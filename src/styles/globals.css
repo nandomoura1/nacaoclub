@@ -1,0 +1,122 @@
+@import 'tailwindcss';
+
+/* ============================================================
+   DESIGN SYSTEM — NAÇÃO CLUB
+   Paleta oficial do Manual da Marca. A hierarquia importa:
+   navy estrutura, azul Nação age, ciano pontua.
+   ============================================================ */
+
+@theme {
+  --color-navy: #022b57;
+  --color-navy-800: #063a70;
+  --color-navy-700: #0a4a8c;
+  --color-nacao: #0169e9;
+  --color-nacao-600: #0158c4;
+  --color-azul-claro: #3a86ff;
+  --color-ciano: #20c4fa;
+
+  /* Neutros derivados do navy — nunca cinza puro, sempre com sangue azul.
+     É o detalhe que separa "sistema da Nação" de "sistema genérico". */
+  --color-tinta: #0d1b2a;
+  --color-tinta-suave: #48596b;
+  --color-tinta-fraca: #7d8ea0;
+  --color-borda: #e2e8f0;
+  --color-fundo: #f4f7fb;
+
+  --color-sucesso: #16a34a;
+  --color-atencao: #d97706;
+  --color-critico: #dc2626;
+
+  --font-titulo: 'Gotham', 'Montserrat', ui-sans-serif, system-ui, sans-serif;
+  --font-corpo: 'Gotham Rounded', 'Nunito', ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Gotham é fonte licenciada e não é redistribuível. Se estiver instalada no
+   sistema do cliente, ela é usada. Caso contrário caímos em Montserrat e
+   Nunito — as substitutas mais próximas em geometria e peso. */
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  background: var(--color-fundo);
+  color: var(--color-tinta);
+  font-family: var(--font-corpo);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, .font-titulo {
+  font-family: var(--font-titulo);
+  letter-spacing: -0.02em;
+}
+
+/* ---------- Elementos gráficos da marca ----------
+   Ondas e linhas fluidas: movimento, vento, água. Sempre discretos,
+   sempre atrás da informação. Nunca por cima. */
+
+.onda-nacao {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.gradiente-nacao {
+  background: linear-gradient(135deg, var(--color-navy) 0%, #04407f 55%, var(--color-nacao) 100%);
+}
+
+/* ---------- Animação de nova entrada (seção 14) ----------
+   Rápida, discreta, elegante. É ferramenta operacional, não fogos. */
+
+@keyframes entrada-nova {
+  0%   { opacity: 0; transform: translateY(-8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulso-suave {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+
+.animar-entrada {
+  animation: entrada-nova 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.destaque-novo {
+  animation: destaque-fade 2.4s ease-out forwards;
+}
+
+@keyframes destaque-fade {
+  0%   { box-shadow: 0 0 0 2px var(--color-ciano); background-color: #f0faff; }
+  100% { box-shadow: 0 0 0 0 transparent; background-color: #ffffff; }
+}
+
+.pulso {
+  animation: pulso-suave 2s ease-in-out infinite;
+}
+
+/* Respeita quem pediu menos movimento. Acessibilidade não é opcional. */
+@media (prefers-reduced-motion: reduce) {
+  .animar-entrada,
+  .destaque-novo,
+  .pulso {
+    animation: none;
+  }
+}
+
+/* ---------- Foco visível ---------- */
+:focus-visible {
+  outline: 2px solid var(--color-nacao);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ---------- Scrollbar discreta ---------- */
+.scroll-fino::-webkit-scrollbar { width: 8px; }
+.scroll-fino::-webkit-scrollbar-track { background: transparent; }
+.scroll-fino::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}

@@ -1,0 +1,410 @@
+// ============================================================
+// NAÇÃO | QUEM CHEGOU? — Schema do banco local
+// ------------------------------------------------------------
+// PRINCÍPIO FUNDAMENTAL (ver docs/database.md):
+// O Tecnofit é a fonte oficial dos dados transacionais.
+// Este banco guarda: usuários, permissões, catracas, eventos de
+// acesso normalizados, relacionamento, alertas, auditoria e cache.
+// Dados de aluno são mantidos como PROJEÇÃO MÍNIMA do Tecnofit,
+// apenas o necessário para identificar e atender rápido.
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------------
+// USUÁRIOS, SESSÕES E PERMISSÕES
+// ------------------------------------------------------------
+
+enum Role {
+  PROFESSOR
+  GESTOR
+  ADMIN
+}
+
+model User {
+  id           String  @id @default(cuid())
+  name         String
+  email        String  @unique
+  passwordHash String  @map("password_hash")
+  role         Role    @default(PROFESSOR)
+  active       Boolean @default(true)
+
+  // Catraca pré-selecionada no login (seção 8 do brief)
+  defaultTurnstileId String?    @map("default_turnstile_id")
+  defaultTurnstile   Turnstile? @relation("UserDefaultTurnstile", fields: [defaultTurnstileId], references: [id], onDelete: SetNull)
+
+  lastLoginAt DateTime? @map("last_login_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  sessions           Session[]
+  turnstileAccess    UserTurnstilePermission[]
+  relationshipNotes  RelationshipNote[]
+  relationshipEvents RelationshipEvent[]
+  auditLogs          AuditLog[]
+  acknowledgedAlerts Alert[]                   @relation("AlertAcknowledgedBy")
+
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+/// Sessão persistida em banco: revogável, auditável e sem estado no cliente
+/// além de um token opaco. O token NUNCA é salvo em claro — apenas seu hash.
+model Session {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique @map("token_hash")
+  userAgent String?   @map("user_agent")
+  ipAddress String?   @map("ip_address")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+/// Autorização explícita de um usuário para visualizar uma catraca.
+/// GESTOR e ADMIN enxergam todas por regra de papel; PROFESSOR depende
+/// desta tabela + sua catraca padrão. Nunca resolver isso no frontend.
+model UserTurnstilePermission {
+  id          String    @id @default(cuid())
+  userId      String    @map("user_id")
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  turnstileId String    @map("turnstile_id")
+  turnstile   Turnstile @relation(fields: [turnstileId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@unique([userId, turnstileId])
+  @@index([turnstileId])
+  @@map("user_turnstile_permissions")
+}
+
+// ------------------------------------------------------------
+// CATRACAS
+// ------------------------------------------------------------
+
+/// Catraca / ponto de acesso.
+/// tecnofitAccessPointId é o identificador EXTERNO real vindo da API.
+/// Ele nunca deve ser inventado — é descoberto via sincronização
+/// (TurnstileService.syncFromTecnofit) ou cadastrado por um ADMIN.
+model Turnstile {
+  id                    String  @id @default(cuid())
+  tecnofitAccessPointId String? @unique @map("tecnofit_access_point_id")
+  name                  String
+  description           String?
+  location              String?
+  active                Boolean @default(true)
+  displayOrder          Int     @default(0) @map("display_order")
+
+  /// Modalidade normalmente associada a esta catraca. Rótulo operacional
+  /// local — não substitui a modalidade oficial do plano no Tecnofit.
+  modalityLabel String? @map("modality_label")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  accessEvents    AccessEvent[]
+  permissions     UserTurnstilePermission[]
+  defaultForUsers User[]                    @relation("UserDefaultTurnstile")
+
+  @@index([active, displayOrder])
+  @@map("turnstiles")
+}
+
+// ------------------------------------------------------------
+// ALUNOS (projeção local do Tecnofit)
+// ------------------------------------------------------------
+
+enum StudentStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  UNKNOWN
+}
+
+/// Projeção mínima do aluno. NÃO é o cadastro oficial.
+/// Regra LGPD: guardamos apenas o suficiente para identificar e atender.
+/// Sem CPF, sem endereço, sem dado financeiro.
+model Student {
+  id                String @id @default(cuid())
+  tecnofitStudentId String @unique @map("tecnofit_student_id")
+
+  fullName  String        @map("full_name")
+  firstName String?       @map("first_name")
+  photoUrl  String?       @map("photo_url")
+  status    StudentStatus @default(UNKNOWN)
+
+  planName   String?  @map("plan_name")
+  /// Modalidades reportadas pelo Tecnofit. Vazio = dado indisponível.
+  /// Nunca preencher por inferência.
+  modalities String[] @default([]) @map("modalities")
+
+  memberSince   DateTime? @map("member_since")
+  planExpiresAt DateTime? @map("plan_expires_at")
+
+  /// Momento da última sincronização bem-sucedida com o Tecnofit.
+  syncedAt    DateTime? @map("synced_at")
+  /// Payload normalizado da última leitura, para depuração da integração.
+  /// Nunca deve conter credenciais.
+  rawSnapshot Json?     @map("raw_snapshot")
+
+  firstSeenAt DateTime? @map("first_seen_at")
+  lastSeenAt  DateTime? @map("last_seen_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  accessEvents       AccessEvent[]
+  relationshipNotes  RelationshipNote[]
+  relationshipEvents RelationshipEvent[]
+  alerts             Alert[]
+
+  @@index([fullName])
+  @@index([lastSeenAt])
+  @@index([status])
+  @@map("students")
+}
+
+// ------------------------------------------------------------
+// EVENTOS DE ACESSO (catraca)
+// ------------------------------------------------------------
+
+enum AccessEventType {
+  ENTRY
+  EXIT
+  DENIED
+  UNKNOWN
+}
+
+enum AccessEventSource {
+  WEBHOOK
+  POLLING
+  MANUAL
+  SEED
+}
+
+model AccessEvent {
+  id String @id @default(cuid())
+
+  /// ID único do evento fornecido pela origem, quando existir.
+  externalEventId String? @unique @map("external_event_id")
+
+  /// Chave determinística de deduplicação, sempre preenchida.
+  /// Ver docs/architecture.md — seção Deduplicação.
+  dedupeKey String @unique @map("dedupe_key")
+
+  studentId String  @map("student_id")
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  turnstileId String?    @map("turnstile_id")
+  turnstile   Turnstile? @relation(fields: [turnstileId], references: [id], onDelete: SetNull)
+
+  eventType  AccessEventType   @default(ENTRY) @map("event_type")
+  occurredAt DateTime          @map("occurred_at")
+  source     AccessEventSource @default(POLLING)
+
+  /// Rótulo bruto da catraca informado pela origem, preservado mesmo
+  /// quando não conseguimos casar com uma Turnstile local.
+  rawTurnstileRef String? @map("raw_turnstile_ref")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([studentId, occurredAt(sort: Desc)])
+  @@index([turnstileId, occurredAt(sort: Desc)])
+  @@index([occurredAt(sort: Desc)])
+  @@map("access_events")
+}
+
+// ------------------------------------------------------------
+// RELACIONAMENTO
+// ------------------------------------------------------------
+
+enum NoteCategory {
+  OBJETIVO
+  PREFERENCIA
+  TREINAMENTO
+  RELACIONAMENTO
+  ATENDIMENTO
+  COMERCIAL
+  EVENTO
+  CONQUISTA
+  FEEDBACK
+  OUTRO
+}
+
+/// Nota qualitativa sobre o aluno. Conteúdo interno, sujeito à LGPD.
+/// Exclusão é sempre soft delete + AuditLog.
+model RelationshipNote {
+  id        String  @id @default(cuid())
+  studentId String  @map("student_id")
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  authorUserId String @map("author_user_id")
+  author       User   @relation(fields: [authorUserId], references: [id])
+
+  category NoteCategory
+  content  String
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@index([studentId, createdAt(sort: Desc)])
+  @@index([authorUserId])
+  @@index([deletedAt])
+  @@map("relationship_notes")
+}
+
+enum RelationshipEventType {
+  FEEDBACK_POSITIVE
+  FEEDBACK_NEGATIVE
+  CONVERSATION
+  ACHIEVEMENT
+  EVOLUTION
+  ATTENTION
+  GOAL
+  OTHER
+}
+
+/// Registro de um clique só (seção 24 do brief): feedback rápido.
+model RelationshipEvent {
+  id        String  @id @default(cuid())
+  studentId String  @map("student_id")
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id])
+
+  type     RelationshipEventType
+  /// Rótulo curto exibido na timeline (ex.: "Treino foi ótimo")
+  label    String?
+  metadata Json?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([studentId, createdAt(sort: Desc)])
+  @@index([userId])
+  @@map("relationship_events")
+}
+
+// ------------------------------------------------------------
+// ALERTAS
+// ------------------------------------------------------------
+
+enum AlertType {
+  NEW_STUDENT
+  FIRST_ACCESS
+  LOW_FREQUENCY
+  RETURN_AFTER_ABSENCE
+  PLAN_EXPIRING
+  PLAN_EXPIRED
+  IMPORTANT_NOTE
+  NEW_MODALITY
+}
+
+enum AlertSeverity {
+  INFO
+  ATTENTION
+  CRITICAL
+}
+
+model Alert {
+  id        String  @id @default(cuid())
+  studentId String  @map("student_id")
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  type     AlertType
+  severity AlertSeverity @default(INFO)
+
+  /// Mensagem pronta para leitura do professor.
+  message  String
+  /// Sugestão de abordagem. Regra determinística, não IA (ver seção 27).
+  guidance String?
+
+  /// Chave estável para evitar alerta repetido do mesmo tipo/janela.
+  dedupeKey String @unique @map("dedupe_key")
+
+  metadata Json?
+
+  resolvedAt       DateTime? @map("resolved_at")
+  acknowledgedAt   DateTime? @map("acknowledged_at")
+  acknowledgedById String?   @map("acknowledged_by_id")
+  acknowledgedBy   User?     @relation("AlertAcknowledgedBy", fields: [acknowledgedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([studentId, createdAt(sort: Desc)])
+  @@index([resolvedAt, severity])
+  @@index([type])
+  @@map("alerts")
+}
+
+// ------------------------------------------------------------
+// AUDITORIA
+// ------------------------------------------------------------
+
+/// Trilha de auditoria. NUNCA armazena segredos, tokens ou senhas.
+model AuditLog {
+  id     String  @id @default(cuid())
+  userId String? @map("user_id")
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  action   String
+  entity   String
+  entityId String? @map("entity_id")
+
+  oldValue Json? @map("old_value")
+  newValue Json? @map("new_value")
+
+  ipAddress String? @map("ip_address")
+  userAgent String? @map("user_agent")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([entity, entityId])
+  @@index([createdAt(sort: Desc)])
+  @@map("audit_logs")
+}
+
+// ------------------------------------------------------------
+// ESTADO DE SINCRONIZAÇÃO E CACHE
+// ------------------------------------------------------------
+
+/// Cursor por recurso do poller. Garante que não relemos o mundo inteiro
+/// a cada ciclo e que sobrevivamos a um restart.
+model SyncState {
+  id           String    @id @default(cuid())
+  resource     String    @unique
+  cursor       String?
+  lastRunAt    DateTime? @map("last_run_at")
+  lastOkAt     DateTime? @map("last_ok_at")
+  lastError    String?   @map("last_error")
+  failureCount Int       @default(0) @map("failure_count")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@map("sync_state")
+}
+
+/// Cache de respostas normalizadas do Tecnofit, com TTL.
+/// Existe para respeitar rate limit, não para virar fonte de verdade.
+model TecnofitCache {
+  key       String   @id
+  value     Json
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([expiresAt])
+  @@map("tecnofit_cache")
+}
