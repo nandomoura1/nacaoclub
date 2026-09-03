@@ -24,14 +24,30 @@ próximo atendimento começa mais rico
 
 ## Começando em 3 minutos
 
+### Pré-requisitos
+Node ≥ 20.11 e Docker (ou um PostgreSQL 16 já rodando).
+
 ```bash
 npm install
+
+# 1. Banco (sobe o Postgres e espera ficar pronto)
+docker compose up -d --wait
+
+# 2. Ambiente
 cp .env.example .env
-openssl rand -hex 32          # cole em SESSION_SECRET
+# Gere o segredo de sessão e cole em SESSION_SECRET:
+openssl rand -hex 32
+
+# 3. Schema + dados fictícios
 npm run db:migrate
 npm run db:seed
+
+# 4. Subir
 npm run dev                   # http://localhost:3000
 ```
+
+> **Sem Docker?** Use seu Postgres local e ajuste `DATABASE_URL` no `.env`.
+> O banco precisa existir antes do `db:migrate`.
 
 **Não precisa de credenciais da Tecnofit.** O provider `mock` (padrão) sobe
 o sistema inteiro com dados fictícios — inclusive chegadas ao vivo pela

@@ -1,0 +1,31 @@
+# Banco de desenvolvimento do NAÇÃO | QUEM CHEGOU?
+#
+#   docker compose up -d
+#
+# Sobe apenas o PostgreSQL. A aplicação roda com `npm run dev`, o que dá
+# hot reload — o fluxo mais rápido para desenvolver. Para empacotar a
+# aplicação também em container, veja o Dockerfile em docs/deployment.md.
+
+services:
+  db:
+    image: postgres:16
+    container_name: nacao-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nacao
+      POSTGRES_PASSWORD: nacao
+      POSTGRES_DB: nacao_relationship
+    ports:
+      - '5432:5432'
+    volumes:
+      - nacao-db-data:/var/lib/postgresql/data
+    healthcheck:
+      # O `npm run db:migrate` falha se rodar antes do banco aceitar conexão.
+      # Este healthcheck deixa o `docker compose up --wait` esperar de verdade.
+      test: ['CMD-SHELL', 'pg_isready -U nacao -d nacao_relationship']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  nacao-db-data:
