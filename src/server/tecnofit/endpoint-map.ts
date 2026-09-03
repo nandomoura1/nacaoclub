@@ -34,6 +34,11 @@ export interface EndpointDefinition {
 
 export interface EndpointMap {
   paths: {
+    /**
+     * Endpoint que troca api_key + api_secret pelo token de acesso temporário.
+     * CONFIRMADO: a Tecnofit usa fluxo de duas etapas (ver docs).
+     */
+    authToken: EndpointDefinition;
     healthCheck: EndpointDefinition;
     listAccessPoints: EndpointDefinition;
     listAccessEvents: EndpointDefinition;
@@ -47,6 +52,23 @@ export interface EndpointMap {
     cursor: string;
     limit: string;
     search: string;
+  };
+  /**
+   * Fluxo de autenticação por troca de credenciais.
+   * Os nomes dos campos do corpo vêm da tela de criação de chave no painel
+   * Tecnofit, que rotula as credenciais como `api_key` e `api_secret`.
+   */
+  auth: {
+    keyField: string;
+    secretField: string;
+    /** Onde o token vem na resposta. Primeiro caminho com valor vence. */
+    tokenPath: string[];
+    /** Validade em segundos, quando informada. */
+    expiresInPath: string[];
+    /** Validade como timestamp absoluto, quando informada. */
+    expiresAtPath: string[];
+    /** Usada quando a API não informa validade alguma. */
+    fallbackTtlSeconds: number;
   };
   /** Onde encontrar a lista dentro do envelope de resposta. */
   collection: {
@@ -71,6 +93,8 @@ const EMPTY: EndpointDefinition = { path: '', method: 'GET' };
 export const DEFAULT_ENDPOINT_MAP: EndpointMap = {
   // Todos vazios de propósito. Preencher só com a documentação em mãos.
   paths: {
+    // O path do endpoint de autenticação também precisa vir da documentação.
+    authToken: { path: '', method: 'POST' },
     healthCheck: { ...EMPTY },
     listAccessPoints: { ...EMPTY },
     listAccessEvents: { ...EMPTY },
@@ -85,6 +109,19 @@ export const DEFAULT_ENDPOINT_MAP: EndpointMap = {
     cursor: 'cursor',
     limit: 'limit',
     search: 'search',
+  },
+
+  auth: {
+    // CONFIRMADO pela tela de criação de chave no painel Tecnofit.
+    keyField: 'api_key',
+    secretField: 'api_secret',
+    tokenPath: ['access_token', 'accessToken', 'token', 'data.token', 'data.access_token'],
+    expiresInPath: ['expires_in', 'expiresIn', 'data.expires_in'],
+    expiresAtPath: ['expires_at', 'expiresAt', 'expiration', 'data.expires_at'],
+    // Conservador de propósito: se a API não disser a validade, renovamos a
+    // cada 10 minutos. Renovar demais custa uma requisição; usar token
+    // expirado quebra a ingestão inteira.
+    fallbackTtlSeconds: 600,
   },
 
   collection: {
@@ -159,6 +196,7 @@ export function loadEndpointMap(rawJson = process.env.TECNOFIT_ENDPOINT_MAP): En
   return {
     paths: { ...DEFAULT_ENDPOINT_MAP.paths, ...override.paths },
     queryParams: { ...DEFAULT_ENDPOINT_MAP.queryParams, ...override.queryParams },
+    auth: { ...DEFAULT_ENDPOINT_MAP.auth, ...override.auth },
     collection: { ...DEFAULT_ENDPOINT_MAP.collection, ...override.collection },
     fields: {
       student: { ...DEFAULT_ENDPOINT_MAP.fields.student, ...override.fields?.student },

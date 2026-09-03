@@ -21,6 +21,43 @@ de ir para produção.
 
 ### 1.1 O que está CONFIRMADO
 
+**Autenticação em duas etapas** (confirmado pela tela de criação de chave no
+painel Tecnofit, em 03/09/2026):
+
+> *"As chaves de acesso consistem em duas partes: uma chave pública e uma
+> chave privada. Você deve usar tanto a chave pública quanto a chave privada
+> juntas para autenticar e **receber seu token de acesso temporário**."*
+
+Isso significa que **não é** autenticação por chave estática em header. O
+fluxo real é:
+
+```
+POST <base>/<authToken>          { "api_key": "pk_tf_…", "api_secret": "sk_tf_…" }
+        ↓
+   token de acesso TEMPORÁRIO
+        ↓
+Authorization: Bearer <token>     em todas as demais chamadas
+```
+
+| Item | Valor |
+|---|---|
+| Nome do campo da chave pública | `api_key` |
+| Nome do campo da chave privada | `api_secret` |
+| Prefixo da chave pública | `pk_tf_` |
+| Prefixo da chave privada | `sk_tf_` |
+| Visibilidade da chave privada | **Exibida uma única vez.** Não é recuperável — só substituível. |
+
+**Recomendações de segurança da própria Tecnofit**, adotadas neste projeto:
+
+- nunca armazenar a chave em texto simples, em código ou em repositório
+  → as credenciais vivem apenas em `.env`, que está no `.gitignore`;
+- desativar a chave quando não for mais necessária;
+- habilitar permissões de menor privilégio.
+
+**Ainda não identificado:** o **path** do endpoint que faz essa troca, o
+formato exato da resposta e a validade do token.
+
+
 - Arquitetura **REST**, troca de dados em **JSON**.
 - Os headers `Content-Type` e `Accept` devem ser **definidos explicitamente**
   em cada requisição.
@@ -41,7 +78,9 @@ no código.
 | Pergunta | Situação |
 |---|---|
 | URL base da API | **Não identificada na documentação disponível.** |
-| Esquema de autenticação (Bearer? API key em header? Basic?) | **Não identificado.** |
+| **Path** do endpoint de autenticação (troca de credenciais por token) | **Não identificado.** |
+| Formato da resposta de autenticação (nome do campo do token) | **Não identificado.** O adapter tenta `access_token`, `accessToken`, `token`, `data.token`. |
+| **Validade** do token temporário | **Não identificada.** Sem `expires_in`/`expires_at` na resposta, o adapter renova a cada 10 minutos. |
 | Path do endpoint de **eventos de acesso/catraca** | **Não identificado.** |
 | Path do endpoint de **alunos** | **Não identificado.** |
 | Path do endpoint de **pontos de acesso (catracas)** | **Não identificado.** |
@@ -140,17 +179,24 @@ TECNOFIT_PROVIDER="http"
 TECNOFIT_API_BASE_URL="<base url oficial>"
 TECNOFIT_API_KEY="<sua chave>"
 TECNOFIT_API_SECRET="<seu segredo>"
-TECNOFIT_AUTH_SCHEME="bearer"   # ou "api-key-header" ou "basic"
+TECNOFIT_AUTH_SCHEME="token-exchange"
 ```
+
+> As credenciais aparecem **uma única vez** na criação. Se você perdê-las,
+> crie uma nova chave e inative a antiga — não há recuperação.
 
 ### Passo 2 — Preencher o mapa de endpoints
 
 Com a documentação aberta, edite `src/server/tecnofit/endpoint-map.ts`, ou
 defina a variável `TECNOFIT_ENDPOINT_MAP` com um JSON (que tem precedência):
 
+O **primeiro** path a preencher é `authToken` — sem ele, nenhuma outra
+chamada acontece, porque toda requisição depende do token.
+
 ```bash
 TECNOFIT_ENDPOINT_MAP='{
   "paths": {
+    "authToken":        { "path": "v1/auth/token",   "method": "POST" },
     "listAccessPoints": { "path": "v1/access-points", "method": "GET" },
     "listAccessEvents": { "path": "v1/accesses",      "method": "GET" },
     "getStudent":       { "path": "v1/students/{id}", "method": "GET" },
@@ -237,6 +283,20 @@ entregue pelas duas portas vire **um único card**.
 > **NÃO VERIFICADO:** o header e o algoritmo de assinatura reais.
 > Ajustáveis por `TECNOFIT_WEBHOOK_SIGNATURE_HEADER`.
 
+## 4.3 Gestão do token de acesso
+
+O token é temporário, então o adapter o trata como recurso gerenciado:
+
+| Comportamento | Por quê |
+|---|---|
+| **Cache em memória** | Sem cache, cada chamada gastaria duas requisições. Com rate limit de 100/min, metade do orçamento iria embora só em autenticação. |
+| **Renovação com margem de 60s** | Relógios divergem e a rede demora. Renovar exatamente no vencimento produz falha intermitente. |
+| **Deduplicação da requisição em voo** | Várias chamadas simultâneas compartilham uma única autenticação, em vez de disparar N. |
+| **Renovação em 401, uma vez** | O token pode ser revogado antes de expirar. Uma renovação e repetição, sem laço infinito. |
+| **TTL conservador de 10 min** | Usado apenas quando a API não informa validade. Renovar demais custa uma requisição; usar token expirado quebra a ingestão. |
+
+Coberto por 13 testes em `tests/auth-token.test.ts`.
+
 ## 5. Respeito ao rate limit
 
 Limite oficial: **100 req/min por endpoint/IP**, **200 req/min global**.
@@ -272,7 +332,9 @@ Limite oficial: **100 req/min por endpoint/IP**, **200 req/min global**.
 Lista pronta para abrir um chamado:
 
 1. Qual a **URL base** da API externa em produção e em homologação?
-2. Qual o **esquema de autenticação**? Header, formato e validade do token.
+2. Qual o **path do endpoint de autenticação** que troca `api_key` +
+   `api_secret` pelo token temporário? Qual o nome do campo do token na
+   resposta e qual a **validade** dele?
 3. Existe endpoint de **eventos de acesso/catraca**? Qual o path, quais filtros
    de data e qual o formato de paginação?
 4. Existe **webhook de passagem de catraca**? Qual o payload e como a

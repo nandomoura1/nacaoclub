@@ -51,7 +51,7 @@ export class HttpTecnofitProvider implements TecnofitProvider {
 
   async listAccessPoints(): Promise<TecnofitAccessPoint[]> {
     const ep = this.map.paths.listAccessPoints;
-    const body = await tecnofitRequest({ path: ep.path, method: ep.method });
+    const body = await tecnofitRequest({ path: ep.path, method: ep.method }, this.map);
     return normalizeCollection(body, this.map, (raw) => normalizeAccessPoint(raw, this.map)).items;
   }
 

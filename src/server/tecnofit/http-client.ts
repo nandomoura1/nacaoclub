@@ -1,5 +1,7 @@
 import { getEnv } from '@/lib/env';
 import { logger } from '@/lib/logger';
+import { loadEndpointMap, type EndpointMap } from './endpoint-map';
+import { asDate, pickFirst } from './normalizer';
 import { TecnofitError } from './types';
 
 /**
@@ -44,13 +46,6 @@ function backoffMs(attempt: number): number {
   return base + Math.random() * 250;
 }
 
-export interface RequestOptions {
-  path: string;
-  method?: 'GET' | 'POST';
-  query?: Record<string, string | number | undefined>;
-  body?: unknown;
-}
-
 let limiter: SlidingWindowLimiter | null = null;
 
 function getLimiter(): SlidingWindowLimiter {
@@ -58,17 +53,181 @@ function getLimiter(): SlidingWindowLimiter {
   return limiter;
 }
 
+function baseUrl(): string {
+  return getEnv().TECNOFIT_API_BASE_URL.replace(/\/+$/, '');
+}
+
+// ============================================================
+// AUTENTICAÇÃO POR TROCA DE CREDENCIAIS
+// ============================================================
+//
+// CONFIRMADO pelo painel Tecnofit: as chaves de acesso têm duas partes —
+// `api_key` (pública) e `api_secret` (privada) — e as duas juntas são
+// trocadas por um **token de acesso temporário**. Não é chave direta no
+// header.
+//
+// Consequências que este módulo trata:
+//   - o token precisa ser cacheado, senão gastamos uma requisição de auth
+//     para cada chamada e estouramos o rate limit;
+//   - o token expira, então renovamos com margem de segurança;
+//   - várias chamadas simultâneas não podem disparar N autenticações —
+//     há deduplicação da requisição em voo;
+//   - um 401 no meio da operação invalida o cache e tenta uma vez mais,
+//     porque o token pode ter sido revogado antes de expirar.
+
+interface CachedToken {
+  token: string;
+  /** Epoch em ms. Já inclui a margem de segurança. */
+  expiresAt: number;
+}
+
+/** Renovamos 60s antes do vencimento: relógios divergem, rede demora. */
+const TOKEN_SKEW_MS = 60_000;
+
+let cachedToken: CachedToken | null = null;
+let tokenInFlight: Promise<string> | null = null;
+
+/**
+ * Faz a troca credenciais → token.
+ *
+ * Não passa por `tecnofitRequest` de propósito: esta é a única chamada que
+ * não pode exigir um token, sob pena de recursão infinita.
+ */
+async function fetchAccessToken(map: EndpointMap): Promise<CachedToken> {
+  const env = getEnv();
+  const ep = map.paths.authToken;
+
+  if (!ep.path) {
+    throw new TecnofitError(
+      'Endpoint de autenticação não configurado. A Tecnofit troca api_key + ' +
+        'api_secret por um token temporário — informe o path desse endpoint em ' +
+        'paths.authToken (endpoint-map.ts ou TECNOFIT_ENDPOINT_MAP). ' +
+        'Este sistema não adivinha endpoints.',
+      'NOT_CONFIGURED',
+    );
+  }
+  if (!env.TECNOFIT_API_KEY || !env.TECNOFIT_API_SECRET) {
+    throw new TecnofitError(
+      'TECNOFIT_API_KEY e TECNOFIT_API_SECRET são obrigatórios para o fluxo de token.',
+      'NOT_CONFIGURED',
+    );
+  }
+
+  const url = `${baseUrl()}/${ep.path.replace(/^\/+/, '')}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), env.TECNOFIT_TIMEOUT_MS);
+
+  await getLimiter().acquire();
+
+  try {
+    const res = await fetch(url, {
+      method: ep.method,
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        [map.auth.keyField]: env.TECNOFIT_API_KEY,
+        [map.auth.secretField]: env.TECNOFIT_API_SECRET,
+      }),
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      // Nunca logamos o corpo: ele carrega as credenciais que acabamos de enviar.
+      logger.error('Falha ao obter token Tecnofit', { path: ep.path, status: res.status });
+      throw new TecnofitError(
+        `Autenticação Tecnofit falhou (HTTP ${res.status}). ` +
+          'Verifique TECNOFIT_API_KEY, TECNOFIT_API_SECRET e o path de authToken.',
+        res.status === 401 || res.status === 403 ? 'UNAUTHORIZED' : 'BAD_RESPONSE',
+        res.status,
+        res.status >= 500,
+      );
+    }
+
+    const body: unknown = await res.json();
+    const token = pickFirst(body, map.auth.tokenPath);
+
+    if (typeof token !== 'string' || !token) {
+      throw new TecnofitError(
+        'A resposta de autenticação não trouxe token reconhecível. ' +
+          `Ajuste auth.tokenPath no EndpointMap (tentados: ${map.auth.tokenPath.join(', ')}).`,
+        'BAD_RESPONSE',
+      );
+    }
+
+    // Validade: preferimos o absoluto, caímos para o relativo e, na falta
+    // dos dois, usamos o TTL conservador do mapa.
+    const expiresAtRaw = asDate(pickFirst(body, map.auth.expiresAtPath));
+    const expiresInRaw = pickFirst(body, map.auth.expiresInPath);
+    const expiresInSeconds =
+      typeof expiresInRaw === 'number'
+        ? expiresInRaw
+        : typeof expiresInRaw === 'string' && /^\d+$/.test(expiresInRaw)
+          ? Number(expiresInRaw)
+          : undefined;
+
+    const absoluteMs =
+      expiresAtRaw?.getTime() ??
+      Date.now() + (expiresInSeconds ?? map.auth.fallbackTtlSeconds) * 1000;
+
+    // Nunca deixamos a validade efetiva virar passado por causa da margem.
+    const expiresAt = Math.max(Date.now() + 30_000, absoluteMs - TOKEN_SKEW_MS);
+
+    logger.info('Token Tecnofit obtido', {
+      validoPorSegundos: Math.round((expiresAt - Date.now()) / 1000),
+      validadeInformadaPelaApi: expiresAtRaw !== undefined || expiresInSeconds !== undefined,
+    });
+
+    return { token, expiresAt };
+  } catch (err) {
+    if (err instanceof TecnofitError) throw err;
+    const aborted = err instanceof Error && err.name === 'AbortError';
+    throw new TecnofitError(
+      aborted ? 'Timeout ao autenticar na Tecnofit' : 'Falha de rede ao autenticar na Tecnofit',
+      aborted ? 'TIMEOUT' : 'NETWORK',
+      undefined,
+      true,
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Devolve um token válido, reaproveitando o cache.
+ * Chamadas simultâneas compartilham a mesma requisição em voo.
+ */
+async function getAccessToken(map: EndpointMap, forceRefresh = false): Promise<string> {
+  if (!forceRefresh && cachedToken && Date.now() < cachedToken.expiresAt) {
+    return cachedToken.token;
+  }
+  if (forceRefresh) cachedToken = null;
+
+  if (tokenInFlight) return tokenInFlight;
+
+  tokenInFlight = fetchAccessToken(map)
+    .then((t) => {
+      cachedToken = t;
+      return t.token;
+    })
+    .finally(() => {
+      tokenInFlight = null;
+    });
+
+  return tokenInFlight;
+}
+
 /**
  * Monta os headers de autenticação.
  *
- * ⚠️ NÃO VERIFICADO: o esquema real de autenticação da API Tecnofit não pôde
- * ser confirmado na documentação oficial neste ambiente. Suportamos os três
- * esquemas usuais e a escolha é feita por TECNOFIT_AUTH_SCHEME, sem mudança
- * de código. Ver docs/tecnofit-integration.md.
+ * `token-exchange` é o esquema CONFIRMADO da Tecnofit. Os demais permanecem
+ * suportados porque o adapter é genérico e pode servir a outra origem.
  */
-function buildAuthHeaders(): Record<string, string> {
+async function buildAuthHeaders(map: EndpointMap): Promise<Record<string, string>> {
   const env = getEnv();
   const { TECNOFIT_API_KEY: key, TECNOFIT_API_SECRET: secret } = env;
+
+  if (env.TECNOFIT_AUTH_SCHEME === 'token-exchange') {
+    return { Authorization: `Bearer ${await getAccessToken(map)}` };
+  }
 
   if (!key && !secret) {
     throw new TecnofitError(
@@ -97,11 +256,22 @@ function classify(status: number): { kind: TecnofitError['kind']; retryable: boo
   return { kind: 'BAD_RESPONSE', retryable: false };
 }
 
+export interface RequestOptions {
+  path: string;
+  method?: 'GET' | 'POST';
+  query?: Record<string, string | number | undefined>;
+  body?: unknown;
+}
+
 /**
- * Executa uma requisição contra a API Tecnofit com timeout, retry e
- * rate limiting. Nunca loga corpo de resposta nem credenciais.
+ * Executa uma requisição contra a API Tecnofit com timeout, retry,
+ * rate limiting e renovação automática de token.
+ * Nunca loga corpo de resposta nem credenciais.
  */
-export async function tecnofitRequest<T = unknown>(opts: RequestOptions): Promise<T> {
+export async function tecnofitRequest<T = unknown>(
+  opts: RequestOptions,
+  map: EndpointMap = loadEndpointMap(),
+): Promise<T> {
   const env = getEnv();
 
   if (!opts.path) {
@@ -113,23 +283,24 @@ export async function tecnofitRequest<T = unknown>(opts: RequestOptions): Promis
     );
   }
 
-  const base = env.TECNOFIT_API_BASE_URL.replace(/\/+$/, '');
-  const url = new URL(`${base}/${opts.path.replace(/^\/+/, '')}`);
+  const url = new URL(`${baseUrl()}/${opts.path.replace(/^\/+/, '')}`);
   for (const [k, v] of Object.entries(opts.query ?? {})) {
     if (v !== undefined && v !== '') url.searchParams.set(k, String(v));
   }
 
-  const headers: Record<string, string> = {
-    // A documentação exige definição explícita de Content-Type e Accept.
-    'Content-Type': 'application/json',
-    Accept: 'application/json',
-    ...buildAuthHeaders(),
-  };
-
   const maxRetries = env.TECNOFIT_MAX_RETRIES;
+  /** Um 401 pode ser token revogado antes da hora. Vale exatamente uma renovação. */
+  let tokenRefreshed = false;
   let lastError: TecnofitError | null = null;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const headers: Record<string, string> = {
+      // A documentação exige definição explícita de Content-Type e Accept.
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      ...(await buildAuthHeaders(map)),
+    };
+
     await getLimiter().acquire();
 
     const controller = new AbortController();
@@ -147,6 +318,20 @@ export async function tecnofitRequest<T = unknown>(opts: RequestOptions): Promis
       const durationMs = Date.now() - startedAt;
 
       if (!res.ok) {
+        // Token revogado ou expirado antes do previsto: renova uma vez e
+        // repete, sem consumir o orçamento normal de retries.
+        if (
+          res.status === 401 &&
+          env.TECNOFIT_AUTH_SCHEME === 'token-exchange' &&
+          !tokenRefreshed
+        ) {
+          tokenRefreshed = true;
+          logger.warn('401 na Tecnofit — renovando token e repetindo', { path: opts.path });
+          await getAccessToken(map, true);
+          attempt--;
+          continue;
+        }
+
         const { kind, retryable } = classify(res.status);
         // Só o path é logado. Query e corpo podem conter dado pessoal.
         logger.warn('Tecnofit respondeu com erro', {
@@ -165,7 +350,9 @@ export async function tecnofitRequest<T = unknown>(opts: RequestOptions): Promis
 
         // Respeita Retry-After quando a API o envia.
         const retryAfter = Number(res.headers.get('retry-after'));
-        await sleep(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : backoffMs(attempt));
+        await sleep(
+          Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : backoffMs(attempt),
+        );
         continue;
       }
 
@@ -201,7 +388,18 @@ export async function tecnofitRequest<T = unknown>(opts: RequestOptions): Promis
   throw lastError ?? new TecnofitError('Falha desconhecida na integração', 'UNKNOWN');
 }
 
-/** Exportado para teste. Reseta o limitador entre cenários. */
-export function __resetLimiter(): void {
+/** Exportado para teste. Reseta limitador e cache de token entre cenários. */
+export function __resetClient(): void {
   limiter = null;
+  cachedToken = null;
+  tokenInFlight = null;
+}
+
+/** Exportado para o probe: mostra o estado do token sem revelá-lo. */
+export function tokenStatus(): { cached: boolean; expiresInSeconds: number | null } {
+  if (!cachedToken) return { cached: false, expiresInSeconds: null };
+  return {
+    cached: true,
+    expiresInSeconds: Math.max(0, Math.round((cachedToken.expiresAt - Date.now()) / 1000)),
+  };
 }

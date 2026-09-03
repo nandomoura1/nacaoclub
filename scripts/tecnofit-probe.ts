@@ -17,6 +17,7 @@
  * O probe mostra isso explicitamente.
  */
 import { loadEndpointMap } from '../src/server/tecnofit/endpoint-map';
+import { tokenStatus } from '../src/server/tecnofit/http-client';
 import { getTecnofitProvider } from '../src/server/tecnofit';
 import { TecnofitError } from '../src/server/tecnofit/types';
 
@@ -48,8 +49,8 @@ async function main() {
 
   console.log(titulo('1. Configuração'));
   console.log(`  provider : ${provider.name}`);
+  console.log(`  auth     : ${process.env.TECNOFIT_AUTH_SCHEME ?? 'token-exchange'}`);
   console.log(`  base URL : ${process.env.TECNOFIT_API_BASE_URL || '(vazia)'}`);
-  console.log(`  auth     : ${process.env.TECNOFIT_AUTH_SCHEME ?? 'bearer'}`);
   console.log(`  key      : ${process.env.TECNOFIT_API_KEY ? 'definida' : '(ausente)'}`);
   console.log(`  secret   : ${process.env.TECNOFIT_API_SECRET ? 'definido' : '(ausente)'}`);
 
@@ -76,11 +77,35 @@ async function main() {
     );
   }
 
-  console.log(titulo('3. Conectividade'));
+  console.log(titulo('3. Autenticação (troca de credenciais por token)'));
+  if (!map.paths.authToken.path && provider.name === 'http') {
+    console.log(bad('paths.authToken não configurado.'));
+    console.log(
+      '      A Tecnofit troca api_key + api_secret por um token temporário.\n' +
+      '      Informe o path desse endpoint antes de qualquer outra chamada.',
+    );
+  } else if (provider.name === 'http') {
+    try {
+      // Uma chamada qualquer força a autenticação; o status revela o cache.
+      await provider.listAccessPoints();
+    } catch {
+      // O erro é reportado na etapa do recurso; aqui só queremos o token.
+    }
+    const st = tokenStatus();
+    if (st.cached) {
+      console.log(ok(`token obtido e cacheado (válido por ~${st.expiresInSeconds}s)`));
+    } else {
+      console.log(bad('não foi possível obter token — verifique chaves e path de authToken.'));
+    }
+  } else {
+    console.log(warn('Provider mock: nenhuma autenticação real é feita.'));
+  }
+
+  console.log(titulo('4. Conectividade'));
   const health = await provider.healthCheck();
   console.log(health.ok ? ok(health.detail) : bad(health.detail));
 
-  console.log(titulo('4. Pontos de acesso (catracas)'));
+  console.log(titulo('5. Pontos de acesso (catracas)'));
   try {
     const pontos = await provider.listAccessPoints();
     console.log(ok(`${pontos.length} ponto(s) retornado(s)`));
@@ -94,7 +119,7 @@ async function main() {
     console.log(bad(descreverErro(err)));
   }
 
-  console.log(titulo('5. Eventos de acesso (última hora)'));
+  console.log(titulo('6. Eventos de acesso (última hora)'));
   try {
     const since = new Date(Date.now() - 3_600_000);
     const page = await provider.listAccessEvents({ since, limit: 5 });
@@ -128,7 +153,7 @@ async function main() {
     console.log(bad(descreverErro(err)));
   }
 
-  console.log(titulo('6. Aluno'));
+  console.log(titulo('7. Aluno'));
   try {
     const alunos = await provider.searchStudents('a', 3);
     console.log(ok(`${alunos.length} aluno(s) retornado(s)`));

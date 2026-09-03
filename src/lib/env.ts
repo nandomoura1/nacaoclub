@@ -32,7 +32,12 @@ const schema = z.object({
   TECNOFIT_API_BASE_URL: z.string().optional().default(''),
   TECNOFIT_API_KEY: z.string().optional().default(''),
   TECNOFIT_API_SECRET: z.string().optional().default(''),
-  TECNOFIT_AUTH_SCHEME: z.enum(['bearer', 'api-key-header', 'basic']).default('bearer'),
+  // 'token-exchange' é o esquema CONFIRMADO da Tecnofit: api_key + api_secret
+  // são trocados por um token temporário. Os demais seguem suportados porque
+  // o adapter é genérico.
+  TECNOFIT_AUTH_SCHEME: z
+    .enum(['token-exchange', 'bearer', 'api-key-header', 'basic'])
+    .default('token-exchange'),
   TECNOFIT_AUTH_HEADER: z.string().optional().default('X-Api-Key'),
   TECNOFIT_TIMEOUT_MS: int(10_000),
   TECNOFIT_MAX_RETRIES: int(3),
