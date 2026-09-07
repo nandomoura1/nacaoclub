@@ -184,6 +184,26 @@ e proporção do manual.
 
 ---
 
+## Time de especialistas da Nação
+
+Além do sistema, este repositório carrega o **time de agentes de gestão da
+Nação Club** — sete especialistas (Chief of Staff, COO, CFO, Experiência,
+Gente, Eventos e Dados) que, somados ao CMO que já vive na conta, dão ao Claude
+o contexto e o método da casa.
+
+| Onde | O quê |
+|---|---|
+| [`.claude/skills/`](.claude/skills/README.md) | As skills dos especialistas e como usá-las |
+| [`.claude/agents/`](.claude/agents) | `conselho-nacao` (reunião de diretoria) e `analista-nacao` (apuração de dados) |
+| [`docs/nacao/migracao-chatgpt.md`](docs/nacao/migracao-chatgpt.md) | Como trazer o conhecimento acumulado no ChatGPT |
+
+Fonte única de verdade numérica:
+[`numeros-da-casa.md`](.claude/skills/nacao-club-brief/references/numeros-da-casa.md).
+Nenhum especialista inventa número da casa — os campos `[A PREENCHER]` são
+propositais.
+
+---
+
 ## Regra de ouro
 
 ```
