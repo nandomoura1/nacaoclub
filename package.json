@@ -5,6 +5,8 @@
   "description": "NAÇÃO | QUEM CHEGOU? — Camada de inteligência de relacionamento do Nação Club",
   "scripts": {
     "dev": "next dev",
+    "setup": "tsx scripts/setup.ts",
+    "doctor": "tsx scripts/doctor.ts",
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",

@@ -29,29 +29,21 @@ Node ≥ 20.11 e Docker (ou um PostgreSQL 16 já rodando).
 
 ```bash
 npm install
-
-# 1. Banco (sobe o Postgres e espera ficar pronto)
-docker compose up -d --wait
-
-# 2. Ambiente
-cp .env.example .env
-# Gere o segredo de sessão e cole em SESSION_SECRET:
-openssl rand -hex 32
-
-# 3. Schema + dados fictícios
-npm run db:migrate
-npm run db:seed
-
-# 4. Subir
-npm run dev                   # http://localhost:3000
+npm run setup     # cria o .env, gera o segredo, sobe o banco, migra e semeia
+npm run dev       # http://localhost:3000
 ```
 
-> **Sem Docker?** Use seu Postgres local e ajuste `DATABASE_URL` no `.env`.
-> O banco precisa existir antes do `db:migrate`.
+O `setup` é idempotente — pode rodar quantas vezes quiser. Um `.env` que já
+exista é preservado; ele só completa o que falta.
 
-**Não precisa de credenciais da Tecnofit.** O provider `mock` (padrão) sobe
-o sistema inteiro com dados fictícios — inclusive chegadas ao vivo pela
-catraca.
+### Deu algum problema?
+
+```bash
+npm run doctor
+```
+
+Verifica Node, Docker, dependências, `.env`, conexão com o banco, migrations,
+seed e a porta 3000 — e, para cada falha, imprime o comando exato que resolve.
 
 | Papel | E-mail | Senha |
 |---|---|---|

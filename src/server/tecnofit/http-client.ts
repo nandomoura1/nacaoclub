@@ -298,6 +298,10 @@ export async function tecnofitRequest<T = unknown>(
       // A documentação exige definição explícita de Content-Type e Accept.
       'Content-Type': 'application/json',
       Accept: 'application/json',
+      // Chaves "Integração Multiempresa" precisam identificar a unidade.
+      // Omitido quando vazio: enviar o header numa chave de empresa única
+      // poderia ser rejeitado pela API.
+      ...(env.TECNOFIT_COMPANY_ID ? { 'X-Company-Id': env.TECNOFIT_COMPANY_ID } : {}),
       ...(await buildAuthHeaders(map)),
     };
 

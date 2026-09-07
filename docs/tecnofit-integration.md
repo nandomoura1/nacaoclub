@@ -69,6 +69,17 @@ formato exato da resposta e a validade do token.
 - Existe um recurso de **Webhook** configurável no painel Tecnofit
   (Integrações → Configurar → Criar Webhook).
 - Existe um programa **"Tecnofit Catraca"** para leitores biométricos externos.
+- **Multiempresa:** chaves do tipo *"Integração Multiempresa"* exigem o header
+  customizado `X-Company-Id` com o ID da unidade/filial em determinados
+  endpoints. Implementado e controlado por `TECNOFIT_COMPANY_ID` — omitido
+  quando vazio, já que enviá-lo numa chave de empresa única pode ser rejeitado.
+- A integração ocorre **em ambiente de produção, com dados reais da academia**.
+  Não há sandbox documentado. Isso reforça a decisão de manter o provider
+  `mock` como padrão: nenhum experimento acidental toca dado real.
+- A própria Tecnofit recomenda implementar a integração **no backend**, para
+  não expor chaves — exatamente a arquitetura adotada aqui.
+- Índice completo da documentação em `https://api-externa-tecnofit.readme.io/llms.txt`.
+  Qualquer página aceita `.md` no final para retornar markdown.
 
 ### 1.2 O que NÃO foi identificado
 

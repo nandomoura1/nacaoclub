@@ -39,6 +39,12 @@ const schema = z.object({
     .enum(['token-exchange', 'bearer', 'api-key-header', 'basic'])
     .default('token-exchange'),
   TECNOFIT_AUTH_HEADER: z.string().optional().default('X-Api-Key'),
+  /**
+   * CONFIRMADO pela documentação: chaves do tipo "Integração Multiempresa"
+   * exigem o header X-Company-Id para consultar unidades/filiais em
+   * determinados endpoints. Vazio = chave de empresa única, header omitido.
+   */
+  TECNOFIT_COMPANY_ID: z.string().optional().default(''),
   TECNOFIT_TIMEOUT_MS: int(10_000),
   TECNOFIT_MAX_RETRIES: int(3),
   TECNOFIT_RATE_LIMIT_PER_MINUTE: int(80),
