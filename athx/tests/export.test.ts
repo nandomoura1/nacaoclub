@@ -19,6 +19,27 @@ describe('Exportação (§42)', () => {
     expect(rows[0]?.posicao).toBe(1);
   });
 
+  it('exporta as OITO pontuações separadamente', () => {
+    const cerrado = rows.find((r) => r.dupla === 'Cerrado');
+    const oito = [
+      cerrado?.wod1_1a_pontos,
+      cerrado?.wod1_1b_pontos,
+      cerrado?.wod1_1c_pontos,
+      cerrado?.wod1_1d_pontos,
+      cerrado?.wod2_2a_pontos,
+      cerrado?.wod2_2b_pontos,
+      cerrado?.wod2_2c_pontos,
+      cerrado?.wod3_pontos,
+    ];
+
+    // Todas as oito presentes e numéricas.
+    expect(oito.every((p) => typeof p === 'number')).toBe(true);
+
+    // E o total da planilha é exatamente a soma delas.
+    const soma = oito.reduce<number>((a, b) => a + (typeof b === 'number' ? b : 0), 0);
+    expect(cerrado?.total_pontos).toBe(soma);
+  });
+
   it('exporta as quatro provas do WOD 1 separadamente', () => {
     const cerrado = rows.find((r) => r.dupla === 'Cerrado');
     expect(cerrado?.wod1_1a_strict_press).toBe(180); // 100 + 80
@@ -39,7 +60,7 @@ describe('Exportação (§42)', () => {
       atleta_2: expect.any(String),
     });
     expect(primeira?.wod1_1d_carga_total).toBe(930);
-    expect(primeira?.wod2_soma_km).toBe(11.95);
+    expect(primeira?.wod2_2c_soma_km).toBe(11.95);
     expect(typeof primeira?.total_pontos).toBe('number');
   });
 

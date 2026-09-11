@@ -190,15 +190,45 @@ export function ResultsReview({ snapshot }: { snapshot: Snapshot }) {
       <Card className="overflow-x-auto">
         <table className="w-full border-collapse text-left">
           <caption className="px-3 py-3 text-left">
-            <span className="font-display text-sm font-bold tracking-wider uppercase">
+            <span className="block font-display text-sm font-bold tracking-wider uppercase">
               {visao === 'PUBLICO'
                 ? 'Classificação publicada'
                 : 'Prévia — inclui rascunhos ainda não publicados'}
             </span>
+            <span className="tnum mt-0.5 block text-[11px] text-white/40">
+              TOTAL = 1A + 1B + 1C + 1D + 2A + 2B + 2C + 3 · menor total vence
+            </span>
           </caption>
           <thead>
+            <tr className="border-b border-white/[0.07] text-white/30">
+              <th colSpan={3} />
+              <th
+                colSpan={4}
+                className="px-3 pt-2 text-center font-display text-[9px] font-bold tracking-wider uppercase"
+              >
+                WOD 1 — Strength
+              </th>
+              <th
+                colSpan={3}
+                className="px-3 pt-2 text-center font-display text-[9px] font-bold tracking-wider uppercase"
+              >
+                WOD 2 — Endurance
+              </th>
+              <th
+                className="px-3 pt-2 text-center font-display text-[9px] font-bold tracking-wider uppercase"
+              >
+                WOD 3
+              </th>
+              <th colSpan={2} />
+            </tr>
             <tr className="border-b border-white/12">
-              {['Pos', 'Nº', 'Dupla', 'WOD 1', 'WOD 2', 'WOD 3', 'Total', 'WODs'].map((h) => (
+              {[
+                'Pos', 'Nº', 'Dupla',
+                '1A', '1B', '1C', '1D',
+                '2A', '2B', '2C',
+                '3',
+                'Total', 'WODs',
+              ].map((h) => (
                 <th
                   key={h}
                   scope="col"
@@ -226,9 +256,15 @@ export function ResultsReview({ snapshot }: { snapshot: Snapshot }) {
                     </Badge>
                   ) : null}
                 </td>
-                <td className="tnum px-3 py-2">{points(row.wod1?.points)}</td>
-                <td className="tnum px-3 py-2">{points(row.wod2?.points)}</td>
-                <td className="tnum px-3 py-2">{points(row.wod3?.points)}</td>
+                {/* As OITO pontuações que somam o total geral. */}
+                <Parcela valor={row.wod1?.pointsStrictPress} />
+                <Parcela valor={row.wod1?.pointsBackSquat} />
+                <Parcela valor={row.wod1?.pointsDeadlift} />
+                <Parcela valor={row.wod1?.pointsTotal} destaque />
+                <Parcela valor={row.wod2?.pointsRun} />
+                <Parcela valor={row.wod2?.pointsBike} />
+                <Parcela valor={row.wod2?.pointsTotal} destaque />
+                <Parcela valor={row.wod3?.points} destaque />
                 <td className="tnum px-3 py-2 font-display font-black">
                   {row.scoredWods > 0 ? points(row.totalPoints) : '—'}
                 </td>
@@ -263,5 +299,18 @@ export function ResultsReview({ snapshot }: { snapshot: Snapshot }) {
         />
       </Modal>
     </div>
+  );
+}
+
+/** Uma das oito parcelas que somam o total geral. */
+function Parcela({ valor, destaque = false }: { valor?: number | null; destaque?: boolean }) {
+  return (
+    <td
+      className={`tnum px-3 py-2 text-center ${
+        destaque ? 'font-display font-bold text-white' : 'text-white/60'
+      }`}
+    >
+      {points(valor)}
+    </td>
   );
 }

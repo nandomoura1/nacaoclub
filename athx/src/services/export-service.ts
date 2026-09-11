@@ -4,9 +4,15 @@ import { formatSeconds } from '@/lib/time';
 
 /**
  * Exportação de resultados (§42).
- * Uma linha por dupla, com tudo que a organização precisa para conferir,
- * arquivar ou mandar para a assessoria: dupla, categoria, atletas, os três
- * WODs, total e posição.
+ *
+ * Uma linha por dupla com AS OITO PONTUAÇÕES separadas — 1A, 1B, 1C, 1D,
+ * 2A, 2B, 2C e 3 — mais os totais por WOD e o total geral:
+ *
+ *   TOTAL = 1A + 1B + 1C + 1D + 2A + 2B + 2C + 3
+ *
+ * Cada prova leva seu resultado bruto (kg, km, tempo), sua posição e seus
+ * pontos, para que a conferência do pódio seja feita na planilha sem
+ * precisar recalcular nada.
  */
 
 export interface ExportRow {
@@ -31,10 +37,15 @@ export interface ExportRow {
   wod1_1d_posicao: number | '';
   wod1_1d_pontos: number | '';
   wod1_pontos: number | '';
-  wod2_corrida_km: number | '';
-  wod2_bike_km: number | '';
-  wod2_soma_km: number | '';
-  wod2_posicao: number | '';
+  wod2_2a_corrida_km: number | '';
+  wod2_2a_posicao: number | '';
+  wod2_2a_pontos: number | '';
+  wod2_2b_bike_km: number | '';
+  wod2_2b_posicao: number | '';
+  wod2_2b_pontos: number | '';
+  wod2_2c_soma_km: number | '';
+  wod2_2c_posicao: number | '';
+  wod2_2c_pontos: number | '';
   wod2_pontos: number | '';
   wod3_tempo: string;
   wod3_concluiu: string;
@@ -84,10 +95,15 @@ export function buildExportRows(board: Leaderboard): ExportRow[] {
         wod1_1d_posicao: w1?.rankTotal ?? '',
         wod1_1d_pontos: w1?.pointsTotal ?? '',
         wod1_pontos: w1?.points ?? '',
-        wod2_corrida_km: w2?.hasResult ? w2.runKm : '',
-        wod2_bike_km: w2?.hasResult ? w2.bikeKm : '',
-        wod2_soma_km: w2?.hasResult ? w2.totalKm : '',
-        wod2_posicao: w2?.rankTotal ?? '',
+        wod2_2a_corrida_km: w2?.hasResult ? w2.runKm : '',
+        wod2_2a_posicao: w2?.rankRun ?? '',
+        wod2_2a_pontos: w2?.pointsRun ?? '',
+        wod2_2b_bike_km: w2?.hasResult ? w2.bikeKm : '',
+        wod2_2b_posicao: w2?.rankBike ?? '',
+        wod2_2b_pontos: w2?.pointsBike ?? '',
+        wod2_2c_soma_km: w2?.hasResult ? w2.totalKm : '',
+        wod2_2c_posicao: w2?.rankTotal ?? '',
+        wod2_2c_pontos: w2?.pointsTotal ?? '',
         wod2_pontos: w2?.points ?? '',
         wod3_tempo: w3?.hasResult ? formatSeconds(w3.timeSeconds) : '',
         wod3_concluiu: w3?.hasResult ? (w3.completed ? 'sim' : 'não') : '',

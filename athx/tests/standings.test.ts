@@ -4,6 +4,72 @@ import { standingsByCategory } from '@/lib/scoring/overall';
 import { settings, team, w1, w2, w3 } from './helpers';
 
 describe('Classificação geral', () => {
+  /**
+   * A REGRA DA COMPETIÇÃO, por extenso:
+   *
+   *   TOTAL = 1A + 1B + 1C + 1D + 2A + 2B + 2C + 3
+   *
+   * São OITO pontuações independentes. Este teste não confere a soma por
+   * atalho (wod1.points + wod2.points + wod3.points): ele soma as oito
+   * parcelas uma a uma e exige que batam com o total da classificação.
+   */
+  it('TOTAL = 1A + 1B + 1C + 1D + 2A + 2B + 2C + 3 (oito pontuações)', () => {
+    const teams = [team(1), team(2), team(3), team(4)];
+    const board = buildLeaderboard({
+      teams,
+      wod1: [
+        w1('team-1', [60, 40, 80, 70, 100, 90]),
+        w1('team-2', [50, 40, 120, 100, 110, 100]),
+        w1('team-3', [40, 40, 100, 90, 150, 140]),
+        w1('team-4', [70, 60, 90, 80, 120, 110]),
+      ],
+      wod2: [
+        w2('team-1', 3.5, 8.45),
+        w2('team-2', 4.0, 7.0),
+        w2('team-3', 3.0, 9.5),
+        w2('team-4', 2.5, 10.2),
+      ],
+      wod3: [w3('team-1', 838), w3('team-2', 872), w3('team-3', 910), w3('team-4', 955)],
+      settings: settings(),
+    });
+
+    for (const row of board.standings) {
+      const w1s = row.wod1;
+      const w2s = row.wod2;
+      const w3s = row.wod3;
+      expect(w1s?.hasResult, row.team.teamName).toBe(true);
+      expect(w2s?.hasResult, row.team.teamName).toBe(true);
+      expect(w3s?.hasResult, row.team.teamName).toBe(true);
+      if (!w1s || !w2s || !w3s) continue;
+
+      const oitoParcelas =
+        (w1s.pointsStrictPress ?? 0) + // 1A
+        (w1s.pointsBackSquat ?? 0) + //   1B
+        (w1s.pointsDeadlift ?? 0) + //    1C
+        (w1s.pointsTotal ?? 0) + //       1D
+        (w2s.pointsRun ?? 0) + //         2A
+        (w2s.pointsBike ?? 0) + //        2B
+        (w2s.pointsTotal ?? 0) + //       2C
+        (w3s.points ?? 0); //             3
+
+      expect(row.totalPoints, `total da ${row.team.teamName}`).toBe(oitoParcelas);
+    }
+
+    // E cada bloco é a soma das suas parcelas.
+    const alvo = board.standings.find((r) => r.team.id === 'team-1');
+    expect(alvo?.wod1?.points).toBe(
+      (alvo?.wod1?.pointsStrictPress ?? 0) +
+        (alvo?.wod1?.pointsBackSquat ?? 0) +
+        (alvo?.wod1?.pointsDeadlift ?? 0) +
+        (alvo?.wod1?.pointsTotal ?? 0),
+    );
+    expect(alvo?.wod2?.points).toBe(
+      (alvo?.wod2?.pointsRun ?? 0) +
+        (alvo?.wod2?.pointsBike ?? 0) +
+        (alvo?.wod2?.pointsTotal ?? 0),
+    );
+  });
+
   it('soma os pontos dos três WODs; menor total = melhor posição', () => {
     const teams = [team(1), team(2), team(3)];
 

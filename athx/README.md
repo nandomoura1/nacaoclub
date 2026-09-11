@@ -252,11 +252,26 @@ Quem não concluir grava **CAP = 20:00** e o **volume concluído**.
 
 ### Classificação geral
 
+A competição tem **oito pontuações independentes**. O total é a soma das oito:
+
 ```
-TOTAL = Pts WOD 1 + Pts WOD 2 + Pts WOD 3      ·      menor total vence
+TOTAL = 1A + 1B + 1C + 1D  +  2A + 2B + 2C  +  3
+        └──── WOD 1 ─────┘    └── WOD 2 ──┘   └ WOD 3
+
+menor total vence
 ```
 
-Exemplo: WOD 1 = 2, WOD 2 = 4, WOD 3 = 1 → **TOTAL = 7**.
+| WOD | Provas que pontuam | Melhor pontuação possível |
+|---|---|---|
+| WOD 1 — Strength | 1A · 1B · 1C · 1D | 4 |
+| WOD 2 — Endurance | 2A · 2B · 2C | 3 |
+| WOD 3 — Metcon | 3 | 1 |
+
+Em cada prova: 1º lugar = 1 ponto, 2º = 2 pontos, e assim por diante.
+
+As oito parcelas aparecem separadas na **conferência** (`/admin/results`), no
+**detalhe da dupla** e na **exportação** — cada uma com o resultado bruto, a
+posição e os pontos, para que o pódio seja conferido sem recalcular nada.
 
 **Empates:** duplas com a mesma pontuação recebem a **mesma posição** e a tela
 mostra `EMPATE`. Nenhum critério de desempate é aplicado automaticamente.

@@ -43,8 +43,14 @@ relativo dos WODs na classificação geral:
 | WOD 3 | 1 | 20 |
 
 Ou seja, **o WOD 1 passa a pesar 4× o WOD 3** na classificação geral. Isso é
-consequência direta da regra pedida, não um efeito colateral do sistema — mas
-vale a organização confirmar se é o peso desejado antes do dia 12.
+consequência direta da regra pedida, não um efeito colateral do sistema.
+
+**Confirmado pela organização em 11/09:** é assim mesmo. A competição soma
+oito pontuações independentes:
+
+```
+TOTAL = 1A + 1B + 1C + 1D + 2A + 2B + 2C + 3
+```
 
 ---
 
