@@ -7,7 +7,7 @@ import type { StandingRow } from '@/types/domain';
 import { Badge } from '@/components/ui/Badge';
 import { RankPosition } from '@/components/RankPosition';
 import { categoryShort, kg, km, points, teamNumber } from '@/lib/format';
-import { formatSeconds } from '@/lib/time';
+import { formatWod3Bruto } from '@/lib/time';
 
 /**
  * RankingTable — a tabela que 200 pessoas vão olhar no celular.
@@ -146,15 +146,32 @@ export function RankingTable({
                     </span>
                   </Td>
 
-                  {/* Tablet: totais por WOD */}
+                  {/* Tablet: pontos do WOD com o resultado bruto embaixo */}
                   <Td className="hidden text-right md:table-cell lg:hidden">
-                    <WodCell value={row.wod1?.hasResult ? row.wod1.points : null} />
+                    <WodCell
+                      value={row.wod1?.hasResult ? row.wod1.points : null}
+                      bruto={row.wod1?.hasResult ? kg(row.wod1.totalLoad) : null}
+                    />
                   </Td>
                   <Td className="hidden text-right md:table-cell lg:hidden">
-                    <WodCell value={row.wod2?.hasResult ? row.wod2.points : null} />
+                    <WodCell
+                      value={row.wod2?.hasResult ? row.wod2.points : null}
+                      bruto={row.wod2?.hasResult ? km(row.wod2.totalKm) : null}
+                    />
                   </Td>
                   <Td className="hidden text-right md:table-cell lg:hidden">
-                    <WodCell value={row.wod3?.hasResult ? row.wod3.points : null} />
+                    <WodCell
+                      value={row.wod3?.hasResult ? row.wod3.points : null}
+                      bruto={
+                        row.wod3?.hasResult
+                          ? formatWod3Bruto(
+                              row.wod3.completed,
+                              row.wod3.timeSeconds,
+                              row.wod3.volumeCompleted,
+                            )
+                          : null
+                      }
+                    />
                   </Td>
 
                   {/* Desktop: cada uma das oito pontuações independentes.
@@ -162,11 +179,31 @@ export function RankingTable({
                   <Prova value={row.wod1?.hasResult ? row.wod1.pointsStrictPress : null} />
                   <Prova value={row.wod1?.hasResult ? row.wod1.pointsBackSquat : null} />
                   <Prova value={row.wod1?.hasResult ? row.wod1.pointsDeadlift : null} />
-                  <Prova value={row.wod1?.hasResult ? row.wod1.pointsTotal : null} destaque />
+                  <Prova
+                    value={row.wod1?.hasResult ? row.wod1.pointsTotal : null}
+                    bruto={row.wod1?.hasResult ? kg(row.wod1.totalLoad) : null}
+                    destaque
+                  />
                   <Prova value={row.wod2?.hasResult ? row.wod2.pointsRun : null} />
                   <Prova value={row.wod2?.hasResult ? row.wod2.pointsBike : null} />
-                  <Prova value={row.wod2?.hasResult ? row.wod2.pointsTotal : null} destaque />
-                  <Prova value={row.wod3?.hasResult ? row.wod3.points : null} destaque />
+                  <Prova
+                    value={row.wod2?.hasResult ? row.wod2.pointsTotal : null}
+                    bruto={row.wod2?.hasResult ? km(row.wod2.totalKm) : null}
+                    destaque
+                  />
+                  <Prova
+                    value={row.wod3?.hasResult ? row.wod3.points : null}
+                    bruto={
+                      row.wod3?.hasResult
+                        ? formatWod3Bruto(
+                            row.wod3.completed,
+                            row.wod3.timeSeconds,
+                            row.wod3.volumeCompleted,
+                          )
+                        : null
+                    }
+                    destaque
+                  />
 
                   <Td className="text-right">
                     {semResultado ? (
@@ -231,9 +268,13 @@ export function RankingTable({
                               prova: '3',
                               rotulo: 'Tempo',
                               pts: row.wod3?.points,
-                              valor: row.wod3?.completed
-                                ? formatSeconds(row.wod3.timeSeconds)
-                                : 'CAP',
+                              valor: row.wod3
+                                ? formatWod3Bruto(
+                                    row.wod3.completed,
+                                    row.wod3.timeSeconds,
+                                    row.wod3.volumeCompleted,
+                                  )
+                                : '—',
                               destaque: true,
                             },
                           ]}
@@ -277,12 +318,20 @@ function Td({ children, className = '' }: { children: React.ReactNode; className
 /** As oito provas que somam o total geral. */
 const PROVAS = ['1A', '1B', '1C', '1D', '2A', '2B', '2C', '3'] as const;
 
-/** Uma das oito pontuações independentes, na visão desktop. */
+/**
+ * Uma das oito pontuações independentes, na visão desktop.
+ *
+ * Nas provas de somatório (1D, 2C e o Metcon) o RESULTADO BRUTO aparece
+ * logo abaixo dos pontos — carga total, distância total e tempo. É o que
+ * responde "esses 2 pontos vieram de quanto?" sem sair da tabela.
+ */
 function Prova({
   value,
+  bruto,
   destaque = false,
 }: {
   value: number | null | undefined;
+  bruto?: string | null;
   destaque?: boolean;
 }) {
   return (
@@ -290,23 +339,45 @@ function Prova({
       {value === null || value === undefined ? (
         <span className="text-white/20">—</span>
       ) : (
-        <span
-          className={`tnum font-display text-sm ${
-            destaque ? 'font-bold text-white' : 'font-semibold text-white/60'
-          }`}
-        >
-          {points(value)}
-        </span>
+        <>
+          <span
+            className={`tnum block font-display text-sm ${
+              destaque ? 'font-bold text-white' : 'font-semibold text-white/60'
+            }`}
+          >
+            {points(value)}
+          </span>
+          {bruto ? (
+            <span className="tnum mt-0.5 block text-[10px] whitespace-nowrap text-white/35">
+              {bruto}
+            </span>
+          ) : null}
+        </>
       )}
     </td>
   );
 }
 
-function WodCell({ value }: { value: number | null | undefined }) {
+function WodCell({
+  value,
+  bruto,
+}: {
+  value: number | null | undefined;
+  bruto?: string | null;
+}) {
   if (value === null || value === undefined) {
     return <span className="text-white/25">—</span>;
   }
-  return <span className="tnum font-display font-bold text-white/80">{points(value)}</span>;
+  return (
+    <>
+      <span className="tnum block font-display font-bold text-white/80">{points(value)}</span>
+      {bruto ? (
+        <span className="tnum mt-0.5 block text-[10px] whitespace-nowrap text-white/35">
+          {bruto}
+        </span>
+      ) : null}
+    </>
+  );
 }
 
 interface ItemProva {

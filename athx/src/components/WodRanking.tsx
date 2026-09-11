@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/Badge';
 import { RankPosition } from '@/components/RankPosition';
 import { EmptyState } from '@/components/ui/Card';
 import { kg, km, points, teamNumber } from '@/lib/format';
-import { formatSeconds } from '@/lib/time';
+import { formatWod3Bruto } from '@/lib/time';
 
 /**
  * WodRanking — classificação de UM WOD.
@@ -202,15 +202,17 @@ export function WodRanking({
 
                   {wod === 3 ? (
                     <Td className="text-right">
-                      <span className="tnum font-display font-bold">
-                        {row.wod3?.completed ? formatSeconds(row.wod3.timeSeconds) : 'CAP'}
+                      <span className="tnum font-display font-bold whitespace-nowrap">
+                        {row.wod3
+                          ? formatWod3Bruto(
+                              row.wod3.completed,
+                              row.wod3.timeSeconds,
+                              row.wod3.volumeCompleted,
+                            )
+                          : '—'}
                       </span>
                       {row.wod3 && !row.wod3.completed ? (
-                        <span className="block text-[10px] text-white/40">
-                          {row.wod3.volumeCompleted !== null
-                            ? `volume ${row.wod3.volumeCompleted}`
-                            : 'não concluiu'}
-                        </span>
+                        <span className="block text-[10px] text-white/40">não concluiu</span>
                       ) : null}
                     </Td>
                   ) : null}

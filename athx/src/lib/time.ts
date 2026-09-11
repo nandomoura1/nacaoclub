@@ -41,3 +41,22 @@ export function formatSeconds(totalSeconds: number | null | undefined): string {
 export function isValidTimeInput(input: string): boolean {
   return parseTimeToSeconds(input) !== null;
 }
+
+/**
+ * Resultado bruto do WOD 3, para aparecer abaixo dos pontos.
+ *
+ *   concluiu              -> "13:35"      o tempo
+ *   estourou o CAP        -> "420 reps"   o volume que a dupla fez
+ *   estourou sem registro -> "CAP"
+ *
+ * Usa apenas o que já existe no banco — nenhuma coluna nova.
+ */
+export function formatWod3Bruto(
+  completed: boolean,
+  timeSeconds: number | null | undefined,
+  volumeCompleted: number | null | undefined,
+): string {
+  if (completed) return formatSeconds(timeSeconds);
+  if (volumeCompleted === null || volumeCompleted === undefined) return 'CAP';
+  return `${volumeCompleted} reps`;
+}

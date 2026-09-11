@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { LiveIndicator } from '@/components/LiveIndicator';
 import { categoryLabel, kg, km, points, teamNumber } from '@/lib/format';
-import { formatSeconds } from '@/lib/time';
+import { formatWod3Bruto } from '@/lib/time';
 
 /**
  * Detalhe da dupla (§10) — a tela que o aluno abre para se ver.
@@ -256,8 +256,12 @@ export function TeamDetail({ initial, teamId }: { initial: Snapshot; teamId: str
               </p>
             ) : null}
             <Result
-              label={row.wod3.completed ? 'Tempo' : 'CAP atingido'}
-              value={formatSeconds(row.wod3.timeSeconds)}
+              label={row.wod3.completed ? 'Tempo' : 'Volume no CAP'}
+              value={formatWod3Bruto(
+                row.wod3.completed,
+                row.wod3.timeSeconds,
+                row.wod3.volumeCompleted,
+              )}
               rank={row.wod3.rank}
               pts={row.wod3.points}
               icon={<Timer size={14} />}
