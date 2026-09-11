@@ -62,16 +62,50 @@ Deve aparecer `Acesso liberado para ...`.
 
 ### 1.5 Copiar as duas chaves
 
-Menu da esquerda → **Settings** (engrenagem) → **API**. Deixe esta aba aberta,
-você vai usar na Parte 2:
+> O painel do Supabase muda de layout com frequência, e este é o passo em que
+> as pessoas mais se perdem. Por isso vão três caminhos — use o que funcionar.
 
-| No Supabase | Você vai colar como |
-|---|---|
-| **Project URL** | `NEXT_PUBLIC_SUPABASE_URL` |
-| **anon public** | `NEXT_PUBLIC_SUPABASE_ANON_KEY` |
+**Caminho 1 — pela URL (o mais garantido).**
+Olhe a barra de endereço; ela está assim:
 
-> ⚠️ Existe uma terceira chave chamada **`service_role`**. **Nunca** use ela
-> aqui, nem em lugar nenhum do site. Ela ignora todas as regras de segurança.
+```
+https://supabase.com/dashboard/project/abcdefghijklmnop
+                                       └──────┬───────┘
+                                        ID do seu projeto
+```
+
+Troque o final para `/settings/api`:
+
+```
+https://supabase.com/dashboard/project/SEU-ID/settings/api
+```
+
+Se não abrir, tente `/settings/api-keys`.
+
+**Caminho 2 — botão "Connect".**
+No topo da tela do projeto. Abra e procure a aba **App Frameworks → Next.js**.
+Esse é o melhor caminho quando aparece: ele já mostra as variáveis com os
+nomes exatos que usamos, prontas para copiar.
+
+**Caminho 3 — menu lateral.**
+Engrenagem no rodapé do menu da esquerda → **API** ou **API Keys**.
+
+---
+
+Você procura dois valores. Deixe a aba aberta, vai usar na Parte 2:
+
+| O que é | Com o que se parece | Vira |
+|---|---|---|
+| **Project URL** | `https://abcdefghijklmnop.supabase.co` | `NEXT_PUBLIC_SUPABASE_URL` |
+| **Chave pública** | longa, começa com `eyJhbGci...` ou `sb_publishable_...` | `NEXT_PUBLIC_SUPABASE_ANON_KEY` |
+
+O rótulo da chave pública varia conforme a versão do painel: **anon public**,
+**Publishable key** ou **Project API key**. Qualquer um deles é o certo.
+
+> ⚠️ **NÃO use** nenhuma chave marcada como **`secret`**, **`service_role`** ou
+> escondida atrás de um botão *Reveal*. Ela ignora todas as regras de
+> segurança — com ela publicada no site, qualquer pessoa conseguiria alterar
+> o ranking.
 
 ---
 
@@ -171,6 +205,7 @@ Deu tudo certo? Está no ar.
 
 | O que aconteceu | O que fazer |
 |---|---|
+| Não acho as chaves / não existe "Settings → API" | O painel mudou de layout. Use a URL direta: `…/project/SEU-ID/settings/api` (passo 1.5) |
 | Build falhou na Vercel | **Root Directory** não está como `athx` (passo 2.2) |
 | Site abre com tarja amarela de demonstração | `NEXT_PUBLIC_DEMO_MODE` não está `false` |
 | "Evento não encontrado" | Faltou rodar o `setup-completo.sql` (passo 1.2) |
