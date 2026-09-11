@@ -269,9 +269,21 @@ menor total vence
 
 Em cada prova: 1º lugar = 1 ponto, 2º = 2 pontos, e assim por diante.
 
-As oito parcelas aparecem separadas na **conferência** (`/admin/results`), no
-**detalhe da dupla** e na **exportação** — cada uma com o resultado bruto, a
-posição e os pontos, para que o pódio seja conferido sem recalcular nada.
+As oito são **rankings independentes**: a dupla pode ser 2ª em 1A e 19ª em 1B.
+1D e 2C são somatórios (das cargas e dos km), e cada um gera sua própria
+pontuação, separada das provas que o compõem.
+
+Onde as oito aparecem separadas:
+
+| Tela | Como |
+|---|---|
+| **Leaderboard** (desktop) | oito colunas, sob os cabeçalhos de WOD |
+| **Leaderboard** (tablet) | totais por WOD |
+| **Leaderboard** (celular) | POS · DUPLA · TOTAL, com as oito no detalhe expansível |
+| **Detalhe da dupla** | cada prova com resultado bruto, posição e pontos |
+| **Conferência** (`/admin/results`) | oito colunas para auditar antes do pódio |
+| **Exportação** CSV/JSON | oito colunas, cada uma com bruto, posição e pontos |
+| **Telão** | três totais por WOD — oito colunas não se leem a 10 metros |
 
 **Empates:** duplas com a mesma pontuação recebem a **mesma posição** e a tela
 mostra `EMPATE`. Nenhum critério de desempate é aplicado automaticamente.

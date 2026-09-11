@@ -40,13 +40,46 @@ export function RankingTable({
         </caption>
 
         <thead>
+          {/* Faixa de agrupamento — só onde as oito provas aparecem. */}
+          <tr className="hidden text-white/30 lg:table-row">
+            <th colSpan={3} />
+            {/* Rótulos curtos: as colunas 1A…3 são estreitas e um nome longo
+                quebra em duas linhas e desalinha a faixa. */}
+            <th
+              colSpan={4}
+              className="px-2 pt-2 text-center font-display text-[9px] font-bold tracking-wider whitespace-nowrap uppercase"
+            >
+              WOD 1
+            </th>
+            <th
+              colSpan={3}
+              className="px-2 pt-2 text-center font-display text-[9px] font-bold tracking-wider whitespace-nowrap uppercase"
+            >
+              WOD 2
+            </th>
+            <th className="px-2 pt-2 text-center font-display text-[9px] font-bold tracking-wider whitespace-nowrap uppercase">
+              WOD 3
+            </th>
+            <th />
+          </tr>
+
           <tr className="border-b border-white/12">
             <Th className="w-14 sm:w-20">Pos</Th>
             <Th className="w-full max-w-0">Dupla</Th>
             <Th className="hidden md:table-cell">Cat.</Th>
-            <Th className="hidden text-right md:table-cell">WOD 1</Th>
-            <Th className="hidden text-right md:table-cell">WOD 2</Th>
-            <Th className="hidden text-right md:table-cell">WOD 3</Th>
+
+            {/* Tablet: os três totais por WOD. */}
+            <Th className="hidden text-right md:table-cell lg:hidden">WOD 1</Th>
+            <Th className="hidden text-right md:table-cell lg:hidden">WOD 2</Th>
+            <Th className="hidden text-right md:table-cell lg:hidden">WOD 3</Th>
+
+            {/* Desktop: as OITO pontuações independentes. */}
+            {PROVAS.map((prova) => (
+              <Th key={prova} className="hidden text-center lg:table-cell">
+                {prova}
+              </Th>
+            ))}
+
             <Th className="text-right">Total</Th>
             <Th className="w-10 md:hidden">
               <span className="sr-only">Detalhes</span>
@@ -106,15 +139,27 @@ export function RankingTable({
                     <Badge tone="neutral">{categoryShort(row.team.category)}</Badge>
                   </Td>
 
-                  <Td className="hidden text-right md:table-cell">
+                  {/* Tablet: totais por WOD */}
+                  <Td className="hidden text-right md:table-cell lg:hidden">
                     <WodCell value={row.wod1?.hasResult ? row.wod1.points : null} />
                   </Td>
-                  <Td className="hidden text-right md:table-cell">
+                  <Td className="hidden text-right md:table-cell lg:hidden">
                     <WodCell value={row.wod2?.hasResult ? row.wod2.points : null} />
                   </Td>
-                  <Td className="hidden text-right md:table-cell">
+                  <Td className="hidden text-right md:table-cell lg:hidden">
                     <WodCell value={row.wod3?.hasResult ? row.wod3.points : null} />
                   </Td>
+
+                  {/* Desktop: cada uma das oito pontuações independentes.
+                      As de somatório (1D, 2C) e a do Metcon vêm destacadas. */}
+                  <Prova value={row.wod1?.hasResult ? row.wod1.pointsStrictPress : null} />
+                  <Prova value={row.wod1?.hasResult ? row.wod1.pointsBackSquat : null} />
+                  <Prova value={row.wod1?.hasResult ? row.wod1.pointsDeadlift : null} />
+                  <Prova value={row.wod1?.hasResult ? row.wod1.pointsTotal : null} destaque />
+                  <Prova value={row.wod2?.hasResult ? row.wod2.pointsRun : null} />
+                  <Prova value={row.wod2?.hasResult ? row.wod2.pointsBike : null} />
+                  <Prova value={row.wod2?.hasResult ? row.wod2.pointsTotal : null} destaque />
+                  <Prova value={row.wod3?.hasResult ? row.wod3.points : null} destaque />
 
                   <Td className="text-right">
                     {semResultado ? (
@@ -151,35 +196,44 @@ export function RankingTable({
                 {aberto ? (
                   <tr className="md:hidden">
                     <td colSpan={4} className="border-b border-white/[0.07] px-2 pb-4">
-                      <div className="animate-rise grid grid-cols-3 gap-2">
-                        <MiniWod
-                          label="WOD 1"
-                          sub="Strength"
-                          pts={row.wod1?.hasResult ? row.wod1.points : null}
-                          detail={row.wod1?.hasResult ? kg(row.wod1.totalLoad) : null}
-                          rank={row.wod1?.rankTotal ?? null}
+                      {/* As OITO pontuações independentes, também no celular. */}
+                      <div className="animate-rise space-y-2.5">
+                        <GrupoProvas
+                          titulo="WOD 1 — Strength"
+                          itens={[
+                            { prova: '1A', rotulo: 'Press', pts: row.wod1?.pointsStrictPress, valor: kg(row.wod1?.strictPress) },
+                            { prova: '1B', rotulo: 'Squat', pts: row.wod1?.pointsBackSquat, valor: kg(row.wod1?.backSquat) },
+                            { prova: '1C', rotulo: 'Deadlift', pts: row.wod1?.pointsDeadlift, valor: kg(row.wod1?.deadlift) },
+                            { prova: '1D', rotulo: 'Total', pts: row.wod1?.pointsTotal, valor: kg(row.wod1?.totalLoad), destaque: true },
+                          ]}
+                          disponivel={row.wod1?.hasResult ?? false}
                         />
-                        <MiniWod
-                          label="WOD 2"
-                          sub="Endurance"
-                          pts={row.wod2?.hasResult ? row.wod2.points : null}
-                          detail={row.wod2?.hasResult ? km(row.wod2.totalKm) : null}
-                          rank={row.wod2?.rankTotal ?? null}
+                        <GrupoProvas
+                          titulo="WOD 2 — Endurance"
+                          itens={[
+                            { prova: '2A', rotulo: 'Corrida', pts: row.wod2?.pointsRun, valor: km(row.wod2?.runKm) },
+                            { prova: '2B', rotulo: 'Bike', pts: row.wod2?.pointsBike, valor: km(row.wod2?.bikeKm) },
+                            { prova: '2C', rotulo: 'Soma', pts: row.wod2?.pointsTotal, valor: km(row.wod2?.totalKm), destaque: true },
+                          ]}
+                          disponivel={row.wod2?.hasResult ?? false}
                         />
-                        <MiniWod
-                          label="WOD 3"
-                          sub="Metcon"
-                          pts={row.wod3?.hasResult ? row.wod3.points : null}
-                          detail={
-                            row.wod3?.hasResult
-                              ? row.wod3.completed
+                        <GrupoProvas
+                          titulo="WOD 3 — Metcon"
+                          itens={[
+                            {
+                              prova: '3',
+                              rotulo: 'Tempo',
+                              pts: row.wod3?.points,
+                              valor: row.wod3?.completed
                                 ? formatSeconds(row.wod3.timeSeconds)
-                                : 'CAP'
-                              : null
-                          }
-                          rank={row.wod3?.rank ?? null}
+                                : 'CAP',
+                              destaque: true,
+                            },
+                          ]}
+                          disponivel={row.wod3?.hasResult ?? false}
                         />
                       </div>
+
                       <Link
                         href={`/team/${row.team.id}`}
                         className="mt-3 block text-center font-display text-xs font-bold tracking-wider text-nacao-cyan uppercase"
@@ -213,6 +267,34 @@ function Td({ children, className = '' }: { children: React.ReactNode; className
   return <td className={`px-2 py-3 align-middle sm:px-3 ${className}`}>{children}</td>;
 }
 
+/** As oito provas que somam o total geral. */
+const PROVAS = ['1A', '1B', '1C', '1D', '2A', '2B', '2C', '3'] as const;
+
+/** Uma das oito pontuações independentes, na visão desktop. */
+function Prova({
+  value,
+  destaque = false,
+}: {
+  value: number | null | undefined;
+  destaque?: boolean;
+}) {
+  return (
+    <td className="hidden px-2 py-3 text-center align-middle lg:table-cell">
+      {value === null || value === undefined ? (
+        <span className="text-white/20">—</span>
+      ) : (
+        <span
+          className={`tnum font-display text-sm ${
+            destaque ? 'font-bold text-white' : 'font-semibold text-white/60'
+          }`}
+        >
+          {points(value)}
+        </span>
+      )}
+    </td>
+  );
+}
+
 function WodCell({ value }: { value: number | null | undefined }) {
   if (value === null || value === undefined) {
     return <span className="text-white/25">—</span>;
@@ -220,31 +302,54 @@ function WodCell({ value }: { value: number | null | undefined }) {
   return <span className="tnum font-display font-bold text-white/80">{points(value)}</span>;
 }
 
-function MiniWod({
-  label,
-  sub,
-  pts,
-  detail,
-  rank,
-}: {
-  label: string;
-  sub: string;
+interface ItemProva {
+  prova: string;
+  rotulo: string;
   pts: number | null | undefined;
-  detail: string | null;
-  rank: number | null;
+  valor: string;
+  destaque?: boolean;
+}
+
+/**
+ * Um WOD e suas provas independentes, na visão de celular.
+ * Cada prova mostra o resultado bruto e os pontos que ela gerou — porque são
+ * pontuações separadas, não partes de uma nota só.
+ */
+function GrupoProvas({
+  titulo,
+  itens,
+  disponivel,
+}: {
+  titulo: string;
+  itens: ItemProva[];
+  disponivel: boolean;
 }) {
   return (
-    <div className="surface px-2 py-2.5 text-center">
-      <p className="font-display text-[9px] font-bold tracking-wider text-nacao-cyan uppercase">
-        {label}
+    <div className="surface p-2.5">
+      <p className="font-display text-[9px] font-bold tracking-kicker text-nacao-cyan uppercase">
+        {titulo}
       </p>
-      <p className="text-[9px] text-white/35 uppercase">{sub}</p>
-      <p className="tnum mt-1.5 font-display text-lg font-extrabold text-white">
-        {pts === null || pts === undefined ? '—' : points(pts)}
-      </p>
-      <p className="text-[10px] text-white/40">
-        {pts === null || pts === undefined ? 'aguardando' : `${rank}º · ${detail}`}
-      </p>
+
+      {!disponivel ? (
+        <p className="mt-1.5 text-[11px] text-white/35">Aguardando resultado</p>
+      ) : (
+        <ul className="mt-1.5 grid grid-cols-4 gap-1.5">
+          {itens.map((item) => (
+            <li
+              key={item.prova}
+              className={`rounded-lg px-1.5 py-1.5 text-center ${
+                item.destaque ? 'bg-nacao-cyan/10' : 'bg-white/[0.04]'
+              }`}
+            >
+              <p className="font-display text-[9px] font-bold text-white/45">{item.prova}</p>
+              <p className="tnum font-display text-base font-extrabold text-white">
+                {points(item.pts)}
+              </p>
+              <p className="tnum text-[9px] text-white/40">{item.valor}</p>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
