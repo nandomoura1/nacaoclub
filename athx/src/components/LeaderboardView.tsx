@@ -2,12 +2,13 @@
 
 import { useMemo, useState } from 'react';
 import { Printer } from 'lucide-react';
-import type { Category, StandingRow, WodNumber } from '@/types/domain';
+import type { Battery, Category, StandingRow, WodNumber } from '@/types/domain';
 import { CATEGORIES, CATEGORY_LABEL, CATEGORY_SHORT, WOD_META } from '@/types/domain';
 import type { Snapshot } from '@/services/snapshot';
 import { buildLeaderboard } from '@/lib/scoring/build';
 import { standingsByCategory } from '@/lib/scoring/overall';
 import { matchesQuery } from '@/lib/search';
+import { horariosDaBateria } from '@/lib/wods';
 import { useLiveSnapshot } from '@/hooks/useLiveSnapshot';
 import { LiveIndicator } from '@/components/LiveIndicator';
 import { RankingTable } from '@/components/RankingTable';
@@ -19,7 +20,17 @@ import { EmptyState } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 
 type CategoryFilter = 'TODAS' | Category;
+type BatteryFilter = 'TODAS' | '1' | '2';
 type ViewFilter = 'GERAL' | '1' | '2' | '3';
+
+// "Todas as baterias" por extenso: com só "Todas", a tela mostraria dois
+// chips idênticos — um da categoria e outro da bateria — e ninguém saberia
+// qual é qual.
+const BATTERY_TABS = [
+  { value: 'TODAS' as const, label: 'Todas as baterias' },
+  { value: '1' as const, label: 'Bateria 1' },
+  { value: '2' as const, label: 'Bateria 2' },
+];
 
 const CATEGORY_TABS = [
   { value: 'TODAS' as const, label: 'Todas' },
@@ -44,6 +55,7 @@ export function LeaderboardView({ initial }: { initial: Snapshot }) {
   const { snapshot, updatedAt } = useLiveSnapshot(initial);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<CategoryFilter>('TODAS');
+  const [battery, setBattery] = useState<BatteryFilter>('TODAS');
   const [view, setView] = useState<ViewFilter>('GERAL');
 
   const board = useMemo(
@@ -68,8 +80,11 @@ export function LeaderboardView({ initial }: { initial: Snapshot }) {
   );
 
   const visible = useMemo(
-    () => scoped.filter((row) => matchesQuery(row, query)),
-    [scoped, query],
+    () =>
+      scoped
+        .filter((row) => battery === 'TODAS' || row.team.battery === (Number(battery) as Battery))
+        .filter((row) => matchesQuery(row, query)),
+    [scoped, battery, query],
   );
 
   const pendingDecision = board.standings.some((r) => r.needsDecision);
@@ -113,6 +128,19 @@ export function LeaderboardView({ initial }: { initial: Snapshot }) {
           {category === 'TODAS' ? 'Classificação geral' : CATEGORY_LABEL[category]}
         </h2>
         <p className="mt-1 text-sm text-white/50">Menor pontuação = melhor classificação</p>
+
+        {battery !== 'TODAS' ? (
+          <p className="mt-2 inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-nacao-cyan/25 bg-nacao-cyan/[0.07] px-3 py-1.5 text-xs text-white/70">
+            <strong className="font-display font-bold tracking-wider text-nacao-cyan uppercase">
+              Bateria {battery}
+            </strong>
+            {horariosDaBateria(Number(battery) as Battery).map(({ wod, hora }) => (
+              <span key={wod} className="tnum">
+                WOD {wod} · {hora.split('–')[0]}
+              </span>
+            ))}
+          </p>
+        ) : null}
       </div>
 
       {/* ---- Busca e filtros --------------------------------------------- */}
@@ -135,6 +163,15 @@ export function LeaderboardView({ initial }: { initial: Snapshot }) {
             size="sm"
           />
         </div>
+
+        {/* Bateria: é por aqui que o atleta acha a própria no dia do evento. */}
+        <Tabs
+          options={BATTERY_TABS}
+          value={battery}
+          onChange={setBattery}
+          label="Filtrar por bateria"
+          size="sm"
+        />
       </div>
 
       {/* ---- Aviso de empate --------------------------------------------- */}
@@ -159,7 +196,11 @@ export function LeaderboardView({ initial }: { initial: Snapshot }) {
       {visible.length === 0 ? (
         <EmptyState
           title="Nenhuma dupla encontrada"
-          description={`Nada corresponde a "${query}". Tente o nome da dupla, o nome de um atleta ou o número.`}
+          description={
+            query
+              ? `Nada corresponde a "${query}". Tente o nome da dupla, o nome de um atleta ou o número.`
+              : 'Nenhuma dupla neste filtro. Experimente voltar para "Todas".'
+          }
         />
       ) : view === 'GERAL' ? (
         <RankingTable rows={visible} categoryScoped={category !== 'TODAS'} />

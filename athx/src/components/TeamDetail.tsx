@@ -2,9 +2,10 @@
 
 import { useMemo } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Bike, Dumbbell, Footprints, Timer } from 'lucide-react';
+import { ArrowLeft, Bike, Clock, Dumbbell, Footprints, Timer } from 'lucide-react';
 import type { Snapshot } from '@/services/snapshot';
 import { WOD_META } from '@/types/domain';
+import { horariosDaBateria } from '@/lib/wods';
 import { buildLeaderboard } from '@/lib/scoring/build';
 import { useLiveSnapshot } from '@/hooks/useLiveSnapshot';
 import { Badge } from '@/components/ui/Badge';
@@ -80,6 +81,48 @@ export function TeamDetail({ initial, teamId }: { initial: Snapshot; teamId: str
           {team.athlete2 || 'Atleta 2'}
         </p>
       </header>
+
+      {/* ---- Horários da bateria -----------------------------------------
+          A pergunta que o atleta abre o celular para responder na manhã do
+          evento: "a que horas eu entro?". Vem antes da classificação de
+          propósito — enquanto o evento não começou, é a informação que
+          importa. */}
+      <Card className="border-nacao-cyan/25 bg-nacao-cyan/[0.05] p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="flex items-center gap-1.5 font-display text-[10px] font-bold tracking-kicker text-nacao-cyan uppercase">
+              <Clock size={12} aria-hidden="true" />
+              Seus horários
+            </p>
+            <p className="mt-1 font-display text-2xl font-black uppercase">
+              Bateria {team.battery}
+            </p>
+          </div>
+          <p className="font-display text-[10px] font-bold tracking-wider text-white/45 uppercase">
+            Sábado · 12 de setembro
+          </p>
+        </div>
+
+        <ul className="mt-4 grid grid-cols-3 gap-2">
+          {horariosDaBateria(team.battery).map(({ wod, hora }) => (
+            <li key={wod} className="rounded-xl bg-nacao-abyss/40 px-2.5 py-2.5 text-center">
+              <p className="font-display text-[9px] font-bold tracking-wider text-white/45 uppercase">
+                WOD {wod}
+              </p>
+              <p className="font-display text-[10px] font-bold text-nacao-sky uppercase">
+                {WOD_META[wod].name}
+              </p>
+              <p className="tnum mt-1 font-display text-base font-extrabold text-white sm:text-lg">
+                {hora.split('–')[0]}
+              </p>
+            </li>
+          ))}
+        </ul>
+
+        <p className="mt-3 text-[11px] text-white/45">
+          Briefing às 08h00, com presença obrigatória. Pódio às 11h30.
+        </p>
+      </Card>
 
       {/* ---- Posição e total --------------------------------------------- */}
       {row && row.scoredWods > 0 ? (
@@ -262,9 +305,11 @@ function Stat({
 }) {
   return (
     <div className="rounded-xl bg-white/[0.045] px-3 py-2.5">
-      <p className="flex items-center gap-1 font-display text-[9px] font-bold tracking-wider text-white/45 uppercase">
-        {icon ? <span className="text-nacao-sky">{icon}</span> : null}
-        <span className="truncate">{label}</span>
+      {/* Sem truncate: em 390px o rótulo tem três colunas e "1C Deadlift"
+          virava "1C DEADL…". Melhor quebrar a linha do que esconder a prova. */}
+      <p className="flex items-start gap-1 font-display text-[9px] leading-tight font-bold tracking-wider text-white/45 uppercase">
+        {icon ? <span className="mt-px shrink-0 text-nacao-sky">{icon}</span> : null}
+        <span>{label}</span>
       </p>
       <p className="tnum mt-1 font-display text-sm font-bold sm:text-base">{value}</p>
       {hint ? <p className="text-[10px] text-white/35">{hint}</p> : null}

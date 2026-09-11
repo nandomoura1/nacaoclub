@@ -1,4 +1,4 @@
-import type { WodNumber } from '@/types/domain';
+import type { Battery, WodNumber } from '@/types/domain';
 
 /**
  * Prescrição dos WODs — exatamente como fornecida pela organização.
@@ -176,6 +176,8 @@ export interface ScheduleEntry {
   /** Observação da organização, como o intervalo entre baterias. */
   nota?: string;
   wod?: WodNumber;
+  /** Qual bateria disputa neste horário. */
+  bateria?: Battery;
   destaque?: boolean;
 }
 
@@ -195,27 +197,45 @@ export const SCHEDULE: ScheduleEntry[] = [
     ],
   },
 
-  { hora: '09h00–09h16', titulo: 'Workout 01 — Bateria 1', detalhe: 'Strength', wod: 1 },
+  { hora: '09h00–09h16', titulo: 'Workout 01 — Bateria 1', detalhe: 'Strength', wod: 1, bateria: 1 },
   {
     hora: '09h26–09h42',
     titulo: 'Workout 01 — Bateria 2',
     detalhe: 'Strength',
     wod: 1,
+    bateria: 2,
     nota: "Intervalo de 14' entre as baterias",
   },
 
-  { hora: '09h30–09h52', titulo: 'Workout 02 — Bateria 1', detalhe: 'Endurance', wod: 2 },
+  { hora: '09h30–09h52', titulo: 'Workout 02 — Bateria 1', detalhe: 'Endurance', wod: 2, bateria: 1 },
   {
     hora: '09h56–10h16',
     titulo: 'Workout 02 — Bateria 2',
     detalhe: 'Endurance',
     wod: 2,
+    bateria: 2,
     nota: "Intervalo de 20' entre as baterias",
   },
 
-  { hora: '10h12–10h32', titulo: 'Workout 03 — Bateria 1', detalhe: 'Metcon', wod: 3 },
-  { hora: '10h36–10h56', titulo: 'Workout 03 — Bateria 2', detalhe: 'Metcon', wod: 3 },
+  { hora: '10h12–10h32', titulo: 'Workout 03 — Bateria 1', detalhe: 'Metcon', wod: 3, bateria: 1 },
+  { hora: '10h36–10h56', titulo: 'Workout 03 — Bateria 2', detalhe: 'Metcon', wod: 3, bateria: 2 },
 
   { hora: '11h00', titulo: 'Conferência / classificação' },
   { hora: '11h30', titulo: 'Pódio', destaque: true },
 ];
+
+/**
+ * Os três horários de uma bateria, na ordem dos WODs.
+ *
+ * É o que o atleta abre o celular para descobrir na manhã do evento:
+ * "eu sou bateria 1 — então entro 09h00, 09h30 e 10h12".
+ */
+export function horariosDaBateria(
+  bateria: Battery,
+): { wod: WodNumber; hora: string }[] {
+  return SCHEDULE.filter(
+    (e): e is ScheduleEntry & { wod: WodNumber } => e.bateria === bateria && e.wod !== undefined,
+  )
+    .map((e) => ({ wod: e.wod, hora: e.hora }))
+    .sort((a, b) => a.wod - b.wod);
+}

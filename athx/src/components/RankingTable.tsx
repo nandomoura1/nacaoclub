@@ -66,7 +66,7 @@ export function RankingTable({
           <tr className="border-b border-white/12">
             <Th className="w-14 sm:w-20">Pos</Th>
             <Th className="w-full max-w-0">Dupla</Th>
-            <Th className="hidden md:table-cell">Cat.</Th>
+            <Th className="hidden md:table-cell">Cat. · Bat.</Th>
 
             {/* Tablet: os três totais por WOD. */}
             <Th className="hidden text-right md:table-cell lg:hidden">WOD 1</Th>
@@ -130,13 +130,20 @@ export function RankingTable({
                         ) : null}
                       </span>
                       <span className="mt-0.5 block truncate text-xs text-white/45">
+                        <span className="font-display font-bold text-nacao-sky">
+                          B{row.team.battery}
+                        </span>
+                        {' · '}
                         {row.team.athlete1 || 'Atleta 1'} · {row.team.athlete2 || 'Atleta 2'}
                       </span>
                     </Link>
                   </Td>
 
                   <Td className="hidden md:table-cell">
-                    <Badge tone="neutral">{categoryShort(row.team.category)}</Badge>
+                    <span className="flex flex-wrap items-center gap-1">
+                      <Badge tone="neutral">{categoryShort(row.team.category)}</Badge>
+                      <Badge tone="sky">B{row.team.battery}</Badge>
+                    </span>
                   </Td>
 
                   {/* Tablet: totais por WOD */}
