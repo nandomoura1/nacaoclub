@@ -1,0 +1,296 @@
+@import 'tailwindcss';
+
+/* ==========================================================================
+   NAÇÃO ATHX — DESIGN SYSTEM
+   Derivado do Manual da Marca Nação Club.
+
+   Paleta oficial ............ #022B57 · #0169E9 · #3A86FF · #20C4FA · #FFFFFF
+   Tipografia oficial ........ Gotham (títulos) · Gotham Rounded Light (corpo)
+   Conceito .................. "Muitos esportes, muitas paixões, uma Nação!"
+   Elementos gráficos ........ ondas concêntricas · céu de Brasília · escudo
+
+   HIERARQUIA (não usar as 5 cores de forma indiscriminada):
+     navy  -> fundo, header, títulos, peso
+     blue  -> CTA, botões, links, estado ativo
+     sky   -> gráficos, destaques secundários, indicadores
+     cyan  -> highlights, badges, AO VIVO, energia
+     white -> cards, texto sobre escuro, contraste
+   ========================================================================== */
+
+@theme {
+  /* --- Paleta oficial ---------------------------------------------------- */
+  --color-nacao-navy: #022b57;
+  --color-nacao-blue: #0169e9;
+  --color-nacao-sky: #3a86ff;
+  --color-nacao-cyan: #20c4fa;
+  --color-nacao-white: #ffffff;
+
+  /* --- Extensões tonais (derivadas, não inventadas: são o navy oficial em
+         profundidades diferentes, para criar camadas sem sujar a paleta) --- */
+  --color-nacao-abyss: #01152c;
+  --color-nacao-deep: #011d3c;
+  --color-nacao-surface: #04305f;
+
+  /* --- Tipografia -------------------------------------------------------- */
+  --font-display: var(--font-nacao-display), 'Gotham', 'Montserrat', ui-sans-serif, system-ui, sans-serif;
+  --font-body: var(--font-nacao-body), 'Gotham Rounded Light', 'Nunito Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Roboto Mono', monospace;
+
+  /* --- Ritmo ------------------------------------------------------------- */
+  --radius-nacao: 14px;
+  --radius-nacao-lg: 20px;
+}
+
+:root {
+  /* Tokens semânticos pedidos na especificação (uso em CSS puro / SVG) */
+  --nacao-navy: #022b57;
+  --nacao-blue: #0169e9;
+  --nacao-sky: #3a86ff;
+  --nacao-cyan: #20c4fa;
+  --nacao-white: #ffffff;
+
+  --nacao-abyss: #01152c;
+  --nacao-deep: #011d3c;
+  --nacao-surface: #04305f;
+
+  /* Superfícies: branco a baixa opacidade sobre o navy — mantém a âncora
+     azul do manual em vez de introduzir cinzas. */
+  --surface-1: rgb(255 255 255 / 0.045);
+  --surface-2: rgb(255 255 255 / 0.075);
+  --surface-3: rgb(255 255 255 / 0.11);
+  --hairline: rgb(255 255 255 / 0.1);
+  --hairline-strong: rgb(32 196 250 / 0.32);
+
+  --text-1: #ffffff;
+  --text-2: rgb(255 255 255 / 0.72);
+  --text-3: rgb(255 255 255 / 0.48);
+
+  color-scheme: dark;
+}
+
+/* ==========================================================================
+   BASE
+   ========================================================================== */
+
+* {
+  border-color: var(--hairline);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background-color: var(--nacao-abyss);
+  color: var(--text-1);
+  font-family: var(--font-body);
+  font-feature-settings: 'ss01', 'cv01';
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+/* O "céu de Brasília": atmosfera azul que nasce no topo e se dissolve.
+   Fixa, discreta, nunca compete com o conteúdo. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 70% at 50% -12%, rgb(1 105 233 / 0.28) 0%, transparent 62%),
+    radial-gradient(80% 50% at 88% 4%, rgb(32 196 250 / 0.14) 0%, transparent 58%),
+    linear-gradient(180deg, var(--nacao-deep) 0%, var(--nacao-abyss) 58%, #010e1e 100%);
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.02;
+  margin: 0;
+  text-wrap: balance;
+}
+
+::selection {
+  background: var(--nacao-cyan);
+  color: var(--nacao-navy);
+}
+
+/* ==========================================================================
+   ACESSIBILIDADE — foco visível e consistente em tudo que é interativo
+   ========================================================================== */
+
+:focus-visible {
+  outline: 3px solid var(--nacao-cyan);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  padding: 0.75rem 1.25rem;
+  background: var(--nacao-cyan);
+  color: var(--nacao-navy);
+  font-weight: 800;
+  border-radius: 0 0 12px 0;
+}
+.skip-link:focus {
+  left: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ==========================================================================
+   UTILITÁRIOS DE MARCA
+   ========================================================================== */
+
+@utility font-display {
+  font-family: var(--font-display);
+}
+
+@utility font-body {
+  font-family: var(--font-body);
+}
+
+/* Tracking largo do wordmark "C L U B" do manual — usado em subtítulos curtos */
+@utility tracking-signature {
+  letter-spacing: 0.42em;
+  text-indent: 0.42em;
+}
+
+@utility tracking-kicker {
+  letter-spacing: 0.2em;
+  text-indent: 0.2em;
+}
+
+/* Superfície padrão de card: vidro sobre navy, hairline clara */
+@utility surface {
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-nacao);
+}
+
+@utility surface-raised {
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-nacao);
+}
+
+/* Texto em gradiente do azul Nação ao ciano — reservado para números-herói */
+@utility text-energy {
+  background: linear-gradient(100deg, var(--nacao-white) 0%, var(--nacao-cyan) 92%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Números tabulares: obrigatório em tabela de ranking */
+@utility tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+/* ==========================================================================
+   ANIMAÇÕES — discretas por decisão de design (§27: "não exagerar")
+   ========================================================================== */
+
+@keyframes nacao-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.82); }
+}
+
+@keyframes nacao-flash {
+  0% { background-color: rgb(32 196 250 / 0.22); }
+  100% { background-color: transparent; }
+}
+
+@keyframes nacao-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes nacao-sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(320%); }
+}
+
+.animate-live-dot { animation: nacao-pulse 1.8s ease-in-out infinite; }
+.animate-flash { animation: nacao-flash 1.6s ease-out 1; }
+.animate-rise { animation: nacao-rise 0.32s ease-out both; }
+
+/* ==========================================================================
+   IMPRESSÃO — §43: leaderboard em A4 paisagem
+   ========================================================================== */
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 12mm;
+  }
+
+  /* Tudo em preto sobre branco. Sem esta regra, os textos com classe
+     `text-white` venceriam por especificidade e a tabela sairia
+     branco-no-branco — ou seja, uma folha em branco na hora do pódio. */
+  *,
+  *::before,
+  *::after {
+    color: #000 !important;
+    background: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    -webkit-text-fill-color: #000 !important;
+    border-color: #bbb !important;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+  body::before { display: none !important; }
+
+  .no-print { display: none !important; }
+  .print-only { display: block !important; }
+
+  .surface,
+  .surface-raised {
+    border: 1px solid #999 !important;
+  }
+
+  table { width: 100%; border-collapse: collapse; }
+  th, td {
+    border-bottom: 1px solid #bbb !important;
+    padding: 5px 7px !important;
+    font-size: 10.5pt !important;
+  }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; }
+  a { text-decoration: none !important; }
+
+  /* Cabeçalho de folha: quem lê a impressão precisa saber de que evento é. */
+  .print-header {
+    display: block !important;
+    margin-bottom: 8mm;
+    padding-bottom: 3mm;
+    border-bottom: 2px solid #000 !important;
+  }
+}
+
+.print-only { display: none; }

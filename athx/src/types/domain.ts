@@ -1,0 +1,202 @@
+/**
+ * NAÇÃO ATHX — modelo de domínio.
+ * Estes tipos espelham exatamente as tabelas do Supabase (supabase/migrations).
+ */
+
+export const CATEGORIES = ['MASCULINA', 'FEMININA', 'MISTA'] as const;
+export type Category = (typeof CATEGORIES)[number];
+
+export const CATEGORY_LABEL: Record<Category, string> = {
+  MASCULINA: 'Masculina',
+  FEMININA: 'Feminina',
+  MISTA: 'Mista',
+};
+
+export const TEAM_STATUSES = ['INSCRITA', 'ATIVA', 'DESCLASSIFICADA'] as const;
+export type TeamStatus = (typeof TEAM_STATUSES)[number];
+
+export const TEAM_STATUS_LABEL: Record<TeamStatus, string> = {
+  INSCRITA: 'Inscrita',
+  ATIVA: 'Ativa',
+  DESCLASSIFICADA: 'Desclassificada',
+};
+
+/** Estados de homologação (§22). LOCKED exige confirmação para alterar. */
+export const RESULT_STATUSES = ['DRAFT', 'PUBLISHED', 'LOCKED'] as const;
+export type ResultStatus = (typeof RESULT_STATUSES)[number];
+
+export type Battery = 1 | 2;
+export type WodNumber = 1 | 2 | 3;
+
+export const WOD_META: Record<WodNumber, { name: string; cap: string; capSeconds: number; format: string }> = {
+  1: { name: 'STRENGTH', cap: '15 minutos', capSeconds: 900, format: 'CARGA MÁXIMA' },
+  2: { name: 'ENDURANCE', cap: '22 minutos', capSeconds: 1320, format: "AMRAP 22'" },
+  3: { name: 'METCON', cap: '20 minutos', capSeconds: 1200, format: 'FOR TIME' },
+};
+
+export interface EventInfo {
+  id: string;
+  name: string;
+  date: string;
+  status: 'DRAFT' | 'LIVE' | 'FINISHED';
+  liveMode: boolean;
+  maintenanceMode: boolean;
+}
+
+export interface Team {
+  id: string;
+  eventId: string;
+  teamNumber: number;
+  teamName: string;
+  category: Category;
+  athlete1: string;
+  athlete2: string;
+  battery: Battery;
+  status: TeamStatus;
+}
+
+/** WOD 1 — seis cargas por dupla (3 levantamentos × 2 atletas). */
+export interface Wod1Result {
+  teamId: string;
+  strictPressAthlete1: number | null;
+  strictPressAthlete2: number | null;
+  backSquatAthlete1: number | null;
+  backSquatAthlete2: number | null;
+  deadliftAthlete1: number | null;
+  deadliftAthlete2: number | null;
+  status: ResultStatus;
+}
+
+/** WOD 2 — AMRAP 22': corrida (shuttle run) + assault bike. */
+export interface Wod2Result {
+  teamId: string;
+  runKm: number | null;
+  bikeKm: number | null;
+  status: ResultStatus;
+}
+
+/** WOD 3 — FOR TIME, CAP 20:00. */
+export interface Wod3Result {
+  teamId: string;
+  timeSeconds: number | null;
+  completed: boolean;
+  /** Reps/metros concluídos dentro do CAP quando `completed = false`. */
+  volumeCompleted: number | null;
+  status: ResultStatus;
+}
+
+/* ==========================================================================
+   CONFIGURAÇÕES QUE A ORGANIZAÇÃO AINDA PRECISA FECHAR (§15, §26, §48)
+   Nada aqui é assumido silenciosamente — tudo é editável em /admin/settings.
+   ========================================================================== */
+
+/**
+ * Como pontuar duplas empatadas no MESMO valor numérico.
+ *  - COMPETITION  1º, 1º, 3º  — ambas recebem 1 ponto (padrão esportivo usual)
+ *  - AVERAGE      1º, 1º, 3º  — ambas recebem 1,5 ponto (média das posições)
+ * A organização escolhe. Em ambos os casos o empate é sinalizado na tela.
+ */
+export const TIE_POINTS_MODES = ['COMPETITION', 'AVERAGE'] as const;
+export type TiePointsMode = (typeof TIE_POINTS_MODES)[number];
+
+/**
+ * Como ordenar duplas que NÃO concluíram o WOD 3 dentro do CAP.
+ *  - PENDING_DEFINITION  (padrão) todas depois das finalizadas, empatadas
+ *                        entre si e marcadas para decisão manual.
+ *                        >>> NENHUM critério é inventado. <<<
+ *  - VOLUME_DESC         maior volume concluído fica à frente
+ *  - TIED_LAST           todas empatadas na última posição
+ */
+export const DNF_POLICIES = ['PENDING_DEFINITION', 'VOLUME_DESC', 'TIED_LAST'] as const;
+export type DnfPolicy = (typeof DNF_POLICIES)[number];
+
+export interface EventSettings {
+  tiePointsMode: TiePointsMode;
+  dnfPolicy: DnfPolicy;
+  /** Critérios de desempate da classificação geral — vazios até definição. */
+  tieBreaker1: string | null;
+  tieBreaker2: string | null;
+  tieBreaker3: string | null;
+  liveMode: boolean;
+  maintenanceMode: boolean;
+}
+
+export const DEFAULT_SETTINGS: EventSettings = {
+  tiePointsMode: 'COMPETITION',
+  dnfPolicy: 'PENDING_DEFINITION',
+  tieBreaker1: null,
+  tieBreaker2: null,
+  tieBreaker3: null,
+  liveMode: true,
+  maintenanceMode: false,
+};
+
+/* ==========================================================================
+   RESULTADOS CALCULADOS
+   ========================================================================== */
+
+export interface RankedEntry {
+  teamId: string;
+  /** Valor bruto que gerou a posição (kg, km ou segundos). */
+  value: number;
+  rank: number;
+  points: number;
+  /** Há outra dupla com exatamente o mesmo valor nesta prova. */
+  tied: boolean;
+  /** A organização precisa decidir manualmente (empate ou DNF sem critério). */
+  needsDecision: boolean;
+}
+
+export interface Wod1Score {
+  teamId: string;
+  totalLoad: number;
+  rank: number | null;
+  points: number | null;
+  tied: boolean;
+  hasResult: boolean;
+}
+
+export interface Wod2Score {
+  teamId: string;
+  runKm: number;
+  bikeKm: number;
+  totalKm: number;
+  rankRun: number | null;
+  pointsRun: number | null;
+  rankBike: number | null;
+  pointsBike: number | null;
+  rankTotal: number | null;
+  pointsTotal: number | null;
+  /** Soma 2A + 2B + 2C — é a pontuação do WOD 2 na classificação geral. */
+  points: number | null;
+  tied: boolean;
+  hasResult: boolean;
+}
+
+export interface Wod3Score {
+  teamId: string;
+  timeSeconds: number;
+  completed: boolean;
+  volumeCompleted: number | null;
+  rank: number | null;
+  points: number | null;
+  tied: boolean;
+  needsDecision: boolean;
+  hasResult: boolean;
+}
+
+export interface StandingRow {
+  team: Team;
+  wod1: Wod1Score | null;
+  wod2: Wod2Score | null;
+  wod3: Wod3Score | null;
+  /** Soma dos pontos dos WODs já pontuados. Menor = melhor. */
+  totalPoints: number;
+  /** Quantos WODs já têm resultado válido para esta dupla (0–3). */
+  scoredWods: number;
+  position: number;
+  /** Outra dupla tem exatamente a mesma pontuação e completude. */
+  tied: boolean;
+  /** Empate que a organização precisa resolver (§15). */
+  needsDecision: boolean;
+}
