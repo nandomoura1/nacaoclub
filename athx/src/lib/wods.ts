@@ -23,9 +23,11 @@ export interface WodSpec {
   formato: string;
   cap: string;
   resumo: string;
-  blocos?: { janela: string; movimento: string }[];
+  blocos?: { janela: string; movimento: string; detalhe?: string }[];
   sequencia?: WodStep[];
   provas: { codigo: string; descricao: string; criterio: string }[];
+  /** Regras de execução informadas pela organização. */
+  regras?: string[];
   pontuacao: string;
   pendencias: string[];
 }
@@ -35,26 +37,44 @@ export const WODS: Record<WodNumber, WodSpec> = {
     numero: 1,
     nome: 'STRENGTH',
     formato: 'CARGA MÁXIMA',
-    cap: '15 minutos',
+    cap: '16 minutos',
     resumo:
-      'Três levantamentos em janelas fixas de 5 minutos. Vale o total somado das cargas dos dois atletas.',
+      'Três blocos de tempo. A dupla usa uma única barra e é responsável por montar e trocar as cargas durante a prova. Cada atleta busca a maior carga válida em cada movimento.',
     blocos: [
-      { janela: '0–5 min', movimento: '1RM Strict Press' },
-      { janela: '5–10 min', movimento: '3RM Back Squat' },
-      { janela: '10–15 min', movimento: '5RM Deadlift' },
+      {
+        janela: '0–5 min',
+        movimento: '1RM Strict Press',
+        detalhe: 'Cada atleta tem até 5 minutos para encontrar sua maior carga válida de 1 repetição.',
+      },
+      {
+        janela: '5–10 min',
+        movimento: '3RM Back Squat',
+        detalhe: 'Maior carga válida para 3 repetições consecutivas, sem interrupção.',
+      },
+      {
+        janela: '10–16 min',
+        movimento: '5RM Deadlift',
+        detalhe: 'Maior carga válida para 5 repetições consecutivas.',
+      },
     ],
     provas: [
-      { codigo: '1A', descricao: '1RM Strict Press', criterio: 'Soma dos dois atletas' },
-      { codigo: '1B', descricao: '3RM Back Squat', criterio: 'Soma dos dois atletas' },
-      { codigo: '1C', descricao: '5RM Deadlift', criterio: 'Soma dos dois atletas' },
+      { codigo: '1A', descricao: '1RM Strict Press', criterio: 'Soma dos dois atletas · maior vence' },
+      { codigo: '1B', descricao: '3RM Back Squat', criterio: 'Soma dos dois atletas · maior vence' },
+      { codigo: '1C', descricao: '5RM Deadlift', criterio: 'Soma dos dois atletas · maior vence' },
       {
         codigo: '1D',
         descricao: 'Resultado total de cargas',
-        criterio: 'Maior total = melhor posição',
+        criterio: 'Soma das cargas válidas dos dois atletas nos três movimentos · maior vence',
       },
     ],
+    regras: [
+      'A dupla utiliza UMA única barra durante todo o workout.',
+      'A montagem e a troca das cargas são responsabilidade da dupla.',
+      'No Back Squat, as três repetições devem ser realizadas sem interrupção.',
+      'No Deadlift, as cinco repetições devem ser consecutivas.',
+    ],
     pontuacao:
-      'A pontuação do WOD 1 vem da prova 1D (total de cargas). 1º lugar = 1 ponto, 2º = 2 pontos, e assim por diante.',
+      'O WOD 1 gera QUATRO pontuações. PONTUAÇÃO DO WOD 1 = Pts 1A + Pts 1B + Pts 1C + Pts 1D. Em cada prova, 1º lugar = 1 ponto, 2º = 2 pontos, e assim por diante.',
     pendencias: [
       'Padrão técnico de cada levantamento não foi definido nesta especificação.',
       'Critério de validação de tentativa (juiz) não foi definido.',
@@ -67,22 +87,36 @@ export const WODS: Record<WodNumber, WodSpec> = {
     formato: "AMRAP 22'",
     cap: '22 minutos',
     resumo:
-      'Atleta 1 começa no shuttle run; atleta 2 começa na assault bike. A dupla define a estratégia de revezamento.',
+      'Realizado simultaneamente em Shuttle Run e Assault Bike. O atleta 1 inicia na corrida, o atleta 2 na bike, e a dupla define sua própria estratégia de divisão do trabalho durante os 22 minutos.',
     blocos: [
-      { janela: 'Atleta 1 inicia', movimento: 'Shuttle Run — 500 m (10 × 50 m)' },
-      { janela: 'Atleta 2 inicia', movimento: 'Assault Bike — máximo de quilômetros' },
+      {
+        janela: 'Atleta 1 inicia',
+        movimento: 'Shuttle Run',
+        detalhe: 'Cada ciclo corresponde a 500 metros — 10 × 50 metros.',
+      },
+      {
+        janela: 'Atleta 2 inicia',
+        movimento: 'Assault Bike',
+        detalhe: 'Acumular a maior distância possível, em quilômetros, enquanto estiver na máquina.',
+      },
     ],
     provas: [
-      { codigo: '2A', descricao: 'KM de corrida', criterio: 'Maior distância = melhor posição' },
-      { codigo: '2B', descricao: 'KM de assault bike', criterio: 'Maior distância = melhor posição' },
+      { codigo: '2A', descricao: 'Maior KM de corrida', criterio: 'Maior distância vence' },
+      { codigo: '2B', descricao: 'Maior KM de Assault Bike', criterio: 'Maior distância vence' },
       {
         codigo: '2C',
         descricao: 'Soma dos KM (corrida + bike)',
-        criterio: 'Maior soma = melhor posição',
+        criterio: 'Maior soma vence',
       },
     ],
+    regras: [
+      'O atleta pode permanecer correndo por múltiplos de 500 metros.',
+      'A troca entre os atletas só pode ocorrer após a conclusão de 500 m ou de seus múltiplos: 500, 1.000, 1.500, 2.000 m…',
+      'Não é permitido trocar em 300 m, 700 m, 1.200 m ou qualquer distância que não seja múltiplo de 500.',
+      'Caso o atleta ultrapasse um múltiplo de 500 m, deve continuar até atingir o próximo múltiplo para realizar a troca.',
+    ],
     pontuacao:
-      'PONTUAÇÃO DO WOD 2 = Pts 2A + Pts 2B + Pts 2C. Cada uma das três provas tem ranking próprio.',
+      'O WOD 2 gera TRÊS pontuações. PONTUAÇÃO DO WOD 2 = Pts 2A + Pts 2B + Pts 2C. Cada uma das três provas tem ranking próprio.',
     pendencias: [
       'Penalidade para troca fora do múltiplo de 500 m não foi definida — o sistema apenas recusa o lançamento inválido.',
     ],
@@ -93,7 +127,7 @@ export const WODS: Record<WodNumber, WodSpec> = {
     nome: 'METCON',
     formato: 'FOR TIME',
     cap: '20 minutos',
-    resumo: 'Sequência completa para tempo. Menor tempo válido = melhor posição.',
+    resumo: 'A dupla deve completar o percurso no menor tempo possível.',
     sequencia: [
       { ordem: '1', movimento: '120 m Burpee Broad Jumps' },
       { ordem: '2', movimento: '120 Box Jump Over' },
@@ -129,17 +163,59 @@ export const WODS: Record<WodNumber, WodSpec> = {
   },
 };
 
-/** Programação do evento (§37). */
-export const SCHEDULE: { hora: string; titulo: string; detalhe?: string; destaque?: boolean }[] = [
-  { hora: '08h00', titulo: 'Aquecimento + Briefing' },
-  { hora: '09h00–09h15', titulo: 'WOD 1 — Bateria 1', detalhe: 'Strength' },
-  { hora: '09h20–09h35', titulo: 'WOD 1 — Bateria 2', detalhe: 'Strength' },
-  { hora: '09h35–09h40', titulo: 'Transição Judges' },
-  { hora: '09h40–10h02', titulo: 'WOD 2 — Bateria 1', detalhe: 'Endurance' },
-  { hora: '10h02–10h24', titulo: 'WOD 2 — Bateria 2', detalhe: 'Endurance' },
-  { hora: '10h24–10h29', titulo: 'Transição Judges' },
-  { hora: '10h29–10h49', titulo: 'WOD 3 — Bateria 1', detalhe: 'Metcon' },
-  { hora: '10h51–11h11', titulo: 'WOD 3 — Bateria 2', detalhe: 'Metcon' },
-  { hora: '11h11–11h30', titulo: 'Conferência / classificação' },
+/* ==========================================================================
+   TIMELINE OFICIAL (§37)
+   ========================================================================== */
+
+export interface ScheduleEntry {
+  hora: string;
+  titulo: string;
+  detalhe?: string;
+  /** Sub-itens, como o conteúdo do briefing. */
+  itens?: string[];
+  /** Observação da organização, como o intervalo entre baterias. */
+  nota?: string;
+  wod?: WodNumber;
+  destaque?: boolean;
+}
+
+export const SCHEDULE: ScheduleEntry[] = [
+  {
+    hora: '08h00',
+    titulo: 'Aquecimento + Briefing',
+    detalhe: 'Presença obrigatória de todos os participantes',
+    itens: [
+      'Aquecimento geral',
+      'Mobilidade e preparação',
+      'Apresentação dos workouts',
+      'Explicação das regras',
+      'Orientações sobre execução dos movimentos',
+      'Estratégias e divisão das tarefas',
+      'Esclarecimento de dúvidas',
+    ],
+  },
+
+  { hora: '09h00–09h16', titulo: 'Workout 01 — Bateria 1', detalhe: 'Strength', wod: 1 },
+  {
+    hora: '09h26–09h42',
+    titulo: 'Workout 01 — Bateria 2',
+    detalhe: 'Strength',
+    wod: 1,
+    nota: "Intervalo de 14' entre as baterias",
+  },
+
+  { hora: '09h30–09h52', titulo: 'Workout 02 — Bateria 1', detalhe: 'Endurance', wod: 2 },
+  {
+    hora: '09h56–10h16',
+    titulo: 'Workout 02 — Bateria 2',
+    detalhe: 'Endurance',
+    wod: 2,
+    nota: "Intervalo de 20' entre as baterias",
+  },
+
+  { hora: '10h12–10h32', titulo: 'Workout 03 — Bateria 1', detalhe: 'Metcon', wod: 3 },
+  { hora: '10h36–10h56', titulo: 'Workout 03 — Bateria 2', detalhe: 'Metcon', wod: 3 },
+
+  { hora: '11h00', titulo: 'Conferência / classificação' },
   { hora: '11h30', titulo: 'Pódio', destaque: true },
 ];

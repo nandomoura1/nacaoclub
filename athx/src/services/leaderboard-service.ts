@@ -169,6 +169,7 @@ export async function getSnapshot(): Promise<Snapshot> {
 
   const s = settingsRes.data;
   const settings: EventSettings = {
+    wod1ScoringMode: s?.wod1_scoring_mode ?? 'SUM_ALL',
     tiePointsMode: s?.tie_points_mode ?? 'COMPETITION',
     dnfPolicy: s?.dnf_policy ?? 'PENDING_DEFINITION',
     tieBreaker1: s?.tie_breaker_1 ?? null,

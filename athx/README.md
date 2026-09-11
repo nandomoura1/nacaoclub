@@ -182,26 +182,33 @@ baixa, atrás do conteúdo.
 
 ## Regras de cálculo
 
-### WOD 1 — STRENGTH · CAP 15'
+### WOD 1 — STRENGTH · CAP 16'
 
 ```
 0–5 min    1RM Strict Press
 5–10 min   3RM Back Squat
-10–15 min  5RM Deadlift
+10–16 min  5RM Deadlift
 ```
+
+A dupla usa **uma única barra** e é responsável por montar e trocar as cargas.
 
 | Prova | O quê | Critério |
 |---|---|---|
-| 1A | 1RM Strict Press | soma dos dois atletas |
-| 1B | 3RM Back Squat | soma dos dois atletas |
-| 1C | 5RM Deadlift | soma dos dois atletas |
-| **1D** | **Total de cargas** | **maior total = melhor posição** |
+| 1A | 1RM Strict Press | soma dos dois atletas · maior vence |
+| 1B | 3RM Back Squat | soma dos dois atletas · maior vence |
+| 1C | 5RM Deadlift | soma dos dois atletas · maior vence |
+| 1D | Total de cargas | soma das seis cargas · maior vence |
 
 ```
-TOTAL = SP(a1) + SP(a2) + BS(a1) + BS(a2) + DL(a1) + DL(a2)
+1D = SP(a1) + SP(a2) + BS(a1) + BS(a2) + DL(a1) + DL(a2)
+
+PONTUAÇÃO DO WOD 1 = Pts 1A + Pts 1B + Pts 1C + Pts 1D
 ```
 
-A pontuação do WOD 1 vem de **1D**. 1º = 1 ponto, 2º = 2 pontos, …
+⚠️ O texto do regulamento diz que a prova 1D sozinha define o 1º lugar do
+workout, o que contradiz somar as quatro. Por isso a regra é configurável em
+`/admin/settings` e a divergência está registrada em
+[`docs/regras-pendentes.md`](docs/regras-pendentes.md).
 
 ### WOD 2 — ENDURANCE · AMRAP 22'
 
@@ -450,11 +457,11 @@ npm run lint        # ESLint
 
 ## Testes
 
-**64 testes** cobrindo:
+**69 testes** cobrindo:
 
 | Arquivo | O que verifica |
 |---|---|
-| `wod1.test.ts` | soma de cargas (o caso 930 kg do enunciado), empates, DRAFT vs publicado, desclassificada |
+| `wod1.test.ts` | as quatro provas (1A/1B/1C/1D), soma de cargas, empates, DRAFT vs publicado, desclassificada |
 | `wod2.test.ts` | soma 3,20 + 8,45 = 11,65 km, os três rankings, **a regra dos 500 m** |
 | `wod3.test.ts` | 14:32 → 872 s, ordenação por tempo, CAP, **as três políticas de DNF** |
 | `standings.test.ts` | classificação geral, empates, resultado parcial, filtro por categoria |
@@ -463,6 +470,7 @@ npm run lint        # ESLint
 | `validation.test.ts` | schemas de lançamento e cadastro |
 | `export.test.ts` | CSV e JSON |
 | `supabase/tests/rls.test.sql` | RLS real e resultado travado, contra um PostgreSQL de verdade (15 verificações) |
+| `parity-expected.json` | gabarito gerado pelo próprio PostgreSQL, não escrito à mão |
 
 Realtime e Supabase Auth dependem de um projeto Supabase ativo e **não** têm
 teste automatizado aqui — verifique-os pelo checklist acima.

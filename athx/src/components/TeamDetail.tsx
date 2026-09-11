@@ -6,7 +6,6 @@ import { ArrowLeft, Bike, Dumbbell, Footprints, Timer } from 'lucide-react';
 import type { Snapshot } from '@/services/snapshot';
 import { WOD_META } from '@/types/domain';
 import { buildLeaderboard } from '@/lib/scoring/build';
-import { liftBreakdown } from '@/lib/scoring/wod1';
 import { useLiveSnapshot } from '@/hooks/useLiveSnapshot';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
@@ -36,7 +35,6 @@ export function TeamDetail({ initial, teamId }: { initial: Snapshot; teamId: str
 
   const row = board.standings.find((r) => r.team.id === teamId);
   const team = row?.team ?? snapshot.teams.find((t) => t.id === teamId);
-  const wod1Raw = snapshot.wod1.find((r) => r.teamId === teamId);
 
   if (!team) {
     return (
@@ -48,8 +46,6 @@ export function TeamDetail({ initial, teamId }: { initial: Snapshot; teamId: str
       </Card>
     );
   }
-
-  const lifts = wod1Raw ? liftBreakdown(wod1Raw) : null;
 
   return (
     <div className="space-y-6">
@@ -136,15 +132,31 @@ export function TeamDetail({ initial, teamId }: { initial: Snapshot; teamId: str
         {row?.wod1?.hasResult ? (
           <>
             <div className="mt-4 grid grid-cols-3 gap-2">
-              <Stat label="1A Press" value={kg(lifts?.strictPress)} icon={<Dumbbell size={14} />} />
-              <Stat label="1B Squat" value={kg(lifts?.backSquat)} icon={<Dumbbell size={14} />} />
-              <Stat label="1C Deadlift" value={kg(lifts?.deadlift)} icon={<Dumbbell size={14} />} />
+              <Stat
+                label="1A Press"
+                value={kg(row.wod1.strictPress)}
+                hint={`${row.wod1.rankStrictPress}º · ${points(row.wod1.pointsStrictPress)} pt`}
+                icon={<Dumbbell size={14} />}
+              />
+              <Stat
+                label="1B Squat"
+                value={kg(row.wod1.backSquat)}
+                hint={`${row.wod1.rankBackSquat}º · ${points(row.wod1.pointsBackSquat)} pt`}
+                icon={<Dumbbell size={14} />}
+              />
+              <Stat
+                label="1C Deadlift"
+                value={kg(row.wod1.deadlift)}
+                hint={`${row.wod1.rankDeadlift}º · ${points(row.wod1.pointsDeadlift)} pt`}
+                icon={<Dumbbell size={14} />}
+              />
             </div>
             <Result
               label="1D Total de cargas"
               value={kg(row.wod1.totalLoad)}
-              rank={row.wod1.rank}
+              rank={row.wod1.rankTotal}
               pts={row.wod1.points}
+              note="Pontuação do WOD 1 = 1A + 1B + 1C + 1D"
             />
           </>
         ) : (

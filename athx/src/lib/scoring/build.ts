@@ -51,7 +51,11 @@ export function buildLeaderboard(
   const { teams, settings } = raw;
   const tieMode = settings.tiePointsMode;
 
-  const wod1 = scoreWod1(teams, raw.wod1, { tieMode, statuses });
+  const wod1 = scoreWod1(teams, raw.wod1, {
+    tieMode,
+    statuses,
+    scoringMode: settings.wod1ScoringMode,
+  });
   const wod2 = scoreWod2(teams, raw.wod2, { tieMode, statuses });
   const wod3 = scoreWod3(teams, raw.wod3, {
     tieMode,

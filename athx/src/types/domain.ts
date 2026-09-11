@@ -44,7 +44,7 @@ export type Battery = 1 | 2;
 export type WodNumber = 1 | 2 | 3;
 
 export const WOD_META: Record<WodNumber, { name: string; cap: string; capSeconds: number; format: string }> = {
-  1: { name: 'STRENGTH', cap: '15 minutos', capSeconds: 900, format: 'CARGA MÁXIMA' },
+  1: { name: 'STRENGTH', cap: '16 minutos', capSeconds: 960, format: 'CARGA MÁXIMA' },
   2: { name: 'ENDURANCE', cap: '22 minutos', capSeconds: 1320, format: "AMRAP 22'" },
   3: { name: 'METCON', cap: '20 minutos', capSeconds: 1200, format: 'FOR TIME' },
 };
@@ -125,7 +125,25 @@ export type TiePointsMode = (typeof TIE_POINTS_MODES)[number];
 export const DNF_POLICIES = ['PENDING_DEFINITION', 'VOLUME_DESC', 'TIED_LAST'] as const;
 export type DnfPolicy = (typeof DNF_POLICIES)[number];
 
+/**
+ * Como a pontuação do WOD 1 entra na classificação geral.
+ *
+ *  - SUM_ALL     (padrão) Pts 1A + Pts 1B + Pts 1C + Pts 1D, do mesmo jeito
+ *                que o WOD 2 soma 2A + 2B + 2C. Foi o que a organização
+ *                pediu: "o WOD 1 gera 4 pontuações".
+ *  - TOTAL_ONLY  apenas a prova 1D (resultado total de cargas) pontua. É o
+ *                que diz a frase do regulamento "a dupla com maior resultado
+ *                total ficará em 1º lugar no Workout".
+ *
+ * As duas leituras existem porque o regulamento e a instrução da organização
+ * divergem neste ponto. A escolha fica em /admin/settings, e trocar recalcula
+ * a classificação inteira. Ver docs/regras-pendentes.md.
+ */
+export const WOD1_SCORING_MODES = ['SUM_ALL', 'TOTAL_ONLY'] as const;
+export type Wod1ScoringMode = (typeof WOD1_SCORING_MODES)[number];
+
 export interface EventSettings {
+  wod1ScoringMode: Wod1ScoringMode;
   tiePointsMode: TiePointsMode;
   dnfPolicy: DnfPolicy;
   /** Critérios de desempate da classificação geral — vazios até definição. */
@@ -137,6 +155,7 @@ export interface EventSettings {
 }
 
 export const DEFAULT_SETTINGS: EventSettings = {
+  wod1ScoringMode: 'SUM_ALL',
   tiePointsMode: 'COMPETITION',
   dnfPolicy: 'PENDING_DEFINITION',
   tieBreaker1: null,
@@ -164,9 +183,36 @@ export interface RankedEntry {
 
 export interface Wod1Score {
   teamId: string;
+
+  /** Prova 1A — soma do Strict Press dos dois atletas. */
+  strictPress: number;
+  rankStrictPress: number | null;
+  pointsStrictPress: number | null;
+
+  /** Prova 1B — soma do Back Squat dos dois atletas. */
+  backSquat: number;
+  rankBackSquat: number | null;
+  pointsBackSquat: number | null;
+
+  /** Prova 1C — soma do Deadlift dos dois atletas. */
+  deadlift: number;
+  rankDeadlift: number | null;
+  pointsDeadlift: number | null;
+
+  /** Prova 1D — soma das seis cargas. */
   totalLoad: number;
-  rank: number | null;
+  rankTotal: number | null;
+  pointsTotal: number | null;
+
+  /**
+   * Pontuação do WOD 1 na classificação geral.
+   * Depende de `settings.wod1ScoringMode` — ver o comentário lá.
+   */
   points: number | null;
+
+  /** Posição na prova 1D. Mantido para leitura rápida e compatibilidade. */
+  rank: number | null;
+
   tied: boolean;
   hasResult: boolean;
 }

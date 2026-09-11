@@ -8,6 +8,46 @@
 
 ---
 
+## 0. Como o WOD 1 pontua — ⚠️ REGULAMENTO E INSTRUÇÃO DIVERGEM
+
+**A contradição:** a organização instruiu que *"o WOD 1 gera 4 pontuações
+(1A, 1B, 1C, 1D)"*, do mesmo jeito que o WOD 2 gera 3. Mas o texto do
+regulamento, na prova 1D, diz:
+
+> "A dupla com maior resultado total ficará em **1º lugar no Workout**."
+
+Essa frase coloca a colocação do workout inteiro nas mãos da prova 1D — o que
+é incompatível com somar as quatro.
+
+**Hoje:** `SUM_ALL` — vale a instrução da organização.
+
+```
+PONTUAÇÃO DO WOD 1 = Pts 1A + Pts 1B + Pts 1C + Pts 1D
+```
+
+**Alternativa disponível:** `TOTAL_ONLY` — só a prova 1D pontua. As provas 1A,
+1B e 1C continuam sendo calculadas, exibidas e exportadas, mas não entram na
+soma.
+
+**Onde ajustar:** `/admin/settings` → *Como o WOD 1 pontua*. Trocar recalcula
+a classificação inteira na hora.
+
+**Consequência prática de somar as quatro:** a menor pontuação possível no
+WOD 1 passa a ser **4** (1º nas quatro provas), e não 1. Isso muda o peso
+relativo dos WODs na classificação geral:
+
+| WOD | Pontuação mínima | Pontuação com 20 duplas, se última em tudo |
+|---|---|---|
+| WOD 1 | 4 | 80 |
+| WOD 2 | 3 | 60 |
+| WOD 3 | 1 | 20 |
+
+Ou seja, **o WOD 1 passa a pesar 4× o WOD 3** na classificação geral. Isso é
+consequência direta da regra pedida, não um efeito colateral do sistema — mas
+vale a organização confirmar se é o peso desejado antes do dia 12.
+
+---
+
 ## 1. Critério de desempate da classificação geral
 
 **Falta:** o que decide entre duas duplas com a mesma pontuação total.

@@ -62,6 +62,9 @@ export function WodPageView({ initial, wod }: { initial: Snapshot; wod: WodNumbe
                   {b.janela}
                 </span>
                 <span className="font-display text-sm font-bold">{b.movimento}</span>
+                {b.detalhe ? (
+                  <span className="w-full text-[11px] text-white/45">{b.detalhe}</span>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -99,6 +102,22 @@ export function WodPageView({ initial, wod }: { initial: Snapshot; wod: WodNumbe
             </div>
           ))}
         </div>
+
+        {spec.regras ? (
+          <div className="mt-5">
+            <p className="font-display text-[10px] font-bold tracking-kicker text-white/45 uppercase">
+              Regras de execução
+            </p>
+            <ul className="mt-2 space-y-1.5">
+              {spec.regras.map((regra) => (
+                <li key={regra} className="flex items-start gap-2 text-xs text-white/65">
+                  <span aria-hidden="true" className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-nacao-cyan" />
+                  {regra}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         <p className="mt-4 rounded-xl border border-nacao-cyan/20 bg-nacao-cyan/[0.06] px-3.5 py-2.5 text-xs text-white/75">
           {spec.pontuacao}

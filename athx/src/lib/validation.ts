@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { CATEGORIES, TEAM_STATUSES, DNF_POLICIES, TIE_POINTS_MODES } from '@/types/domain';
+import {
+  CATEGORIES,
+  TEAM_STATUSES,
+  DNF_POLICIES,
+  TIE_POINTS_MODES,
+  WOD1_SCORING_MODES,
+} from '@/types/domain';
 import { isValidRunKm } from '@/lib/scoring/wod2';
 import { parseTimeToSeconds } from '@/lib/time';
 import { WOD3_CAP_SECONDS } from '@/lib/scoring/wod3';
@@ -84,6 +90,7 @@ export const wod3RowSchema = z
   });
 
 export const settingsSchema = z.object({
+  wod1ScoringMode: z.enum(WOD1_SCORING_MODES),
   tiePointsMode: z.enum(TIE_POINTS_MODES),
   dnfPolicy: z.enum(DNF_POLICIES),
   tieBreaker1: z.string().trim().max(200).nullable(),

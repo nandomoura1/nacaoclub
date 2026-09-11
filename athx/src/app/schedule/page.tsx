@@ -50,6 +50,23 @@ export default function SchedulePage() {
                     {item.detalhe}
                   </p>
                 ) : null}
+
+                {item.itens ? (
+                  <ul className="mt-2 grid gap-x-4 gap-y-1 sm:grid-cols-2">
+                    {item.itens.map((sub) => (
+                      <li key={sub} className="flex items-start gap-1.5 text-xs text-white/55">
+                        <span aria-hidden="true" className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-nacao-sky" />
+                        {sub}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+
+                {item.nota ? (
+                  <p className="mt-1.5 inline-block rounded-md border border-white/12 px-2 py-0.5 text-[10px] text-white/45">
+                    {item.nota}
+                  </p>
+                ) : null}
               </div>
             </li>
           ))}

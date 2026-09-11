@@ -157,7 +157,7 @@ export function RankingTable({
                           sub="Strength"
                           pts={row.wod1?.hasResult ? row.wod1.points : null}
                           detail={row.wod1?.hasResult ? kg(row.wod1.totalLoad) : null}
-                          rank={row.wod1?.rank ?? null}
+                          rank={row.wod1?.rankTotal ?? null}
                         />
                         <MiniWod
                           label="WOD 2"

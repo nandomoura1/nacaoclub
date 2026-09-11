@@ -19,6 +19,17 @@ describe('Exportação (§42)', () => {
     expect(rows[0]?.posicao).toBe(1);
   });
 
+  it('exporta as quatro provas do WOD 1 separadamente', () => {
+    const cerrado = rows.find((r) => r.dupla === 'Cerrado');
+    expect(cerrado?.wod1_1a_strict_press).toBe(180); // 100 + 80
+    expect(cerrado?.wod1_1b_back_squat).toBe(330); // 180 + 150
+    expect(cerrado?.wod1_1c_deadlift).toBe(420); // 220 + 200
+    expect(cerrado?.wod1_1d_carga_total).toBe(930);
+    // Cada prova leva sua posição e seus pontos para a planilha.
+    expect(cerrado?.wod1_1a_posicao).toBe(1);
+    expect(cerrado?.wod1_pontos).toBe(4); // 1º nas quatro provas
+  });
+
   it('inclui dupla, categoria, atletas, os três WODs, total e posição', () => {
     const primeira = rows[0];
     expect(primeira).toMatchObject({
@@ -27,7 +38,7 @@ describe('Exportação (§42)', () => {
       atleta_1: expect.any(String),
       atleta_2: expect.any(String),
     });
-    expect(primeira?.wod1_carga_total).toBe(930);
+    expect(primeira?.wod1_1d_carga_total).toBe(930);
     expect(primeira?.wod2_soma_km).toBe(11.95);
     expect(typeof primeira?.total_pontos).toBe('number');
   });

@@ -1,7 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import { useMemo } from 'react';
 import type { StandingRow, WodNumber } from '@/types/domain';
+import { rankValues } from '@/lib/scoring/rank';
 import { Badge } from '@/components/ui/Badge';
 import { RankPosition } from '@/components/RankPosition';
 import { EmptyState } from '@/components/ui/Card';
@@ -15,6 +17,11 @@ import { formatSeconds } from '@/lib/time';
  * /wod/1, /wod/2 e /wod/3 (§28). O WOD 2 mostra corrida, bike e soma
  * SEPARADAMENTE, porque cada um tem ranking próprio.
  */
+/** Pontuação da dupla neste WOD (soma das provas, quando há mais de uma). */
+function wodPoints(row: StandingRow, wod: WodNumber): number | null | undefined {
+  return wod === 1 ? row.wod1?.points : wod === 2 ? row.wod2?.points : row.wod3?.points;
+}
+
 export function WodRanking({
   wod,
   rows,
@@ -29,10 +36,31 @@ export function WodRanking({
       return r.wod3?.hasResult;
     })
     .sort((a, b) => {
-      const ra = wod === 1 ? a.wod1?.rank : wod === 2 ? a.wod2?.rankTotal : a.wod3?.rank;
-      const rb = wod === 1 ? b.wod1?.rank : wod === 2 ? b.wod2?.rankTotal : b.wod3?.rank;
+      // Ordena pela PONTUAÇÃO do WOD — é ela que define a colocação no
+      // workout quando há mais de uma prova (1A+1B+1C+1D, 2A+2B+2C).
+      const pa = wodPoints(a, wod) ?? 9999;
+      const pb = wodPoints(b, wod) ?? 9999;
+      if (pa !== pb) return pa - pb;
+
+      const ra = wod === 1 ? a.wod1?.rankTotal : wod === 2 ? a.wod2?.rankTotal : a.wod3?.rank;
+      const rb = wod === 1 ? b.wod1?.rankTotal : wod === 2 ? b.wod2?.rankTotal : b.wod3?.rank;
       return (ra ?? 999) - (rb ?? 999);
     });
+
+  /**
+   * Colocação NO WOD, derivada da pontuação somada.
+   *
+   * Sem isto a coluna "Pos" mostraria a posição de uma prova só (a 1D no WOD
+   * 1, a 2C no WOD 2) — e a tabela apareceria ordenada por pontos exibindo
+   * outra numeração. Menor pontuação = melhor colocação, com o mesmo
+   * tratamento de empate do resto do sistema.
+   */
+  const placement = useMemo(() => {
+    const entradas = scored
+      .map((r) => ({ teamId: r.team.id, value: wodPoints(r, wod) }))
+      .filter((e): e is { teamId: string; value: number } => typeof e.value === 'number');
+    return new Map(rankValues(entradas, 'LOWER_IS_BETTER').map((e) => [e.teamId, e.rank]));
+  }, [scored, wod]);
 
   const pending = rows.filter((r) => !scored.includes(r));
 
@@ -56,7 +84,14 @@ export function WodRanking({
             <tr className="border-b border-white/12">
               <Th className="w-14">Pos</Th>
               <Th className="w-full max-w-0">Dupla</Th>
-              {wod === 1 ? <Th className="text-right">Carga total</Th> : null}
+              {wod === 1 ? (
+                <>
+                  <Th className="hidden text-right sm:table-cell">1A Press</Th>
+                  <Th className="hidden text-right sm:table-cell">1B Squat</Th>
+                  <Th className="hidden text-right sm:table-cell">1C Deadlift</Th>
+                  <Th className="text-right">1D Total</Th>
+                </>
+              ) : null}
               {wod === 2 ? (
                 <>
                   <Th className="text-right">2A Corrida</Th>
@@ -65,16 +100,16 @@ export function WodRanking({
                 </>
               ) : null}
               {wod === 3 ? <Th className="text-right">Tempo</Th> : null}
-              <Th className="text-right">Pts</Th>
+              <Th className="text-right">
+                {wod === 3 ? 'Pts' : 'Pts WOD'}
+              </Th>
             </tr>
           </thead>
 
           <tbody>
             {scored.map((row) => {
-              const rank =
-                wod === 1 ? row.wod1?.rank : wod === 2 ? row.wod2?.rankTotal : row.wod3?.rank;
-              const pts =
-                wod === 1 ? row.wod1?.points : wod === 2 ? row.wod2?.points : row.wod3?.points;
+              const rank = placement.get(row.team.id) ?? null;
+              const pts = wodPoints(row, wod);
 
               return (
                 <tr
@@ -100,11 +135,40 @@ export function WodRanking({
                   </Td>
 
                   {wod === 1 ? (
-                    <Td className="text-right">
-                      <span className="tnum font-display font-bold">
-                        {kg(row.wod1?.totalLoad)}
-                      </span>
-                    </Td>
+                    <>
+                      <Td className="hidden text-right sm:table-cell">
+                        <span className="tnum font-display text-sm font-bold">
+                          {kg(row.wod1?.strictPress)}
+                        </span>
+                        <span className="block text-[10px] text-white/35">
+                          {row.wod1?.rankStrictPress}º · {points(row.wod1?.pointsStrictPress)} pt
+                        </span>
+                      </Td>
+                      <Td className="hidden text-right sm:table-cell">
+                        <span className="tnum font-display text-sm font-bold">
+                          {kg(row.wod1?.backSquat)}
+                        </span>
+                        <span className="block text-[10px] text-white/35">
+                          {row.wod1?.rankBackSquat}º · {points(row.wod1?.pointsBackSquat)} pt
+                        </span>
+                      </Td>
+                      <Td className="hidden text-right sm:table-cell">
+                        <span className="tnum font-display text-sm font-bold">
+                          {kg(row.wod1?.deadlift)}
+                        </span>
+                        <span className="block text-[10px] text-white/35">
+                          {row.wod1?.rankDeadlift}º · {points(row.wod1?.pointsDeadlift)} pt
+                        </span>
+                      </Td>
+                      <Td className="text-right">
+                        <span className="tnum font-display text-sm font-bold text-nacao-cyan">
+                          {kg(row.wod1?.totalLoad)}
+                        </span>
+                        <span className="block text-[10px] text-white/35">
+                          {row.wod1?.rankTotal}º · {points(row.wod1?.pointsTotal)} pt
+                        </span>
+                      </Td>
+                    </>
                   ) : null}
 
                   {wod === 2 ? (

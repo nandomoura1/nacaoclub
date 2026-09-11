@@ -18,8 +18,18 @@ export interface ExportRow {
   atleta_2: string;
   bateria: number;
   status: string;
-  wod1_carga_total: number | '';
-  wod1_posicao: number | '';
+  wod1_1a_strict_press: number | '';
+  wod1_1a_posicao: number | '';
+  wod1_1a_pontos: number | '';
+  wod1_1b_back_squat: number | '';
+  wod1_1b_posicao: number | '';
+  wod1_1b_pontos: number | '';
+  wod1_1c_deadlift: number | '';
+  wod1_1c_posicao: number | '';
+  wod1_1c_pontos: number | '';
+  wod1_1d_carga_total: number | '';
+  wod1_1d_posicao: number | '';
+  wod1_1d_pontos: number | '';
   wod1_pontos: number | '';
   wod2_corrida_km: number | '';
   wod2_bike_km: number | '';
@@ -61,8 +71,18 @@ export function buildExportRows(board: Leaderboard): ExportRow[] {
         atleta_2: team.athlete2,
         bateria: team.battery,
         status: team.status,
-        wod1_carga_total: w1?.hasResult ? w1.totalLoad : '',
-        wod1_posicao: w1?.rank ?? '',
+        wod1_1a_strict_press: w1?.hasResult ? w1.strictPress : '',
+        wod1_1a_posicao: w1?.rankStrictPress ?? '',
+        wod1_1a_pontos: w1?.pointsStrictPress ?? '',
+        wod1_1b_back_squat: w1?.hasResult ? w1.backSquat : '',
+        wod1_1b_posicao: w1?.rankBackSquat ?? '',
+        wod1_1b_pontos: w1?.pointsBackSquat ?? '',
+        wod1_1c_deadlift: w1?.hasResult ? w1.deadlift : '',
+        wod1_1c_posicao: w1?.rankDeadlift ?? '',
+        wod1_1c_pontos: w1?.pointsDeadlift ?? '',
+        wod1_1d_carga_total: w1?.hasResult ? w1.totalLoad : '',
+        wod1_1d_posicao: w1?.rankTotal ?? '',
+        wod1_1d_pontos: w1?.pointsTotal ?? '',
         wod1_pontos: w1?.points ?? '',
         wod2_corrida_km: w2?.hasResult ? w2.runKm : '',
         wod2_bike_km: w2?.hasResult ? w2.bikeKm : '',

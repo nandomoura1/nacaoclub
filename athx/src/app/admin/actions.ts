@@ -388,6 +388,7 @@ export async function salvarConfiguracoes(input: unknown): Promise<ActionResult>
     const { error } = await supabase
       .from('event_settings')
       .update({
+        wod1_scoring_mode: dados.wod1ScoringMode,
         tie_points_mode: dados.tiePointsMode,
         dnf_policy: dados.dnfPolicy,
         tie_breaker_1: dados.tieBreaker1 || null,
@@ -401,7 +402,8 @@ export async function salvarConfiguracoes(input: unknown): Promise<ActionResult>
 
     if (error) throw new Error(error.message);
 
-    // Mudar o modo de empate ou a política de DNF muda a classificação.
+    // Mudar o modo do WOD 1, o de empate ou a política de DNF muda a
+    // classificação inteira.
     await supabase.rpc('athx_recalculate_event', { p_event: eventId });
     revalidateTudo();
     revalidatePath('/admin/settings');

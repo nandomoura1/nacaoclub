@@ -70,8 +70,24 @@ describe('Motor TypeScript × motor SQL', () => {
       expect(s, `dupla ${row.team_number}`).toBeDefined();
       if (!s) continue;
 
-      expect(s.wod1?.totalLoad, `carga total dupla ${row.team_number}`).toBe(row.total_load);
-      expect(s.wod1?.rank, `WOD1 rank dupla ${row.team_number}`).toBe(row.wod1_rank);
+      // WOD 1 — as quatro provas, uma a uma
+      expect(s.wod1?.strictPress, `1A kg dupla ${row.team_number}`).toBe(row.strict_press);
+      expect(s.wod1?.rankStrictPress, `1A pos dupla ${row.team_number}`).toBe(row.rank_strict_press);
+      expect(s.wod1?.pointsStrictPress, `1A pts dupla ${row.team_number}`).toBe(row.points_strict_press);
+
+      expect(s.wod1?.backSquat, `1B kg dupla ${row.team_number}`).toBe(row.back_squat);
+      expect(s.wod1?.rankBackSquat, `1B pos dupla ${row.team_number}`).toBe(row.rank_back_squat);
+      expect(s.wod1?.pointsBackSquat, `1B pts dupla ${row.team_number}`).toBe(row.points_back_squat);
+
+      expect(s.wod1?.deadlift, `1C kg dupla ${row.team_number}`).toBe(row.deadlift);
+      expect(s.wod1?.rankDeadlift, `1C pos dupla ${row.team_number}`).toBe(row.rank_deadlift);
+      expect(s.wod1?.pointsDeadlift, `1C pts dupla ${row.team_number}`).toBe(row.points_deadlift);
+
+      expect(s.wod1?.totalLoad, `1D kg dupla ${row.team_number}`).toBe(row.total_load);
+      expect(s.wod1?.rankTotal, `1D pos dupla ${row.team_number}`).toBe(row.wod1_rank_total);
+      expect(s.wod1?.pointsTotal, `1D pts dupla ${row.team_number}`).toBe(row.points_total);
+
+      // PONTUAÇÃO DO WOD 1 = 1A + 1B + 1C + 1D
       expect(s.wod1?.points, `WOD1 pts dupla ${row.team_number}`).toBe(row.wod1_points);
 
       expect(s.wod2?.totalKm, `WOD2 km dupla ${row.team_number}`).toBe(row.total_km);
