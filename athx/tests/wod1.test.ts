@@ -68,22 +68,6 @@ describe('WOD 1 — STRENGTH', () => {
     expect(scores.get('team-3')?.points).toBe(3 + 2 + 1 + 1); // 7
   });
 
-  it('modo TOTAL_ONLY pontua apenas pela prova 1D', () => {
-    const teams = [team(1), team(2), team(3)];
-    const results = [
-      w1('team-1', [60, 40, 80, 70, 100, 90]),
-      w1('team-2', [50, 40, 120, 100, 110, 100]),
-      w1('team-3', [40, 40, 100, 90, 150, 140]),
-    ];
-    const scores = scoreWod1(teams, results, { scoringMode: 'TOTAL_ONLY' });
-
-    expect(scores.get('team-3')?.points).toBe(1);
-    expect(scores.get('team-2')?.points).toBe(2);
-    expect(scores.get('team-1')?.points).toBe(3);
-    // As quatro provas continuam registradas, só não somam.
-    expect(scores.get('team-1')?.pointsStrictPress).toBe(1);
-  });
-
   // §26 — empate numérico exato
   it('empate 100/100/95 produz 1º, 1º, 3º e sinaliza decisão manual', () => {
     const teams = [team(1), team(2), team(3)];

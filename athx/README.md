@@ -205,9 +205,9 @@ A dupla usa **uma única barra** e é responsável por montar e trocar as cargas
 PONTUAÇÃO DO WOD 1 = Pts 1A + Pts 1B + Pts 1C + Pts 1D
 ```
 
-⚠️ O texto do regulamento diz que a prova 1D sozinha define o 1º lugar do
-workout, o que contradiz somar as quatro. Por isso a regra é configurável em
-`/admin/settings` e a divergência está registrada em
+As quatro provas sempre somam — não há modo alternativo. O texto do
+regulamento sugeria que a prova 1D sozinha definisse o workout; a organização
+decidiu pela soma, e a divergência está registrada em
 [`docs/regras-pendentes.md`](docs/regras-pendentes.md).
 
 ### WOD 2 — ENDURANCE · AMRAP 22'

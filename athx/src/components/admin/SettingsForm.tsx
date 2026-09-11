@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Save } from 'lucide-react';
-import type { DnfPolicy, EventSettings, TiePointsMode, Wod1ScoringMode } from '@/types/domain';
+import type { DnfPolicy, EventSettings, TiePointsMode } from '@/types/domain';
 import { salvarConfiguracoes } from '@/app/admin/actions';
 import type { ActionResult } from '@/app/admin/actions';
 import { Button } from '@/components/ui/Button';
@@ -22,21 +22,6 @@ const TIE_MODES: { value: TiePointsMode; titulo: string; descricao: string }[] =
     titulo: 'Média das posições (1,5 · 1,5 · 3)',
     descricao:
       'As duplas empatadas dividem a média das posições que ocupariam. Distribui os pontos de forma mais suave.',
-  },
-];
-
-const WOD1_MODES: { value: Wod1ScoringMode; titulo: string; descricao: string }[] = [
-  {
-    value: 'SUM_ALL',
-    titulo: 'Somar as quatro provas (padrão)',
-    descricao:
-      'PONTUAÇÃO DO WOD 1 = Pts 1A + Pts 1B + Pts 1C + Pts 1D, do mesmo jeito que o WOD 2 soma 2A + 2B + 2C. É o que a organização definiu.',
-  },
-  {
-    value: 'TOTAL_ONLY',
-    titulo: 'Somente a prova 1D (total de cargas)',
-    descricao:
-      'Apenas o resultado total de cargas pontua. As provas 1A, 1B e 1C continuam registradas e visíveis, mas não entram na conta. É a leitura da frase do regulamento "a dupla com maior resultado total ficará em 1º lugar no Workout".',
   },
 ];
 
@@ -115,29 +100,6 @@ export function SettingsForm({ settings }: { settings: EventSettings }) {
             onChange={(v) => setForm({ ...form, maintenanceMode: v })}
             perigo
           />
-        </div>
-      </Card>
-
-      {/* ---- WOD 1 -------------------------------------------------------- */}
-      <Card className="p-5">
-        <CardHeader kicker="WOD 1 — Strength" title="Como o WOD 1 pontua" />
-        <p className="mt-2 text-sm text-white/55">
-          O WOD 1 gera quatro resultados: 1A Strict Press, 1B Back Squat, 1C Deadlift e 1D
-          Resultado total de cargas. Cada um tem ranking próprio. A pergunta é quais deles
-          entram na classificação geral.
-        </p>
-
-        <div className="mt-4 space-y-2">
-          {WOD1_MODES.map((opcao) => (
-            <Escolha
-              key={opcao.value}
-              name="wod1ScoringMode"
-              checked={form.wod1ScoringMode === opcao.value}
-              onChange={() => setForm({ ...form, wod1ScoringMode: opcao.value })}
-              titulo={opcao.titulo}
-              descricao={opcao.descricao}
-            />
-          ))}
         </div>
       </Card>
 

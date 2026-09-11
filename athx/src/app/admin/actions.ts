@@ -388,7 +388,6 @@ export async function salvarConfiguracoes(input: unknown): Promise<ActionResult>
     const { error } = await supabase
       .from('event_settings')
       .update({
-        wod1_scoring_mode: dados.wod1ScoringMode,
         tie_points_mode: dados.tiePointsMode,
         dnf_policy: dados.dnfPolicy,
         tie_breaker_1: dados.tieBreaker1 || null,

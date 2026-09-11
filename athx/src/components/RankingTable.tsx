@@ -176,16 +176,31 @@ export function RankingTable({
 
                   {/* Desktop: cada uma das oito pontuações independentes.
                       As de somatório (1D, 2C) e a do Metcon vêm destacadas. */}
-                  <Prova value={row.wod1?.hasResult ? row.wod1.pointsStrictPress : null} />
-                  <Prova value={row.wod1?.hasResult ? row.wod1.pointsBackSquat : null} />
-                  <Prova value={row.wod1?.hasResult ? row.wod1.pointsDeadlift : null} />
+                  <Prova
+                    value={row.wod1?.hasResult ? row.wod1.pointsStrictPress : null}
+                    bruto={row.wod1?.hasResult ? kg(row.wod1.strictPress) : null}
+                  />
+                  <Prova
+                    value={row.wod1?.hasResult ? row.wod1.pointsBackSquat : null}
+                    bruto={row.wod1?.hasResult ? kg(row.wod1.backSquat) : null}
+                  />
+                  <Prova
+                    value={row.wod1?.hasResult ? row.wod1.pointsDeadlift : null}
+                    bruto={row.wod1?.hasResult ? kg(row.wod1.deadlift) : null}
+                  />
                   <Prova
                     value={row.wod1?.hasResult ? row.wod1.pointsTotal : null}
                     bruto={row.wod1?.hasResult ? kg(row.wod1.totalLoad) : null}
                     destaque
                   />
-                  <Prova value={row.wod2?.hasResult ? row.wod2.pointsRun : null} />
-                  <Prova value={row.wod2?.hasResult ? row.wod2.pointsBike : null} />
+                  <Prova
+                    value={row.wod2?.hasResult ? row.wod2.pointsRun : null}
+                    bruto={row.wod2?.hasResult ? km(row.wod2.runKm) : null}
+                  />
+                  <Prova
+                    value={row.wod2?.hasResult ? row.wod2.pointsBike : null}
+                    bruto={row.wod2?.hasResult ? km(row.wod2.bikeKm) : null}
+                  />
                   <Prova
                     value={row.wod2?.hasResult ? row.wod2.pointsTotal : null}
                     bruto={row.wod2?.hasResult ? km(row.wod2.totalKm) : null}
@@ -321,9 +336,10 @@ const PROVAS = ['1A', '1B', '1C', '1D', '2A', '2B', '2C', '3'] as const;
 /**
  * Uma das oito pontuações independentes, na visão desktop.
  *
- * Nas provas de somatório (1D, 2C e o Metcon) o RESULTADO BRUTO aparece
- * logo abaixo dos pontos — carga total, distância total e tempo. É o que
- * responde "esses 2 pontos vieram de quanto?" sem sair da tabela.
+ * O RESULTADO BRUTO aparece logo abaixo dos pontos em TODAS as provas —
+ * a carga de cada levantamento, a distância de cada máquina e o tempo.
+ * É o que responde "esses 2 pontos vieram de quanto?" sem sair da tabela.
+ * As provas de somatório (1D, 2C e o Metcon) vêm em destaque.
  */
 function Prova({
   value,

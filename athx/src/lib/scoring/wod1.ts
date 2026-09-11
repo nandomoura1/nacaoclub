@@ -4,7 +4,6 @@ import type {
   TiePointsMode,
   Wod1Result,
   Wod1Score,
-  Wod1ScoringMode,
 } from '@/types/domain';
 import { indexByTeam, rankValues, type RankInput } from './rank';
 import { isCounted, isRankable, PUBLIC_STATUSES } from './eligibility';
@@ -31,13 +30,8 @@ import { isCounted, isRankable, PUBLIC_STATUSES } from './eligibility';
  *
  * PONTUAÇÃO DO WOD 1 = Pts 1A + Pts 1B + Pts 1C + Pts 1D
  *
- * ...quando `wod1ScoringMode` é SUM_ALL, que é o padrão e o que a
- * organização pediu — a mesma lógica do WOD 2, que soma 2A + 2B + 2C.
- *
- * No modo TOTAL_ONLY, só a prova 1D pontua. Essa alternativa existe porque o
- * texto do regulamento diz "a dupla com maior resultado total ficará em 1º
- * lugar no Workout", o que contradiz a soma das quatro. Quem decide é a
- * organização, em /admin/settings.
+ * A mesma lógica do WOD 2, que soma 2A + 2B + 2C. Não há modo alternativo:
+ * as quatro provas sempre somam.
  */
 
 export const WOD1_LIFTS = [
@@ -71,17 +65,9 @@ export function liftBreakdown(result: Pick<Wod1Result, (typeof WOD1_LIFTS)[numbe
 export function scoreWod1(
   teams: readonly Team[],
   results: readonly Wod1Result[],
-  options: {
-    tieMode?: TiePointsMode;
-    statuses?: readonly ResultStatus[];
-    scoringMode?: Wod1ScoringMode;
-  } = {},
+  options: { tieMode?: TiePointsMode; statuses?: readonly ResultStatus[] } = {},
 ): Map<string, Wod1Score> {
-  const {
-    tieMode = 'COMPETITION',
-    statuses = PUBLIC_STATUSES,
-    scoringMode = 'SUM_ALL',
-  } = options;
+  const { tieMode = 'COMPETITION', statuses = PUBLIC_STATUSES } = options;
 
   const rankableIds = new Set(teams.filter(isRankable).map((t) => t.id));
   const eligible = results.filter(
@@ -114,12 +100,8 @@ export function scoreWod1(
     const d = rankD.get(result.teamId);
     const hasResult = a !== undefined && b !== undefined && c !== undefined && d !== undefined;
 
-    // SUM_ALL soma as quatro provas; TOTAL_ONLY usa apenas a 1D.
-    const points = hasResult
-      ? scoringMode === 'TOTAL_ONLY'
-        ? d.points
-        : a.points + b.points + c.points + d.points
-      : null;
+    // As quatro provas somam. Sempre.
+    const points = hasResult ? a.points + b.points + c.points + d.points : null;
 
     scores.set(result.teamId, {
       teamId: result.teamId,

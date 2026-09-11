@@ -8,49 +8,27 @@
 
 ---
 
-## 0. Como o WOD 1 pontua — ⚠️ REGULAMENTO E INSTRUÇÃO DIVERGEM
+## 0. Como o WOD 1 pontua — ✅ RESOLVIDO
 
-**A contradição:** a organização instruiu que *"o WOD 1 gera 4 pontuações
-(1A, 1B, 1C, 1D)"*, do mesmo jeito que o WOD 2 gera 3. Mas o texto do
-regulamento, na prova 1D, diz:
+Havia divergência: a organização instruiu que *"o WOD 1 gera 4 pontuações"*,
+enquanto o texto do regulamento diz, na prova 1D, que *"a dupla com maior
+resultado total ficará em 1º lugar no Workout"*.
 
-> "A dupla com maior resultado total ficará em **1º lugar no Workout**."
-
-Essa frase coloca a colocação do workout inteiro nas mãos da prova 1D — o que
-é incompatível com somar as quatro.
-
-**Hoje:** `SUM_ALL` — vale a instrução da organização.
+**Decidido pela organização:** as quatro provas somam.
 
 ```
 PONTUAÇÃO DO WOD 1 = Pts 1A + Pts 1B + Pts 1C + Pts 1D
 ```
 
-**Alternativa disponível:** `TOTAL_ONLY` — só a prova 1D pontua. As provas 1A,
-1B e 1C continuam sendo calculadas, exibidas e exportadas, mas não entram na
-soma.
+A opção alternativa (`TOTAL_ONLY`, em que só a 1D pontuava) **foi removida do
+sistema**. O motivo é operacional: com ela ligada, as provas 1A, 1B e 1C
+apareciam na tela com posição e pontos mas não entravam no total — o
+leaderboard mostrava 4 pontos onde a soma real era 7, sem nenhum aviso.
+Configuração capaz de zerar em silêncio a pontuação de três provas é risco no
+dia do evento, não flexibilidade.
 
-**Onde ajustar:** `/admin/settings` → *Como o WOD 1 pontua*. Trocar recalcula
-a classificação inteira na hora.
-
-**Consequência prática de somar as quatro:** a menor pontuação possível no
-WOD 1 passa a ser **4** (1º nas quatro provas), e não 1. Isso muda o peso
-relativo dos WODs na classificação geral:
-
-| WOD | Pontuação mínima | Pontuação com 20 duplas, se última em tudo |
-|---|---|---|
-| WOD 1 | 4 | 80 |
-| WOD 2 | 3 | 60 |
-| WOD 3 | 1 | 20 |
-
-Ou seja, **o WOD 1 passa a pesar 4× o WOD 3** na classificação geral. Isso é
-consequência direta da regra pedida, não um efeito colateral do sistema.
-
-**Confirmado pela organização em 11/09:** é assim mesmo. A competição soma
-oito pontuações independentes:
-
-```
-TOTAL = 1A + 1B + 1C + 1D + 2A + 2B + 2C + 3
-```
+A coluna `wod1_scoring_mode` continua existindo no banco e é simplesmente
+ignorada. Não há migration a rodar.
 
 ---
 
