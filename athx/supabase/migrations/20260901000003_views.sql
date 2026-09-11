@@ -3,6 +3,13 @@
 --
 -- O leaderboard público é servido por estas views. Uma consulta, sem varrer
 -- o banco inteiro a cada atualização (§34).
+--
+-- DROP antes de CREATE, e não CREATE OR REPLACE:
+-- o Postgres recusa remover ou trocar o tipo de uma coluna existente de uma
+-- view. Quando uma migration posterior acrescenta colunas (como a 0007 fez
+-- na athx_public_wod1), reexecutar este arquivo tentaria devolver a view à
+-- forma antiga e falharia com "cannot drop columns from view" — quebrando a
+-- reinstalação por cima de um banco já em produção.
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
@@ -19,7 +26,8 @@
 -- apareceria à frente de quem já fez 3. Idêntico a computeStandings() em
 -- src/lib/scoring/overall.ts. Documentado em docs/regras-pendentes.md.
 -- ---------------------------------------------------------------------------
-create or replace view public.athx_standings as
+drop view if exists public.athx_standings;
+create view public.athx_standings as
 with scored as (
   select
     t.id            as team_id,
@@ -67,7 +75,8 @@ from scored s;
 -- athx_public_wod1 / _wod2 / _wod3 — resultados por WOD já homologados.
 -- Usadas pelas páginas /wod/1, /wod/2 e /wod/3.
 -- ---------------------------------------------------------------------------
-create or replace view public.athx_public_wod1 as
+drop view if exists public.athx_public_wod1;
+create view public.athx_public_wod1 as
 select
   t.id as team_id, t.event_id, t.team_number, t.team_name, t.category, t.battery,
   t.athlete_1, t.athlete_2,
@@ -82,7 +91,8 @@ from public.wod1_results w
 join public.teams t on t.id = w.team_id
 where w.status in ('PUBLISHED', 'LOCKED');
 
-create or replace view public.athx_public_wod2 as
+drop view if exists public.athx_public_wod2;
+create view public.athx_public_wod2 as
 select
   t.id as team_id, t.event_id, t.team_number, t.team_name, t.category, t.battery,
   t.athlete_1, t.athlete_2,
@@ -93,7 +103,8 @@ from public.wod2_results w
 join public.teams t on t.id = w.team_id
 where w.status in ('PUBLISHED', 'LOCKED');
 
-create or replace view public.athx_public_wod3 as
+drop view if exists public.athx_public_wod3;
+create view public.athx_public_wod3 as
 select
   t.id as team_id, t.event_id, t.team_number, t.team_name, t.category, t.battery,
   t.athlete_1, t.athlete_2,
@@ -106,7 +117,8 @@ where w.status in ('PUBLISHED', 'LOCKED');
 -- ---------------------------------------------------------------------------
 -- athx_last_update — "Última atualização HH:MM" do leaderboard (§9)
 -- ---------------------------------------------------------------------------
-create or replace view public.athx_last_update as
+drop view if exists public.athx_last_update;
+create view public.athx_last_update as
 select
   e.id as event_id,
   greatest(

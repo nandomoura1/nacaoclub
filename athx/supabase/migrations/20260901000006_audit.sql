@@ -109,7 +109,8 @@ for each row execute function public.athx_audit_team();
 -- ---------------------------------------------------------------------------
 -- athx_audit_feed — histórico legível para a tela /admin/results
 -- ---------------------------------------------------------------------------
-create or replace view public.athx_audit_feed as
+drop view if exists public.athx_audit_feed;
+create view public.athx_audit_feed as
 select
   a.id,
   a.created_at,
