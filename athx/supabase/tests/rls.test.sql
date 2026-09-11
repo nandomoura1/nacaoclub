@@ -18,11 +18,17 @@ insert into admin_users (user_id, email, name)
 values ('11111111-1111-1111-1111-111111111111', 'admin@nacaoclub.test', 'Admin Teste')
 on conflict (user_id) do nothing;
 
--- Uma dupla com resultado em RASCUNHO e outra com resultado PUBLICADO.
-update wod1_results set status = 'DRAFT'
- where team_id = (select id from teams order by team_number limit 1);
-update wod1_results set status = 'PUBLISHED'
- where team_id = (select id from teams order by team_number offset 1 limit 1);
+-- O teste cria o próprio cenário e não depende de haver resultado no banco:
+-- uma dupla com resultado em RASCUNHO e outra com resultado PUBLICADO.
+delete from wod1_results;
+
+insert into wod1_results (event_id, team_id, strict_press_athlete_1, status)
+select t.event_id, t.id, 60, 'DRAFT'
+from teams t order by t.team_number limit 1;
+
+insert into wod1_results (event_id, team_id, strict_press_athlete_1, status)
+select t.event_id, t.id, 70, 'PUBLISHED'
+from teams t order by t.team_number offset 1 limit 1;
 
 \set QUIET off
 
@@ -130,5 +136,52 @@ end $$;
 rollback to savepoint s5;
 
 reset role;
+
+-- =============================================================================
+-- 4) RESULTADO TRAVADO (LOCKED)
+--
+--    Travar congela o que foi LANÇADO — não pode impedir o motor de
+--    recalcular. Este bloco existe porque a primeira versão do guarda
+--    bloqueava o próprio recálculo: travar o WOD 1 e depois publicar o
+--    WOD 3 quebrava, e o botão TRAVAR nem funcionava.
+-- =============================================================================
+
+savepoint s6;
+
+delete from wod1_results;
+insert into wod1_results (event_id, team_id, strict_press_athlete_1, status)
+select e.id, t.id, 50 + t.team_number * 10, 'PUBLISHED'
+from events e join teams t on t.event_id = e.id
+where t.team_number <= 3;
+
+do $$
+begin
+  update wod1_results set status = 'LOCKED';
+  raise notice 'PASSOU :: consegue TRAVAR os resultados';
+exception when others then
+  raise notice 'FALHOU :: nao conseguiu travar (%)', sqlerrm;
+end $$;
+
+do $$
+begin
+  perform athx_recalculate_event(id) from events;
+  raise notice 'PASSOU :: recalculo roda com resultado travado';
+exception when others then
+  raise notice 'FALHOU :: recalculo quebrou com resultado travado (%)', sqlerrm;
+end $$;
+
+select case when count(*) = 3 then 'PASSOU' else 'FALHOU' end
+       || ' :: resultado travado continua pontuado pelo motor'
+from wod1_results where rank is not null and points is not null;
+
+do $$
+begin
+  update wod1_results set strict_press_athlete_1 = 999;
+  raise notice 'FALHOU :: conseguiu ALTERAR carga de resultado travado';
+exception when others then
+  raise notice 'PASSOU :: NAO consegue alterar carga de resultado travado';
+end $$;
+
+rollback to savepoint s6;
 
 rollback;

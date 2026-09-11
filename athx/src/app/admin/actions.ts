@@ -58,10 +58,32 @@ async function requireAdmin() {
   return { supabase, user, eventId: event.id as string };
 }
 
+/**
+ * Traduz erros do banco para linguagem de quem está operando o evento.
+ *
+ * O gatilho que protege resultado travado devolve uma mensagem que cita o
+ * nome de uma função SQL — informação inútil para quem está com um juiz
+ * esperando do lado. Aqui vira uma instrução acionável.
+ */
+function traduzir(mensagem: string): string {
+  if (mensagem.includes('LOCKED')) {
+    return 'Este resultado está TRAVADO e por isso não pode ser alterado. Vá em Conferência (/admin/results), clique em Destravar, informe o motivo e tente de novo.';
+  }
+  if (mensagem.includes('wod2_results_run_km_check')) {
+    return 'Distância de corrida inválida. A troca de atleta só acontece a cada 500 m, então a corrida só pode ser 0,5 · 1,0 · 1,5 · 2,0 km e assim por diante.';
+  }
+  if (mensagem.includes('wod3_completed_needs_time')) {
+    return 'Quem concluiu precisa ter o tempo preenchido no formato MM:SS (ex.: 14:32).';
+  }
+  return mensagem;
+}
+
 function fail(error: unknown): ActionResult {
   return {
     ok: false,
-    message: error instanceof Error ? error.message : 'Não foi possível concluir a operação.',
+    message: error instanceof Error
+      ? traduzir(error.message)
+      : 'Não foi possível concluir a operação.',
   };
 }
 
@@ -288,16 +310,7 @@ export async function definirStatus(
       .update({ status, updated_by: user.id })
       .in('team_id', teamIds);
 
-    if (error) {
-      if (error.message.includes('LOCKED')) {
-        return {
-          ok: false,
-          message:
-            'Há resultado travado (LOCKED) nesta seleção. Destrave em /admin/results antes de alterar.',
-        };
-      }
-      throw new Error(error.message);
-    }
+    if (error) throw new Error(error.message);
 
     // O gatilho do banco já recalcula, mas pedimos explicitamente: assim o
     // recálculo acontece ainda dentro desta requisição e a próxima leitura

@@ -15,6 +15,9 @@ se atualiza sozinho.
 👉 **[docs/colocar-no-ar.md](docs/colocar-no-ar.md)** — passo a passo do zero
 até você lançando resultados. ~20 minutos, tudo em plano gratuito.
 
+👉 **[docs/como-testar.md](docs/como-testar.md)** — três níveis de teste, do
+modo demo ao ensaio geral do dia do evento.
+
 O banco inteiro se instala com **uma única colagem** no SQL Editor do Supabase:
 [`supabase/setup-completo.sql`](supabase/setup-completo.sql).
 
@@ -130,6 +133,7 @@ athx/
 ├── supabase/
 │   ├── setup-completo.sql      ⭐ instalação em UMA colagem (gerado)
 │   ├── tornar-admin.sql        liberar acesso de administrador
+│   ├── limpar-resultados.sql   zerar o ensaio, mantendo duplas e acessos
 │   ├── migrations/             6 migrations SQL
 │   ├── seed.sql                evento + 20 duplas
 │   └── tests/rls.test.sql      verificação do RLS
@@ -137,6 +141,7 @@ athx/
 ├── tests/                      63 testes (Vitest)
 └── docs/
     ├── colocar-no-ar.md        🚀 do zero ao site no ar
+    ├── como-testar.md          🧪 demo, ensaio geral e véspera
     └── regras-pendentes.md     ⚠️ o que ainda falta a organização decidir
 ```
 
@@ -445,7 +450,7 @@ npm run lint        # ESLint
 
 ## Testes
 
-**63 testes** cobrindo:
+**64 testes** cobrindo:
 
 | Arquivo | O que verifica |
 |---|---|
@@ -457,7 +462,7 @@ npm run lint        # ESLint
 | `search.test.ts` | busca por dupla, atleta, número, sem acento; filtro por categoria |
 | `validation.test.ts` | schemas de lançamento e cadastro |
 | `export.test.ts` | CSV e JSON |
-| `supabase/tests/rls.test.sql` | RLS real, contra um PostgreSQL de verdade |
+| `supabase/tests/rls.test.sql` | RLS real e resultado travado, contra um PostgreSQL de verdade (15 verificações) |
 
 Realtime e Supabase Auth dependem de um projeto Supabase ativo e **não** têm
 teste automatizado aqui — verifique-os pelo checklist acima.

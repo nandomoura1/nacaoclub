@@ -128,14 +128,36 @@ create or replace function public.athx_guard_locked()
 returns trigger
 language plpgsql
 as $$
+declare
+  -- Colunas que o MOTOR escreve, não o juiz.
+  v_derivadas text[] := array[
+    'rank', 'points', 'tied', 'needs_decision', 'total_points', 'total_load', 'total_km',
+    'rank_run', 'points_run', 'rank_bike', 'points_bike', 'rank_total', 'points_total',
+    'updated_at'
+  ];
 begin
-  if old.status = 'LOCKED'
-     and coalesce(current_setting('athx.allow_locked_edit', true), 'off') <> 'on' then
-    raise exception
-      'Resultado LOCKED. Destrave com athx_unlock_result() antes de alterar.'
-      using errcode = 'check_violation';
+  if old.status <> 'LOCKED' then
+    return new;
   end if;
-  return new;
+
+  -- Destravamento explícito, via athx_unlock_result().
+  if coalesce(current_setting('athx.allow_locked_edit', true), 'off') = 'on' then
+    return new;
+  end if;
+
+  -- O RECÁLCULO PRECISA PASSAR.
+  -- Travar congela o que foi LANÇADO (cargas, tempos, status) — não congela
+  -- a classificação. Quando o WOD 3 é publicado, o motor reescreve posição e
+  -- pontos de TODOS os WODs, inclusive os já travados. Sem esta exceção, o
+  -- próprio ato de travar falhava: travar dispara o recálculo, que então
+  -- esbarrava neste guarda.
+  if (to_jsonb(new) - v_derivadas) = (to_jsonb(old) - v_derivadas) then
+    return new;
+  end if;
+
+  raise exception
+    'Resultado LOCKED. Destrave com athx_unlock_result() antes de alterar.'
+    using errcode = 'check_violation';
 end;
 $$;
 

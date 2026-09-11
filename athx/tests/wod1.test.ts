@@ -75,6 +75,18 @@ describe('WOD 1 — STRENGTH', () => {
     expect(scores.get('team-2')).toMatchObject({ rank: 1, points: 1 });
   });
 
+  // LOCKED é resultado homologado e travado: continua valendo para o público.
+  // O banco também garante isso — travar congela o que foi lançado, mas o
+  // motor segue reescrevendo posição e pontos (ver supabase/tests/rls.test.sql).
+  it('conta resultado LOCKED normalmente no ranking público', () => {
+    const teams = [team(1), team(2)];
+    const results = [w1('team-1', [100], { status: 'LOCKED' }), w1('team-2', [90])];
+    const scores = scoreWod1(teams, results);
+
+    expect(scores.get('team-1')).toMatchObject({ rank: 1, points: 1, hasResult: true });
+    expect(scores.get('team-2')).toMatchObject({ rank: 2, points: 2 });
+  });
+
   it('inclui DRAFT quando o admin pede a prévia', () => {
     const teams = [team(1), team(2)];
     const results = [w1('team-1', [100], { status: 'DRAFT' }), w1('team-2', [90])];
