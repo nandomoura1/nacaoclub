@@ -10,6 +10,16 @@ se atualiza sozinho.
 
 ---
 
+## 🚀 Quer colocar no ar para usar no evento?
+
+👉 **[docs/colocar-no-ar.md](docs/colocar-no-ar.md)** — passo a passo do zero
+até você lançando resultados. ~20 minutos, tudo em plano gratuito.
+
+O banco inteiro se instala com **uma única colagem** no SQL Editor do Supabase:
+[`supabase/setup-completo.sql`](supabase/setup-completo.sql).
+
+---
+
 ## Comece em 60 segundos (sem banco nenhum)
 
 ```bash
@@ -118,11 +128,16 @@ athx/
 │   ├── types/domain.ts         modelo de domínio
 │   └── styles/globals.css      ⭐ DESIGN SYSTEM DA MARCA
 ├── supabase/
+│   ├── setup-completo.sql      ⭐ instalação em UMA colagem (gerado)
+│   ├── tornar-admin.sql        liberar acesso de administrador
 │   ├── migrations/             6 migrations SQL
 │   ├── seed.sql                evento + 20 duplas
 │   └── tests/rls.test.sql      verificação do RLS
+├── scripts/gerar-setup.mjs     regenera o setup-completo.sql
 ├── tests/                      63 testes (Vitest)
-└── docs/regras-pendentes.md    ⚠️ o que ainda falta a organização decidir
+└── docs/
+    ├── colocar-no-ar.md        🚀 do zero ao site no ar
+    └── regras-pendentes.md     ⚠️ o que ainda falta a organização decidir
 ```
 
 ---
@@ -262,8 +277,12 @@ Anote a senha do banco. Escolha a região mais próxima (`sa-east-1`, São Paulo
 
 ### 2. Aplicar as migrations
 
-**Opção A — SQL Editor (sem instalar nada):** abra o SQL Editor do projeto e
-cole o conteúdo de cada arquivo, **na ordem**:
+**Opção A — uma colagem só (recomendado):** abra o **SQL Editor** do projeto e
+cole todo o conteúdo de **[`supabase/setup-completo.sql`](supabase/setup-completo.sql)**.
+É a junção, na ordem certa, das seis migrations e do seed. Idempotente: pode
+rodar de novo sem duplicar nada nem apagar resultado já lançado.
+
+**Opção B — arquivo por arquivo,** se preferir enxergar cada etapa:
 
 ```
 supabase/migrations/20260901000001_schema.sql     tabelas, tipos, índices
@@ -275,7 +294,10 @@ supabase/migrations/20260901000006_audit.sql      auditoria
 supabase/seed.sql                                 evento + 20 duplas
 ```
 
-**Opção B — CLI:**
+> `setup-completo.sql` é **gerado**. Se alterar alguma migration, rode
+> `node scripts/gerar-setup.mjs` para atualizá-lo.
+
+**Opção C — CLI:**
 
 ```bash
 npx supabase link --project-ref SEU_REF
@@ -303,14 +325,10 @@ NEXT_PUBLIC_SITE_URL=https://athx.nacaoclub.com.br
 **Authentication → Users → Add user**: informe e-mail e senha e marque
 *Auto Confirm User*.
 
-Depois, no SQL Editor, autorize essa conta:
-
-```sql
-insert into admin_users (user_id, email, name)
-select id, email, 'Nome da Pessoa'
-from auth.users
-where email = 'voce@nacaoclub.com.br';
-```
+Depois, no SQL Editor, rode
+**[`supabase/tornar-admin.sql`](supabase/tornar-admin.sql)** trocando o e-mail e
+o nome nas duas linhas marcadas. Ele avisa com mensagem clara se o usuário
+ainda não existir.
 
 > **Só quem está em `admin_users` pode escrever.** Ter conta no Supabase não
 > basta — é isso que `athx_is_admin()` verifica em toda policy de escrita.
@@ -336,6 +354,9 @@ nada.
 ---
 
 ## Deploy
+
+> Passo a passo completo, com o que clicar em cada tela:
+> **[docs/colocar-no-ar.md](docs/colocar-no-ar.md)**
 
 ### Vercel
 

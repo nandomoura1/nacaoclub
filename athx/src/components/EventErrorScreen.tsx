@@ -23,13 +23,32 @@ export function EventErrorScreen({ message }: { message?: string }) {
             {message}
           </p>
         ) : null}
-        <p className="mt-4 text-sm text-white/50">
-          Para avaliar a aplicação sem banco, defina{' '}
-          <code className="rounded bg-white/10 px-1.5 py-0.5 text-nacao-cyan">
-            NEXT_PUBLIC_DEMO_MODE=true
-          </code>{' '}
-          no <code className="rounded bg-white/10 px-1.5 py-0.5">.env.local</code>.
-        </p>
+        <div className="mt-5 space-y-3 text-left text-sm text-white/55">
+          <p className="font-display text-xs font-bold tracking-wider text-white/70 uppercase">
+            O que costuma ser
+          </p>
+          <ul className="list-disc space-y-1.5 pl-5">
+            <li>
+              As variáveis não foram preenchidas na Vercel — vá em{' '}
+              <strong>Settings → Environment Variables</strong> e depois faça{' '}
+              <strong>Redeploy</strong>.
+            </li>
+            <li>
+              O banco ainda não foi instalado — rode{' '}
+              <code className="rounded bg-white/10 px-1.5 py-0.5 text-nacao-cyan">
+                supabase/setup-completo.sql
+              </code>{' '}
+              no SQL Editor do Supabase.
+            </li>
+            <li>
+              Rodando no seu computador? As variáveis vão no arquivo{' '}
+              <code className="rounded bg-white/10 px-1.5 py-0.5">.env.local</code>.
+            </li>
+          </ul>
+          <p className="text-white/40">
+            Passo a passo completo em <strong>docs/colocar-no-ar.md</strong>.
+          </p>
+        </div>
       </div>
     </main>
   );

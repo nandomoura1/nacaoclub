@@ -19,8 +19,15 @@ export const IS_DEMO = truthy.has(String(process.env.NEXT_PUBLIC_DEMO_MODE ?? ''
 export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
 
 const supabaseSchema = z.object({
-  url: z.string().url('NEXT_PUBLIC_SUPABASE_URL precisa ser uma URL válida'),
-  anonKey: z.string().min(20, 'NEXT_PUBLIC_SUPABASE_ANON_KEY ausente ou inválida'),
+  // required_error é o que aparece quando a variável não existe. Sem ele, o
+  // Zod diria apenas "Required" e a mensagem na tela não diria QUAL variável
+  // está faltando — inútil para quem está configurando a Vercel.
+  url: z
+    .string({ required_error: 'falta NEXT_PUBLIC_SUPABASE_URL' })
+    .url('NEXT_PUBLIC_SUPABASE_URL não é uma URL válida'),
+  anonKey: z
+    .string({ required_error: 'falta NEXT_PUBLIC_SUPABASE_ANON_KEY' })
+    .min(20, 'NEXT_PUBLIC_SUPABASE_ANON_KEY parece incompleta'),
 });
 
 export type SupabaseEnv = z.infer<typeof supabaseSchema>;
@@ -39,7 +46,9 @@ export function getSupabaseEnv(): SupabaseEnv {
     const detalhes = parsed.error.issues.map((i) => i.message).join('; ');
     throw new Error(
       `Supabase não configurado: ${detalhes}. ` +
-        'Defina as variáveis no .env.local ou ligue NEXT_PUBLIC_DEMO_MODE=true para usar dados fictícios.',
+        'Na Vercel: Settings > Environment Variables (e depois Redeploy). ' +
+        'No seu computador: arquivo .env.local. ' +
+        'Para avaliar sem banco, use NEXT_PUBLIC_DEMO_MODE=true.',
     );
   }
   return parsed.data;
