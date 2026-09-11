@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { StandingRow } from '@/types/domain';
-import { categoryLabel, points, teamNumber } from '@/lib/format';
+import { categoryShort, points, teamNumber } from '@/lib/format';
 
 /**
  * Podium — o Top 3 (§7).
@@ -61,7 +61,7 @@ export function Podium({ rows }: { rows: readonly StandingRow[] }) {
 
               <div className="mt-4 flex items-end justify-between">
                 <span className="font-display text-[10px] font-bold tracking-wider text-white/40 uppercase">
-                  {categoryLabel(row.team.category)}
+                  {categoryShort(row.team.category)}
                 </span>
                 <span className="text-right">
                   <span className="tnum block font-display text-3xl leading-none font-black text-white">

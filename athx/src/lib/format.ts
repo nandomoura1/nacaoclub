@@ -1,5 +1,5 @@
 import type { Category } from '@/types/domain';
-import { CATEGORY_LABEL } from '@/types/domain';
+import { CATEGORY_LABEL, CATEGORY_SHORT } from '@/types/domain';
 
 export function ordinal(position: number): string {
   return `${position}º`;
@@ -26,8 +26,14 @@ export function points(value: number | null | undefined): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1).replace('.', ',');
 }
 
+/** Nome oficial: "Dupla Masculina". */
 export function categoryLabel(category: Category): string {
   return CATEGORY_LABEL[category];
+}
+
+/** Forma curta: "Masculina". Para tabelas, chips e cards. */
+export function categoryShort(category: Category): string {
+  return CATEGORY_SHORT[category];
 }
 
 /** Número da dupla sempre com dois dígitos: 7 -> "07" */

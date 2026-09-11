@@ -4,7 +4,13 @@ import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, Pencil, Plus, Trash2, TriangleAlert } from 'lucide-react';
 import type { Category, Team, TeamStatus } from '@/types/domain';
-import { CATEGORIES, CATEGORY_LABEL, TEAM_STATUSES, TEAM_STATUS_LABEL } from '@/types/domain';
+import {
+  CATEGORIES,
+  CATEGORY_LABEL,
+  CATEGORY_SHORT,
+  TEAM_STATUSES,
+  TEAM_STATUS_LABEL,
+} from '@/types/domain';
 import type { Snapshot } from '@/services/snapshot';
 import { excluirDupla, salvarDupla } from '@/app/admin/actions';
 import type { ActionResult } from '@/app/admin/actions';
@@ -172,7 +178,7 @@ export function TeamsManager({ snapshot }: { snapshot: Snapshot }) {
                   {team.athlete2 || <span className="text-amber-300/70">a preencher</span>}
                 </td>
                 <td className="px-3 py-2.5">
-                  <Badge tone="neutral">{CATEGORY_LABEL[team.category]}</Badge>
+                  <Badge tone="neutral">{CATEGORY_SHORT[team.category]}</Badge>
                 </td>
                 <td className="px-3 py-2.5">
                   <Badge tone="sky">{team.battery}</Badge>

@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Printer } from 'lucide-react';
 import type { Category, StandingRow, WodNumber } from '@/types/domain';
-import { CATEGORIES, CATEGORY_LABEL, WOD_META } from '@/types/domain';
+import { CATEGORIES, CATEGORY_LABEL, CATEGORY_SHORT, WOD_META } from '@/types/domain';
 import type { Snapshot } from '@/services/snapshot';
 import { buildLeaderboard } from '@/lib/scoring/build';
 import { standingsByCategory } from '@/lib/scoring/overall';
@@ -23,7 +23,7 @@ type ViewFilter = 'GERAL' | '1' | '2' | '3';
 
 const CATEGORY_TABS = [
   { value: 'TODAS' as const, label: 'Todas' },
-  ...CATEGORIES.map((c) => ({ value: c, label: CATEGORY_LABEL[c] })),
+  ...CATEGORIES.map((c) => ({ value: c, label: CATEGORY_SHORT[c] })),
 ];
 
 const VIEW_TABS = [
@@ -102,10 +102,15 @@ export function LeaderboardView({ initial }: { initial: Snapshot }) {
 
       {/* ---- Título ------------------------------------------------------ */}
       <div>
-        <h2 className="font-display text-2xl font-black tracking-tight uppercase sm:text-3xl">
-          {category === 'TODAS'
-            ? 'Classificação geral'
-            : `Classificação da categoria ${CATEGORY_LABEL[category]}`}
+        {/* §29 — ao filtrar, precisa ficar explícito que a posição exibida é
+            a posição DENTRO da categoria, não a da classificação geral. */}
+        {category !== 'TODAS' ? (
+          <p className="font-display text-[10px] font-bold tracking-kicker text-nacao-cyan uppercase">
+            Classificação da categoria
+          </p>
+        ) : null}
+        <h2 className="mt-1 font-display text-2xl font-black tracking-tight uppercase sm:text-3xl">
+          {category === 'TODAS' ? 'Classificação geral' : CATEGORY_LABEL[category]}
         </h2>
         <p className="mt-1 text-sm text-white/50">Menor pontuação = melhor classificação</p>
       </div>

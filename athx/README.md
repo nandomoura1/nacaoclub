@@ -241,6 +241,16 @@ documentada e é confirmável.
 
 **Desclassificada:** fica fora do ranking, mas continua visível na listagem.
 
+### Categorias
+
+O evento tem três: **Dupla Masculina**, **Dupla Feminina** e **Dupla Mista**.
+
+Ao filtrar por uma delas, a posição exibida é recalculada **dentro da
+categoria** e a tela diz isso com todas as letras ("Classificação da
+categoria"). Nas tabelas e nos chips de filtro aparece a forma curta
+(Masculina · Feminina · Mista), porque ali o contexto já deixa claro que se
+trata de duplas.
+
 ---
 
 ## Configurar o Supabase
@@ -344,7 +354,8 @@ produção (e não `localhost`) e baixe o PNG para os banners.
 ### Checklist do dia anterior
 
 - [ ] as 20 duplas cadastradas com **nome dos dois atletas**
-- [ ] **categoria** de cada dupla confirmada (o seed cria todas como MISTA)
+- [ ] **categoria** de cada dupla confirmada — Dupla Masculina, Dupla Feminina
+      ou Dupla Mista (o seed cria todas como Mista)
 - [ ] baterias conferidas (1 e 2)
 - [ ] critério de desempate decidido → `/admin/settings`
 - [ ] política do WOD 3 para quem não concluir decidida → `/admin/settings`

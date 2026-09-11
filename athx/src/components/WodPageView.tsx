@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import type { Category, WodNumber } from '@/types/domain';
-import { CATEGORIES, CATEGORY_LABEL } from '@/types/domain';
+import { CATEGORIES, CATEGORY_LABEL, CATEGORY_SHORT } from '@/types/domain';
 import type { Snapshot } from '@/services/snapshot';
 import { buildLeaderboard } from '@/lib/scoring/build';
 import { useLiveSnapshot } from '@/hooks/useLiveSnapshot';
@@ -16,7 +16,7 @@ type CategoryFilter = 'TODAS' | Category;
 
 const CATEGORY_TABS = [
   { value: 'TODAS' as const, label: 'Todas' },
-  ...CATEGORIES.map((c) => ({ value: c, label: CATEGORY_LABEL[c] })),
+  ...CATEGORIES.map((c) => ({ value: c, label: CATEGORY_SHORT[c] })),
 ];
 
 /** Página pública de um WOD (§28): descrição, CAP, provas e ranking ao vivo. */

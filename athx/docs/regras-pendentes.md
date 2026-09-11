@@ -102,7 +102,8 @@ Zod e como `CHECK` no PostgreSQL. Não há penalidade automática.
 
 ## 8. Categoria das 20 duplas
 
-**Falta:** quais duplas são Masculina, Feminina ou Mista.
+**Falta:** quais duplas são **Dupla Masculina**, **Dupla Feminina** ou
+**Dupla Mista** — as três categorias do evento.
 
 **Hoje:** o seed cria as 20 duplas como **MISTA** porque a coluna é obrigatória.
 O painel avisa explicitamente que a categoria precisa ser revisada.

@@ -6,7 +6,7 @@ import { ChevronDown } from 'lucide-react';
 import type { StandingRow } from '@/types/domain';
 import { Badge } from '@/components/ui/Badge';
 import { RankPosition } from '@/components/RankPosition';
-import { categoryLabel, kg, km, points, teamNumber } from '@/lib/format';
+import { categoryShort, kg, km, points, teamNumber } from '@/lib/format';
 import { formatSeconds } from '@/lib/time';
 
 /**
@@ -103,7 +103,7 @@ export function RankingTable({
                   </Td>
 
                   <Td className="hidden md:table-cell">
-                    <Badge tone="neutral">{categoryLabel(row.team.category)}</Badge>
+                    <Badge tone="neutral">{categoryShort(row.team.category)}</Badge>
                   </Td>
 
                   <Td className="hidden text-right md:table-cell">

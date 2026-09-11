@@ -31,7 +31,21 @@ const SIZES: Record<Size, { img: string; nacao: string; club: string; rule: stri
   lg: { img: 'h-16', nacao: 'text-3xl sm:text-4xl', club: 'text-[11px]', rule: 'my-1.5' },
 };
 
-const OFFICIAL_LOGO = '/logo-nacao-club.svg';
+/**
+ * Arquivos procurados, em ordem de preferência.
+ *
+ * A versão BRANCA/monocromática vem primeiro porque o fundo da aplicação é o
+ * navy #022B57 do manual: a logomarca azul sobre o navy quase desaparece.
+ * SVG antes de PNG porque o telão escala até 1920px sem serrilhar.
+ *
+ * Basta salvar UM desses arquivos em public/ — nenhuma linha de código muda.
+ */
+const CANDIDATOS = [
+  '/logo-nacao-club-white.svg',
+  '/logo-nacao-club.svg',
+  '/logo-nacao-club-white.png',
+  '/logo-nacao-club.png',
+] as const;
 
 export function BrandLogo({
   size = 'md',
@@ -40,25 +54,35 @@ export function BrandLogo({
   size?: Size;
   className?: string;
 }) {
-  const [officialAvailable, setOfficialAvailable] = useState(false);
+  const [oficial, setOficial] = useState<string | null>(null);
   const s = SIZES[size];
 
   useEffect(() => {
-    let cancelled = false;
-    const probe = new Image();
-    probe.onload = () => {
-      if (!cancelled) setOfficialAvailable(true);
+    let cancelado = false;
+
+    // Testa os candidatos em ordem e para no primeiro que carregar de verdade.
+    const tentar = (indice: number) => {
+      const caminho = CANDIDATOS[indice];
+      if (cancelado || !caminho) return;
+
+      const probe = new Image();
+      probe.onload = () => {
+        if (!cancelado) setOficial(caminho);
+      };
+      probe.onerror = () => tentar(indice + 1);
+      probe.src = caminho;
     };
-    probe.src = OFFICIAL_LOGO;
+
+    tentar(0);
     return () => {
-      cancelled = true;
+      cancelado = true;
     };
   }, []);
 
-  if (officialAvailable) {
+  if (oficial) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={OFFICIAL_LOGO} alt="Nação Club" className={`${s.img} w-auto ${className}`} />
+      <img src={oficial} alt="Nação Club" className={`${s.img} w-auto ${className}`} />
     );
   }
 

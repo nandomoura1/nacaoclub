@@ -6,7 +6,22 @@
 export const CATEGORIES = ['MASCULINA', 'FEMININA', 'MISTA'] as const;
 export type Category = (typeof CATEGORIES)[number];
 
+/**
+ * Nome oficial da categoria, como a organização a chama.
+ * Usado onde há espaço: detalhe da dupla, formulários, títulos e exportação.
+ */
 export const CATEGORY_LABEL: Record<Category, string> = {
+  MASCULINA: 'Dupla Masculina',
+  FEMININA: 'Dupla Feminina',
+  MISTA: 'Dupla Mista',
+};
+
+/**
+ * Forma curta, para onde "Dupla" seria redundante ou não caberia:
+ * coluna CAT. da tabela, chips de filtro e cards do pódio — lugares em que
+ * o contexto já deixou claro que se trata de uma dupla.
+ */
+export const CATEGORY_SHORT: Record<Category, string> = {
   MASCULINA: 'Masculina',
   FEMININA: 'Feminina',
   MISTA: 'Mista',

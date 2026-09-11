@@ -6,7 +6,9 @@
 -- NOMES DOS ATLETAS FICAM VAZIOS de propósito — a organização preenche em
 -- /admin/teams. Nenhum nome real é inventado aqui.
 --
--- CATEGORIA: o enum exige um valor, então todas entram como MISTA.
+-- CATEGORIA: as três categorias do evento são
+--     Dupla Masculina · Dupla Feminina · Dupla Mista
+-- O enum exige um valor, então todas entram como MISTA.
 -- >>> A organização DEVE revisar a categoria de cada dupla em /admin/teams
 --     antes do evento. Não há como adivinhar isso. <<<
 --
