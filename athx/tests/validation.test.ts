@@ -16,19 +16,20 @@ describe('Validação do lançamento', () => {
     expect(r.strictPressAthlete2).toBeNull();
   });
 
-  // §12 — a REGRA CRÍTICA da troca a cada 500 m
-  it('recusa corrida fora do múltiplo de 500 m', () => {
-    expect(wod2RowSchema.safeParse({ teamId: 't1', runKm: '3,2', bikeKm: '8' }).success).toBe(false);
-    expect(wod2RowSchema.safeParse({ teamId: 't1', runKm: '1,2', bikeKm: '8' }).success).toBe(false);
-    expect(wod2RowSchema.safeParse({ teamId: 't1', runKm: '0,7', bikeKm: '8' }).success).toBe(false);
+  // A distância é livre: o AMRAP para no meio de um trecho.
+  it('aceita qualquer distância de corrida', () => {
+    for (const valor of ['0', '0,5', '2,41', '3,2', '10,375']) {
+      expect(
+        wod2RowSchema.safeParse({ teamId: 't1', runKm: valor, bikeKm: '8' }).success,
+        `${valor} km`,
+      ).toBe(true);
+    }
   });
 
-  it('aceita corrida em múltiplos de 500 m', () => {
-    for (const valor of ['0,5', '1', '1,5', '3,5', '0']) {
-      expect(wod2RowSchema.safeParse({ teamId: 't1', runKm: valor, bikeKm: '8' }).success).toBe(
-        true,
-      );
-    }
+  it('converte a vírgula decimal da corrida', () => {
+    const r = wod2RowSchema.parse({ teamId: 't1', runKm: '2,41', bikeKm: '2,59' });
+    expect(r.runKm).toBe(2.41);
+    expect(r.bikeKm).toBe(2.59);
   });
 
   // §21 — MM:SS convertido pelo sistema

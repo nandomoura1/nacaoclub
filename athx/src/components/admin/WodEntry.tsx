@@ -353,7 +353,7 @@ export function WodEntry({ snapshot, wod }: { snapshot: Snapshot; wod: WodNumber
                           className="w-28"
                         />
                         <span className="mt-1 block text-center text-[10px] text-white/35">
-                          múltiplos de 0,5
+                          km · qualquer valor
                         </span>
                       </td>
                       <td className="px-3 py-2.5">

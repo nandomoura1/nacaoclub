@@ -114,6 +114,7 @@ export const WODS: Record<WodNumber, WodSpec> = {
       'A troca entre os atletas só pode ocorrer após a conclusão de 500 m ou de seus múltiplos: 500, 1.000, 1.500, 2.000 m…',
       'Não é permitido trocar em 300 m, 700 m, 1.200 m ou qualquer distância que não seja múltiplo de 500.',
       'Caso o atleta ultrapasse um múltiplo de 500 m, deve continuar até atingir o próximo múltiplo para realizar a troca.',
+      'A distância final registrada é a que a dupla percorreu quando o cronômetro parou — pode não ser múltiplo de 500 m.',
     ],
     pontuacao:
       'O WOD 2 gera TRÊS pontuações. PONTUAÇÃO DO WOD 2 = Pts 2A + Pts 2B + Pts 2C. Cada uma das três provas tem ranking próprio.',

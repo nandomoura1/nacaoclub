@@ -284,6 +284,14 @@ h1, h2, h3, h4 {
   tr { break-inside: avoid; }
   a { text-decoration: none !important; }
 
+  /* Uma categoria por folha. Sem isto, a Dupla Masculina termina no meio
+     da página e a Dupla Feminina começa logo embaixo — e a folha entregue
+     ao pódio fica impossível de separar. */
+  .print-categoria { break-before: page; }
+  .print-categoria:first-of-type { break-before: auto; }
+  .print-categoria > h3,
+  .print-categoria > div:first-child { break-after: avoid; }
+
   /* Cabeçalho de folha: quem lê a impressão precisa saber de que evento é. */
   .print-header {
     display: block !important;

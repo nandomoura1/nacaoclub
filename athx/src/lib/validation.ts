@@ -44,15 +44,16 @@ export const wod1RowSchema = z.object({
 });
 
 /**
- * WOD 2 — a REGRA CRÍTICA (§12) vira validação de verdade: a corrida só
- * avança em blocos de 500 m, porque a troca de atleta só pode acontecer a
- * cada 500 m. 3,2 km é recusado aqui e também pelo CHECK no Postgres.
+ * WOD 2 — distância livre.
+ *
+ * A troca entre os atletas acontece a cada 500 m, mas isso é regra de pista,
+ * cobrada pelo juiz. O AMRAP para no minuto 22 no meio de um trecho, então a
+ * distância final pode ser qualquer uma — 2,410 km é um resultado legítimo.
  */
 export const wod2RowSchema = z.object({
   teamId: z.string().min(1),
   runKm: numeroOpcional.refine((v) => v === null || isValidRunKm(v), {
-    message:
-      'A corrida só pode ser registrada em múltiplos de 500 m (0,5 · 1,0 · 1,5 km…), porque a troca de atleta só ocorre a cada 500 m.',
+    message: 'Distância de corrida inválida',
   }),
   bikeKm: numeroOpcional.refine((v) => v === null || (v >= 0 && v <= 99), {
     message: 'Distância de bike inválida',

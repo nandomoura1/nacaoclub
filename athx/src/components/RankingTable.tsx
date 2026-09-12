@@ -66,7 +66,7 @@ export function RankingTable({
           <tr className="border-b border-white/12">
             <Th className="w-14 sm:w-20">Pos</Th>
             <Th className="w-full max-w-0">Dupla</Th>
-            <Th className="hidden md:table-cell">Cat. · Bat.</Th>
+            <Th className="hidden md:table-cell">{categoryScoped ? 'Bat.' : 'Cat. · Bat.'}</Th>
 
             {/* Tablet: os três totais por WOD. */}
             <Th className="hidden text-right md:table-cell lg:hidden">WOD 1</Th>
@@ -139,9 +139,13 @@ export function RankingTable({
                     </Link>
                   </Td>
 
+                  {/* Dentro de um bloco de categoria, repetir "MASCULINA" em
+                      toda linha é ruído: o título da seção já disse isso. */}
                   <Td className="hidden md:table-cell">
                     <span className="flex flex-wrap items-center gap-1">
-                      <Badge tone="neutral">{categoryShort(row.team.category)}</Badge>
+                      {categoryScoped ? null : (
+                        <Badge tone="neutral">{categoryShort(row.team.category)}</Badge>
+                      )}
                       <Badge tone="sky">B{row.team.battery}</Badge>
                     </span>
                   </Td>

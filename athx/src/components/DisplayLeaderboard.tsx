@@ -1,14 +1,20 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import type { Category } from '@/types/domain';
+import { CATEGORIES, CATEGORY_LABEL } from '@/types/domain';
 import type { Snapshot } from '@/services/snapshot';
 import { buildLeaderboard } from '@/lib/scoring/build';
+import { standingsByCategory } from '@/lib/scoring/overall';
 import { useLiveSnapshot } from '@/hooks/useLiveSnapshot';
 import { BrandLogo } from '@/components/BrandLogo';
 import { WaveField, SkyGlow } from '@/components/WaveField';
 import { points, teamNumber } from '@/lib/format';
 
 const TOP = 10;
+
+/** De quanto em quanto tempo o telão troca de categoria. */
+const GIRO_MS = 14_000;
 
 /**
  * MODO TELÃO (§31)
@@ -17,12 +23,17 @@ const TOP = 10;
  * linhas, zero navegação. Atualiza sozinho pelo Realtime e nunca precisa de
  * alguém com um mouse na mão durante o evento.
  *
+ * Uma categoria de cada vez, girando sozinho a cada 14 segundos. Misturar
+ * as três numa lista só colocaria uma dupla masculina disputando posição
+ * com uma dupla feminina — o que não acontece na competição (§29).
+ *
  * As unidades são vw/vh de propósito — a mesma tela serve um monitor de 27"
  * e um telão de LED sem ajuste manual.
  */
 export function DisplayLeaderboard({ initial }: { initial: Snapshot }) {
   const { snapshot, updatedAt } = useLiveSnapshot(initial);
   const [relogio, setRelogio] = useState('');
+  const [giro, setGiro] = useState(0);
 
   useEffect(() => {
     const tick = () =>
@@ -46,7 +57,29 @@ export function DisplayLeaderboard({ initial }: { initial: Snapshot }) {
     [snapshot],
   );
 
-  const rows = board.standings.filter((r) => r.scoredWods > 0).slice(0, TOP);
+  // Uma lista por categoria, já reposicionada dentro dela. Categorias sem
+  // nenhum resultado ainda ficam fora do giro: telão não mostra tela vazia.
+  const blocos = useMemo(
+    () =>
+      CATEGORIES.map((categoria) => ({
+        categoria,
+        rows: standingsByCategory(board.standings, categoria)
+          .filter((r) => r.scoredWods > 0)
+          .slice(0, TOP),
+      })).filter((b) => b.rows.length > 0),
+    [board.standings],
+  );
+
+  // O giro só existe se houver mais de uma categoria pontuando.
+  useEffect(() => {
+    if (blocos.length < 2) return;
+    const id = setInterval(() => setGiro((n) => n + 1), GIRO_MS);
+    return () => clearInterval(id);
+  }, [blocos.length]);
+
+  const bloco = blocos.length > 0 ? blocos[giro % blocos.length] : undefined;
+  const rows = bloco?.rows ?? [];
+  const categoriaAtual: Category | null = bloco?.categoria ?? null;
 
   return (
     <main
@@ -65,8 +98,8 @@ export function DisplayLeaderboard({ initial }: { initial: Snapshot }) {
             <h1 className="font-display text-[3.2vw] leading-none font-black tracking-[-0.03em]">
               NAÇÃO <span className="text-nacao-cyan">ATHX</span>
             </h1>
-            <p className="mt-[0.4vh] font-display text-[0.85vw] font-bold tracking-signature text-white/60 uppercase">
-              Classificação geral
+            <p className="mt-[0.4vh] font-display text-[0.85vw] font-bold tracking-signature text-nacao-cyan uppercase">
+              {categoriaAtual ? CATEGORY_LABEL[categoriaAtual] : 'Classificação por categoria'}
             </p>
           </div>
         </div>
@@ -203,8 +236,22 @@ export function DisplayLeaderboard({ initial }: { initial: Snapshot }) {
 
       {/* ---- Rodapé ------------------------------------------------------- */}
       <footer className="relative flex items-center justify-between border-t border-white/12 pt-[1.2vh]">
-        <p className="font-display text-[0.85vw] font-bold tracking-signature text-white/45 uppercase">
+        <p className="flex items-center gap-[1vw] font-display text-[0.85vw] font-bold tracking-signature text-white/45 uppercase">
           Muitos esportes, muitas paixões, uma Nação!
+          {blocos.length > 1 ? (
+            <span className="flex items-center gap-[0.4vw]" aria-hidden="true">
+              {blocos.map((b, i) => (
+                <span
+                  key={b.categoria}
+                  className={`block h-[0.6vh] rounded-full transition-all ${
+                    i === giro % blocos.length
+                      ? 'w-[2vw] bg-nacao-cyan'
+                      : 'w-[0.6vh] bg-white/25'
+                  }`}
+                />
+              ))}
+            </span>
+          ) : null}
         </p>
         <p className="font-display text-[0.85vw] font-bold tracking-wider text-white/35 uppercase">
           {snapshot.demo ? 'Modo demonstração · ' : ''}

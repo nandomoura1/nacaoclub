@@ -12,7 +12,14 @@ import { categoryShort, points, teamNumber } from '@/lib/format';
 const MEDALS = ['🥇', '🥈', '🥉'] as const;
 const LABELS = ['1º lugar', '2º lugar', '3º lugar'] as const;
 
-export function Podium({ rows }: { rows: readonly StandingRow[] }) {
+export function Podium({
+  rows,
+  categoryScoped = false,
+}: {
+  rows: readonly StandingRow[];
+  /** true quando o pódio já está dentro de um bloco de categoria (§29). */
+  categoryScoped?: boolean;
+}) {
   const top3 = rows.filter((r) => r.scoredWods > 0).slice(0, 3);
   if (top3.length === 0) return null;
 
@@ -60,8 +67,12 @@ export function Podium({ rows }: { rows: readonly StandingRow[] }) {
               </p>
 
               <div className="mt-4 flex items-end justify-between">
+                {/* Dentro do bloco da categoria, o rótulo já foi dito no
+                    título — ali vale mais mostrar a bateria da dupla. */}
                 <span className="font-display text-[10px] font-bold tracking-wider text-white/40 uppercase">
-                  {categoryShort(row.team.category)}
+                  {categoryScoped
+                    ? `Bateria ${row.team.battery}`
+                    : categoryShort(row.team.category)}
                 </span>
                 <span className="text-right">
                   <span className="tnum block font-display text-3xl leading-none font-black text-white">

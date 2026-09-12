@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isValidRunKm, isValidRunSwitchDistance, scoreWod2, totalKm } from '@/lib/scoring/wod2';
+import { isValidRunKm, scoreWod2, totalKm } from '@/lib/scoring/wod2';
 import { team, w2 } from './helpers';
 
 describe('WOD 2 — ENDURANCE', () => {
@@ -12,20 +12,21 @@ describe('WOD 2 — ENDURANCE', () => {
     expect(totalKm({ runKm: 0.1, bikeKm: 0.2 })).toBe(0.3);
   });
 
-  // §12 — REGRA CRÍTICA da troca da corrida
-  it('aceita troca apenas em múltiplos de 500 m', () => {
-    for (const valid of [0, 500, 1000, 1500, 2000, 3500]) {
-      expect(isValidRunSwitchDistance(valid)).toBe(true);
-    }
-    for (const invalid of [300, 700, 1200, 1750, 499]) {
-      expect(isValidRunSwitchDistance(invalid)).toBe(false);
+  // A troca acontece a cada 500 m, mas o AMRAP para no minuto 22 no meio de
+  // um trecho: a distância registrada é livre.
+  it('aceita qualquer distância de corrida', () => {
+    for (const valido of [0, 0.5, 2.41, 3.2, 3.5, 10.375]) {
+      expect(isValidRunKm(valido), `${valido} km`).toBe(true);
     }
   });
 
-  it('valida o km da corrida em blocos de 0,5 km', () => {
-    expect(isValidRunKm(3.5)).toBe(true);
-    expect(isValidRunKm(3.2)).toBe(false); // 3200 m não é múltiplo de 500
+  it('recusa distância negativa', () => {
     expect(isValidRunKm(-1)).toBe(false);
+  });
+
+  it('soma distâncias quebradas sem erro de arredondamento', () => {
+    // O caso real: 2.410 m de corrida + 2.590 m de bike = 5,00 km.
+    expect(totalKm({ runKm: 2.41, bikeKm: 2.59 })).toBe(5);
   });
 
   it('gera três rankings independentes e soma os pontos', () => {

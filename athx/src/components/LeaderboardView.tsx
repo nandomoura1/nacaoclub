@@ -23,6 +23,9 @@ type CategoryFilter = 'TODAS' | Category;
 type BatteryFilter = 'TODAS' | '1' | '2';
 type ViewFilter = 'GERAL' | '1' | '2' | '3';
 
+/** Um bloco de classificação: uma categoria e as duplas dela, já reposicionadas. */
+type Section = { category: Category; rows: StandingRow[] };
+
 // "Todas as baterias" por extenso: com só "Todas", a tela mostraria dois
 // chips idênticos — um da categoria e outro da bateria — e ninguém saberia
 // qual é qual.
@@ -32,8 +35,12 @@ const BATTERY_TABS = [
   { value: '2' as const, label: 'Bateria 2' },
 ];
 
+// O primeiro chip não mostra uma classificação única misturando as três
+// categorias: mostra as TRÊS classificações, uma embaixo da outra. Por isso
+// o rótulo é "Todas as categorias" e não "Geral" — não existe um ranking
+// geral disputado entre uma dupla masculina e uma dupla feminina.
 const CATEGORY_TABS = [
-  { value: 'TODAS' as const, label: 'Todas' },
+  { value: 'TODAS' as const, label: 'Todas as categorias' },
   ...CATEGORIES.map((c) => ({ value: c, label: CATEGORY_SHORT[c] })),
 ];
 
@@ -50,6 +57,11 @@ const VIEW_TABS = [
  * Recebe o snapshot renderizado no servidor (a primeira pintura já vem
  * pronta, sem spinner) e a partir daí se mantém viva pelo Realtime. Todo o
  * cálculo é o MESMO motor usado no servidor e no admin (§25).
+ *
+ * A classificação é SEMPRE por categoria (§29). A soma de pontos é a mesma
+ * para todo mundo — 1A+1B+1C+1D+2A+2B+2C+3 —, mas quem disputa com quem é
+ * decidido pela categoria: Dupla Masculina, Dupla Feminina e Dupla Mista
+ * têm cada uma o seu pódio e a sua tabela.
  */
 export function LeaderboardView({ initial }: { initial: Snapshot }) {
   const { snapshot, updatedAt } = useLiveSnapshot(initial);
@@ -70,24 +82,32 @@ export function LeaderboardView({ initial }: { initial: Snapshot }) {
     [snapshot],
   );
 
-  // Filtro por categoria recalcula a posição DENTRO da categoria (§29).
-  const scoped: StandingRow[] = useMemo(
-    () =>
-      category === 'TODAS'
-        ? board.standings
-        : standingsByCategory(board.standings, category),
-    [board.standings, category],
-  );
-
-  const visible = useMemo(
-    () =>
-      scoped
+  // Um bloco por categoria. standingsByCategory recalcula a posição DENTRO
+  // da categoria — o 1º lugar da Mista é o 1º da Mista, não o 7º do geral.
+  const sections: Section[] = useMemo(() => {
+    const aplicarFiltros = (rows: readonly StandingRow[]) =>
+      rows
         .filter((row) => battery === 'TODAS' || row.team.battery === (Number(battery) as Battery))
-        .filter((row) => matchesQuery(row, query)),
-    [scoped, battery, query],
-  );
+        .filter((row) => matchesQuery(row, query));
+
+    const alvo = category === 'TODAS' ? CATEGORIES : [category];
+
+    return alvo.map((c) => ({
+      category: c,
+      rows: aplicarFiltros(standingsByCategory(board.standings, c)),
+    }));
+  }, [board.standings, category, battery, query]);
+
+  const visibleCount = sections.reduce((total, s) => total + s.rows.length, 0);
+
+  // Com busca ou filtro de bateria ligado, categoria vazia é ruído: some.
+  // Sem filtro nenhum, ela fica visível com um aviso — a categoria existe
+  // no evento mesmo que ainda não tenha resultado.
+  const filtrando = query !== '' || battery !== 'TODAS';
+  const rendered = filtrando ? sections.filter((s) => s.rows.length > 0) : sections;
 
   const pendingDecision = board.standings.some((r) => r.needsDecision);
+  const wodAtual = view === 'GERAL' ? null : (Number(view) as WodNumber);
 
   return (
     <div className="space-y-6">
@@ -117,17 +137,17 @@ export function LeaderboardView({ initial }: { initial: Snapshot }) {
 
       {/* ---- Título ------------------------------------------------------ */}
       <div>
-        {/* §29 — ao filtrar, precisa ficar explícito que a posição exibida é
-            a posição DENTRO da categoria, não a da classificação geral. */}
-        {category !== 'TODAS' ? (
-          <p className="font-display text-[10px] font-bold tracking-kicker text-nacao-cyan uppercase">
-            Classificação da categoria
-          </p>
-        ) : null}
+        {/* §29 — a posição exibida é sempre a posição DENTRO da categoria.
+            Isso precisa estar escrito na tela, não subentendido. */}
+        <p className="font-display text-[10px] font-bold tracking-kicker text-nacao-cyan uppercase">
+          {category === 'TODAS' ? 'Três disputas independentes' : 'Classificação da categoria'}
+        </p>
         <h2 className="mt-1 font-display text-2xl font-black tracking-tight uppercase sm:text-3xl">
-          {category === 'TODAS' ? 'Classificação geral' : CATEGORY_LABEL[category]}
+          {category === 'TODAS' ? 'Classificação por categoria' : CATEGORY_LABEL[category]}
         </h2>
-        <p className="mt-1 text-sm text-white/50">Menor pontuação = melhor classificação</p>
+        <p className="mt-1 text-sm text-white/50">
+          Menor pontuação = melhor classificação · soma de 1A + 1B + 1C + 1D + 2A + 2B + 2C + 3
+        </p>
 
         {battery !== 'TODAS' ? (
           <p className="mt-2 inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-nacao-cyan/25 bg-nacao-cyan/[0.07] px-3 py-1.5 text-xs text-white/70">
@@ -145,7 +165,7 @@ export function LeaderboardView({ initial }: { initial: Snapshot }) {
 
       {/* ---- Busca e filtros --------------------------------------------- */}
       <div className="no-print space-y-3">
-        <SearchBar value={query} onChange={setQuery} resultCount={visible.length} />
+        <SearchBar value={query} onChange={setQuery} resultCount={visibleCount} />
 
         <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
           <Tabs
@@ -185,37 +205,74 @@ export function LeaderboardView({ initial }: { initial: Snapshot }) {
         </p>
       ) : null}
 
-      {/* ---- Pódio (só na visão geral e sem busca ativa) ------------------ */}
-      {view === 'GERAL' && !query ? (
-        <div className="no-print">
-          <Podium rows={scoped} />
+      {/* ---- Cabeçalho do WOD (uma vez, acima das três categorias) -------- */}
+      {wodAtual ? (
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h3 className="font-display text-lg font-extrabold uppercase">
+            WOD {wodAtual} — {WOD_META[wodAtual].name}
+          </h3>
+          <span className="font-display text-[10px] font-bold tracking-wider text-white/40 uppercase">
+            CAP {WOD_META[wodAtual].cap} · {WOD_META[wodAtual].format}
+          </span>
         </div>
       ) : null}
 
-      {/* ---- Tabela ------------------------------------------------------ */}
-      {visible.length === 0 ? (
+      {/* ---- Um bloco por categoria -------------------------------------- */}
+      {visibleCount === 0 ? (
         <EmptyState
           title="Nenhuma dupla encontrada"
           description={
             query
               ? `Nada corresponde a "${query}". Tente o nome da dupla, o nome de um atleta ou o número.`
-              : 'Nenhuma dupla neste filtro. Experimente voltar para "Todas".'
+              : 'Nenhuma dupla neste filtro. Experimente voltar para "Todas as categorias".'
           }
         />
-      ) : view === 'GERAL' ? (
-        <RankingTable rows={visible} categoryScoped={category !== 'TODAS'} />
       ) : (
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <h3 className="font-display text-lg font-extrabold uppercase">
-              WOD {view} — {WOD_META[Number(view) as WodNumber].name}
-            </h3>
-            <span className="font-display text-[10px] font-bold tracking-wider text-white/40 uppercase">
-              CAP {WOD_META[Number(view) as WodNumber].cap} ·{' '}
-              {WOD_META[Number(view) as WodNumber].format}
-            </span>
-          </div>
-          <WodRanking wod={Number(view) as WodNumber} rows={visible} />
+        <div className="space-y-10">
+          {rendered.map(({ category: cat, rows }) => (
+            <section
+              key={cat}
+              className="print-categoria space-y-4"
+              aria-labelledby={`cat-${cat}`}
+            >
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-white/10 pb-2">
+                <h3
+                  id={`cat-${cat}`}
+                  className="font-display text-xl font-black tracking-tight uppercase sm:text-2xl"
+                >
+                  {CATEGORY_LABEL[cat]}
+                </h3>
+                <span className="tnum font-display text-[10px] font-bold tracking-wider text-white/40 uppercase">
+                  {rows.length} {rows.length === 1 ? 'dupla' : 'duplas'}
+                </span>
+              </div>
+
+              {rows.length === 0 ? (
+                <p className="text-sm text-white/45">
+                  Nenhuma dupla inscrita nesta categoria.
+                </p>
+              ) : wodAtual ? (
+                <WodRanking wod={wodAtual} rows={rows} />
+              ) : (
+                <>
+                  {/* Com as três categorias na tela, três pódios empilhados
+                      empurrariam a tabela para muito longe no celular — lá o
+                      pódio começa a partir do tablet. Com uma categoria só,
+                      aparece em qualquer tamanho. */}
+                  {!query ? (
+                    <div
+                      className={`no-print ${
+                        category === 'TODAS' ? 'hidden sm:block' : ''
+                      }`}
+                    >
+                      <Podium rows={rows} categoryScoped />
+                    </div>
+                  ) : null}
+                  <RankingTable rows={rows} categoryScoped />
+                </>
+              )}
+            </section>
+          ))}
         </div>
       )}
 

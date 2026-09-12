@@ -15,10 +15,11 @@ import { isCounted, isRankable, PUBLIC_STATUSES } from './eligibility';
  *   Atleta 2 inicia na ASSAULT BIKE (máximo de km)
  *   A dupla define a estratégia de troca.
  *
- * REGRA CRÍTICA: a troca do atleta da corrida só pode ocorrer a cada 500 m
- * (500, 1000, 1500, 2000 ...). Nunca em 300, 700, 1200 m. O sistema valida
- * isso no lançamento — ver `isValidRunSwitchDistance` e o schema em
- * `src/lib/validation.ts`.
+ * A TROCA entre os atletas acontece a cada 500 m — é regra de pista, dita no
+ * briefing e cobrada pelo juiz. Mas a DISTÂNCIA REGISTRADA é livre: o AMRAP
+ * para no minuto 22, no meio de um trecho, e a dupla pode terminar com 2.410 m.
+ * Exigir múltiplo de 500 no lançamento tornaria impossível registrar o
+ * resultado real.
  *
  * TRÊS PROVAS, TRÊS RANKINGS:
  *   2A  maior KM de corrida
@@ -28,22 +29,12 @@ import { isCounted, isRankable, PUBLIC_STATUSES } from './eligibility';
  * PONTUAÇÃO DO WOD 2 = Pts 2A + Pts 2B + Pts 2C
  */
 
-/** Múltiplo de 500 m: a troca da corrida só é válida nesses pontos. */
+/** Intervalo de troca entre os atletas na corrida — regra de pista. */
 export const RUN_SWITCH_INTERVAL_M = 500;
 
-export function isValidRunSwitchDistance(meters: number): boolean {
-  return Number.isFinite(meters) && meters >= 0 && meters % RUN_SWITCH_INTERVAL_M === 0;
-}
-
-/**
- * A corrida é registrada em km e só avança em blocos de 500 m (0,5 km).
- * Aceita uma tolerância de ponto flutuante de 1 mm para não rejeitar 3.5
- * por causa de binário.
- */
+/** Só checa se é uma distância possível. Qualquer valor não negativo serve. */
 export function isValidRunKm(km: number): boolean {
-  if (!Number.isFinite(km) || km < 0) return false;
-  const meters = Math.round(km * 1000);
-  return Math.abs(km * 1000 - meters) < 1 && isValidRunSwitchDistance(meters);
+  return Number.isFinite(km) && km >= 0;
 }
 
 export function totalKm(result: Pick<Wod2Result, 'runKm' | 'bikeKm'>): number {
