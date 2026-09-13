@@ -3,9 +3,11 @@
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Download, FileJson, Printer, RefreshCw, Unlock } from 'lucide-react';
-import type { ResultStatus, WodNumber } from '@/types/domain';
+import type { Category, ResultStatus, StandingRow, WodNumber } from '@/types/domain';
+import { CATEGORIES, CATEGORY_LABEL, CATEGORY_SHORT } from '@/types/domain';
 import type { Snapshot } from '@/services/snapshot';
 import { buildLeaderboard } from '@/lib/scoring/build';
+import { standingsByCategory } from '@/lib/scoring/overall';
 import { ADMIN_STATUSES, PUBLIC_STATUSES } from '@/lib/scoring/eligibility';
 import { destravarResultado, recalcular } from '@/app/admin/actions';
 import type { ActionResult } from '@/app/admin/actions';
@@ -23,11 +25,23 @@ import { points, teamNumber } from '@/lib/format';
  * Mostra lado a lado a classificação que o PÚBLICO está vendo (só o que foi
  * homologado) e a PRÉVIA com os rascunhos incluídos. É como a organização
  * enxerga o efeito de publicar antes de publicar.
+ *
+ * A conferência é SEMPRE por categoria, igual ao leaderboard público: é o
+ * pódio da Masculina, o da Feminina e o da Mista que vão ser anunciados, não
+ * um pódio único. A posição mostrada aqui é a posição NA CATEGORIA.
  */
+
+type CategoryFilter = 'TODAS' | Category;
+
+const CATEGORY_TABS = [
+  { value: 'TODAS' as const, label: 'Todas as categorias' },
+  ...CATEGORIES.map((c) => ({ value: c, label: CATEGORY_SHORT[c] })),
+];
 export function ResultsReview({ snapshot }: { snapshot: Snapshot }) {
   const router = useRouter();
   const [pendente, startTransition] = useTransition();
   const [visao, setVisao] = useState<'PUBLICO' | 'PREVIA'>('PUBLICO');
+  const [categoria, setCategoria] = useState<CategoryFilter>('TODAS');
   const [aviso, setAviso] = useState<ActionResult | null>(null);
   const [destravar, setDestravar] = useState<{ wod: WodNumber; teamId: string; nome: string } | null>(null);
   const [motivo, setMotivo] = useState('');
@@ -63,6 +77,23 @@ export function ResultsReview({ snapshot }: { snapshot: Snapshot }) {
     }
     return lista;
   }, [snapshot]);
+
+  // Um bloco por categoria, com a posição recalculada dentro dela.
+  const blocos = useMemo(() => {
+    const alvo = categoria === 'TODAS' ? CATEGORIES : [categoria];
+    return alvo.map((c) => ({ categoria: c, rows: standingsByCategory(board.standings, c) }));
+  }, [board.standings, categoria]);
+
+  // Para a lista de empates: a posição que vale é a da categoria.
+  const posicaoNaCategoria = useMemo(() => {
+    const mapa = new Map<string, number>();
+    for (const c of CATEGORIES) {
+      for (const row of standingsByCategory(board.standings, c)) {
+        mapa.set(row.team.id, row.position);
+      }
+    }
+    return mapa;
+  }, [board.standings]);
 
   const empates = board.standings.filter((r) => r.needsDecision);
 
@@ -122,6 +153,17 @@ export function ResultsReview({ snapshot }: { snapshot: Snapshot }) {
         </div>
       </div>
 
+      {/* Filtro de categoria — a disputa acontece dentro dela. */}
+      <div className="no-print">
+        <Tabs
+          options={CATEGORY_TABS}
+          value={categoria}
+          onChange={setCategoria}
+          label="Filtrar a conferência por categoria"
+          size="sm"
+        />
+      </div>
+
       {aviso ? (
         <p
           role="status"
@@ -150,7 +192,12 @@ export function ResultsReview({ snapshot }: { snapshot: Snapshot }) {
                 <span className="tnum font-display font-bold text-nacao-sky">
                   {teamNumber(r.team.teamNumber)}
                 </span>{' '}
-                {r.team.teamName} — {r.position}º com {points(r.totalPoints)} pontos
+                {r.team.teamName} —{' '}
+                <span className="font-display font-bold uppercase">
+                  {CATEGORY_SHORT[r.team.category]}
+                </span>{' '}
+                {posicaoNaCategoria.get(r.team.id) ?? r.position}º com{' '}
+                {points(r.totalPoints)} pontos
               </li>
             ))}
           </ul>
@@ -186,61 +233,126 @@ export function ResultsReview({ snapshot }: { snapshot: Snapshot }) {
         </Card>
       ) : null}
 
-      {/* ---- Tabela de conferência ---------------------------------------- */}
-      <Card className="overflow-x-auto">
-        <table className="w-full border-collapse text-left">
-          <caption className="px-3 py-3 text-left">
-            <span className="block font-display text-sm font-bold tracking-wider uppercase">
-              {visao === 'PUBLICO'
-                ? 'Classificação publicada'
-                : 'Prévia — inclui rascunhos ainda não publicados'}
+      {/* ---- Tabela de conferência, uma por categoria ---------------------- */}
+      <div className="space-y-6">
+        {blocos.map(({ categoria: cat, rows }) => (
+          <TabelaConferencia key={cat} categoria={cat} rows={rows} visao={visao} />
+        ))}
+      </div>
+
+      <Modal
+        open={destravar !== null}
+        onClose={() => setDestravar(null)}
+        title={`Destravar WOD ${destravar?.wod} — ${destravar?.nome}`}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setDestravar(null)}>
+              Cancelar
+            </Button>
+            <Button variant="danger" onClick={confirmarDestravar} disabled={pendente || motivo.trim().length < 5}>
+              Destravar
+            </Button>
+          </>
+        }
+      >
+        <Input
+          label="Motivo (obrigatório)"
+          value={motivo}
+          onChange={(e) => setMotivo(e.target.value)}
+          placeholder="Ex.: erro de digitação confirmado pelo juiz da pista 3"
+          hint="Mínimo de 5 caracteres. Fica registrado na auditoria com seu usuário e horário."
+        />
+      </Modal>
+    </div>
+  );
+}
+
+/**
+ * A tabela de conferência de UMA categoria.
+ *
+ * A posição da coluna "Pos" é a posição dentro da categoria — é ela que vai
+ * ser anunciada no pódio.
+ */
+function TabelaConferencia({
+  categoria,
+  rows,
+  visao,
+}: {
+  categoria: Category;
+  rows: readonly StandingRow[];
+  visao: 'PUBLICO' | 'PREVIA';
+}) {
+  return (
+    // print-categoria: no PDF da conferência cada categoria começa numa folha,
+    // para a organização levar a da Masculina ao pódio da Masculina.
+    <Card className="print-categoria overflow-x-auto">
+      <table className="w-full border-collapse text-left">
+        <caption className="px-3 py-3 text-left">
+          <span className="block font-display text-base font-black tracking-tight uppercase">
+            {CATEGORY_LABEL[categoria]}
+            <span className="tnum ml-2 font-display text-[10px] font-bold tracking-wider text-white/40 uppercase">
+              {rows.length} {rows.length === 1 ? 'dupla' : 'duplas'}
             </span>
-            <span className="tnum mt-0.5 block text-[11px] text-white/40">
-              TOTAL = 1A + 1B + 1C + 1D + 2A + 2B + 2C + 3 · menor total vence
-            </span>
-          </caption>
-          <thead>
-            <tr className="border-b border-white/[0.07] text-white/30">
-              <th colSpan={3} />
+          </span>
+          <span className="mt-0.5 block font-display text-[10px] font-bold tracking-wider text-white/45 uppercase">
+            {visao === 'PUBLICO'
+              ? 'Classificação publicada'
+              : 'Prévia — inclui rascunhos ainda não publicados'}
+          </span>
+          <span className="tnum mt-0.5 block text-[11px] text-white/40">
+            TOTAL = 1A + 1B + 1C + 1D + 2A + 2B + 2C + 3 · menor total vence · máximo de{' '}
+            {rows.length} {rows.length === 1 ? 'ponto' : 'pontos'} por prova nesta categoria
+          </span>
+        </caption>
+
+        <thead>
+          <tr className="border-b border-white/[0.07] text-white/30">
+            <th colSpan={3} />
+            <th
+              colSpan={4}
+              className="px-3 pt-2 text-center font-display text-[9px] font-bold tracking-wider uppercase"
+            >
+              WOD 1 — Strength
+            </th>
+            <th
+              colSpan={3}
+              className="px-3 pt-2 text-center font-display text-[9px] font-bold tracking-wider uppercase"
+            >
+              WOD 2 — Endurance
+            </th>
+            <th className="px-3 pt-2 text-center font-display text-[9px] font-bold tracking-wider uppercase">
+              WOD 3
+            </th>
+            <th colSpan={2} />
+          </tr>
+          <tr className="border-b border-white/12">
+            {[
+              'Pos', 'Nº', 'Dupla',
+              '1A', '1B', '1C', '1D',
+              '2A', '2B', '2C',
+              '3',
+              'Total', 'WODs',
+            ].map((h) => (
               <th
-                colSpan={4}
-                className="px-3 pt-2 text-center font-display text-[9px] font-bold tracking-wider uppercase"
+                key={h}
+                scope="col"
+                className="px-3 py-2.5 font-display text-[10px] font-bold tracking-wider text-white/45 uppercase"
               >
-                WOD 1 — Strength
+                {h}
               </th>
-              <th
-                colSpan={3}
-                className="px-3 pt-2 text-center font-display text-[9px] font-bold tracking-wider uppercase"
-              >
-                WOD 2 — Endurance
-              </th>
-              <th
-                className="px-3 pt-2 text-center font-display text-[9px] font-bold tracking-wider uppercase"
-              >
-                WOD 3
-              </th>
-              <th colSpan={2} />
+            ))}
+          </tr>
+        </thead>
+
+        <tbody>
+          {rows.length === 0 ? (
+            <tr>
+              <td colSpan={13} className="px-3 py-6 text-center text-sm text-white/40">
+                Nenhuma dupla nesta categoria.
+              </td>
             </tr>
-            <tr className="border-b border-white/12">
-              {[
-                'Pos', 'Nº', 'Dupla',
-                '1A', '1B', '1C', '1D',
-                '2A', '2B', '2C',
-                '3',
-                'Total', 'WODs',
-              ].map((h) => (
-                <th
-                  key={h}
-                  scope="col"
-                  className="px-3 py-2.5 font-display text-[10px] font-bold tracking-wider text-white/45 uppercase"
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {board.standings.map((row) => (
+          ) : (
+            rows.map((row) => (
               <tr key={row.team.id} className="border-b border-white/[0.07]">
                 <td className="tnum px-3 py-2 font-display font-black">
                   {row.scoredWods > 0 ? `${row.position}º` : '—'}
@@ -270,35 +382,11 @@ export function ResultsReview({ snapshot }: { snapshot: Snapshot }) {
                 </td>
                 <td className="tnum px-3 py-2 text-xs text-white/45">{row.scoredWods}/3</td>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
-
-      <Modal
-        open={destravar !== null}
-        onClose={() => setDestravar(null)}
-        title={`Destravar WOD ${destravar?.wod} — ${destravar?.nome}`}
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setDestravar(null)}>
-              Cancelar
-            </Button>
-            <Button variant="danger" onClick={confirmarDestravar} disabled={pendente || motivo.trim().length < 5}>
-              Destravar
-            </Button>
-          </>
-        }
-      >
-        <Input
-          label="Motivo (obrigatório)"
-          value={motivo}
-          onChange={(e) => setMotivo(e.target.value)}
-          placeholder="Ex.: erro de digitação confirmado pelo juiz da pista 3"
-          hint="Mínimo de 5 caracteres. Fica registrado na auditoria com seu usuário e horário."
-        />
-      </Modal>
-    </div>
+            ))
+          )}
+        </tbody>
+      </table>
+    </Card>
   );
 }
 
