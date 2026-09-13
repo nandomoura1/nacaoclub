@@ -16,7 +16,32 @@ describe('Exportação (§42)', () => {
 
   it('exporta uma linha por dupla, em ordem de classificação', () => {
     expect(rows).toHaveLength(2);
-    expect(rows[0]?.posicao).toBe(1);
+    expect(rows[0]?.posicao_categoria).toBe(1);
+    expect(rows[0]?.posicao_geral).toBe(1);
+  });
+
+  it('agrupa a planilha por categoria, na ordem da colocação de cada uma', () => {
+    const misto = buildLeaderboard({
+      teams: [
+        team(1, { teamName: 'Cerrado', category: 'MISTA' }),
+        team(2, { teamName: 'Buriti', category: 'MASCULINA' }),
+        team(3, { teamName: 'Savana', category: 'MASCULINA' }),
+      ],
+      wod1: [
+        w1('team-1', [100, 100, 100, 100, 100, 100]),
+        w1('team-2', [90, 90, 90, 90, 90, 90]),
+        w1('team-3', [80, 80, 80, 80, 80, 80]),
+      ],
+      wod2: [w2('team-1', 3, 7), w2('team-2', 3, 7), w2('team-3', 2, 6)],
+      wod3: [w3('team-1', 900), w3('team-2', 900), w3('team-3', 1000)],
+      settings: settings(),
+    });
+
+    const linhas = buildExportRows(misto);
+
+    // Masculinas primeiro (ordem de CATEGORIES), 1ª e 2ª da categoria.
+    expect(linhas.map((l) => l.dupla)).toEqual(['Buriti', 'Savana', 'Cerrado']);
+    expect(linhas.map((l) => l.posicao_categoria)).toEqual([1, 2, 1]);
   });
 
   it('exporta as OITO pontuações separadamente', () => {

@@ -269,7 +269,21 @@ menor total vence
 
 Em cada prova: 1º lugar = 1 ponto, 2º = 2 pontos, e assim por diante.
 
-As oito são **rankings independentes**: a dupla pode ser 2ª em 1A e 19ª em 1B.
+**A disputa acontece dentro da categoria.** Cada uma das oito provas é
+ranqueada só entre as duplas da mesma categoria — Dupla Masculina, Dupla
+Feminina e Dupla Mista têm cada uma o seu ranking. Na prática:
+
+> Se a Dupla Masculina tem 5 duplas, o máximo que uma dupla masculina pode
+> receber numa prova é **5 pontos**. O tamanho e a força das outras
+> categorias não influenciam a pontuação dela.
+
+Uma dupla masculina nunca disputa posição com uma dupla feminina, então
+ranquear as 20 juntas distorceria a classificação de todo mundo. A regra vale
+para as oito provas e também para o WOD 3: "atrás de quem concluiu" significa
+atrás de quem concluiu **na categoria**. Implementação em
+`src/lib/scoring/categoria.ts`, espelhada em SQL na migration `…_0010`.
+
+As oito são **rankings independentes**: a dupla pode ser 2ª em 1A e 5ª em 1B.
 1D e 2C são somatórios (das cargas e dos km), e cada um gera sua própria
 pontuação, separada das provas que o compõem.
 
@@ -492,6 +506,7 @@ npm run lint        # ESLint
 | `wod2.test.ts` | soma 3,20 + 8,45 = 11,65 km, os três rankings, **a regra dos 500 m** |
 | `wod3.test.ts` | 14:32 → 872 s, ordenação por tempo, CAP, **as três políticas de DNF** |
 | `standings.test.ts` | classificação geral, empates, resultado parcial, filtro por categoria |
+| `categoria.test.ts` | teto de pontos por categoria nas 8 provas, DNF e desclassificada |
 | `parity.test.ts` | **motor TypeScript × motor SQL** sobre 20 duplas |
 | `search.test.ts` | busca por dupla, atleta, número, sem acento; filtro por categoria |
 | `validation.test.ts` | schemas de lançamento e cadastro |

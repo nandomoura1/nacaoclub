@@ -7,6 +7,7 @@ import type {
 } from '@/types/domain';
 import { indexByTeam, rankValues, type RankInput } from './rank';
 import { isCounted, isRankable, PUBLIC_STATUSES } from './eligibility';
+import { pontuarPorCategoria } from './categoria';
 
 /**
  * WOD 1 — STRENGTH · CAP 16 min
@@ -32,6 +33,9 @@ import { isCounted, isRankable, PUBLIC_STATUSES } from './eligibility';
  *
  * A mesma lógica do WOD 2, que soma 2A + 2B + 2C. Não há modo alternativo:
  * as quatro provas sempre somam.
+ *
+ * CADA RANKING É DENTRO DA CATEGORIA (ver ./categoria.ts): com 5 duplas na
+ * Masculina, a pior posição possível em 1A é a 5ª — e vale 5 pontos.
  */
 
 export const WOD1_LIFTS = [
@@ -66,6 +70,15 @@ export function scoreWod1(
   teams: readonly Team[],
   results: readonly Wod1Result[],
   options: { tieMode?: TiePointsMode; statuses?: readonly ResultStatus[] } = {},
+): Map<string, Wod1Score> {
+  return pontuarPorCategoria(teams, results, (t, r) => pontuarNaCategoria(t, r, options));
+}
+
+/** O ranking propriamente dito, já restrito às duplas de UMA categoria. */
+function pontuarNaCategoria(
+  teams: readonly Team[],
+  results: readonly Wod1Result[],
+  options: { tieMode?: TiePointsMode; statuses?: readonly ResultStatus[] },
 ): Map<string, Wod1Score> {
   const { tieMode = 'COMPETITION', statuses = PUBLIC_STATUSES } = options;
 

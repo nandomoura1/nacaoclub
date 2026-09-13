@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildLeaderboard } from '@/lib/scoring/build';
+import { standingsByCategory } from '@/lib/scoring/overall';
+import type { Category } from '@/types/domain';
 import { settings, team, w1, w2, w3 } from './helpers';
 import input from './fixtures/parity-input.json';
 import expected from './fixtures/parity-expected.json';
@@ -9,8 +11,15 @@ import expected from './fixtures/parity-expected.json';
  *
  * `parity-expected.json` NÃO foi escrito à mão: é a saída real do motor SQL
  * (supabase/migrations/…_scoring.sql) rodando em um PostgreSQL 16 sobre o
- * dataset de `parity-input.json` — 20 duplas, empates propositais de carga e
- * de tempo, e duplas que não concluíram o WOD 3.
+ * dataset de `parity-input.json` — 20 duplas divididas em 5 Masculinas, 6
+ * Femininas e 9 Mistas, com empates propositais de carga e de tempo, duplas
+ * que não concluíram o WOD 3 e uma distância de corrida fora do múltiplo de
+ * 500 m.
+ *
+ * A divisão desigual (5 · 6 · 9) é de propósito: é ela que prova que cada
+ * prova é ranqueada DENTRO da categoria. Se os dois motores ranqueassem as
+ * 20 duplas juntas, os tetos de pontuação sairiam iguais nas três e o teste
+ * passaria sem provar nada.
  *
  * Este teste roda o motor TypeScript sobre o MESMO dataset e exige resultado
  * idêntico. Se alguém mexer em um dos dois lados sem mexer no outro, quebra
@@ -20,6 +29,7 @@ import expected from './fixtures/parity-expected.json';
 
 interface Row {
   n: number;
+  cat: Category;
   sp1: number;
   sp2: number;
   bs1: number;
@@ -37,7 +47,7 @@ const rows = input as Row[];
 
 describe('Motor TypeScript × motor SQL', () => {
   const board = buildLeaderboard({
-    teams: rows.map((r) => team(r.n)),
+    teams: rows.map((r) => team(r.n, { category: r.cat })),
     wod1: rows.map((r) => w1(`team-${r.n}`, [r.sp1, r.sp2, r.bs1, r.bs2, r.dl1, r.dl2])),
     wod2: rows.map((r) => w2(`team-${r.n}`, r.runKm, r.bikeKm)),
     wod3: rows.map((r) =>
@@ -101,6 +111,44 @@ describe('Motor TypeScript × motor SQL', () => {
       expect(s.wod3?.needsDecision, `WOD3 decisão dupla ${row.team_number}`).toBe(
         row.needs_decision,
       );
+    }
+  });
+
+  it('coloca cada dupla na mesma posição de categoria que o banco', () => {
+    for (const categoria of ['MASCULINA', 'FEMININA', 'MISTA'] as const) {
+      const naCategoria = standingsByCategory(board.standings, categoria);
+      for (const row of naCategoria) {
+        const esperado = expected.find((e) => e.team_number === row.team.teamNumber);
+        expect(esperado, `dupla ${row.team.teamNumber}`).toBeDefined();
+        expect(esperado?.category, `categoria da dupla ${row.team.teamNumber}`).toBe(categoria);
+        expect(row.position, `posição na categoria da dupla ${row.team.teamNumber}`).toBe(
+          esperado?.category_position,
+        );
+      }
+    }
+  });
+
+  it('nenhuma pontuação de prova passa do tamanho da categoria', () => {
+    for (const categoria of ['MASCULINA', 'FEMININA', 'MISTA'] as const) {
+      const naCategoria = standingsByCategory(board.standings, categoria);
+      const teto = naCategoria.length;
+
+      for (const row of naCategoria) {
+        const pontos = [
+          row.wod1?.pointsStrictPress,
+          row.wod1?.pointsBackSquat,
+          row.wod1?.pointsDeadlift,
+          row.wod1?.pointsTotal,
+          row.wod2?.pointsRun,
+          row.wod2?.pointsBike,
+          row.wod2?.pointsTotal,
+          row.wod3?.points,
+        ];
+        for (const pts of pontos) {
+          if (pts === null || pts === undefined) continue;
+          expect(pts, `dupla ${row.team.teamNumber} em ${categoria}`).toBeLessThanOrEqual(teto);
+        }
+      }
     }
   });
 

@@ -7,6 +7,7 @@ import type { Snapshot } from '@/services/snapshot';
 import { WOD_META } from '@/types/domain';
 import { horariosDaBateria } from '@/lib/wods';
 import { buildLeaderboard } from '@/lib/scoring/build';
+import { standingsByCategory } from '@/lib/scoring/overall';
 import { useLiveSnapshot } from '@/hooks/useLiveSnapshot';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
@@ -34,8 +35,18 @@ export function TeamDetail({ initial, teamId }: { initial: Snapshot; teamId: str
     [snapshot],
   );
 
-  const row = board.standings.find((r) => r.team.id === teamId);
-  const team = row?.team ?? snapshot.teams.find((t) => t.id === teamId);
+  const geral = board.standings.find((r) => r.team.id === teamId);
+  const team = geral?.team ?? snapshot.teams.find((t) => t.id === teamId);
+
+  // A posição que interessa ao atleta é a da CATEGORIA dele — é lá que a
+  // disputa acontece. A posição no geral misturaria as três categorias e
+  // diria "7º lugar" para quem é o 1º entre as duplas mistas.
+  const row = useMemo(() => {
+    if (!geral || !team) return geral;
+    return standingsByCategory(board.standings, team.category).find(
+      (r) => r.team.id === teamId,
+    );
+  }, [board.standings, geral, team, teamId]);
 
   if (!team) {
     return (
@@ -128,8 +139,8 @@ export function TeamDetail({ initial, teamId }: { initial: Snapshot; teamId: str
       {row && row.scoredWods > 0 ? (
         <Card className="flex flex-wrap items-center justify-between gap-5 p-5 sm:p-6">
           <div>
-            <p className="font-display text-[10px] font-bold tracking-kicker text-white/45 uppercase">
-              Classificação geral
+            <p className="font-display text-[10px] font-bold tracking-kicker text-nacao-cyan uppercase">
+              {team ? categoryLabel(team.category) : 'Classificação'}
             </p>
             <p className="mt-1 flex items-baseline gap-2">
               <span className="tnum font-display text-4xl font-black text-nacao-cyan sm:text-5xl">

@@ -1,4 +1,5 @@
 export * from './rank';
+export * from './categoria';
 export * from './eligibility';
 export * from './wod1';
 export * from './wod2';

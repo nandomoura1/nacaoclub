@@ -9,6 +9,7 @@ import type {
 import { WOD_META } from '@/types/domain';
 import { rankValues, type RankInput } from './rank';
 import { isCounted, isRankable, PUBLIC_STATUSES } from './eligibility';
+import { pontuarPorCategoria } from './categoria';
 
 /**
  * WOD 3 — METCON · FOR TIME · CAP 20:00
@@ -32,6 +33,10 @@ import { isCounted, isRankable, PUBLIC_STATUSES } from './eligibility';
  *       concluíram, empatados entre si e marcados para decisão manual.
  *     VOLUME_DESC — maior volume concluído fica à frente.
  *     TIED_LAST — todos os incompletos ocupam a última posição.
+ *
+ * TUDO ISSO DENTRO DA CATEGORIA (ver ./categoria.ts): "atrás de quem
+ * concluiu" significa atrás de quem concluiu NA CATEGORIA, e "última
+ * posição" é a última da categoria.
  */
 
 export const WOD3_CAP_SECONDS = WOD_META[3].capSeconds; // 1200
@@ -54,6 +59,19 @@ export function scoreWod3(
     dnfPolicy?: DnfPolicy;
     statuses?: readonly ResultStatus[];
   } = {},
+): Map<string, Wod3Score> {
+  return pontuarPorCategoria(teams, results, (t, r) => pontuarNaCategoria(t, r, options));
+}
+
+/** O ranking propriamente dito, já restrito às duplas de UMA categoria. */
+function pontuarNaCategoria(
+  teams: readonly Team[],
+  results: readonly Wod3Result[],
+  options: {
+    tieMode?: TiePointsMode;
+    dnfPolicy?: DnfPolicy;
+    statuses?: readonly ResultStatus[];
+  },
 ): Map<string, Wod3Score> {
   const {
     tieMode = 'COMPETITION',

@@ -1,5 +1,6 @@
 import type { Leaderboard } from '@/lib/scoring/build';
-import { CATEGORY_LABEL } from '@/types/domain';
+import { CATEGORIES, CATEGORY_LABEL } from '@/types/domain';
+import { standingsByCategory } from '@/lib/scoring/overall';
 import { formatSeconds } from '@/lib/time';
 
 /**
@@ -13,10 +14,15 @@ import { formatSeconds } from '@/lib/time';
  * Cada prova leva seu resultado bruto (kg, km, tempo), sua posição e seus
  * pontos, para que a conferência do pódio seja feita na planilha sem
  * precisar recalcular nada.
+ *
+ * DUAS COLUNAS DE POSIÇÃO, e a diferença importa:
+ *   posicao_categoria — a que vale, porque a disputa é dentro da categoria
+ *   posicao_geral     — as 20 duplas ordenadas por pontos, só como referência
  */
 
 export interface ExportRow {
-  posicao: number | '';
+  posicao_categoria: number | '';
+  posicao_geral: number | '';
   numero: number;
   dupla: string;
   categoria: string;
@@ -60,11 +66,27 @@ export interface ExportRow {
 export function buildExportRows(board: Leaderboard): ExportRow[] {
   const porId = new Map(board.standings.map((s) => [s.team.id, s]));
 
+  // Posição dentro da categoria — é a colocação que vai ao pódio.
+  const posicaoNaCategoria = new Map<string, number>();
+  for (const categoria of CATEGORIES) {
+    for (const row of standingsByCategory(board.standings, categoria)) {
+      posicaoNaCategoria.set(row.team.id, row.position);
+    }
+  }
+
+  // Ordem da planilha: categoria, depois colocação dentro dela. Assim a
+  // folha sai pronta para ler o pódio de cada categoria em sequência.
+  const ordemCategoria = new Map(CATEGORIES.map((c, i) => [c, i] as const));
+
   return board.teams
     .slice()
     .sort((a, b) => {
-      const pa = porId.get(a.id)?.position ?? 9999;
-      const pb = porId.get(b.id)?.position ?? 9999;
+      const ca = ordemCategoria.get(a.category) ?? 9;
+      const cb = ordemCategoria.get(b.category) ?? 9;
+      if (ca !== cb) return ca - cb;
+
+      const pa = posicaoNaCategoria.get(a.id) ?? 9999;
+      const pb = posicaoNaCategoria.get(b.id) ?? 9999;
       return pa - pb || a.teamNumber - b.teamNumber;
     })
     .map((team) => {
@@ -74,7 +96,9 @@ export function buildExportRows(board: Leaderboard): ExportRow[] {
       const w3 = board.wod3.get(team.id);
 
       return {
-        posicao: s && s.scoredWods > 0 ? s.position : '',
+        posicao_categoria:
+          s && s.scoredWods > 0 ? (posicaoNaCategoria.get(team.id) ?? '') : '',
+        posicao_geral: s && s.scoredWods > 0 ? s.position : '',
         numero: team.teamNumber,
         dupla: team.teamName,
         categoria: CATEGORY_LABEL[team.category],

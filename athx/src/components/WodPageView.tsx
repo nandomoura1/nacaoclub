@@ -5,6 +5,7 @@ import type { Category, WodNumber } from '@/types/domain';
 import { CATEGORIES, CATEGORY_LABEL, CATEGORY_SHORT } from '@/types/domain';
 import type { Snapshot } from '@/services/snapshot';
 import { buildLeaderboard } from '@/lib/scoring/build';
+import { standingsByCategory } from '@/lib/scoring/overall';
 import { useLiveSnapshot } from '@/hooks/useLiveSnapshot';
 import { WodRanking } from '@/components/WodRanking';
 import { LiveIndicator } from '@/components/LiveIndicator';
@@ -15,7 +16,7 @@ import { WODS } from '@/lib/wods';
 type CategoryFilter = 'TODAS' | Category;
 
 const CATEGORY_TABS = [
-  { value: 'TODAS' as const, label: 'Todas' },
+  { value: 'TODAS' as const, label: 'Todas as categorias' },
   ...CATEGORIES.map((c) => ({ value: c, label: CATEGORY_SHORT[c] })),
 ];
 
@@ -37,13 +38,14 @@ export function WodPageView({ initial, wod }: { initial: Snapshot; wod: WodNumbe
     [snapshot],
   );
 
-  const rows = useMemo(
-    () =>
-      category === 'TODAS'
-        ? board.standings
-        : board.standings.filter((r) => r.team.category === category),
-    [board.standings, category],
-  );
+  // Um bloco por categoria. Juntar as três numa lista só não faria sentido:
+  // a pontuação de cada prova é disputada DENTRO da categoria, então o 1º da
+  // Masculina e o 1º da Feminina teriam ambos 1 ponto e apareceriam
+  // empatados numa disputa que não existe.
+  const blocos = useMemo(() => {
+    const alvo = category === 'TODAS' ? CATEGORIES : [category];
+    return alvo.map((c) => ({ category: c, rows: standingsByCategory(board.standings, c) }));
+  }, [board.standings, category]);
 
   return (
     <div className="space-y-7">
@@ -141,9 +143,7 @@ export function WodPageView({ initial, wod }: { initial: Snapshot; wod: WodNumbe
       {/* ---- Ranking ------------------------------------------------------ */}
       <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="font-display text-xl font-extrabold uppercase">
-            Resultados{category !== 'TODAS' ? ` · ${CATEGORY_LABEL[category]}` : ''}
-          </h2>
+          <h2 className="font-display text-xl font-extrabold uppercase">Resultados</h2>
           <LiveIndicator
             live={snapshot.event.liveMode}
             lastUpdate={new Date(updatedAt).toISOString()}
@@ -158,7 +158,19 @@ export function WodPageView({ initial, wod }: { initial: Snapshot; wod: WodNumbe
           size="sm"
         />
 
-        <WodRanking wod={wod} rows={rows} />
+        <div className="space-y-8">
+          {blocos.map(({ category: cat, rows }) => (
+            <section key={cat} className="space-y-3" aria-labelledby={`wod-cat-${cat}`}>
+              <h3
+                id={`wod-cat-${cat}`}
+                className="border-b border-white/10 pb-2 font-display text-lg font-black uppercase"
+              >
+                {CATEGORY_LABEL[cat]}
+              </h3>
+              <WodRanking wod={wod} rows={rows} />
+            </section>
+          ))}
+        </div>
       </div>
     </div>
   );

@@ -32,9 +32,10 @@ ignorada. Não há migration a rodar.
 
 ---
 
-## 1. Critério de desempate da classificação geral
+## 1. Critério de desempate dentro da categoria
 
-**Falta:** o que decide entre duas duplas com a mesma pontuação total.
+**Falta:** o que decide entre duas duplas da mesma categoria com a mesma
+pontuação total.
 
 **Hoje:** as duas recebem a **mesma posição** e a tela mostra `EMPATE`. Nada é
 desempatado automaticamente. A tela de Conferência lista todos os empates

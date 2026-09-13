@@ -7,6 +7,7 @@ import type {
 } from '@/types/domain';
 import { indexByTeam, rankValues, type RankInput } from './rank';
 import { isCounted, isRankable, PUBLIC_STATUSES } from './eligibility';
+import { pontuarPorCategoria } from './categoria';
 
 /**
  * WOD 2 — ENDURANCE · AMRAP 22'
@@ -27,6 +28,8 @@ import { isCounted, isRankable, PUBLIC_STATUSES } from './eligibility';
  *   2C  maior SOMA (corrida + bike)
  *
  * PONTUAÇÃO DO WOD 2 = Pts 2A + Pts 2B + Pts 2C
+ *
+ * Cada um dos três rankings é DENTRO DA CATEGORIA (ver ./categoria.ts).
  */
 
 /** Intervalo de troca entre os atletas na corrida — regra de pista. */
@@ -53,6 +56,15 @@ export function scoreWod2(
   teams: readonly Team[],
   results: readonly Wod2Result[],
   options: { tieMode?: TiePointsMode; statuses?: readonly ResultStatus[] } = {},
+): Map<string, Wod2Score> {
+  return pontuarPorCategoria(teams, results, (t, r) => pontuarNaCategoria(t, r, options));
+}
+
+/** O ranking propriamente dito, já restrito às duplas de UMA categoria. */
+function pontuarNaCategoria(
+  teams: readonly Team[],
+  results: readonly Wod2Result[],
+  options: { tieMode?: TiePointsMode; statuses?: readonly ResultStatus[] },
 ): Map<string, Wod2Score> {
   const { tieMode = 'COMPETITION', statuses = PUBLIC_STATUSES } = options;
 

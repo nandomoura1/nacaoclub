@@ -34,11 +34,13 @@ Abra **http://localhost:3000**.
 
 ### O que olhar
 
-- [ ] a classificação geral com as 20 duplas
+- [ ] os **três blocos de classificação** — Dupla Masculina, Dupla Feminina e
+      Dupla Mista —, cada um com o seu pódio e a sua tabela
+- [ ] confira o teto da pontuação: numa categoria com 6 duplas, nenhuma prova
+      distribui mais de 6 pontos. A disputa é dentro da categoria
 - [ ] pesquisar **"marina"** — acha pelo nome do atleta
 - [ ] pesquisar **"07"** — acha pelo número da dupla
-- [ ] filtrar **Feminina** — repare que as posições são **renumeradas dentro
-      da categoria** e o título muda para "Classificação da categoria"
+- [ ] filtrar **Feminina** — fica só aquele bloco, com as posições da categoria
 - [ ] tocar numa dupla → abre o detalhe com os três WODs
 - [ ] abrir as abas **WOD 1 / WOD 2 / WOD 3**
 - [ ] **http://localhost:3000/display** → aperte `F11` (tela do telão)
