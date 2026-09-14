@@ -37,9 +37,7 @@ export const DEMO_EVENT: EventInfo = {
   maintenanceMode: false,
 };
 
-// A demonstração representa um evento já configurado: a organização
-// escolheu o desempate por melhor colocação no WOD 3.
-export const DEMO_SETTINGS: EventSettings = { ...DEFAULT_SETTINGS, tieBreaker1: 'WOD3' };
+export const DEMO_SETTINGS: EventSettings = { ...DEFAULT_SETTINGS };
 
 const ROSTER: ReadonlyArray<readonly [string, string, string, Category]> = [
   ['Cerrado', 'Marina Cerrado', 'Rafa Cerrado', 'MISTA'],

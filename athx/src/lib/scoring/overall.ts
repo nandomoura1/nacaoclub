@@ -182,7 +182,29 @@ export function computeStandings(
     index = blocoFim + 1;
   }
 
-  return standings;
+  return marcarEmpatesDaCategoria(standings);
+}
+
+/**
+ * EMPATE SÓ EXISTE DENTRO DA CATEGORIA.
+ *
+ * A varredura acima trabalha na lista inteira, então uma dupla masculina e
+ * uma feminina com o mesmo total caem no mesmo tieGroup e sairiam as duas
+ * marcadas como empatadas — numa disputa que não existe. O selo EMPATE na
+ * tela do pódio precisa dizer "empatada com alguém que disputa comigo".
+ */
+function marcarEmpatesDaCategoria(standings: readonly StandingRow[]): StandingRow[] {
+  const quantos = new Map<string, number>();
+  for (const row of standings) {
+    const chave = `${row.team.category}#${row.tieGroup}`;
+    quantos.set(chave, (quantos.get(chave) ?? 0) + 1);
+  }
+
+  return standings.map((row) => {
+    const naCategoria = quantos.get(`${row.team.category}#${row.tieGroup}`) ?? 1;
+    const empatada = naCategoria > 1 && row.scoredWods > 0;
+    return { ...row, tied: empatada, needsDecision: empatada };
+  });
 }
 
 /**

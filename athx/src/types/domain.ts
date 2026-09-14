@@ -178,18 +178,32 @@ export const TIE_BREAKER_SHORT: Record<TieBreaker, string> = {
 };
 
 /**
+ * A REGRA DO EVENTO: empate na classificação geral é decidido pela melhor
+ * colocação no WOD 3.
+ *
+ * Decisão da organização do Nação Celebration, e por isso é o PADRÃO do
+ * sistema — não algo que alguém precise lembrar de configurar antes do
+ * pódio. Continua trocável em /admin/settings: escolher outro critério, ou
+ * NENHUM para voltar à decisão manual, sobrescreve este padrão.
+ */
+export const TIE_BREAKER_PADRAO: TieBreaker = 'WOD3';
+
+/**
  * Lê o que está guardado no banco.
  *
- * A coluna sempre foi texto livre: até esta versão, o campo só REGISTRAVA a
- * regra, sem aplicá-la. Texto que não seja um dos códigos conhecidos vira
- * NENHUM — o sistema não tenta adivinhar o que a frase queria dizer —, e o
- * formulário mostra o texto antigo para a organização reescolher.
+ * A coluna já foi texto livre: até pouco tempo o campo só REGISTRAVA a regra,
+ * sem aplicá-la. Uma frase escrita ali não vira ordenação — o sistema não
+ * adivinha o que ela queria dizer —, então valor irreconhecível cai no
+ * `padrao` recebido, e o formulário mostra o texto antigo para conferência.
  */
-export function parseTieBreaker(valor: string | null | undefined): TieBreaker {
+export function parseTieBreaker(
+  valor: string | null | undefined,
+  padrao: TieBreaker = 'NENHUM',
+): TieBreaker {
   const limpo = (valor ?? '').trim().toUpperCase();
   return (TIE_BREAKERS as readonly string[]).includes(limpo)
     ? (limpo as TieBreaker)
-    : 'NENHUM';
+    : padrao;
 }
 
 export interface EventSettings {
@@ -212,7 +226,8 @@ export interface EventSettings {
 export const DEFAULT_SETTINGS: EventSettings = {
   tiePointsMode: 'COMPETITION',
   dnfPolicy: 'PENDING_DEFINITION',
-  tieBreaker1: 'NENHUM',
+  // A regra do evento já está decidida — ver TIE_BREAKER_PADRAO.
+  tieBreaker1: TIE_BREAKER_PADRAO,
   tieBreaker2: 'NENHUM',
   tieBreaker3: 'NENHUM',
   tieBreakerLegado: null,

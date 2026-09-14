@@ -141,7 +141,9 @@ describe('Classificação geral', () => {
       ],
       wod2: [],
       wod3: [w3('team-1', 800), w3('team-2', 900)],
-      settings: settings(),
+      // O padrão do evento desempata pelo WOD 3; aqui queremos ver o empate
+      // permanecendo de pé, então a organização optou por NENHUM.
+      settings: settings({ tieBreaker1: 'NENHUM' }),
     });
 
     expect(board.standings[0]?.totalPoints).toBe(7);
@@ -165,7 +167,10 @@ describe('Classificação geral', () => {
       wod3: [w3('team-1', 800), w3('team-2', 900)],
     };
 
-    const semCriterio = buildLeaderboard({ ...entrada, settings: settings() });
+    const semCriterio = buildLeaderboard({
+      ...entrada,
+      settings: settings({ tieBreaker1: 'NENHUM' }),
+    });
     expect(semCriterio.standings[0]?.tied).toBe(true);
     expect(semCriterio.standings[0]?.needsDecision).toBe(true);
 

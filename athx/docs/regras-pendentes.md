@@ -36,9 +36,9 @@ ignorada. Não há migration a rodar.
 
 **Decisão da organização:** melhor colocação no **WOD 3**.
 
-**Onde escolher:** `/admin/settings` → *Critérios de desempate*. São três
-listas, aplicadas em ordem: o critério 2 só é consultado quando o 1 também
-empata.
+É o **padrão do sistema** — não é preciso configurar nada para valer. Em
+`/admin/settings` → *Critérios de desempate* dá para trocar, e para encadear
+até três: o critério 2 só é consultado quando o 1 também empata.
 
 | Opção | O que faz |
 |---|---|
@@ -58,10 +58,10 @@ Quando nenhum dos três critérios separar as duplas, elas continuam dividindo a
 posição e a tela volta a mostrar `EMPATE`. O sistema nunca chuta um
 desempate: ou existe um critério que decide, ou a decisão é da organização.
 
-⚠️ **O campo já foi texto livre.** Até esta versão ele só REGISTRAVA a regra.
-Uma frase escrita ali não vira ordenação — o sistema não adivinha o que ela
-queria dizer. Se havia texto salvo, o formulário mostra o que estava escrito e
-pede para escolher na lista.
+⚠️ **O campo já foi texto livre.** Até pouco tempo ele só REGISTRAVA a regra:
+uma frase escrita ali não virava ordenação. Valor irreconhecível hoje cai no
+padrão do evento (WOD 3), e o formulário mostra o texto antigo para
+conferência.
 
 Implementado em `src/lib/scoring/overall.ts` e espelhado na view
 `athx_standings` (migration `…_0011`).

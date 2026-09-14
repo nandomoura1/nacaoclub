@@ -38,15 +38,18 @@ function cenarioEmpate() {
   };
 }
 
+/** O padrão do evento é WOD3; para testar o caso "nenhum" é preciso pedir. */
+const semCriterio = () => settings({ tieBreaker1: 'NENHUM' });
+
 describe('O cenário de teste é mesmo um empate', () => {
   it('as três duplas somam 12 pontos', () => {
-    const board = buildLeaderboard({ ...cenarioEmpate(), settings: settings() });
+    const board = buildLeaderboard({ ...cenarioEmpate(), settings: semCriterio() });
     expect(board.standings.map((r) => r.totalPoints)).toEqual([12, 12, 12]);
   });
 });
 
-describe('Sem critério escolhido', () => {
-  const board = buildLeaderboard({ ...cenarioEmpate(), settings: settings() });
+describe('Com a organização optando por NENHUM', () => {
+  const board = buildLeaderboard({ ...cenarioEmpate(), settings: semCriterio() });
 
   it('as três dividem a 1ª posição e ficam marcadas para decisão manual', () => {
     expect(board.standings.map((r) => r.position)).toEqual([1, 1, 1]);
@@ -114,8 +117,8 @@ describe('O desempate vale também dentro da categoria', () => {
     expect(masculinas.every((r) => !r.tied)).toBe(true);
   });
 
-  it('sem critério, a categoria continua mostrando as três empatadas em 1º', () => {
-    const board = buildLeaderboard({ ...cenarioEmpate(), settings: settings() });
+  it('com NENHUM, a categoria continua mostrando as três empatadas em 1º', () => {
+    const board = buildLeaderboard({ ...cenarioEmpate(), settings: semCriterio() });
     const masculinas = standingsByCategory(board.standings, 'MASCULINA');
 
     expect(masculinas.map((r) => r.position)).toEqual([1, 1, 1]);
@@ -142,7 +145,7 @@ describe('Critérios em cascata', () => {
   };
 
   it('o cenário empata em 11 pontos e também no WOD 3', () => {
-    const board = buildLeaderboard({ ...entrada, settings: settings() });
+    const board = buildLeaderboard({ ...entrada, settings: semCriterio() });
     expect(board.standings.map((r) => r.totalPoints)).toEqual([11, 11]);
   });
 
@@ -186,6 +189,15 @@ describe('O critério não mexe em quem não estava empatado', () => {
   });
 });
 
+describe('O padrão do evento', () => {
+  it('sem nada configurado, o desempate já é o WOD 3', () => {
+    const board = buildLeaderboard({ ...cenarioEmpate(), settings: settings() });
+
+    expect(board.standings.map((r) => r.team.id)).toEqual(['team-2', 'team-3', 'team-1']);
+    expect(board.standings.every((r) => r.desempatadoPor === 'WOD3')).toBe(true);
+  });
+});
+
 describe('Texto livre antigo não vira critério', () => {
   it('o motor ignora o que não for um código conhecido', () => {
     const board = buildLeaderboard({
@@ -194,8 +206,9 @@ describe('Texto livre antigo não vira critério', () => {
       settings: settings({ tieBreaker1: 'Melhor colocação no WOD 3' as never }),
     });
 
-    // O sistema não adivinha o que a frase queria dizer: o empate fica de pé
-    // e a organização é chamada a escolher na lista.
+    // O sistema não adivinha o que a frase queria dizer. Aqui a frase chega
+    // direto ao motor (o serviço já a teria trocado pelo padrão do evento):
+    // como não é um código, nenhum valor é comparado e o empate fica de pé.
     expect(board.standings.every((r) => r.tied)).toBe(true);
     expect(board.standings.every((r) => r.needsDecision)).toBe(true);
   });

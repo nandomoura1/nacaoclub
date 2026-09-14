@@ -22,7 +22,7 @@ import type {
   Wod2Result,
   Wod3Result,
 } from '@/types/domain';
-import { parseTieBreaker, TIE_BREAKERS } from '@/types/domain';
+import { parseTieBreaker, TIE_BREAKERS, TIE_BREAKER_PADRAO } from '@/types/domain';
 
 /* -------------------------------------------------------------------------
    Linhas cruas do Postgres -> tipos do domínio.
@@ -186,7 +186,9 @@ export async function getSnapshot(): Promise<Snapshot> {
   const settings: EventSettings = {
     tiePointsMode: s?.tie_points_mode ?? 'COMPETITION',
     dnfPolicy: s?.dnf_policy ?? 'PENDING_DEFINITION',
-    tieBreaker1: parseTieBreaker(s?.tie_breaker_1),
+    // Campo 1 sem valor reconhecível cai na regra do evento (melhor
+    // colocação no WOD 3); 2 e 3 continuam vazios até alguém escolher.
+    tieBreaker1: parseTieBreaker(s?.tie_breaker_1, TIE_BREAKER_PADRAO),
     tieBreaker2: parseTieBreaker(s?.tie_breaker_2),
     tieBreaker3: parseTieBreaker(s?.tie_breaker_3),
     // Texto livre que sobrou da época em que o campo só registrava a regra.

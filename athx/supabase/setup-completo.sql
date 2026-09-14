@@ -2056,6 +2056,10 @@ $$;
 -- Os três são consultados em ordem: o 2 só entra quando o 1 também empata.
 -- "Melhor colocação no WOD" = menor pontuação naquele workout.
 --
+-- A REGRA DESTA ETAPA, decidida pela organização, é WOD3 — e por isso ela
+-- passa a ser o PADRÃO da coluna, não algo que alguém precise lembrar de
+-- configurar antes do pódio.
+--
 -- Espelha src/lib/scoring/overall.ts (§25).
 --
 -- ----------------------------------------------------------------------------
@@ -2069,12 +2073,11 @@ $$;
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
--- Texto livre da versão anterior vira NENHUM.
+-- O critério 1 passa a ser WOD3 — a regra que a organização definiu.
 --
--- O sistema não adivinha o que a frase queria dizer. A organização reescolhe
--- na lista — são três cliques — e aí passa a valer de verdade. Converter na
--- base do palpite seria inventar a regra que este projeto se recusa a
--- inventar (§48).
+-- Não é leitura do texto que estava salvo: é a regra dita pela organização,
+-- em palavras, fora do sistema. O texto antigo é apenas reportado abaixo
+-- para conferência, e continua trocável em /admin/settings.
 -- ---------------------------------------------------------------------------
 do $$
 declare
@@ -2090,22 +2093,24 @@ begin
     and upper(btrim(t)) not in ('NENHUM', 'WOD1', 'WOD2', 'WOD3');
 
   if v_legado is not null then
-    raise notice 'NAÇÃO ATHX · critério antigo em texto livre encontrado: %', v_legado;
-    raise notice 'NAÇÃO ATHX · escolha o critério em /admin/settings para ele passar a valer';
+    raise notice 'NAÇÃO ATHX · texto livre encontrado nos campos de desempate: %', v_legado;
+    raise notice 'NAÇÃO ATHX · substituído pelo critério do evento: WOD3 (melhor colocação no WOD 3)';
   end if;
 end;
 $$;
 
 update public.event_settings
+-- Código válido é respeitado; qualquer outra coisa (texto livre ou vazio)
+-- vira a regra do evento.
 set tie_breaker_1 = case when upper(btrim(coalesce(tie_breaker_1, ''))) in ('NENHUM','WOD1','WOD2','WOD3')
-                         then upper(btrim(tie_breaker_1)) else 'NENHUM' end,
+                         then upper(btrim(tie_breaker_1)) else 'WOD3' end,
     tie_breaker_2 = case when upper(btrim(coalesce(tie_breaker_2, ''))) in ('NENHUM','WOD1','WOD2','WOD3')
                          then upper(btrim(tie_breaker_2)) else 'NENHUM' end,
     tie_breaker_3 = case when upper(btrim(coalesce(tie_breaker_3, ''))) in ('NENHUM','WOD1','WOD2','WOD3')
                          then upper(btrim(tie_breaker_3)) else 'NENHUM' end;
 
 alter table public.event_settings
-  alter column tie_breaker_1 set default 'NENHUM',
+  alter column tie_breaker_1 set default 'WOD3',
   alter column tie_breaker_2 set default 'NENHUM',
   alter column tie_breaker_3 set default 'NENHUM';
 
@@ -2120,7 +2125,7 @@ alter table public.event_settings
   );
 
 comment on column public.event_settings.tie_breaker_1 is
-  'Critério de desempate aplicado primeiro: NENHUM, WOD1, WOD2 ou WOD3.';
+  'Critério de desempate aplicado primeiro: NENHUM, WOD1, WOD2 ou WOD3. Padrão do evento: WOD3.';
 
 -- ---------------------------------------------------------------------------
 -- athx_standings — a ordenação passa a consultar os critérios.
@@ -2185,9 +2190,12 @@ select
     order by s.scored_wods desc, s.total_points asc,
              s.tb1 asc nulls last, s.tb2 asc nulls last, s.tb3 asc nulls last
   ) as category_position,
+  -- Empate só existe DENTRO da categoria: uma dupla masculina e uma feminina
+  -- com o mesmo total não disputam nada entre si.
   (
     count(*) over (
-      partition by s.event_id, s.scored_wods, s.total_points, s.tb1, s.tb2, s.tb3
+      partition by s.event_id, s.category, s.scored_wods, s.total_points,
+                   s.tb1, s.tb2, s.tb3
     ) > 1
     and s.scored_wods > 0
   ) as tied
