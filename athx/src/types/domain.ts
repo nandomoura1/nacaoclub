@@ -140,13 +140,71 @@ export type DnfPolicy = (typeof DNF_POLICIES)[number];
  * ignorada — não há migration a rodar.
  */
 
+/**
+ * CRITÉRIOS DE DESEMPATE DA CLASSIFICAÇÃO (§15)
+ *
+ * Duas duplas da mesma categoria podem terminar com a mesma pontuação total.
+ * Estes são os critérios que decidem quem fica na frente — escolhidos pela
+ * organização em /admin/settings e APLICADOS pelo sistema, em ordem: o
+ * critério 2 só é consultado quando o 1 empata, e assim por diante.
+ *
+ * "Melhor colocação no WOD X" = menor pontuação naquele WOD. No WOD 3, que
+ * tem uma prova só, isso é literalmente a colocação. Nos WODs 1 e 2 é a soma
+ * das provas do workout (1A+1B+1C+1D e 2A+2B+2C), que é justamente a
+ * colocação da dupla naquele workout.
+ *
+ * Dupla sem resultado no WOD do critério vai para trás — não há como
+ * comparar, e presumir a favor dela seria inventar regra.
+ *
+ * NENHUM mantém o comportamento honesto de antes: as duplas dividem a
+ * posição, a tela mostra EMPATE e a decisão é de gente.
+ */
+export const TIE_BREAKERS = ['NENHUM', 'WOD3', 'WOD2', 'WOD1'] as const;
+export type TieBreaker = (typeof TIE_BREAKERS)[number];
+
+export const TIE_BREAKER_LABEL: Record<TieBreaker, string> = {
+  NENHUM: 'Nenhum — decisão manual',
+  WOD3: 'Melhor colocação no WOD 3 — Metcon',
+  WOD2: 'Melhor colocação no WOD 2 — Endurance',
+  WOD1: 'Melhor colocação no WOD 1 — Strength',
+};
+
+/** Forma curta, para caber num selo de tabela. */
+export const TIE_BREAKER_SHORT: Record<TieBreaker, string> = {
+  NENHUM: '—',
+  WOD3: 'WOD 3',
+  WOD2: 'WOD 2',
+  WOD1: 'WOD 1',
+};
+
+/**
+ * Lê o que está guardado no banco.
+ *
+ * A coluna sempre foi texto livre: até esta versão, o campo só REGISTRAVA a
+ * regra, sem aplicá-la. Texto que não seja um dos códigos conhecidos vira
+ * NENHUM — o sistema não tenta adivinhar o que a frase queria dizer —, e o
+ * formulário mostra o texto antigo para a organização reescolher.
+ */
+export function parseTieBreaker(valor: string | null | undefined): TieBreaker {
+  const limpo = (valor ?? '').trim().toUpperCase();
+  return (TIE_BREAKERS as readonly string[]).includes(limpo)
+    ? (limpo as TieBreaker)
+    : 'NENHUM';
+}
+
 export interface EventSettings {
   tiePointsMode: TiePointsMode;
   dnfPolicy: DnfPolicy;
-  /** Critérios de desempate da classificação geral — vazios até definição. */
-  tieBreaker1: string | null;
-  tieBreaker2: string | null;
-  tieBreaker3: string | null;
+  /** Critérios de desempate, aplicados nesta ordem. */
+  tieBreaker1: TieBreaker;
+  tieBreaker2: TieBreaker;
+  tieBreaker3: TieBreaker;
+  /**
+   * Texto livre que estava guardado antes de os critérios virarem escolha.
+   * Existe só para o formulário poder dizer "você tinha escrito isto" — o
+   * motor nunca usa.
+   */
+  tieBreakerLegado: string | null;
   liveMode: boolean;
   maintenanceMode: boolean;
 }
@@ -154,12 +212,22 @@ export interface EventSettings {
 export const DEFAULT_SETTINGS: EventSettings = {
   tiePointsMode: 'COMPETITION',
   dnfPolicy: 'PENDING_DEFINITION',
-  tieBreaker1: null,
-  tieBreaker2: null,
-  tieBreaker3: null,
+  tieBreaker1: 'NENHUM',
+  tieBreaker2: 'NENHUM',
+  tieBreaker3: 'NENHUM',
+  tieBreakerLegado: null,
   liveMode: true,
   maintenanceMode: false,
 };
+
+/** Os critérios na ordem em que são consultados, já sem os vazios. */
+export function criteriosDeDesempate(
+  settings: Pick<EventSettings, 'tieBreaker1' | 'tieBreaker2' | 'tieBreaker3'>,
+): TieBreaker[] {
+  return [settings.tieBreaker1, settings.tieBreaker2, settings.tieBreaker3].filter(
+    (c): c is TieBreaker => c !== 'NENHUM',
+  );
+}
 
 /* ==========================================================================
    RESULTADOS CALCULADOS
@@ -256,4 +324,15 @@ export interface StandingRow {
   tied: boolean;
   /** Empate que a organização precisa resolver (§15). */
   needsDecision: boolean;
+  /**
+   * Identificador do grupo que divide a MESMA posição.
+   *
+   * É o que permite recalcular a posição dentro da categoria sem reaplicar o
+   * desempate: quem ficou junto no geral fica junto na categoria, e quem foi
+   * separado por um critério continua separado. Sem isso, as duas telas
+   * poderiam discordar sobre quem está empatado com quem.
+   */
+  tieGroup: number;
+  /** Critério que desempatou esta dupla, quando houve empate de pontos. */
+  desempatadoPor: TieBreaker | null;
 }

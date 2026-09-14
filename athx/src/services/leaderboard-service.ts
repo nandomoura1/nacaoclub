@@ -22,11 +22,26 @@ import type {
   Wod2Result,
   Wod3Result,
 } from '@/types/domain';
+import { parseTieBreaker, TIE_BREAKERS } from '@/types/domain';
 
 /* -------------------------------------------------------------------------
    Linhas cruas do Postgres -> tipos do domínio.
    Um lugar só faz essa tradução; o resto do app nunca vê snake_case.
    ------------------------------------------------------------------------- */
+
+/**
+ * Junta o que estiver guardado nos campos de desempate e NÃO for um código
+ * conhecido. É o texto que a organização escreveu na época em que o campo só
+ * registrava a regra — serve para o formulário dizer "você tinha escrito
+ * isto" em vez de apagar em silêncio.
+ */
+function textoLegado(valores: readonly (string | null | undefined)[]): string | null {
+  const codigos = TIE_BREAKERS as readonly string[];
+  const sobra = valores
+    .map((v) => (v ?? '').trim())
+    .filter((v) => v.length > 0 && !codigos.includes(v.toUpperCase()));
+  return sobra.length > 0 ? sobra.join(' · ') : null;
+}
 
 interface TeamRow {
   id: string;
@@ -171,9 +186,16 @@ export async function getSnapshot(): Promise<Snapshot> {
   const settings: EventSettings = {
     tiePointsMode: s?.tie_points_mode ?? 'COMPETITION',
     dnfPolicy: s?.dnf_policy ?? 'PENDING_DEFINITION',
-    tieBreaker1: s?.tie_breaker_1 ?? null,
-    tieBreaker2: s?.tie_breaker_2 ?? null,
-    tieBreaker3: s?.tie_breaker_3 ?? null,
+    tieBreaker1: parseTieBreaker(s?.tie_breaker_1),
+    tieBreaker2: parseTieBreaker(s?.tie_breaker_2),
+    tieBreaker3: parseTieBreaker(s?.tie_breaker_3),
+    // Texto livre que sobrou da época em que o campo só registrava a regra.
+    // Guardado para o formulário poder mostrá-lo; o motor nunca usa.
+    tieBreakerLegado: textoLegado([
+      s?.tie_breaker_1,
+      s?.tie_breaker_2,
+      s?.tie_breaker_3,
+    ]),
     liveMode: s?.live_mode ?? true,
     maintenanceMode: s?.maintenance_mode ?? false,
   };

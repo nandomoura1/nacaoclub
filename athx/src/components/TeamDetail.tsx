@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Bike, Clock, Dumbbell, Footprints, Timer } from 'lucide-react';
 import type { Snapshot } from '@/services/snapshot';
-import { WOD_META } from '@/types/domain';
+import { TIE_BREAKER_SHORT, WOD_META } from '@/types/domain';
 import { horariosDaBateria } from '@/lib/wods';
 import { buildLeaderboard } from '@/lib/scoring/build';
 import { standingsByCategory } from '@/lib/scoring/overall';
@@ -153,6 +153,14 @@ export function TeamDetail({ initial, teamId }: { initial: Snapshot; teamId: str
             {row.scoredWods < 3 ? (
               <p className="mt-1 text-xs text-white/40">
                 Parcial — {row.scoredWods} de 3 WODs pontuados
+              </p>
+            ) : null}
+            {/* "Por que estamos em 2º se temos os mesmos pontos?" — a resposta
+                tem que estar aqui, não na cabeça de quem organiza. */}
+            {row.desempatadoPor ? (
+              <p className="mt-1 text-xs text-nacao-sky">
+                Empate de pontos resolvido pela melhor colocação no{' '}
+                {TIE_BREAKER_SHORT[row.desempatadoPor]}
               </p>
             ) : null}
           </div>

@@ -390,9 +390,10 @@ export async function salvarConfiguracoes(input: unknown): Promise<ActionResult>
       .update({
         tie_points_mode: dados.tiePointsMode,
         dnf_policy: dados.dnfPolicy,
-        tie_breaker_1: dados.tieBreaker1 || null,
-        tie_breaker_2: dados.tieBreaker2 || null,
-        tie_breaker_3: dados.tieBreaker3 || null,
+        // Grava o CÓDIGO do critério, não a frase. É ele que o motor lê.
+        tie_breaker_1: dados.tieBreaker1,
+        tie_breaker_2: dados.tieBreaker2,
+        tie_breaker_3: dados.tieBreaker3,
         live_mode: dados.liveMode,
         maintenance_mode: dados.maintenanceMode,
         updated_by: user.id,

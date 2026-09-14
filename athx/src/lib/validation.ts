@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { CATEGORIES, TEAM_STATUSES, DNF_POLICIES, TIE_POINTS_MODES } from '@/types/domain';
+import {
+  CATEGORIES,
+  TEAM_STATUSES,
+  DNF_POLICIES,
+  TIE_BREAKERS,
+  TIE_POINTS_MODES,
+} from '@/types/domain';
 import { isValidRunKm } from '@/lib/scoring/wod2';
 import { parseTimeToSeconds } from '@/lib/time';
 import { WOD3_CAP_SECONDS } from '@/lib/scoring/wod3';
@@ -87,9 +93,11 @@ export const wod3RowSchema = z
 export const settingsSchema = z.object({
   tiePointsMode: z.enum(TIE_POINTS_MODES),
   dnfPolicy: z.enum(DNF_POLICIES),
-  tieBreaker1: z.string().trim().max(200).nullable(),
-  tieBreaker2: z.string().trim().max(200).nullable(),
-  tieBreaker3: z.string().trim().max(200).nullable(),
+  tieBreaker1: z.enum(TIE_BREAKERS),
+  tieBreaker2: z.enum(TIE_BREAKERS),
+  tieBreaker3: z.enum(TIE_BREAKERS),
+  // Só volta para o banco como estava; nunca entra no cálculo.
+  tieBreakerLegado: z.string().trim().max(600).nullable().optional(),
   liveMode: z.boolean(),
   maintenanceMode: z.boolean(),
 });

@@ -3,12 +3,13 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Save } from 'lucide-react';
-import type { DnfPolicy, EventSettings, TiePointsMode } from '@/types/domain';
+import type { DnfPolicy, EventSettings, TieBreaker, TiePointsMode } from '@/types/domain';
+import { TIE_BREAKERS, TIE_BREAKER_LABEL } from '@/types/domain';
 import { salvarConfiguracoes } from '@/app/admin/actions';
 import type { ActionResult } from '@/app/admin/actions';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
-import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Input';
 
 const TIE_MODES: { value: TiePointsMode; titulo: string; descricao: string }[] = [
   {
@@ -152,33 +153,56 @@ export function SettingsForm({ settings }: { settings: EventSettings }) {
       <Card className="p-5">
         <CardHeader kicker="§15 Classificação geral" title="Critérios de desempate" />
         <p className="mt-2 text-sm text-white/55">
-          Ainda não definidos. Enquanto os campos estiverem vazios, duplas com a mesma
-          pontuação aparecem como <strong>EMPATE</strong> e a decisão é da organização.
-          Preencher aqui é registrar a regra oficial da etapa — o sistema passa a exibi-la
-          nas telas, mas a aplicação continua sendo manual até que a regra seja
-          implementada em código.
+          Quando duas duplas da mesma categoria terminam com a{' '}
+          <strong>mesma pontuação total</strong>, é isto que decide quem fica na
+          frente. Os critérios são aplicados <strong>em ordem</strong>: o 2 só é
+          consultado quando o 1 também empata.
+        </p>
+        <p className="mt-2 text-sm text-white/55">
+          “Melhor colocação no WOD” quer dizer menor pontuação naquele workout. Uma
+          dupla sem resultado no WOD do critério vai para trás — não há como comparar.
         </p>
 
+        {/* O campo já foi texto livre. Se sobrou o que a organização escreveu
+            na época, mostramos — apagar em silêncio seria pior. */}
+        {form.tieBreakerLegado ? (
+          <p className="mt-3 rounded-xl border border-amber-400/30 bg-amber-400/[0.08] px-3.5 py-2.5 text-xs text-amber-200/90">
+            <strong className="font-display font-bold uppercase">Antes era texto livre.</strong>{' '}
+            Estava escrito aqui: <em>“{form.tieBreakerLegado}”</em>. O sistema não
+            adivinha o que a frase queria dizer — escolha o critério na lista abaixo e
+            salve para ele passar a valer.
+          </p>
+        ) : null}
+
         <div className="mt-4 space-y-3">
-          <Input
-            label="Critério 1"
-            value={form.tieBreaker1 ?? ''}
-            onChange={(e) => setForm({ ...form, tieBreaker1: e.target.value || null })}
-            placeholder="Ex.: melhor posição no WOD 3"
-          />
-          <Input
-            label="Critério 2"
-            value={form.tieBreaker2 ?? ''}
-            onChange={(e) => setForm({ ...form, tieBreaker2: e.target.value || null })}
-            placeholder="Ex.: melhor posição no WOD 1"
-          />
-          <Input
-            label="Critério 3"
-            value={form.tieBreaker3 ?? ''}
-            onChange={(e) => setForm({ ...form, tieBreaker3: e.target.value || null })}
-            placeholder="Ex.: menor tempo no WOD 3"
-          />
+          {([1, 2, 3] as const).map((n) => {
+            const campo = `tieBreaker${n}` as const;
+            return (
+              <Select
+                key={campo}
+                id={`desempate-${n}`}
+                label={`Critério ${n}`}
+                value={form[campo]}
+                onChange={(e) =>
+                  setForm({ ...form, [campo]: e.target.value as TieBreaker })
+                }
+              >
+                {TIE_BREAKERS.map((criterio) => (
+                  <option key={criterio} value={criterio}>
+                    {TIE_BREAKER_LABEL[criterio]}
+                  </option>
+                ))}
+              </Select>
+            );
+          })}
         </div>
+
+        <p className="mt-3 text-xs text-white/45">
+          Com os três em <strong>Nenhum</strong>, duplas empatadas dividem a posição, a
+          tela mostra <strong>EMPATE</strong> e a decisão volta para a organização. É
+          também o que acontece quando nenhum dos critérios escolhidos consegue
+          separar as duas.
+        </p>
       </Card>
 
       <div className="sticky bottom-0 border-t border-white/10 bg-nacao-abyss/92 py-3 backdrop-blur-md">

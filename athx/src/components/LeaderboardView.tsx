@@ -3,7 +3,14 @@
 import { useMemo, useState } from 'react';
 import { Printer } from 'lucide-react';
 import type { Battery, Category, StandingRow, WodNumber } from '@/types/domain';
-import { CATEGORIES, CATEGORY_LABEL, CATEGORY_SHORT, WOD_META } from '@/types/domain';
+import {
+  CATEGORIES,
+  CATEGORY_LABEL,
+  CATEGORY_SHORT,
+  TIE_BREAKER_SHORT,
+  WOD_META,
+  criteriosDeDesempate,
+} from '@/types/domain';
 import type { Snapshot } from '@/services/snapshot';
 import { buildLeaderboard } from '@/lib/scoring/build';
 import { standingsByCategory } from '@/lib/scoring/overall';
@@ -107,6 +114,7 @@ export function LeaderboardView({ initial }: { initial: Snapshot }) {
   const rendered = filtrando ? sections.filter((s) => s.rows.length > 0) : sections;
 
   const pendingDecision = board.standings.some((r) => r.needsDecision);
+  const criterios = criteriosDeDesempate(snapshot.settings);
   const wodAtual = view === 'GERAL' ? null : (Number(view) as WodNumber);
 
   return (
@@ -148,6 +156,20 @@ export function LeaderboardView({ initial }: { initial: Snapshot }) {
         <p className="mt-1 text-sm text-white/50">
           Menor pontuação = melhor classificação · soma de 1A + 1B + 1C + 1D + 2A + 2B + 2C + 3
         </p>
+
+        {/* Duas duplas com o mesmo total vão aparecer em posições diferentes.
+            A regra que decidiu isso precisa estar escrita na tela. */}
+        {criterios.length > 0 ? (
+          <p className="mt-1 text-sm text-white/50">
+            Empate de pontos: melhor colocação no{' '}
+            {criterios.map((c, i) => (
+              <span key={c}>
+                {i > 0 ? ', depois no ' : ''}
+                <strong className="text-white/70">{TIE_BREAKER_SHORT[c]}</strong>
+              </span>
+            ))}
+          </p>
+        ) : null}
 
         {battery !== 'TODAS' ? (
           <p className="mt-2 inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-nacao-cyan/25 bg-nacao-cyan/[0.07] px-3 py-1.5 text-xs text-white/70">
@@ -199,8 +221,9 @@ export function LeaderboardView({ initial }: { initial: Snapshot }) {
         <p className="flex items-start gap-2 rounded-xl border border-amber-400/25 bg-amber-400/[0.07] px-3.5 py-2.5 text-xs text-amber-200/90">
           <Badge tone="warn">Empate</Badge>
           <span>
-            Há posições empatadas. O critério de desempate ainda será definido pela
-            organização — até lá, a decisão é manual.
+            {criterios.length > 0
+              ? 'Há duplas que nem os critérios de desempate escolhidos conseguiram separar. A decisão é da organização.'
+              : 'Há posições empatadas. O critério de desempate ainda será definido pela organização — até lá, a decisão é manual.'}
           </span>
         </p>
       ) : null}

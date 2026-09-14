@@ -152,21 +152,34 @@ describe('Classificação geral', () => {
     expect(board.standings[0]?.needsDecision).toBe(true);
   });
 
-  it('com critério de desempate configurado, o empate deixa de exigir decisão', () => {
+  it('com o critério do WOD 3 escolhido, o empate é resolvido de verdade', () => {
     const teams = [team(1), team(2)];
-    const board = buildLeaderboard({
+    const entrada = {
       teams,
       wod1: [
         w1('team-1', [50, 50, 50, 50, 25, 25]),
         w1('team-2', [25, 25, 50, 50, 100, 100]),
       ],
       wod2: [],
+      // team-1 fez melhor tempo, logo é 1ª no WOD 3.
       wod3: [w3('team-1', 800), w3('team-2', 900)],
-      settings: settings({ tieBreaker1: 'Melhor posição no WOD 3' }),
+    };
+
+    const semCriterio = buildLeaderboard({ ...entrada, settings: settings() });
+    expect(semCriterio.standings[0]?.tied).toBe(true);
+    expect(semCriterio.standings[0]?.needsDecision).toBe(true);
+
+    const comCriterio = buildLeaderboard({
+      ...entrada,
+      settings: settings({ tieBreaker1: 'WOD3' }),
     });
 
-    expect(board.standings[0]?.tied).toBe(true);
-    expect(board.standings[0]?.needsDecision).toBe(false);
+    expect(comCriterio.standings[0]?.team.id).toBe('team-1');
+    expect(comCriterio.standings[0]?.position).toBe(1);
+    expect(comCriterio.standings[1]?.position).toBe(2);
+    expect(comCriterio.standings.every((r) => !r.tied)).toBe(true);
+    expect(comCriterio.standings.every((r) => !r.needsDecision)).toBe(true);
+    expect(comCriterio.standings[0]?.desempatadoPor).toBe('WOD3');
   });
 
   // Integridade: quem tem menos WODs lançados não pode "furar a fila"

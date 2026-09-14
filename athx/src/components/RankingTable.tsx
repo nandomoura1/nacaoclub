@@ -6,6 +6,7 @@ import { ChevronDown } from 'lucide-react';
 import type { StandingRow } from '@/types/domain';
 import { Badge } from '@/components/ui/Badge';
 import { RankPosition } from '@/components/RankPosition';
+import { TIE_BREAKER_SHORT } from '@/types/domain';
 import { categoryShort, kg, km, points, teamNumber } from '@/lib/format';
 import { formatWod3Bruto } from '@/lib/time';
 
@@ -126,6 +127,18 @@ export function RankingTable({
                         {row.tied ? (
                           <Badge tone="warn" className="shrink-0">
                             Empate
+                          </Badge>
+                        ) : null}
+                        {/* Mesma pontuação de outra dupla, posição decidida
+                            por um critério. Sem este selo, duas linhas com o
+                            mesmo total em posições diferentes parecem erro. */}
+                        {row.desempatadoPor ? (
+                          <Badge
+                            tone="sky"
+                            className="shrink-0"
+                            title={`Empate de pontos resolvido pela melhor colocação no ${TIE_BREAKER_SHORT[row.desempatadoPor]}`}
+                          >
+                            Desempate · {TIE_BREAKER_SHORT[row.desempatadoPor]}
                           </Badge>
                         ) : null}
                       </span>

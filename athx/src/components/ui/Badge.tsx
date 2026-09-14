@@ -16,13 +16,17 @@ export function Badge({
   children,
   tone = 'neutral',
   className = '',
+  title,
 }: {
   children: ReactNode;
   tone?: Tone;
+  /** Texto de apoio no hover — para selos cuja forma curta precisa explicar-se. */
+  title?: string;
   className?: string;
 }) {
   return (
     <span
+      title={title}
       className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 font-display text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${TONES[tone]} ${className}`}
     >
       {children}

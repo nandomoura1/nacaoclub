@@ -32,23 +32,39 @@ ignorada. Não há migration a rodar.
 
 ---
 
-## 1. Critério de desempate dentro da categoria
+## 1. Critério de desempate dentro da categoria — ✅ RESOLVIDO
 
-**Falta:** o que decide entre duas duplas da mesma categoria com a mesma
-pontuação total.
+**Decisão da organização:** melhor colocação no **WOD 3**.
 
-**Hoje:** as duas recebem a **mesma posição** e a tela mostra `EMPATE`. Nada é
-desempatado automaticamente. A tela de Conferência lista todos os empates
-pendentes antes do pódio.
+**Onde escolher:** `/admin/settings` → *Critérios de desempate*. São três
+listas, aplicadas em ordem: o critério 2 só é consultado quando o 1 também
+empata.
 
-**Onde ajustar:** `/admin/settings` → *Critérios de desempate* (campos
-`tie_breaker_1`, `tie_breaker_2`, `tie_breaker_3`).
+| Opção | O que faz |
+|---|---|
+| `NENHUM` | as duplas dividem a posição, a tela mostra `EMPATE`, a decisão é de gente |
+| `WOD3` | melhor colocação no WOD 3 fica na frente |
+| `WOD2` | melhor colocação no WOD 2 fica na frente |
+| `WOD1` | melhor colocação no WOD 1 fica na frente |
 
-⚠️ Preencher esses campos **registra a regra** e faz o sistema exibi-la, mas a
-aplicação continua manual: transformar o texto em ordenação automática exige
-uma alteração de código em `src/lib/scoring/overall.ts` e na view
-`athx_standings`. Isso é proposital — o time precisa decidir a regra antes de
-alguém codificá-la.
+"Melhor colocação no WOD" = **menor pontuação naquele workout**. No WOD 3, que
+tem uma prova só, isso é literalmente a colocação; nos WODs 1 e 2 é a soma das
+provas do workout (1A+1B+1C+1D e 2A+2B+2C), que é a colocação da dupla ali.
+
+Uma dupla **sem resultado** no WOD do critério vai para trás — não há como
+comparar, e presumir a favor dela seria inventar regra.
+
+Quando nenhum dos três critérios separar as duplas, elas continuam dividindo a
+posição e a tela volta a mostrar `EMPATE`. O sistema nunca chuta um
+desempate: ou existe um critério que decide, ou a decisão é da organização.
+
+⚠️ **O campo já foi texto livre.** Até esta versão ele só REGISTRAVA a regra.
+Uma frase escrita ali não vira ordenação — o sistema não adivinha o que ela
+queria dizer. Se havia texto salvo, o formulário mostra o que estava escrito e
+pede para escolher na lista.
+
+Implementado em `src/lib/scoring/overall.ts` e espelhado na view
+`athx_standings` (migration `…_0011`).
 
 ---
 

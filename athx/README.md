@@ -299,8 +299,12 @@ Onde as oito aparecem separadas:
 | **Exportação** CSV/JSON | oito colunas, cada uma com bruto, posição e pontos |
 | **Telão** | três totais por WOD — oito colunas não se leem a 10 metros |
 
-**Empates:** duplas com a mesma pontuação recebem a **mesma posição** e a tela
-mostra `EMPATE`. Nenhum critério de desempate é aplicado automaticamente.
+**Empates:** duplas com a mesma pontuação total passam pelos **critérios de
+desempate** escolhidos em `/admin/settings` — por exemplo, *melhor colocação no
+WOD 3*. São três, aplicados em ordem: o 2 só entra quando o 1 também empata.
+Enquanto os três estiverem em `NENHUM`, ou quando nenhum deles separar as
+duplas, elas dividem a posição, a tela mostra `EMPATE` e a decisão é da
+organização. Nenhum desempate é inventado.
 
 **Resultado parcial:** a ordenação considera primeiro **quantos WODs a dupla já
 tem pontuados**, e só depois o total. Sem isso, uma dupla com 1 WOD lançado
@@ -507,6 +511,7 @@ npm run lint        # ESLint
 | `wod3.test.ts` | 14:32 → 872 s, ordenação por tempo, CAP, **as três políticas de DNF** |
 | `standings.test.ts` | classificação geral, empates, resultado parcial, filtro por categoria |
 | `categoria.test.ts` | teto de pontos por categoria nas 8 provas, DNF e desclassificada |
+| `desempate.test.ts` | critérios em ordem, empate que sobrevive, herança na categoria |
 | `parity.test.ts` | **motor TypeScript × motor SQL** sobre 20 duplas |
 | `search.test.ts` | busca por dupla, atleta, número, sem acento; filtro por categoria |
 | `validation.test.ts` | schemas de lançamento e cadastro |
