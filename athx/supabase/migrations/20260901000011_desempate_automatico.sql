@@ -87,14 +87,19 @@ comment on column public.event_settings.tie_breaker_1 is
   'Critério de desempate aplicado primeiro: NENHUM, WOD1, WOD2 ou WOD3. Padrão do evento: WOD3.';
 
 -- ---------------------------------------------------------------------------
--- athx_standings — a ordenação passa a consultar os critérios.
+-- athx_standings — o critério age SÓ na classificação da categoria.
 --
--- Cada critério vira uma chave de ordenação: a pontuação da dupla no WOD
--- escolhido, com NULLS LAST (sem resultado naquele WOD vai para trás, igual
--- ao motor TypeScript).
+-- `position` (geral) mistura as três categorias e existe como referência:
+-- ninguém disputa contra outra categoria, então ali duplas com a mesma
+-- pontuação dividem a posição e nenhum critério é consultado.
 --
--- `tied` também muda de sentido: duas duplas só continuam empatadas quando
--- nenhum dos critérios as separou.
+-- `category_position` é a classificação que vale, a que vai ao pódio — e é
+-- nela que cada critério entra como chave de ordenação: a pontuação da dupla
+-- no WOD escolhido, com NULLS LAST (sem resultado naquele WOD vai para trás,
+-- igual ao motor TypeScript).
+--
+-- `tied` acompanha: duas duplas só continuam empatadas quando são da MESMA
+-- categoria e nenhum dos critérios as separou.
 -- ---------------------------------------------------------------------------
 drop view if exists public.athx_standings;
 
@@ -139,11 +144,12 @@ select
   s.athlete_1, s.athlete_2, s.battery, s.team_status,
   s.wod1_points, s.wod1_rank, s.wod2_points, s.wod2_rank,
   s.wod3_points, s.wod3_rank, s.total_points, s.scored_wods,
+  -- Geral: completude e pontos, e nada mais.
   rank() over (
     partition by s.event_id
-    order by s.scored_wods desc, s.total_points asc,
-             s.tb1 asc nulls last, s.tb2 asc nulls last, s.tb3 asc nulls last
+    order by s.scored_wods desc, s.total_points asc
   ) as position,
+  -- Categoria: é aqui que o desempate decide o pódio.
   rank() over (
     partition by s.event_id, s.category
     order by s.scored_wods desc, s.total_points asc,
@@ -165,4 +171,4 @@ from scored s;
 alter view public.athx_standings set (security_invoker = on);
 
 comment on view public.athx_standings is
-  'Classificação com os critérios de desempate de event_settings aplicados. Espelha src/lib/scoring/overall.ts.';
+  'position = classificação geral, sem desempate (referência). category_position = a que vale, com os critérios de event_settings aplicados. Espelha src/lib/scoring/overall.ts.';

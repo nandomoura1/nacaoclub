@@ -334,20 +334,23 @@ export interface StandingRow {
   totalPoints: number;
   /** Quantos WODs já têm resultado válido para esta dupla (0–3). */
   scoredWods: number;
-  position: number;
-  /** Outra dupla tem exatamente a mesma pontuação e completude. */
-  tied: boolean;
-  /** Empate que a organização precisa resolver (§15). */
-  needsDecision: boolean;
   /**
-   * Identificador do grupo que divide a MESMA posição.
+   * Posição na classificação GERAL — as três categorias misturadas.
    *
-   * É o que permite recalcular a posição dentro da categoria sem reaplicar o
-   * desempate: quem ficou junto no geral fica junto na categoria, e quem foi
-   * separado por um critério continua separado. Sem isso, as duas telas
-   * poderiam discordar sobre quem está empatado com quem.
+   * Referência, não disputa: ninguém compete contra outra categoria, então
+   * aqui o critério de desempate não age e duplas com a mesma pontuação
+   * dividem a posição.
    */
-  tieGroup: number;
-  /** Critério que desempatou esta dupla, quando houve empate de pontos. */
+  position: number;
+  /**
+   * Posição DENTRO DA CATEGORIA — a que vale, a que vai ao pódio.
+   * É aqui que o critério de desempate é aplicado (§15).
+   */
+  categoryPosition: number;
+  /** Outra dupla DA MESMA CATEGORIA tem a mesma pontuação e completude. */
+  tied: boolean;
+  /** Empate que nenhum critério separou: a organização decide (§15). */
+  needsDecision: boolean;
+  /** Critério que desempatou esta dupla dentro da categoria. */
   desempatadoPor: TieBreaker | null;
 }

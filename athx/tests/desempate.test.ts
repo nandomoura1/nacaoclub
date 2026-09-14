@@ -64,23 +64,29 @@ describe('Critério: melhor colocação no WOD 3', () => {
     ...cenarioEmpate(),
     settings: settings({ tieBreaker1: 'WOD3' }),
   });
+  // A disputa é na categoria: é essa lista que o pódio usa.
+  const masculinas = standingsByCategory(board.standings, 'MASCULINA');
 
-  it('ordena pela colocação no WOD 3', () => {
-    expect(board.standings.map((r) => r.team.id)).toEqual(['team-2', 'team-3', 'team-1']);
-    expect(board.standings.map((r) => r.position)).toEqual([1, 2, 3]);
+  it('ordena a categoria pela colocação no WOD 3', () => {
+    expect(masculinas.map((r) => r.team.id)).toEqual(['team-2', 'team-3', 'team-1']);
+    expect(masculinas.map((r) => r.position)).toEqual([1, 2, 3]);
+  });
+
+  it('a classificação geral continua sem desempate: as três dividem o 1º', () => {
+    expect(board.standings.map((r) => r.position)).toEqual([1, 1, 1]);
   });
 
   it('ninguém continua empatado nem aguardando decisão', () => {
-    expect(board.standings.every((r) => !r.tied)).toBe(true);
-    expect(board.standings.every((r) => !r.needsDecision)).toBe(true);
+    expect(masculinas.every((r) => !r.tied)).toBe(true);
+    expect(masculinas.every((r) => !r.needsDecision)).toBe(true);
   });
 
   it('registra qual critério resolveu, para a tela poder explicar', () => {
-    expect(board.standings.every((r) => r.desempatadoPor === 'WOD3')).toBe(true);
+    expect(masculinas.every((r) => r.desempatadoPor === 'WOD3')).toBe(true);
   });
 
   it('o total continua 12 nas três — o desempate ordena, não pontua', () => {
-    expect(board.standings.map((r) => r.totalPoints)).toEqual([12, 12, 12]);
+    expect(masculinas.map((r) => r.totalPoints)).toEqual([12, 12, 12]);
   });
 });
 
@@ -91,9 +97,10 @@ describe('Critério: melhor colocação no WOD 1', () => {
       settings: settings({ tieBreaker1: 'WOD1' }),
     });
 
+    const masculinas = standingsByCategory(board.standings, 'MASCULINA');
     // No WOD 1 a ordem é 6 · 7 · 8 → dupla 1, dupla 3, dupla 2.
-    expect(board.standings.map((r) => r.team.id)).toEqual(['team-1', 'team-3', 'team-2']);
-    expect(board.standings[0]?.desempatadoPor).toBe('WOD1');
+    expect(masculinas.map((r) => r.team.id)).toEqual(['team-1', 'team-3', 'team-2']);
+    expect(masculinas[0]?.desempatadoPor).toBe('WOD1');
   });
 });
 
@@ -164,9 +171,10 @@ describe('Critérios em cascata', () => {
       settings: settings({ tieBreaker1: 'WOD3', tieBreaker2: 'WOD2' }),
     });
 
-    expect(board.standings[0]?.team.id).toBe('team-2');
-    expect(board.standings.every((r) => !r.tied)).toBe(true);
-    expect(board.standings[0]?.desempatadoPor).toBe('WOD2');
+    const masculinas = standingsByCategory(board.standings, 'MASCULINA');
+    expect(masculinas[0]?.team.id).toBe('team-2');
+    expect(masculinas.every((r) => !r.tied)).toBe(true);
+    expect(masculinas[0]?.desempatadoPor).toBe('WOD2');
   });
 });
 
@@ -189,12 +197,53 @@ describe('O critério não mexe em quem não estava empatado', () => {
   });
 });
 
+describe('O critério NÃO age na classificação geral', () => {
+  it('duplas com o mesmo total dividem a posição geral, mesmo com critério ativo', () => {
+    const board = buildLeaderboard({
+      ...cenarioEmpate(),
+      settings: settings({ tieBreaker1: 'WOD3' }),
+    });
+
+    // Geral: as três dividem o 1º lugar — é uma lista de referência, não uma
+    // disputa. Categoria: 1º, 2º e 3º, decididos pelo WOD 3.
+    expect(board.standings.map((r) => r.position)).toEqual([1, 1, 1]);
+    expect(standingsByCategory(board.standings, 'MASCULINA').map((r) => r.position)).toEqual([
+      1, 2, 3,
+    ]);
+  });
+
+  it('dupla de outra categoria não interfere no desempate da categoria', () => {
+    const base = cenarioEmpate();
+
+    const sozinhas = standingsByCategory(
+      buildLeaderboard({ ...base, settings: settings({ tieBreaker1: 'WOD3' }) }).standings,
+      'MASCULINA',
+    );
+
+    // A mesma disputa masculina, agora com uma dupla mista no meio do evento.
+    const comMista = standingsByCategory(
+      buildLeaderboard({
+        teams: [...base.teams, team(9, { category: 'MISTA' })],
+        wod1: [...base.wod1, w1('team-9', [130, 130, 40, 40, 130, 130])],
+        wod2: [...base.wod2, w2('team-9', 7, 12)],
+        wod3: [...base.wod3, w3('team-9', 850)],
+        settings: settings({ tieBreaker1: 'WOD3' }),
+      }).standings,
+      'MASCULINA',
+    );
+
+    expect(comMista.map((r) => r.team.id)).toEqual(sozinhas.map((r) => r.team.id));
+    expect(comMista.map((r) => r.position)).toEqual(sozinhas.map((r) => r.position));
+  });
+});
+
 describe('O padrão do evento', () => {
   it('sem nada configurado, o desempate já é o WOD 3', () => {
     const board = buildLeaderboard({ ...cenarioEmpate(), settings: settings() });
+    const masculinas = standingsByCategory(board.standings, 'MASCULINA');
 
-    expect(board.standings.map((r) => r.team.id)).toEqual(['team-2', 'team-3', 'team-1']);
-    expect(board.standings.every((r) => r.desempatadoPor === 'WOD3')).toBe(true);
+    expect(masculinas.map((r) => r.team.id)).toEqual(['team-2', 'team-3', 'team-1']);
+    expect(masculinas.every((r) => r.desempatadoPor === 'WOD3')).toBe(true);
   });
 });
 

@@ -34,7 +34,10 @@ ignorada. Não há migration a rodar.
 
 ## 1. Critério de desempate dentro da categoria — ✅ RESOLVIDO
 
-**Decisão da organização:** melhor colocação no **WOD 3**.
+**Decisão da organização:** melhor colocação no **WOD 3**, aplicado **apenas na
+classificação de cada categoria** (Masculina, Feminina e Mista). A
+classificação geral mistura as três e não é disputada por ninguém — lá duplas
+com a mesma pontuação dividem a posição e nenhum critério é consultado.
 
 É o **padrão do sistema** — não é preciso configurar nada para valer. Em
 `/admin/settings` → *Critérios de desempate* dá para trocar, e para encadear

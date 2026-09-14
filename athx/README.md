@@ -299,16 +299,20 @@ Onde as oito aparecem separadas:
 | **Exportação** CSV/JSON | oito colunas, cada uma com bruto, posição e pontos |
 | **Telão** | três totais por WOD — oito colunas não se leem a 10 metros |
 
-**Empates:** duplas da mesma categoria com a mesma pontuação total são
-separadas pela **melhor colocação no WOD 3** — a regra desta etapa, definida
-pela organização, e o padrão do sistema. Em `/admin/settings` dá para trocar
-por WOD 2, WOD 1 ou `NENHUM`, e para encadear até três critérios: o 2 só entra
-quando o 1 também empata. Quando nenhum critério separar as duas, elas dividem
-a posição, a tela mostra `EMPATE` e a decisão volta para a organização. Nenhum
-desempate é inventado além da regra escolhida.
+**Empates:** o critério de desempate age **apenas na classificação de cada
+categoria** — Masculina, Feminina e Mista. É lá que existe disputa e é de lá
+que sai o pódio.
 
-Empate é sempre **dentro da categoria**: uma dupla masculina e uma feminina com
-o mesmo total não disputam nada entre si e nenhuma das duas é marcada.
+Duas duplas da mesma categoria com a mesma pontuação total são separadas pela
+**melhor colocação no WOD 3**, a regra desta etapa e o padrão do sistema. Em
+`/admin/settings` dá para trocar por WOD 2, WOD 1 ou `NENHUM`, e para encadear
+até três critérios: o 2 só entra quando o 1 também empata. Quando nenhum
+critério separar as duas, elas dividem a posição, a tela mostra `EMPATE` e a
+decisão volta para a organização.
+
+A **classificação geral** (as três categorias juntas) é referência, não
+disputa: ninguém compete contra outra categoria. Ali duplas com a mesma
+pontuação simplesmente dividem a posição, e nenhum critério é consultado.
 
 **Resultado parcial:** a ordenação considera primeiro **quantos WODs a dupla já
 tem pontuados**, e só depois o total. Sem isso, uma dupla com 1 WOD lançado

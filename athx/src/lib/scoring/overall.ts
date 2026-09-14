@@ -7,7 +7,7 @@ import type {
   Wod2Score,
   Wod3Score,
 } from '@/types/domain';
-import { criteriosDeDesempate } from '@/types/domain';
+import { CATEGORIES, criteriosDeDesempate } from '@/types/domain';
 import { isRankable } from './eligibility';
 
 /** O que um critério vale para uma dupla. Menor é melhor; null = sem resultado. */
@@ -66,14 +66,17 @@ export function compararDesempate(
  * regra de competição: é integridade de dado. Está documentada em
  * docs/regras-pendentes.md para confirmação da organização.
  *
- * EMPATES (§15): duplas com a mesma completude E a mesma pontuação passam
- * pelos CRITÉRIOS DE DESEMPATE escolhidos em /admin/settings — por exemplo,
- * "melhor colocação no WOD 3". Os critérios são consultados em ordem: o 2 só
- * entra quando o 1 empata.
+ * EMPATES (§15): o critério de desempate NÃO age aqui.
  *
- * Nenhum critério é inventado. Enquanto a organização deixar os três em
- * NENHUM, ou quando nenhum deles separar as duplas, elas dividem a posição, a
- * tela mostra "EMPATE" e a decisão é de gente.
+ * A classificação geral mistura as três categorias e existe só como
+ * referência — não é disputada por ninguém. Duas duplas com a mesma
+ * pontuação dividem a posição geral, ponto.
+ *
+ * A DISPUTA, e portanto o desempate, acontece DENTRO DA CATEGORIA: é lá que
+ * "melhor colocação no WOD 3" decide quem sobe no pódio. Por isso a posição
+ * de categoria, o selo de empate e o registro de qual critério decidiu são
+ * calculados por `posicionarNasCategorias`, logo abaixo, e viajam prontos na
+ * linha — `standingsByCategory` só recorta e exibe.
  */
 export function computeStandings(
   teams: readonly Team[],
@@ -84,7 +87,12 @@ export function computeStandings(
 ): StandingRow[] {
   const criterios = criteriosDeDesempate(settings);
 
-  const rows = teams.filter(isRankable).map<Omit<StandingRow, 'position' | 'tied' | 'needsDecision' | 'tieGroup' | 'desempatadoPor'>>((team) => {
+  type Base = Omit<
+    StandingRow,
+    'position' | 'categoryPosition' | 'tied' | 'needsDecision' | 'desempatadoPor'
+  >;
+
+  const rows = teams.filter(isRankable).map<Base>((team) => {
     const s1 = wod1.get(team.id) ?? null;
     const s2 = wod2.get(team.id) ?? null;
     const s3 = wod3.get(team.id) ?? null;
@@ -105,106 +113,146 @@ export function computeStandings(
     };
   });
 
-  rows.sort((a, b) => {
-    if (a.scoredWods !== b.scoredWods) return b.scoredWods - a.scoredWods;
-    if (a.totalPoints !== b.totalPoints) return a.totalPoints - b.totalPoints;
-    const criterio = compararDesempate(a, b, criterios);
-    if (criterio !== 0) return criterio;
-    return a.team.teamNumber - b.team.teamNumber; // ordem estável, não é desempate
-  });
+  // --- Classificação geral: completude, pontos, e nada mais ---------------
+  rows.sort(ordemBase);
 
   const standings: StandingRow[] = [];
   let index = 0;
-  let tieGroup = 0;
 
   while (index < rows.length) {
     const current = rows[index];
     if (!current) break;
 
-    // Primeiro o bloco de mesma pontuação — é dentro dele que o desempate
-    // trabalha e é ele que a tela chama de "empate de pontos".
-    let blocoFim = index;
+    let groupEnd = index;
     while (
-      blocoFim + 1 < rows.length &&
-      rows[blocoFim + 1]?.scoredWods === current.scoredWods &&
-      rows[blocoFim + 1]?.totalPoints === current.totalPoints
+      groupEnd + 1 < rows.length &&
+      rows[groupEnd + 1]?.scoredWods === current.scoredWods &&
+      rows[groupEnd + 1]?.totalPoints === current.totalPoints
     ) {
-      blocoFim += 1;
+      groupEnd += 1;
     }
 
-    const empatouEmPontos = blocoFim > index && current.scoredWods > 0;
-    const bloco = rows.slice(index, blocoFim + 1);
-
-    // Qual critério separou este bloco? O primeiro em que nem todos têm o
-    // mesmo valor. Se nenhum separou, o empate continua de pé.
-    const criterioQueSeparou = empatouEmPontos
-      ? (criterios.find((criterio) => {
-          const valores = bloco.map((r) => valorDoCriterio(r, criterio));
-          return valores.some((v) => v !== valores[0]);
-        }) ?? null)
-      : null;
-
-    // Agora as posições dentro do bloco, já na ordem desempatada.
-    let i = index;
-    while (i <= blocoFim) {
-      const atual = rows[i];
-      if (!atual) break;
-
-      let fim = i;
-      while (
-        fim + 1 <= blocoFim &&
-        compararDesempate(atual, rows[fim + 1] as ParaDesempatar, criterios) === 0
-      ) {
-        fim += 1;
-      }
-
-      // Ainda dividem a posição: ou não havia critério, ou ele não separou.
-      const aindaEmpatadas = fim > i && atual.scoredWods > 0;
-      const position = i + 1;
-      tieGroup += 1;
-
-      for (let k = i; k <= fim; k += 1) {
-        const row = rows[k];
-        if (!row) continue;
-        standings.push({
-          ...row,
-          position,
-          tied: aindaEmpatadas,
-          needsDecision: aindaEmpatadas,
-          tieGroup,
-          desempatadoPor: empatouEmPontos && !aindaEmpatadas ? criterioQueSeparou : null,
-        });
-      }
-
-      i = fim + 1;
+    const position = index + 1;
+    for (let i = index; i <= groupEnd; i += 1) {
+      const row = rows[i];
+      if (!row) continue;
+      standings.push({
+        ...row,
+        position,
+        // Preenchidos pela passada por categoria, logo abaixo.
+        categoryPosition: position,
+        tied: false,
+        needsDecision: false,
+        desempatadoPor: null,
+      });
     }
 
-    index = blocoFim + 1;
+    index = groupEnd + 1;
   }
 
-  return marcarEmpatesDaCategoria(standings);
+  return posicionarNasCategorias(standings, criterios);
+}
+
+/** Completude primeiro, depois pontos. Número da dupla só para dar estabilidade. */
+function ordemBase(
+  a: Pick<StandingRow, 'scoredWods' | 'totalPoints' | 'team'>,
+  b: Pick<StandingRow, 'scoredWods' | 'totalPoints' | 'team'>,
+): number {
+  if (a.scoredWods !== b.scoredWods) return b.scoredWods - a.scoredWods;
+  if (a.totalPoints !== b.totalPoints) return a.totalPoints - b.totalPoints;
+  return a.team.teamNumber - b.team.teamNumber;
 }
 
 /**
- * EMPATE SÓ EXISTE DENTRO DA CATEGORIA.
+ * A CLASSIFICAÇÃO QUE VALE: a de cada categoria.
  *
- * A varredura acima trabalha na lista inteira, então uma dupla masculina e
- * uma feminina com o mesmo total caem no mesmo tieGroup e sairiam as duas
- * marcadas como empatadas — numa disputa que não existe. O selo EMPATE na
- * tela do pódio precisa dizer "empatada com alguém que disputa comigo".
+ * Recorta as duplas de uma categoria por vez, ordena aplicando os critérios
+ * de desempate e grava na linha a posição da categoria, o selo de empate e
+ * qual critério decidiu. Rodar categoria a categoria é o que garante que uma
+ * dupla masculina nunca seja desempatada contra uma feminina.
  */
-function marcarEmpatesDaCategoria(standings: readonly StandingRow[]): StandingRow[] {
-  const quantos = new Map<string, number>();
-  for (const row of standings) {
-    const chave = `${row.team.category}#${row.tieGroup}`;
-    quantos.set(chave, (quantos.get(chave) ?? 0) + 1);
+function posicionarNasCategorias(
+  standings: readonly StandingRow[],
+  criterios: readonly TieBreaker[],
+): StandingRow[] {
+  const porId = new Map<string, StandingRow>();
+
+  for (const categoria of CATEGORIES) {
+    const daCategoria = standings
+      .filter((r) => r.team.category === categoria)
+      .sort((a, b) => {
+        const base = ordemBase(a, b);
+        if (base !== 0 && (a.scoredWods !== b.scoredWods || a.totalPoints !== b.totalPoints)) {
+          return base;
+        }
+        const criterio = compararDesempate(a, b, criterios);
+        return criterio !== 0 ? criterio : a.team.teamNumber - b.team.teamNumber;
+      });
+
+    let index = 0;
+    while (index < daCategoria.length) {
+      const atual = daCategoria[index];
+      if (!atual) break;
+
+      // O bloco de mesma pontuação — é dentro dele que o critério trabalha.
+      let blocoFim = index;
+      while (
+        blocoFim + 1 < daCategoria.length &&
+        daCategoria[blocoFim + 1]?.scoredWods === atual.scoredWods &&
+        daCategoria[blocoFim + 1]?.totalPoints === atual.totalPoints
+      ) {
+        blocoFim += 1;
+      }
+
+      const empatouEmPontos = blocoFim > index && atual.scoredWods > 0;
+      const bloco = daCategoria.slice(index, blocoFim + 1);
+
+      // Qual critério separou este bloco? O primeiro em que nem todos têm o
+      // mesmo valor. Se nenhum separou, o empate continua de pé.
+      const criterioQueSeparou = empatouEmPontos
+        ? (criterios.find((criterio) => {
+            const valores = bloco.map((r) => valorDoCriterio(r, criterio));
+            return valores.some((v) => v !== valores[0]);
+          }) ?? null)
+        : null;
+
+      let i = index;
+      while (i <= blocoFim) {
+        const inicio = daCategoria[i];
+        if (!inicio) break;
+
+        let fim = i;
+        while (
+          fim + 1 <= blocoFim &&
+          compararDesempate(inicio, daCategoria[fim + 1] as ParaDesempatar, criterios) === 0
+        ) {
+          fim += 1;
+        }
+
+        const aindaEmpatadas = fim > i && inicio.scoredWods > 0;
+        const categoryPosition = i + 1;
+
+        for (let k = i; k <= fim; k += 1) {
+          const row = daCategoria[k];
+          if (!row) continue;
+          porId.set(row.team.id, {
+            ...row,
+            categoryPosition,
+            tied: aindaEmpatadas,
+            needsDecision: aindaEmpatadas,
+            desempatadoPor: empatouEmPontos && !aindaEmpatadas ? criterioQueSeparou : null,
+          });
+        }
+
+        i = fim + 1;
+      }
+
+      index = blocoFim + 1;
+    }
   }
 
-  return standings.map((row) => {
-    const naCategoria = quantos.get(`${row.team.category}#${row.tieGroup}`) ?? 1;
-    const empatada = naCategoria > 1 && row.scoredWods > 0;
-    return { ...row, tied: empatada, needsDecision: empatada };
-  });
+  // Devolve na ordem da classificação geral, com os dados de categoria dentro.
+  return standings.map((r) => porId.get(r.team.id) ?? r);
 }
 
 /**
@@ -216,36 +264,14 @@ export function standingsByCategory(
   standings: readonly StandingRow[],
   category: StandingRow['team']['category'],
 ): StandingRow[] {
-  const filtered = standings.filter((row) => row.team.category === category);
-
-  const result: StandingRow[] = [];
-  let index = 0;
-
-  while (index < filtered.length) {
-    const current = filtered[index];
-    if (!current) break;
-
-    // Agrupa pelo tieGroup, não por pontuação: quem o critério de desempate
-    // separou lá na classificação geral continua separado aqui. Reaplicar o
-    // desempate nesta função seria uma segunda implementação da mesma regra —
-    // e duas implementações acabam discordando.
-    let groupEnd = index;
-    while (
-      groupEnd + 1 < filtered.length &&
-      filtered[groupEnd + 1]?.tieGroup === current.tieGroup
-    ) {
-      groupEnd += 1;
-    }
-
-    for (let i = index; i <= groupEnd; i += 1) {
-      const row = filtered[i];
-      if (!row) continue;
-      result.push({ ...row, position: index + 1 });
-    }
-    index = groupEnd + 1;
-  }
-
-  return result;
+  // A posição de categoria e o desempate já vieram calculados de
+  // computeStandings — aqui é só recorte e ordenação. Reaplicar a regra
+  // nesta função seria uma segunda implementação da mesma coisa, e duas
+  // implementações acabam discordando.
+  return standings
+    .filter((row) => row.team.category === category)
+    .sort((a, b) => a.categoryPosition - b.categoryPosition || a.team.teamNumber - b.team.teamNumber)
+    .map((row) => ({ ...row, position: row.categoryPosition }));
 }
 
 /** Duplas desclassificadas — fora do ranking, mas visíveis na listagem. */

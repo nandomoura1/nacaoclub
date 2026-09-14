@@ -179,12 +179,14 @@ describe('Classificação geral', () => {
       settings: settings({ tieBreaker1: 'WOD3' }),
     });
 
-    expect(comCriterio.standings[0]?.team.id).toBe('team-1');
-    expect(comCriterio.standings[0]?.position).toBe(1);
-    expect(comCriterio.standings[1]?.position).toBe(2);
-    expect(comCriterio.standings.every((r) => !r.tied)).toBe(true);
-    expect(comCriterio.standings.every((r) => !r.needsDecision)).toBe(true);
-    expect(comCriterio.standings[0]?.desempatadoPor).toBe('WOD3');
+    // O desempate age na classificação DA CATEGORIA, não na geral.
+    const naCategoria = standingsByCategory(comCriterio.standings, 'MISTA');
+    expect(naCategoria[0]?.team.id).toBe('team-1');
+    expect(naCategoria[0]?.position).toBe(1);
+    expect(naCategoria[1]?.position).toBe(2);
+    expect(naCategoria.every((r) => !r.tied)).toBe(true);
+    expect(naCategoria.every((r) => !r.needsDecision)).toBe(true);
+    expect(naCategoria[0]?.desempatadoPor).toBe('WOD3');
   });
 
   // Integridade: quem tem menos WODs lançados não pode "furar a fila"
