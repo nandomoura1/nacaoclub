@@ -1,105 +1,118 @@
 # 05 · MVP × Fase 2 e plano de implementação
 
-Item **11** da entrega + o plano pedido antes do código.
+Item **11** da entrega + o plano pedido antes do código. Atualizado com as
+respostas da Nação e o [diagnóstico da planilha](06-diagnostico-da-planilha.md).
 
 ---
 
+## 0. O que mudou com as respostas
+
+| Resposta | Consequência no projeto |
+|---|---|
+| Aula com 2 pessoas: **as duas recebem**. A ideia inicial é **só calcular horas** | Cada pessoa escalada recebe a duração cheia. **Financeiro sai do MVP** e vai inteiro para a Fase 2 |
+| **Cancelar aulas não dadas por motivos específicos** | Catálogo de motivos de cancelamento, com "conta hora do professor?" por motivo e relatório por motivo |
+| **DSR: contabilidade** | Removido do escopo. O sistema exporta horas e dias da competência |
+| **Áreas**: Nação Fit (Academia) · CrossFit (CrossFit, HYROX, Funcional, GAP, Fit Dance, Mobilidade 30 min, Funcional Beach) · Futevôlei (Futevôlei, Base Forte, Saque e Entra) | Seed real de áreas e modalidades. Mobilidade nasce com 30 min |
+| **Planilha** compartilhada | Importador com os 4 layouts reais e validação contra a HORAS MENSAIS (doc 06) |
+| **Criação/exclusão de aulas em dias específicos** | Aula avulsa em várias datas, excluir nesta data, suspender entre datas ([03 §6.2](03-regras-de-negocio.md#62-criação-e-exclusão-em-dias-específicos)) |
+| **Fechamento 26 → 25** | Competência com `start_date`/`end_date`, dia de corte parametrizável ([03 §1.1](03-regras-de-negocio.md#11-competência-26--25)) |
+
 ## 1. Escopo
 
-### MVP (os 18 itens do briefing)
+### MVP: horas, ponta a ponta
 
 | # | Item | Etapa |
 |---|---|---|
 | 1 | Login | E1 |
 | 2 | Usuários e permissões (RBAC + escopo por área) | E1 |
-| 3 | Professores | E2 |
-| 4 | Modalidades | E2 |
-| 5 | Centros de custo (+ áreas, catálogos) | E2 |
+| 3 | Professores (+ apelidos para importação) | E2 |
+| 4 | Modalidades, tipos de atividade, espaços | E2 |
+| 5 | Áreas, centros de custo, motivos de cancelamento, feriados | E2 |
 | 6 | Grade semanal com vigência | E3 |
-| 7 | Geração automática do mês + feriados | E4 |
-| 8 | Férias/afastamentos em lote | E5 |
-| 9 | Substituições | E5 |
-| 10 | Faltas | E5 |
-| 11 | Aulas extras | E5 |
-| 12 | Cancelamentos | E5 |
-| 13 | Cálculo das horas | E4 (núcleo) / E6 |
-| 14 | Fechamento mensal | E6 |
-| 15 | Aprovação pelo coordenador | E6 |
-| 16 | Relatório por professor (extrato) | E6 |
-| 17 | Exportação Excel/CSV | E7 |
-| 18 | Auditoria | E1 (infra) → todas |
-
-Entram no MVP também, por serem baratos e mudarem o jogo: **Tela Hoje**,
-**Pendências**, **Dashboard operacional**, **importação da planilha** (sem
-ela a implantação vira digitação) e o **motor financeiro básico**
-(valor por nível/modalidade/professor com vigência — sem adicionais).
+| 7 | **Importação da planilha atual** (4 layouts) + conferência | E3 |
+| 8 | Geração automática da competência 26→25 + feriados | E4 |
+| 9 | Cálculo das horas (ledger) | E4 |
+| 10 | Substituições, faltas, cancelamentos com motivo | E5 |
+| 11 | Aulas avulsas/extras em várias datas, exclusão pontual, suspensão entre datas | E5 |
+| 12 | Férias/afastamentos em lote | E5 |
+| 13 | Tela **Hoje** (mobile), **Pendências**, Dashboard operacional | E4–E5 |
+| 14 | Fechamento da competência + aprovação por área | E6 |
+| 15 | Ajustes de competências anteriores | E6 |
+| 16 | Extrato do professor | E6 |
+| 17 | Exportação XLSX/CSV (inclusive no formato da HORAS MENSAIS) | E7 |
+| 18 | Auditoria + histórico de alterações | E1 → todas |
 
 ### Fase 2
 
-- Financeiro avançado: adicionais, gratificações, DSR, descontos, dashboard
-  financeiro com gráficos
+- **Financeiro**: tabelas N1–N5, valor por professor/modalidade/tipo com
+  vigência, adicionais, gratificações, descontos, custo por
+  modalidade/centro de custo, dashboard financeiro
 - Notificações por e-mail/WhatsApp (in-app já no MVP)
 - Portal do professor (extrato + contestação)
-- Comparativo mensal e dashboards avançados
-- Relatórios em PDF
-- API pública `/api/v1` + webhooks entregues
-- Integração ponto/presença e conferência automática escala × ponto
-- Multiunidade na UI
+- Comparativo entre competências e dashboards avançados
+- PDF do extrato
+- API pública `/api/v1` + webhooks
+- Integração ponto/presença: escala × ponto automática
+- Escalas de outras equipes (a planilha tem "Escala Recepção")
 
 ## 2. Etapas
 
-Cada etapa segue o ciclo pedido: **o que será construído → arquivos →
+Cada etapa segue o ciclo: **o que será construído → arquivos →
 implementação → migration → seed → testes → correções → só então avança.**
 Cada etapa termina com um commit verde (`typecheck` + `test` + `build`).
 
 | Etapa | Entrega | Testes que fecham a etapa |
 |---|---|---|
-| **E0 · Fundação** | App `horas/` (Next 15, TS estrito, Tailwind v4, shadcn, Prisma), design system Nação, Postgres local via Docker, CI local (`npm run check`) | smoke: build + página de login renderiza |
-| **E1 · Identidade e auditoria** | Supabase Auth (+ login dev para seed local), `users/roles/permissions/scopes`, `withPermission()`, `scopeFilter()`, `audit()` transacional, trigger append-only | RBAC por papel; coordenador fora da área = 403; audit grava antes/depois; `DELETE` em audit falha |
-| **E2 · Cadastros** | Modalidades, áreas, CC, unidades, tipos, cargos, níveis, vínculos, professores (+ habilitações, contratos com vigência), feriados (nacionais + DF 2026–2027 pré-carregados) | exclusion de vigência; soft delete; escopo |
-| **E3 · Grade semanal** | Slots + versões, editor DnD, "somente nesta data" × "a partir desta data", histórico de versões, **importação XLSX/CSV com preview** | **Cenário 5**; importação: duplicidade, professor inexistente |
-| **E4 · Motor do calendário** | `domain/calendar` + `domain/ledger` puros, `generateMonth` idempotente, política de feriado, Calendário (mês/semana/lista), Dashboard operacional | **Cenários 1 e 2**; idempotência; invariante de previstas |
-| **E5 · Exceções** | Drawer da aula, tela **Hoje** mobile, substituição/falta/cancelamento/extra/horário/compensação/reversão, **Ausências em lote**, **Pendências**, sugestão de substituto | **Cenários 3 e 4**; reversão restaura estado; conflito de horário; Playwright: substituir no celular em ≤ 4 toques |
-| **E6 · Fechamento** | Máquina de estados, aprovação por área, snapshot, ajustes de competência anterior, edição pós-fechamento com diff, extrato, motor financeiro básico | **Cenário 6**; snapshot imutável; precedência e vigência de valores; **mês demo bate 7h30 / 3h / 2h** |
-| **E7 · Relatórios e exportação** | Horas por professor/modalidade/CC/coordenador, faltas, substituições, extras, canceladas, ausências; XLSX + CSV; histórico de alterações; central de notificações in-app | export confere com o fechamento; CSV com separador `;` e BOM (Excel BR) |
-| **E8 · Endurecimento e deploy** | RLS deny-all + revokes, rate limit no login, headers de segurança, backup documentado, guia "colocar no ar" (Vercel + Supabase), README | checklist de segurança; `npm run doctor` |
+| **E0 · Fundação** | App `horas/` (Next 15, TS estrito, Tailwind v4, shadcn, Prisma), design system Nação, Postgres local via Docker | smoke: build + login renderiza |
+| **E1 · Identidade e auditoria** | Supabase Auth (+ login de dev para o seed local), `users/roles/permissions/scopes`, `withPermission()`, `scopeFilter()`, `audit()` transacional, trigger append-only | RBAC por papel. Coordenador fora da área recebe 403. Audit grava antes/depois. `DELETE` em audit falha |
+| **E2 · Cadastros** | Áreas e modalidades reais, tipos de atividade, espaços, motivos de cancelamento, professores (+ habilitações, contratos, apelidos), feriados nacionais + DF 2026–2027, configuração do corte (26) | Exclusion de vigência, soft delete, escopo |
+| **E3 · Grade + importação** | Slots + versões, editor DnD, "somente nesta data" × "a partir desta data". **Importador dos 4 layouts** com preview, apelidos e **relatório de conferência** contra o PADRÃO da HORAS MENSAIS | **Cenário 5**. Parser de cada layout com fixtures anonimizadas. Nome desconhecido bloqueia a importação |
+| **E4 · Motor da competência** | `domain/calendar` + `domain/ledger` puros, `generatePeriod` 26→25 idempotente, política de feriado, calendário, dashboard | **Cenários 1 e 2**. Fronteira 25/26. Mobilidade = 0h30. Idempotência. Invariante de previstas. Contagem de dias da semana (26/08–25/09 = 4·4·5·5·5·4·4) |
+| **E5 · Exceções** | Drawer da aula, tela **Hoje**, substituição/falta/cancelamento com motivo/avulsa multi-data/exclusão/suspensão/horário/reversão, **Ausências em lote**, **Pendências** | **Cenários 3 e 4**. Cancelamento que conta hora. Suspensão com preview. Reversão. Playwright: substituir no celular em ≤ 4 toques |
+| **E6 · Fechamento** | Máquina de estados, aprovação por área, snapshot de horas, ajustes de competência anterior, edição pós-fechamento com diff, extrato | **Cenário 6**. Snapshot imutável. **Competência demo bate 7h30 / 3h / 2h** |
+| **E7 · Relatórios e exportação** | Horas por professor/modalidade/área/tipo, faltas, substituições, avulsas, canceladas **por motivo**, ausências. XLSX/CSV, inclusive um layout espelho da HORAS MENSAIS para a transição. Central de notificações in-app | O export confere com o fechamento. CSV com `;` e BOM (Excel BR) |
+| **E8 · Endurecimento e deploy** | RLS deny-all + revokes, rate limit no login, headers de segurança, backup, guia "colocar no ar" (Vercel + Supabase) | Checklist de segurança |
+| **Implantação** | Importar a grade real → conferência → **rodada em paralelo** numa competência (sugestão: Novembro/2026 = 26/10–25/11) → desligar a planilha | Relatório de diferenças sistema × planilha, com zero diferença sem explicação |
 
-Estimativa de esforço relativo: E4, E5 e E6 são ~60% do trabalho — é onde
-mora o valor. E0–E2 são rápidas porque reaproveitam padrões do repo.
+E4, E5 e E6 são ~60% do esforço. Sem o financeiro, o MVP fica
+sensivelmente mais enxuto.
 
 ## 3. Estratégia de testes
 
 | Nível | Ferramenta | O que cobre |
 |---|---|---|
-| Domínio | Vitest, sem I/O | Calendário, vigência, ledger, invariantes, resolução de valor, regras — **milhares de casos por property-based** (fast-check: "gerar o mês 2× = gerar 1×", "previstas = próprias + ausências + canceladas") |
-| Serviço | Vitest + Postgres real (Docker, schema descartável por teste) | Transações, triggers, escopo, fechamento, Cenário 6 |
-| E2E | Playwright (Chromium já disponível) | Fluxo mobile de substituição, fechamento ponta a ponta com o seed |
+| Domínio | Vitest, sem I/O | Calendário 26→25, vigência, ledger, invariantes, com **property-based** (fast-check): "gerar 2× = gerar 1×", "previstas = próprias + ausências + canceladas + aguardando" |
+| Importação | Vitest + fixtures | Um arquivo por layout, com nomes fictícios e a mesma estrutura da planilha real |
+| Serviço | Vitest + Postgres real (Docker) | Transações, triggers, escopo, fechamento, Cenário 6 |
+| E2E | Playwright | Substituição pelo celular, fechamento ponta a ponta com o seed |
 
 Regra: **nenhum número de hora aparece na tela sem um teste que o produza.**
 
-## 4. Decisões que eu tomei (e dá pra mudar)
+## 4. Decisões tomadas (dá para mudar)
 
 | Decisão | Por quê |
 |---|---|
-| Ocorrências **materializadas** ao gerar o mês (não virtuais) | Exceção precisa de algo concreto para apontar; consultas simples e rápidas; snapshot fácil |
-| `class_assignments` separado de `class_occurrences` | Suporta aula com 2 professores e substituição parcial sem gambiarra |
-| Exceções append-only com `before/after` | Auditoria nativa, "desfazer" seguro |
-| Aprovação **por área**, não por coordenador | Se o coordenador sair, a área continua; dois coordenadores podem dividir uma área |
-| Minutos inteiros e centavos inteiros | Folha não pode ter 0,1 + 0,2 ≠ 0,3 |
-| Prisma + SQL puro nas migrations | Tipagem do Prisma + recursos do Postgres que ele não expressa |
-| Supabase Auth, com login de desenvolvimento só em `NODE_ENV=development` | Recuperação de senha e MFA prontos; demo local sem conta externa |
-| App em `horas/`, irmão de `athx/` | Deploy independente na Vercel (Root Directory = `horas`) |
+| Ocorrências **materializadas** ao gerar a competência | Exceção precisa de algo concreto para apontar. Snapshot fácil |
+| `class_assignments` separado de `class_occurrences` | Aula com várias pessoas e substituição parcial sem gambiarra |
+| Tipo de atividade com "conta hora" | Plantão, coordenação, reunião e curso somam hora como aula, sem virar exceção |
+| Exceções append-only com `before/after` | Auditoria nativa e "desfazer" seguro |
+| Aprovação **por área** | Se o coordenador sair, a área continua |
+| Minutos inteiros | Mobilidade de 30 min é 0h30, não 1h |
+| Competência nomeada pelo mês de término | "Setembro" = 26/08–25/09, como a folha é paga (confirmar, §5) |
+| App em `horas/`, irmão de `athx/` | Deploy independente na Vercel |
 
-## 5. Perguntas para a Nação (não bloqueiam o início)
+## 5. Perguntas que ainda ficam (nenhuma trava o início)
 
-1. **Aula com dois professores** (coach + estagiário) acontece? Ambos recebem
-   a hora cheia? — o modelo já suporta; muda só o padrão da tela.
-2. **Aula realizada por presunção**: quais modalidades exigem confirmação
-   manual (Kids? personal?)
-3. **DSR**: vale para quais vínculos, e qual fórmula o DP usa hoje?
-4. **Feriados**: a política padrão da Nação é cancelar, manter ou decidir
-   caso a caso? Quais datas especiais da Nação entram no calendário?
-5. **Áreas de coordenação**: qual a lista real e quem coordena cada uma?
-6. O coordenador pode ver o **custo da própria área**?
-7. Quando o mês deve ser gerado automaticamente (ex.: dia 25 do anterior)?
-8. Existe um modelo da planilha atual para eu calibrar o importador?
+1. **Contraturno/Kids e Lutas** (Muay Thai, Jiu-Jitsu, Judô) estão na
+   planilha, mas não nas 3 áreas. Entram como áreas próprias, ficam dentro
+   de alguma delas ou ficam fora do sistema por ora?
+2. **Nome da competência**: 26/08–25/09 é "Setembro" (mês do fim, como
+   assumi) ou "Agosto"?
+3. **Motivos de cancelamento**: quais contam hora para o professor? Os
+   mais prováveis são chuva e sem alunos, quando o professor compareceu.
+4. **Personal** (quadras) conta hora no sistema? Hoje a fórmula não conta.
+5. **Coordenação**: as horas fixas por dia de coordenação entram como
+   atividade recorrente do coordenador (sugestão) ou continuam de fora?
+6. **Plantão do Nação Fit**: uma hora de plantão vale uma hora-aula para a
+   contagem?
+7. Quem são os **coordenadores** de cada área (para os usuários e o escopo)?

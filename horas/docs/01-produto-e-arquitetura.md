@@ -18,7 +18,8 @@ permissões)** da entrega. Os demais estão em:
 
 ```
       CAMADA 1                  CAMADA 2                     CAMADA 3
-   GRADE PADRÃO   ──gera──►  OCORRÊNCIAS DO MÊS  ◄──ajusta──  EXCEÇÕES
+   GRADE PADRÃO   ──gera──►  OCORRÊNCIAS DA      ◄──ajusta──  EXCEÇÕES
+                             COMPETÊNCIA (26→25)
  (recorrente, com           (uma linha por aula          (falta, férias,
   vigência/versão)           por data, idempotente)       substituição, extra…)
                                      │
@@ -28,9 +29,9 @@ permissões)** da entrega. Os demais estão em:
                                      │
                      ┌───────────────┴────────────────┐
                      ▼                                ▼
-            FECHAMENTO OPERACIONAL             MOTOR FINANCEIRO
+            FECHAMENTO OPERACIONAL             MOTOR FINANCEIRO (Fase 2)
           (horas, aprovação por área)     (tabelas de valor, adicionais,
-                     │                     DSR, vigências — plugável)
+                     │                     vigências — plugável)
                      ▼                                │
               COMPETÊNCIA FECHADA  ◄──── snapshot ────┘
                      │
@@ -41,12 +42,13 @@ permissões)** da entrega. Os demais estão em:
 Três princípios que viram código:
 
 1. **Nada é recriado todo mês.** A grade é cadastrada uma vez, com vigência.
-   O mês é *gerado* a partir dela.
+   A competência (26 do mês anterior → 25) é *gerada* a partir dela.
 2. **Nada é apagado.** Exceções são registros *append-only*; desfazer é
    registrar uma reversão. Mudança de grade fecha uma versão e abre outra.
 3. **Hora ≠ dinheiro.** O motor operacional produz *minutos*. O financeiro
    consome minutos e aplica regras. Se a regra de remuneração mudar amanhã,
-   nenhuma hora muda.
+   nenhuma hora muda. **O MVP entrega só horas**. O financeiro entra na
+   Fase 2 sem mexer no operacional, e o DSR fica com a contabilidade.
 
 ---
 
@@ -63,7 +65,7 @@ Três princípios que viram código:
 | Auth | **Supabase Auth** (e-mail+senha, magic link, MFA para admin) | Recuperação de senha e MFA prontos; o athx já usa |
 | Datas | **date-fns** + `date-fns-tz`, fuso fixo **America/Sao_Paulo** | Aula é `DATE` + `TIME` locais — nunca `timestamptz` para escala |
 | Exportação | **exceljs** (XLSX), CSV nativo, **@react-pdf/renderer** (PDF) | Sem serviço externo |
-| Gráficos | **Recharts** (só no dashboard financeiro) | Simples, suficiente |
+| Gráficos | **Recharts** (dashboard; financeiro na Fase 2) | Simples, suficiente |
 | Testes | **Vitest** (domínio puro) + Vitest com Postgres real (integração) + **Playwright** (fluxo mobile crítico) | O cálculo é o produto: ele tem que ser provado |
 | Deploy | **Vercel** + **Supabase** | Baixo custo, zero servidor para cuidar |
 
@@ -89,11 +91,11 @@ horas/src/
 │   └── api/v1                  API interna/externa versionada + webhooks
 │
 ├── domain/                     ⭐ NÚCLEO PURO — sem Prisma, sem Next, sem I/O
-│   ├── calendar/               expansão grade×mês, vigência, feriados
+│   ├── calendar/               expansão grade×competência 26→25, vigência, feriados
 │   ├── occurrences/            máquina de estados da aula
 │   ├── ledger/                 aula → linhas de minutos (o "cálculo")
 │   ├── payroll/                consolidação, snapshot, diff pós-fechamento
-│   └── finance/                resolução de valor, regras, DSR
+│   └── finance/                (Fase 2) resolução de valor, regras
 │
 ├── server/                     aplicação — casos de uso transacionais
 │   ├── auth/                   sessão Supabase, RBAC, escopo por área
@@ -136,7 +138,7 @@ Permissão responde **"o que"**. Escopo responde **"onde"**.
 | Papel | Resumo |
 |---|---|
 | **ADMIN** | Tudo. Único que fecha/reabre competência e edita tabelas de valor. |
-| **COORDENADOR** | Opera a escala e aprova horas **das suas áreas de coordenação**. |
+| **COORDENADOR** | Opera a escala e aprova horas **das suas áreas de coordenação** (Nação Fit, CrossFit, Futevôlei). |
 | **CONSULTA** (DP / Financeiro) | Leitura de fechamento e relatórios, com ou sem valores conforme permissão. |
 | **PROFESSOR** *(arquitetura pronta, fora do MVP)* | Vê o próprio extrato; futuramente confirma/contesta. |
 
@@ -160,8 +162,8 @@ no código. Um admin pode criar "Supervisor Kids" combinando permissões.
 | `payroll.admin_review` / `payroll.close` / `payroll.reopen` | ✅ | — | — | — |
 | `payroll.edit_closed` | ✅ | — | — | — |
 | `payroll.adjust` (ajuste de competência anterior) | ✅ | 🟦 | — | — |
-| `finance.view` | ✅ | opcional 🟦 | opcional | self |
-| `finance.edit_rates` | ✅ | — | — | — |
+| `finance.view` *(Fase 2)* | ✅ | opcional 🟦 | opcional | self |
+| `finance.edit_rates` *(Fase 2)* | ✅ | — | — | — |
 | `admin.catalog` (modalidades, áreas, CC, feriados) | ✅ | — | — | — |
 | `admin.users` | ✅ | — | — | — |
 | `audit.view` | ✅ | 🟦 | — | — |
@@ -171,8 +173,10 @@ no código. Um admin pode criar "Supervisor Kids" combinando permissões.
 
 ### 4.3 Escopo por área
 
-- Cada **modalidade** pertence a uma **área de coordenação**
-  (ex.: *Cross & HYROX*, *Raquetes*, *Lutas*, *Kids*, *Nação Fit*).
+- Cada **modalidade** pertence a uma **área de coordenação**. Áreas
+  iniciais: **Nação Fit** (Academia) · **CrossFit** (CrossFit, HYROX,
+  Funcional, GAP, Fit Dance, Mobilidade, Funcional Beach) · **Futevôlei**
+  (Futevôlei, Base Forte, Saque e Entra).
 - `user_area_scopes` liga usuário ↔ área, com flag `can_view_finance`.
 - Toda consulta passa por `scopeFilter(user)`, que injeta
   `modality.area_id IN (...)` — **no repositório, não no componente**.
@@ -221,7 +225,7 @@ Central in-app (`notifications`) alimentada por **regras** avaliadas por cron
 
 - aula nas próximas 24h sem professor;
 - professor inicia férias amanhã;
-- feriado no mês com decisão pendente;
+- feriado na competência com decisão pendente;
 - N pendências para o fechamento;
 - área que ainda não aprovou a competência (a partir do dia X).
 

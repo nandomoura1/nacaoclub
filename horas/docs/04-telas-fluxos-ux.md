@@ -56,7 +56,7 @@ LOGIN
  └─ APP (sidebar desktop · bottom-nav mobile)
     ├─ HOJE ............................ (home do coordenador; mobile-first)
     ├─ DASHBOARD ....................... (home do admin/consulta)
-    │   └─ Dashboard financeiro ........ (finance.view)
+    │   └─ Dashboard financeiro ........ (Fase 2 · finance.view)
     ├─ CALENDÁRIO (mês | semana | dia | lista)
     │   └─ Drawer da aula ← abre de qualquer lugar
     ├─ PENDÊNCIAS
@@ -83,7 +83,7 @@ LOGIN
         ├─ Histórico de alterações (auditoria)
         └─ Integrações (tokens, webhooks, IDs externos)
 
-* só com finance.view / finance.edit_rates
+* Fase 2, só com finance.view / finance.edit_rates
 ```
 
 ### 2.1 Telas-chave
@@ -123,7 +123,7 @@ outros dias, encerrar. **Todo salvamento pergunta a data de vigência**
 de outubro; 2 têm exceção e irão para revisão."* Seletor "ver grade em
 [data]" navega no histórico de versões.
 
-**CALENDÁRIO** — mês (densidade: pontos coloridos + contador; clique no dia
+**CALENDÁRIO**: competência 26→25 ou mês civil (densidade: pontos coloridos + contador; clique no dia
 abre lista), semana (igual à grade, mas com ocorrências reais e status),
 lista (tabela filtrável). Filtros persistentes: professor, modalidade, área,
 centro de custo, status. Busca `⌘K`: "rafael", "hyrox 15/09".
@@ -172,25 +172,27 @@ toast: "João substitui Rafael · HYROX 05:00 · desfazer"
 ```
 4 toques. Atualização otimista; "desfazer" por 10 s gera `REVERSAO`.
 
-### 3.2 Coordenador — mês típico
+### 3.2 Coordenador: competência típica
 
 ```
-Dia 1   recebe notificação "Outubro gerado: 312 aulas, 318h"
-Durante registra só exceções (Hoje / Calendário / Ausências)
+Dia 26  recebe notificação "Outubro (26/09–25/10) gerado: 312 aulas, 318h"
+Durante registra só exceções (Hoje / Calendário / Ausências):
+        substituições, faltas, cancelamentos com motivo,
+        aulas avulsas, exclusões e suspensões em dias específicos
         resolve o que aparece em Pendências
-Fim     abre Fechamento → confere a própria área → [Aprovar minha área]
+Dia 25  abre Fechamento → confere a própria área → [Aprovar minha área]
 ```
 
-### 3.3 Admin — ciclo do mês
+### 3.3 Admin: ciclo da competência
 
 ```
 Grade padrão (uma vez; ajustes com vigência)
-  → [Gerar mês] (ou automático no dia 25 do mês anterior)
+  → [Gerar competência] (ou automático, alguns dias antes do dia 26)
   → decide feriados pendentes
   → acompanha Dashboard
   → envia competência para revisão
   → acompanha chips das áreas / cobra quem falta
-  → revisão administrativa (diff contra mês anterior, pendências = 0)
+  → revisão administrativa (diff contra a competência anterior, pendências = 0)
   → [Fechar competência] → snapshot
   → Exportar XLSX/CSV para folha
 ```
@@ -228,4 +230,5 @@ Alvos de toque ≥ 44 px, modais viram bottom sheets, tabelas viram cards.
 | Aulas da próxima semana sem professor? | Pendências → Aulas sem professor (filtro semana) | 1 |
 | Qual coordenador não aprovou? | Fechamento → chips por área | 1 |
 | Diferença de horas agosto × setembro? | Relatórios → Comparativo | 2 |
-| Custo previsto × realizado por modalidade? | Dashboard financeiro | 1 |
+| Custo previsto × realizado por modalidade? | Dashboard financeiro (Fase 2) | 1 |
+| Quantas aulas de Futevôlei caíram por chuva? | Relatórios → Canceladas por motivo | 2 |
