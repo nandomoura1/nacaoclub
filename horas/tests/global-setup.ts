@@ -31,7 +31,7 @@ export default async function setup(project: TestProject) {
   const databaseUrl = url.toString();
 
   execSync('npx prisma migrate deploy', {
-    env: { ...process.env, DATABASE_URL: databaseUrl, PRISMA_HIDE_UPDATE_MESSAGE: '1' },
+    env: { ...process.env, DATABASE_URL: databaseUrl, DIRECT_URL: databaseUrl, PRISMA_HIDE_UPDATE_MESSAGE: '1' },
     stdio: 'pipe',
   });
   project.provide('databaseUrl', databaseUrl);

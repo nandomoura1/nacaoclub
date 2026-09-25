@@ -23,5 +23,5 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   // Tudo, menos login, assets e arquivos do Next.
-  matcher: ['/((?!login|_next/|icon.svg|favicon.ico|robots.txt).*)'],
+  matcher: ['/((?!login|primeiro-acesso|_next/|icon.svg|favicon.ico|robots.txt).*)'],
 };

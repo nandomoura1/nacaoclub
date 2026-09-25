@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { Logo } from '@/components/Logo';
 import { getPrincipal } from '@/server/auth/session';
 import { LoginForm } from './LoginForm';
+import { needsSetup } from '@/server/services/setup-service';
 
 export const metadata: Metadata = { title: 'Entrar' };
 
@@ -11,6 +12,7 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ next?: string }>;
 }) {
+  if (await needsSetup()) redirect('/primeiro-acesso');
   if (await getPrincipal()) redirect('/hoje');
   const { next } = await searchParams;
 

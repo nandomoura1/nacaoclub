@@ -11,8 +11,11 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  /// App: no Supabase, o "Transaction pooler" (porta 6543).
+  url       = env("DATABASE_URL")
+  /// Migrations: no Supabase, o "Session pooler" (porta 5432). Local: igual à DATABASE_URL.
+  directUrl = env("DIRECT_URL")
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -218,6 +221,7 @@ model Modality {
   aliases    TeacherAlias[]
   slotVersions ScheduleSlotVersion[]
   occurrences  ClassOccurrence[]
+  manualEntries ManualEntry[]
 
   @@index([areaId])
   @@map("modalities")
@@ -365,6 +369,9 @@ model Teacher {
   slotAssignments SlotVersionTeacher[]
   plannedIn       ClassAssignment[]    @relation("PlannedAssignments")
   executedIn      ClassAssignment[]    @relation("ExecutingAssignments")
+  leaves          Leave[]              @relation("TeacherLeaves")
+  covering        Leave[]              @relation("LeaveSubstitute")
+  manualEntries   ManualEntry[]
 
   @@index([active, name])
   @@map("teachers")
@@ -495,7 +502,8 @@ model PayrollPeriod {
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")
 
-  occurrences ClassOccurrence[]
+  occurrences   ClassOccurrence[]
+  manualEntries ManualEntry[]
 
   @@unique([year, month])
   @@map("payroll_periods")
@@ -625,11 +633,87 @@ model ClassException {
   before             Json?
   after              Json?
   revertsExceptionId String?       @map("reverts_exception_id") @db.Uuid
+  leaveId            String?       @map("leave_id") @db.Uuid
   createdById        String?       @map("created_by") @db.Uuid
   createdAt          DateTime      @default(now()) @map("created_at")
 
   occurrence ClassOccurrence @relation(fields: [occurrenceId], references: [id], onDelete: Restrict)
+  leave      Leave?          @relation(fields: [leaveId], references: [id], onDelete: Restrict)
 
   @@index([occurrenceId, createdAt])
+  @@index([leaveId])
   @@map("class_exceptions")
+}
+
+// ─────────────────────────────────────────────────────────────
+// E5 · Férias/afastamentos e lançamentos manuais
+// ─────────────────────────────────────────────────────────────
+
+enum LeaveType {
+  FERIAS
+  ATESTADO
+  AFASTAMENTO
+  FOLGA
+}
+
+enum LeaveCoverage {
+  PENDENTE
+  CANCELAR
+  SUBSTITUIR
+}
+
+/// Período de ausência. Vale para as aulas já geradas E para as geradas depois.
+model Leave {
+  id           String        @id @default(uuid()) @db.Uuid
+  teacherId    String        @map("teacher_id") @db.Uuid
+  type         LeaveType
+  startDate    DateTime      @map("start_date") @db.Date
+  endDate      DateTime      @map("end_date") @db.Date
+  coverage     LeaveCoverage @default(PENDENTE)
+  substituteId String?       @map("substitute_id") @db.Uuid
+  notes        String?
+  createdById  String?       @map("created_by") @db.Uuid
+  createdAt    DateTime      @default(now()) @map("created_at")
+
+  teacher    Teacher          @relation("TeacherLeaves", fields: [teacherId], references: [id], onDelete: Restrict)
+  substitute Teacher?         @relation("LeaveSubstitute", fields: [substituteId], references: [id], onDelete: Restrict)
+  exceptions ClassException[]
+
+  @@index([teacherId, startDate, endDate])
+  @@map("leaves")
+}
+
+enum ManualEntryType {
+  COORDENACAO
+  REUNIAO
+  CURSO
+  EVENTO
+  COMPENSACAO
+  AJUSTE
+  OUTRO
+}
+
+/// Horas que não vêm da grade (coordenação, reunião, compensação). ± minutos.
+model ManualEntry {
+  id          String          @id @default(uuid()) @db.Uuid
+  periodId    String          @map("period_id") @db.Uuid
+  teacherId   String          @map("teacher_id") @db.Uuid
+  modalityId  String?         @map("modality_id") @db.Uuid
+  type        ManualEntryType
+  minutes     Int
+  date        DateTime?       @db.Date
+  notes       String
+  /// Lançamento anulado (não se apaga: anula-se, com motivo).
+  voidedAt    DateTime?       @map("voided_at")
+  voidedById  String?         @map("voided_by") @db.Uuid
+  voidReason  String?         @map("void_reason")
+  createdById String?         @map("created_by") @db.Uuid
+  createdAt   DateTime        @default(now()) @map("created_at")
+
+  period   PayrollPeriod @relation(fields: [periodId], references: [id], onDelete: Restrict)
+  teacher  Teacher       @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+  modality Modality?     @relation(fields: [modalityId], references: [id], onDelete: SetNull)
+
+  @@index([periodId, teacherId])
+  @@map("manual_entries")
 }

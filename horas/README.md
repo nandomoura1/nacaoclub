@@ -84,6 +84,10 @@ horas/
 └── tests/             unit/ (puro) · integration/ (Postgres real)
 ```
 
+## Colocar no ar
+
+👉 **[docs/colocar-no-ar.md](docs/colocar-no-ar.md)** — Supabase + Vercel, ~30 min, sem instalar nada.
+
 ## Documentação
 
 | # | Documento | Cobre |
