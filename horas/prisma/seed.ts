@@ -7,6 +7,9 @@
 import { PrismaClient } from '@prisma/client';
 import { hashPassword } from '../src/server/auth/password';
 import { bootstrapStructure } from '../src/server/services/bootstrap';
+import { loadPrincipal } from '../src/server/auth/principal';
+import { createSlots } from '../src/server/services/schedule-service';
+import { decideHoliday, generatePeriod } from '../src/server/services/period-service';
 
 const prisma = new PrismaClient();
 
@@ -56,8 +59,48 @@ async function main() {
     }
   }, { timeout: 60_000 });
 
+  await seedDemoSchedule();
+
   console.log(`✔ Seed aplicado. Usuários de demonstração com senha "${DEMO_PASSWORD}":`);
   for (const u of USERS) console.log(`   ${u.role.padEnd(12)} ${u.email}`);
+}
+
+/**
+ * Grade do briefing (§39) e a competência Setembro/2026 (26/08–25/09) gerada.
+ * Faltas, substituições, férias e aula extra chegam com a etapa E5.
+ */
+async function seedDemoSchedule() {
+  if (await prisma.teacher.findFirst({ where: { name: 'Rafael (demo)' } })) return;
+  const adminUser = await prisma.user.findUniqueOrThrow({ where: { email: 'admin@nacaoclub.dev' } });
+  const admin = (await loadPrincipal(prisma, adminUser.id))!;
+  const meta = { ipAddress: '127.0.0.1', userAgent: 'seed' };
+
+  const mod = async (name: string) => (await prisma.modality.findUniqueOrThrow({ where: { name } })).id;
+  const [hyrox, crossfit, funcional] = await Promise.all([mod('HYROX'), mod('CrossFit'), mod('Funcional')]);
+  const aula = (await prisma.activityType.findUniqueOrThrow({ where: { name: 'Aula' } })).id;
+  const space = async (name: string) => (await prisma.space.findUniqueOrThrow({ where: { name } })).id;
+
+  const teacher = (name: string, displayName: string, modalityIds: string[]) =>
+    prisma.teacher.create({ data: { name, displayName, modalities: { create: modalityIds.map((modalityId) => ({ modalityId })) } } });
+  const rafael = await teacher('Rafael (demo)', 'Rafael', [hyrox, funcional]);
+  const eliseu = await teacher('Eliseu (demo)', 'Eliseu', [crossfit]);
+  await teacher('João (demo)', 'João', [crossfit, hyrox]);
+
+  const slot = async (weekday: number, startMin: number, modalityId: string, teacherId: string, spaceName: string) =>
+    createSlots(admin, {
+      weekdays: [weekday], startMin, durationMin: 60, modalityId, activityTypeId: aula, spaceId: await space(spaceName),
+      label: '', people: [{ teacherId, role: 'TITULAR' }], validFrom: '2026-08-01',
+    }, meta);
+  await slot(1, 300, hyrox, rafael.id, 'Funcional 1');   // Segunda 05:00 HYROX Rafael
+  await slot(1, 300, crossfit, eliseu.id, 'CrossFit 1'); // Segunda 05:00 CrossFit Eliseu
+  await slot(3, 360, funcional, rafael.id, 'Funcional 1'); // Quarta 06:00 Funcional Rafael
+
+  // 07/09 (Independência) vem com "decidir aula por aula":
+  // HYROX cancelada, CrossFit mantida — como no mês de demonstração (docs/03 §10).
+  await generatePeriod(admin, { year: 2026, month: 9 }, meta);
+  const areaOf = async (id: string) => (await prisma.modality.findUniqueOrThrow({ where: { id } })).areaId;
+  await decideHoliday(admin, '2026-09-07', 'CANCELAR', await areaOf(hyrox), meta);
+  await decideHoliday(admin, '2026-09-07', 'MANTER', await areaOf(crossfit), meta);
 }
 
 main()

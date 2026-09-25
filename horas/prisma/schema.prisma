@@ -217,6 +217,7 @@ model Modality {
   primaryOf  Teacher[]         @relation("PrimaryModality")
   aliases    TeacherAlias[]
   slotVersions ScheduleSlotVersion[]
+  occurrences  ClassOccurrence[]
 
   @@index([areaId])
   @@map("modalities")
@@ -244,6 +245,7 @@ model ActivityType {
   updatedAt   DateTime     @updatedAt @map("updated_at")
 
   slotVersions ScheduleSlotVersion[]
+  occurrences  ClassOccurrence[]
 
   @@map("activity_types")
 }
@@ -258,6 +260,7 @@ model Space {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   slotVersions ScheduleSlotVersion[]
+  occurrences  ClassOccurrence[]
 
   @@map("spaces")
 }
@@ -272,6 +275,8 @@ model CancellationReason {
   sortOrder          Int      @default(0) @map("sort_order")
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
+
+  occurrences ClassOccurrence[]
 
   @@map("cancellation_reasons")
 }
@@ -324,6 +329,8 @@ model Holiday {
   createdAt DateTime      @default(now()) @map("created_at")
   updatedAt DateTime      @updatedAt @map("updated_at")
 
+  occurrences ClassOccurrence[]
+
   @@map("holidays")
 }
 
@@ -356,6 +363,8 @@ model Teacher {
   modalities      TeacherModality[]
   aliases         TeacherAlias[]
   slotAssignments SlotVersionTeacher[]
+  plannedIn       ClassAssignment[]    @relation("PlannedAssignments")
+  executedIn      ClassAssignment[]    @relation("ExecutingAssignments")
 
   @@index([active, name])
   @@map("teachers")
@@ -430,6 +439,7 @@ model ScheduleSlotVersion {
   activityType ActivityType         @relation(fields: [activityTypeId], references: [id], onDelete: Restrict)
   space        Space?               @relation(fields: [spaceId], references: [id], onDelete: SetNull)
   teachers     SlotVersionTeacher[]
+  occurrences  ClassOccurrence[]
 
   @@index([slotId, validFrom])
   @@index([weekday, validFrom, validTo])
@@ -455,4 +465,171 @@ model SlotVersionTeacher {
   @@id([versionId, teacherId])
   @@index([teacherId])
   @@map("slot_version_teachers")
+}
+
+// ─────────────────────────────────────────────────────────────
+// E4 · Competência (26 → 25), ocorrências e exceções (CAMADAS 2 e 3)
+// ─────────────────────────────────────────────────────────────
+
+enum PeriodStatus {
+  ABERTO
+  EM_REVISAO_COORDENACAO
+  APROVADO_COORDENACAO
+  REVISAO_ADMINISTRATIVA
+  FECHADO
+}
+
+/// "Setembro/2026" = 26/08/2026 a 25/09/2026 (dia de corte em app_settings).
+model PayrollPeriod {
+  id            String       @id @default(uuid()) @db.Uuid
+  year          Int
+  month         Int
+  startDate     DateTime     @map("start_date") @db.Date
+  endDate       DateTime     @map("end_date") @db.Date
+  status        PeriodStatus @default(ABERTO)
+  generatedAt   DateTime?    @map("generated_at")
+  generatedById String?      @map("generated_by") @db.Uuid
+  needsReview   Boolean      @default(false) @map("needs_review")
+  closedAt      DateTime?    @map("closed_at")
+  closedById    String?      @map("closed_by") @db.Uuid
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  occurrences ClassOccurrence[]
+
+  @@unique([year, month])
+  @@map("payroll_periods")
+}
+
+enum OccurrenceOrigin {
+  GRADE
+  EXTRA
+}
+
+enum OccurrenceStatus {
+  PREVISTA
+  REALIZADA
+  CANCELADA
+  AGUARDANDO_DECISAO_FERIADO
+}
+
+/// Uma aula numa data. Gerada da grade (idempotente) ou lançada avulsa.
+model ClassOccurrence {
+  id                   String           @id @default(uuid()) @db.Uuid
+  periodId             String           @map("period_id") @db.Uuid
+  date                 DateTime         @db.Date
+  origin               OccurrenceOrigin @default(GRADE)
+  slotId               String?          @map("slot_id") @db.Uuid
+  slotVersionId        String?          @map("slot_version_id") @db.Uuid
+  modalityId           String           @map("modality_id") @db.Uuid
+  activityTypeId       String           @map("activity_type_id") @db.Uuid
+  spaceId              String?          @map("space_id") @db.Uuid
+  label                String?
+  startMin             Int              @map("start_min")
+  durationMin          Int              @map("duration_min")
+  /// O que a grade dizia — congelado. Os campos acima refletem as exceções.
+  plannedStartMin      Int              @map("planned_start_min")
+  plannedDurationMin   Int              @map("planned_duration_min")
+  status               OccurrenceStatus @default(PREVISTA)
+  holidayId            String?          @map("holiday_id") @db.Uuid
+  cancellationReasonId String?          @map("cancellation_reason_id") @db.Uuid
+  /// Alguém registrou algo nesta aula: a regeneração da grade não toca mais nela.
+  touched              Boolean          @default(false)
+  /// A grade mudou depois de alguém mexer nesta aula: um humano precisa olhar.
+  needsReview          Boolean          @default(false) @map("needs_review")
+  createdAt            DateTime         @default(now()) @map("created_at")
+  updatedAt            DateTime         @updatedAt @map("updated_at")
+
+  period             PayrollPeriod       @relation(fields: [periodId], references: [id], onDelete: Restrict)
+  slotVersion        ScheduleSlotVersion? @relation(fields: [slotVersionId], references: [id], onDelete: Restrict)
+  modality           Modality            @relation(fields: [modalityId], references: [id], onDelete: Restrict)
+  activityType       ActivityType        @relation(fields: [activityTypeId], references: [id], onDelete: Restrict)
+  space              Space?              @relation(fields: [spaceId], references: [id], onDelete: SetNull)
+  holiday            Holiday?            @relation(fields: [holidayId], references: [id], onDelete: SetNull)
+  cancellationReason CancellationReason? @relation(fields: [cancellationReasonId], references: [id], onDelete: Restrict)
+  assignments        ClassAssignment[]
+  exceptions         ClassException[]
+
+  @@unique([slotId, date])
+  @@index([periodId, date])
+  @@index([date, startMin])
+  @@index([modalityId, date])
+  @@map("class_occurrences")
+}
+
+enum AssignmentStatus {
+  PREVISTA
+  REALIZADA
+  SUBSTITUIDA
+  CANCELADA
+  AUSENTE_PENDENTE
+}
+
+enum AbsenceReason {
+  FALTA
+  FERIAS
+  ATESTADO
+  FOLGA
+  OUTRO
+}
+
+/// Uma "cadeira de professor" na aula. É o que gera hora.
+model ClassAssignment {
+  id                 String           @id @default(uuid()) @db.Uuid
+  occurrenceId       String           @map("occurrence_id") @db.Uuid
+  role               AssignmentRole   @default(TITULAR)
+  /// Quem a grade escalou. Nulo = aula avulsa (não havia previsão).
+  plannedTeacherId   String?          @map("planned_teacher_id") @db.Uuid
+  /// Quem deu a aula. Nulo = ninguém (cancelada ou aguardando substituto).
+  executingTeacherId String?          @map("executing_teacher_id") @db.Uuid
+  minutes            Int
+  status             AssignmentStatus @default(PREVISTA)
+  absenceReason      AbsenceReason?   @map("absence_reason")
+  createdAt          DateTime         @default(now()) @map("created_at")
+  updatedAt          DateTime         @updatedAt @map("updated_at")
+
+  occurrence       ClassOccurrence @relation(fields: [occurrenceId], references: [id], onDelete: Cascade)
+  plannedTeacher   Teacher?        @relation("PlannedAssignments", fields: [plannedTeacherId], references: [id], onDelete: Restrict)
+  executingTeacher Teacher?        @relation("ExecutingAssignments", fields: [executingTeacherId], references: [id], onDelete: Restrict)
+
+  @@index([occurrenceId])
+  @@index([plannedTeacherId])
+  @@index([executingTeacherId])
+  @@map("class_assignments")
+}
+
+enum ExceptionType {
+  FALTA
+  FERIAS
+  ATESTADO
+  FOLGA
+  SUBSTITUICAO
+  AULA_CANCELADA
+  AULA_EXTRA
+  ALTERACAO_HORARIO
+  CONFIRMACAO
+  COMPENSACAO
+  DECISAO_FERIADO
+  REVERSAO
+  OUTRO
+}
+
+/// Fato registrado sobre uma aula. Somente-inclusão: desfazer = nova exceção REVERSAO.
+model ClassException {
+  id                 String        @id @default(uuid()) @db.Uuid
+  occurrenceId       String        @map("occurrence_id") @db.Uuid
+  assignmentId       String?       @map("assignment_id") @db.Uuid
+  type               ExceptionType
+  cancellationReasonId String?     @map("cancellation_reason_id") @db.Uuid
+  notes              String?
+  before             Json?
+  after              Json?
+  revertsExceptionId String?       @map("reverts_exception_id") @db.Uuid
+  createdById        String?       @map("created_by") @db.Uuid
+  createdAt          DateTime      @default(now()) @map("created_at")
+
+  occurrence ClassOccurrence @relation(fields: [occurrenceId], references: [id], onDelete: Restrict)
+
+  @@index([occurrenceId, createdAt])
+  @@map("class_exceptions")
 }

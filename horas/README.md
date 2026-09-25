@@ -10,8 +10,20 @@ auditável por área → horas exportadas para a folha.
 **MVP = horas.** Valores e custos entram na Fase 2. O DSR fica com a
 contabilidade.
 
-**Status:** ✅ E0 (fundação) e ✅ E1 (login, permissões, auditoria) prontas.
-Próxima: E2 (cadastros).
+**Status:** ✅ E0 fundação · ✅ E1 login, permissões e auditoria · ✅ E2
+cadastros · ✅ E3 grade com vigência + importação da planilha · ✅ E4
+competência 26→25 e cálculo de horas. Próxima: E5 (exceções: falta,
+substituição, cancelamento, aula avulsa, férias em lote).
+
+### Implantação com a planilha atual
+
+1. **Grade semanal → Importar planilha**: envie o .xlsx (Arquivo → Fazer
+   download → Microsoft Excel). As abas de grade são reconhecidas sozinhas;
+   as demais são ignoradas.
+2. Na prévia, resolva os textos sem modalidade (ex.: "Boxe", "Core") e
+   confira os nomes. Erros de digitação: "é a mesma pessoa que…".
+3. Compare o quadro **horas por semana** com o PADRÃO da HORAS MENSAIS.
+4. **Calendário → Gerar** a competência.
 
 ## Rodando em 3 minutos
 
@@ -34,6 +46,10 @@ npm run dev                   # http://localhost:3000
 | Coordenação CrossFit | `juliana@nacaoclub.dev` | `nacao@2026` |
 | Coordenação Aulas Coletivas | `rafa@nacaoclub.dev` | `nacao@2026` |
 | Coordenação Futevôlei | `ramon@nacaoclub.dev` | `nacao@2026` |
+
+O seed também cria a grade do briefing (Rafael, Eliseu, João) e gera
+**Setembro/2026** (26/08–25/09), com o feriado de 07/09 decidido: HYROX
+cancelada, CrossFit mantida.
 | Consulta (DP / Financeiro) | `dp@nacaoclub.dev` | `nacao@2026` |
 
 ## Comandos

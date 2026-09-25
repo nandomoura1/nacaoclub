@@ -7,6 +7,7 @@ import type { RequestMeta } from '@/server/auth/session';
 import { AppError, NotFoundError } from '@/server/errors';
 import { fromUtc, isIsoDate, toUtc, formatDateBR } from '@/domain/dates';
 import { holidaysOf } from '@/domain/holidays';
+import { onHolidayChanged } from './period-service';
 
 export const HOLIDAY_POLICIES = [
   { value: 'DECIDIR_INDIVIDUALMENTE', label: 'Decidir aula por aula' },
@@ -32,8 +33,8 @@ const holidaySchema = z.object({
  * Garante os feriados oficiais de um ano. Idempotente: não sobrescreve
  * política nem nome que a Nação já tenha ajustado.
  */
-export async function ensureOfficialHolidays(tx: Tx, year: number): Promise<number> {
-  let created = 0;
+export async function ensureOfficialHolidays(tx: Tx, year: number): Promise<string[]> {
+  const created: string[] = [];
   for (const h of holidaysOf(year)) {
     const exists = await tx.holiday.findUnique({ where: { date: toUtc(h.date) } });
     if (exists) continue;
@@ -46,7 +47,7 @@ export async function ensureOfficialHolidays(tx: Tx, year: number): Promise<numb
         policy: h.scope === 'FACULTATIVO' ? 'MANTER_TODAS' : 'DECIDIR_INDIVIDUALMENTE',
       },
     });
-    created++;
+    created.push(h.date);
   }
   return created;
 }
@@ -65,12 +66,13 @@ export async function importOfficialHolidays(principal: Principal | null, year: 
   if (!Number.isInteger(year) || year < 2020 || year > 2100) throw new AppError('Ano inválido.');
   return prisma.$transaction(async (tx) => {
     const created = await ensureOfficialHolidays(tx, year);
+    for (const date of created) await onHolidayChanged(tx, date);
     await audit(tx, { actorId: principal.id, ...meta }, {
       action: 'holiday.imported',
       entityType: 'holiday',
-      summary: `${principal.name} carregou os feriados oficiais de ${year} (${created} novos)`,
+      summary: `${principal.name} carregou os feriados oficiais de ${year} (${created.length} novos)`,
     });
-    return created;
+    return created.length;
   });
 }
 
@@ -87,6 +89,9 @@ export async function saveHoliday(principal: Principal | null, id: string | null
     if (clash && clash.id !== id) throw new AppError('Já existe um feriado nesta data.');
 
     const row = id ? await tx.holiday.update({ where: { id }, data }) : await tx.holiday.create({ data });
+    // Competências já geradas refletem a nova política (aulas em que ninguém mexeu).
+    if (before && fromUtc(before.date) !== parsed.data.date) await onHolidayChanged(tx, fromUtc(before.date));
+    await onHolidayChanged(tx, parsed.data.date);
     const policy = HOLIDAY_POLICIES.find((p) => p.value === row.policy)!.label.toLowerCase();
     await audit(tx, { actorId: principal.id, ...meta }, {
       action: id ? 'holiday.updated' : 'holiday.created',

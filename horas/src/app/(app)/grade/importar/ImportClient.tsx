@@ -18,7 +18,7 @@ type Committed = Extract<Awaited<ReturnType<typeof commitAction>>, { ok: true }>
 
 const LAYOUT_LABEL: Record<string, string> = { SALA: 'grade por sala', QUADRA: 'quadras (turma - professor)', PLANTAO: 'plantão por faixa' };
 
-export function ImportClient({ today }: { today: string }) {
+export function ImportClient({ defaultFrom }: { defaultFrom: string }) {
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [done, setDone] = useState<Committed | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -74,13 +74,13 @@ export function ImportClient({ today }: { today: string }) {
     );
   }
 
-  return <Preview analysis={analysis} today={today} onDone={setDone} onRestart={() => setAnalysis(null)} />;
+  return <Preview analysis={analysis} defaultFrom={defaultFrom} onDone={setDone} onRestart={() => setAnalysis(null)} />;
 }
 
-function Preview({ analysis, today, onDone, onRestart }: { analysis: Analysis; today: string; onDone: (c: Committed) => void; onRestart: () => void }) {
+function Preview({ analysis, defaultFrom, onDone, onRestart }: { analysis: Analysis; defaultFrom: string; onDone: (c: Committed) => void; onRestart: () => void }) {
   const recognized = analysis.sheets.filter((s) => s.layout && s.rows > 0);
   const [sheets, setSheets] = useState(() => recognized.map((s) => s.sheet));
-  const [validFrom, setValidFrom] = useState(today);
+  const [validFrom, setValidFrom] = useState(defaultFrom);
   const [overrides, setOverrides] = useState<ModalityOverrides>({});
   const [decisions, setDecisions] = useState<NameDecisions>(() => Object.fromEntries(analysis.names.map((n) => [n.key, n.auto])));
   const [error, setError] = useState<string | null>(null);
@@ -135,7 +135,7 @@ function Preview({ analysis, today, onDone, onRestart }: { analysis: Analysis; t
                 <span className="block text-xs text-tinta-suave">
                   {s.layout ? `${LAYOUT_LABEL[s.layout]} · ${s.rows} células com aula` : 'não é uma grade: ignorada'}
                 </span>
-                {s.warnings.map((w) => <span key={w} className="mt-1 block text-xs text-atencao">⚠ {w}</span>)}
+                {s.layout && s.warnings.map((w) => <span key={w} className="mt-1 block text-xs text-atencao">⚠ {w}</span>)}
               </span>
             </label>
           ))}
@@ -143,6 +143,7 @@ function Preview({ analysis, today, onDone, onRestart }: { analysis: Analysis; t
         <div className="mt-4 max-w-xs">
           <Label htmlFor="vf">A grade importada vale a partir de</Label>
           <Input id="vf" type="date" value={validFrom} onChange={(e) => setValidFrom(e.target.value)} />
+          <p className="mt-1 text-xs text-tinta-suave">Sugestão: o início da competência atual. Competências já geradas a partir dessa data são atualizadas.</p>
         </div>
       </Card>
 
