@@ -6,20 +6,11 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { hashPassword } from '../src/server/auth/password';
-import { syncPermissionCatalog } from '../src/server/services/rbac-catalog';
+import { bootstrapStructure } from '../src/server/services/bootstrap';
 
 const prisma = new PrismaClient();
 
 export const DEMO_PASSWORD = 'nacao@2026';
-
-const AREAS = [
-  { name: 'Nação Fit', color: '#022B57' },
-  { name: 'CrossFit', color: '#0169E9' },
-  { name: 'Aulas Coletivas', color: '#3A86FF' },
-  { name: 'Futevôlei', color: '#20C4FA' },
-  { name: 'Lutas', color: '#7C3AED' },
-  { name: 'Contraturno / Kids', color: '#F59E0B' },
-];
 
 const USERS: { name: string; email: string; role: string; areas: string[] }[] = [
   { name: 'Administração Nação', email: 'admin@nacaoclub.dev', role: 'ADMIN', areas: [] },
@@ -38,16 +29,7 @@ async function main() {
   const passwordHash = await hashPassword(DEMO_PASSWORD);
 
   await prisma.$transaction(async (tx) => {
-    await tx.appSettings.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
-    await syncPermissionCatalog(tx);
-
-    for (const [i, a] of AREAS.entries()) {
-      await tx.coordinationArea.upsert({
-        where: { name: a.name },
-        create: { ...a, sortOrder: i },
-        update: { color: a.color, sortOrder: i },
-      });
-    }
+    await bootstrapStructure(tx);
 
     const roles = new Map((await tx.role.findMany()).map((r) => [r.key, r.id]));
     const areas = new Map((await tx.coordinationArea.findMany()).map((a) => [a.name, a.id]));
@@ -72,7 +54,7 @@ async function main() {
         });
       }
     }
-  }, { timeout: 30_000 });
+  }, { timeout: 60_000 });
 
   console.log(`✔ Seed aplicado. Usuários de demonstração com senha "${DEMO_PASSWORD}":`);
   for (const u of USERS) console.log(`   ${u.role.padEnd(12)} ${u.email}`);

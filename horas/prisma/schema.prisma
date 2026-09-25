@@ -134,6 +134,7 @@ model CoordinationArea {
   deletedAt DateTime? @map("deleted_at")
 
   userScopes UserAreaScope[]
+  modalities Modality[]
 
   @@map("coordination_areas")
 }
@@ -176,4 +177,208 @@ model AuditLog {
   @@index([at(sort: Desc)])
   @@index([actorId, at(sort: Desc)])
   @@map("audit_logs")
+}
+
+// ─────────────────────────────────────────────────────────────
+// E2 · Cadastros parametrizáveis (nada de modalidade no código)
+// ─────────────────────────────────────────────────────────────
+
+model CostCenter {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String?  @unique
+  name      String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  modalities Modality[]
+
+  @@map("cost_centers")
+}
+
+model Modality {
+  id                   String   @id @default(uuid()) @db.Uuid
+  name                 String   @unique
+  areaId               String   @map("area_id") @db.Uuid
+  costCenterId         String?  @map("cost_center_id") @db.Uuid
+  color                String   @default("#0169E9")
+  /// Duração padrão ao criar aula: Mobilidade nasce com 30.
+  defaultDurationMin   Int      @default(60) @map("default_duration_min")
+  /// Gestão por exceção: só exige confirmação onde a Nação quiser.
+  requiresConfirmation Boolean  @default(false) @map("requires_confirmation")
+  active               Boolean  @default(true)
+  sortOrder            Int      @default(0) @map("sort_order")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  area       CoordinationArea  @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  costCenter CostCenter?       @relation(fields: [costCenterId], references: [id], onDelete: SetNull)
+  teachers   TeacherModality[]
+  primaryOf  Teacher[]         @relation("PrimaryModality")
+  aliases    TeacherAlias[]
+
+  @@index([areaId])
+  @@map("modalities")
+}
+
+enum ActivityKind {
+  AULA
+  PLANTAO
+  COORDENACAO
+  REUNIAO
+  CURSO
+  EVENTO
+  PERSONAL
+}
+
+/// Nem toda hora é aula: plantão, coordenação, reunião… Cada tipo diz se conta hora.
+model ActivityType {
+  id          String       @id @default(uuid()) @db.Uuid
+  name        String       @unique
+  kind        ActivityKind
+  countsHours Boolean      @default(true) @map("counts_hours")
+  active      Boolean      @default(true)
+  sortOrder   Int          @default(0) @map("sort_order")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  @@map("activity_types")
+}
+
+/// Sala, quadra, box: é como a grade atual é organizada.
+model Space {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("spaces")
+}
+
+model CancellationReason {
+  id                 String   @id @default(uuid()) @db.Uuid
+  name               String   @unique
+  /// O professor recebe a hora mesmo com a aula cancelada? Padrão: não.
+  countsTeacherHours Boolean  @default(false) @map("counts_teacher_hours")
+  requiresNote       Boolean  @default(false) @map("requires_note")
+  active             Boolean  @default(true)
+  sortOrder          Int      @default(0) @map("sort_order")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@map("cancellation_reasons")
+}
+
+model Position {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  teachers Teacher[]
+
+  @@map("positions")
+}
+
+model ContractType {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  teachers Teacher[]
+
+  @@map("contract_types")
+}
+
+enum HolidayScope {
+  NACIONAL
+  DISTRITAL
+  FACULTATIVO
+  NACAO
+}
+
+enum HolidayPolicy {
+  CANCELAR_TODAS
+  MANTER_TODAS
+  DECIDIR_INDIVIDUALMENTE
+}
+
+model Holiday {
+  id        String        @id @default(uuid()) @db.Uuid
+  date      DateTime      @unique @db.Date
+  name      String
+  scope     HolidayScope
+  policy    HolidayPolicy @default(DECIDIR_INDIVIDUALMENTE)
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  @@map("holidays")
+}
+
+// ─────────────────────────────────────────────────────────────
+// E2 · Professores
+// ─────────────────────────────────────────────────────────────
+
+model Teacher {
+  id                 String    @id @default(uuid()) @db.Uuid
+  name               String
+  /// Como aparece na grade e no card: "Rafa", "Ju".
+  displayName        String?   @map("display_name")
+  email              String?
+  phone              String?
+  admissionDate      DateTime? @map("admission_date") @db.Date
+  terminationDate    DateTime? @map("termination_date") @db.Date
+  active             Boolean   @default(true)
+  primaryModalityId  String?   @map("primary_modality_id") @db.Uuid
+  positionId         String?   @map("position_id") @db.Uuid
+  contractTypeId     String?   @map("contract_type_id") @db.Uuid
+  level              String?
+  notes              String?
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  createdById        String?   @map("created_by") @db.Uuid
+
+  primaryModality Modality?         @relation("PrimaryModality", fields: [primaryModalityId], references: [id], onDelete: SetNull)
+  position        Position?         @relation(fields: [positionId], references: [id], onDelete: SetNull)
+  contractType    ContractType?     @relation(fields: [contractTypeId], references: [id], onDelete: SetNull)
+  modalities      TeacherModality[]
+  aliases         TeacherAlias[]
+
+  @@index([active, name])
+  @@map("teachers")
+}
+
+/// Habilitação: alimenta a sugestão de substitutos.
+model TeacherModality {
+  teacherId  String @map("teacher_id") @db.Uuid
+  modalityId String @map("modality_id") @db.Uuid
+
+  teacher  Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  modality Modality @relation(fields: [modalityId], references: [id], onDelete: Cascade)
+
+  @@id([teacherId, modalityId])
+  @@index([modalityId])
+  @@map("teacher_modalities")
+}
+
+/// Só para a importação: "Juliana (mobility)" → Juliana + Mobilidade.
+model TeacherAlias {
+  id         String   @id @default(uuid()) @db.Uuid
+  teacherId  String   @map("teacher_id") @db.Uuid
+  /// Normalizado: minúsculas, sem acento, espaços colapsados.
+  alias      String   @unique
+  modalityId String?  @map("modality_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  teacher  Teacher   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  modality Modality? @relation(fields: [modalityId], references: [id], onDelete: SetNull)
+
+  @@map("teacher_aliases")
 }
