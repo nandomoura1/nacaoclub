@@ -88,7 +88,7 @@ describe.skipIf(!hasDb)('E3 · grade com vigência e importação', () => {
       ['5h', 'CROSSFIT 1', 'Zeca Import', 'Zeca Import'],
       ['^', 'FUNCIONAL 1', 'Hyrox', 'Mobilidade Master'],
       ['^', '^', 'Yara Import', 'Zeca Import (mobility)'],
-      ['^', 'SALA TATAME', 'Core', ''],
+      ['^', 'SALA TATAME', 'Pilates Solo', ''],
       ['^', '^', 'Yara Import', ''],
       ['^', 'ESTAGIÁRIOS', 'Xande Import', 'estagiário'],
     ]);
@@ -101,10 +101,10 @@ describe.skipIf(!hasDb)('E3 · grade com vigência e importação', () => {
       const funcional = await prisma.modality.findUniqueOrThrow({ where: { name: 'Funcional' } });
       const payload = { fileName: 'teste.xlsx', sheets: ['CROSSFIT TESTE'], validFrom: '2026-08-26', rows, decisions, overrides: {} as Record<string, string> };
 
-      // "Core" não é modalidade: sem decisão, a importação é recusada.
+      // "Pilates Solo" não é modalidade: sem decisão, a importação é recusada.
       await expect(commitImport(admin.principal, payload, META)).rejects.toThrow(/sem modalidade/);
 
-      const r = await commitImport(admin.principal, { ...payload, overrides: { 'CROSSFIT TESTE::core': funcional.id } }, META);
+      const r = await commitImport(admin.principal, { ...payload, overrides: { 'CROSSFIT TESTE::pilates solo': funcional.id } }, META);
       expect(r).toMatchObject({ created: 7, newTeachers: 3, skipped: 0 });
 
       const zeca = await prisma.teacher.findFirstOrThrow({ where: { name: 'Zeca Import' }, include: { aliases: true, modalities: { include: { modality: true } } } });
@@ -116,10 +116,10 @@ describe.skipIf(!hasDb)('E3 · grade com vigência e importação', () => {
       expect(tue.find((x) => x.modality.name === 'Mobilidade')).toMatchObject({ label: 'Master', durationMin: 30 });
       // "estagiário" não é ninguém: a linha de estagiários de terça não tem pessoa.
       expect(tue.find((x) => x.label === 'Estagiários')?.people ?? []).toHaveLength(0);
-      const core = grade.find((x) => x.label === 'Core')!;
+      const core = grade.find((x) => x.label === 'Pilates Solo')!;
       expect(core.modality.name).toBe('Funcional');
 
-      const again = await commitImport(admin.principal, { ...payload, overrides: { 'CROSSFIT TESTE::core': funcional.id } }, META);
+      const again = await commitImport(admin.principal, { ...payload, overrides: { 'CROSSFIT TESTE::pilates solo': funcional.id } }, META);
       expect(again).toMatchObject({ created: 0, skipped: 7, newTeachers: 0 });
       expect(await prisma.teacher.count({ where: { name: 'Zeca Import' } })).toBe(1);
 

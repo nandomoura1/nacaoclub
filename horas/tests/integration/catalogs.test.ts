@@ -34,15 +34,15 @@ describe.skipIf(!hasDb)('E2 · cadastros, feriados e professores', () => {
       const admin = await makeUser('ADMIN', { name: 'Admin' });
       const area = await prisma.coordinationArea.findUniqueOrThrow({ where: { name: 'Lutas' } });
       const id = await saveCatalogItem(admin.principal, 'modalidades', null, {
-        name: 'Boxe', areaId: area.id, defaultDurationMin: '60', color: '#B91C1C', costCenterId: '', requiresConfirmation: false, active: true,
+        name: 'Kickboxing', areaId: area.id, defaultDurationMin: '60', color: '#B91C1C', costCenterId: '', requiresConfirmation: false, active: true,
       }, META);
       await saveCatalogItem(admin.principal, 'modalidades', id, {
-        name: 'Boxe', areaId: area.id, defaultDurationMin: '45', color: '#B91C1C', costCenterId: '', requiresConfirmation: false, active: true,
+        name: 'Kickboxing', areaId: area.id, defaultDurationMin: '45', color: '#B91C1C', costCenterId: '', requiresConfirmation: false, active: true,
       }, META);
 
       expect((await prisma.modality.findUniqueOrThrow({ where: { id } })).defaultDurationMin).toBe(45);
       const log = await prisma.auditLog.findFirstOrThrow({ where: { action: 'catalog.updated', entityId: id } });
-      expect(log.summary).toBe('Admin alterou modalidade Boxe');
+      expect(log.summary).toBe('Admin alterou modalidade Kickboxing');
       expect(log.before).toMatchObject({ defaultDurationMin: 60 });
       expect(log.after).toMatchObject({ defaultDurationMin: 45, costCenterId: null });
     });

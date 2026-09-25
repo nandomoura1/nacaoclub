@@ -119,9 +119,9 @@ Regra: **nenhum número de hora aparece na tela sem um teste que o produza.**
 |---|---|---|
 | Nação Fit (Academia) | Maria | Musculação (plantão) |
 | CrossFit | Juliana | CrossFit |
-| Aulas Coletivas | Rafa | HYROX, Funcional, GAP, Fit Dance, Mobilidade (30 min), Funcional Beach |
+| Aulas Coletivas | Rafa | HYROX, Funcional, GAP, Fit Dance, Mobilidade (30 min), Funcional Beach, Core |
 | Futevôlei | Ramon | Futevôlei, Base Forte, Saque e Entra |
-| Lutas | admin | Muay Thai, Jiu-Jitsu, Judô |
+| Lutas | admin | Muay Thai, Boxe, Jiu-Jitsu, Judô |
 | Contraturno / Kids | admin | Natação, Funcional Kids, Futebol, Vôlei, Futevôlei Kids |
 
 > A divisão entre **CrossFit** e **Aulas Coletivas** é uma suposição:
