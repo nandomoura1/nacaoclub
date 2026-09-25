@@ -5,6 +5,8 @@ const nextConfig: NextConfig = {
   // este app é autocontido na pasta horas/.
   outputFileTracingRoot: __dirname,
   reactStrictMode: true,
+  // Importação da planilha envia o .xlsx e a prévia (algumas centenas de aulas).
+  experimental: { serverActions: { bodySizeLimit: '6mb' } },
   poweredByHeader: false,
   async headers() {
     return [

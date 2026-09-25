@@ -18,7 +18,7 @@ export const NAV_MAIN: NavItem[] = [
   { href: '/hoje', label: 'Hoje', icon: 'hoje', mobile: true },
   { href: '/calendario', label: 'Calendário', icon: 'calendario', permission: 'schedule.view', soon: 'E4', mobile: true },
   { href: '/pendencias', label: 'Pendências', icon: 'pendencias', permission: 'occurrence.exception', soon: 'E5', mobile: true },
-  { href: '/grade', label: 'Grade semanal', icon: 'grade', permission: 'schedule.view', soon: 'E3' },
+  { href: '/grade', label: 'Grade semanal', icon: 'grade', permission: 'schedule.view' },
   { href: '/professores', label: 'Professores', icon: 'professores', permission: 'teacher.view' },
   { href: '/fechamento', label: 'Fechamento', icon: 'fechamento', permission: 'payroll.view_hours', soon: 'E6', mobile: true },
   { href: '/relatorios', label: 'Relatórios', icon: 'relatorios', permission: 'payroll.view_hours', soon: 'E7' },

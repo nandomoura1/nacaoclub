@@ -216,6 +216,7 @@ model Modality {
   teachers   TeacherModality[]
   primaryOf  Teacher[]         @relation("PrimaryModality")
   aliases    TeacherAlias[]
+  slotVersions ScheduleSlotVersion[]
 
   @@index([areaId])
   @@map("modalities")
@@ -242,6 +243,8 @@ model ActivityType {
   createdAt   DateTime     @default(now()) @map("created_at")
   updatedAt   DateTime     @updatedAt @map("updated_at")
 
+  slotVersions ScheduleSlotVersion[]
+
   @@map("activity_types")
 }
 
@@ -253,6 +256,8 @@ model Space {
   sortOrder Int      @default(0) @map("sort_order")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+
+  slotVersions ScheduleSlotVersion[]
 
   @@map("spaces")
 }
@@ -350,6 +355,7 @@ model Teacher {
   contractType    ContractType?     @relation(fields: [contractTypeId], references: [id], onDelete: SetNull)
   modalities      TeacherModality[]
   aliases         TeacherAlias[]
+  slotAssignments SlotVersionTeacher[]
 
   @@index([active, name])
   @@map("teachers")
@@ -381,4 +387,72 @@ model TeacherAlias {
   modality Modality? @relation(fields: [modalityId], references: [id], onDelete: SetNull)
 
   @@map("teacher_aliases")
+}
+
+// ─────────────────────────────────────────────────────────────
+// E3 · Grade padrão (CAMADA 1) — recorrente, com vigência
+// ─────────────────────────────────────────────────────────────
+
+/// Identidade estável de "a aula de segunda 05:00 de HYROX". Nunca muda.
+model ScheduleSlot {
+  id          String   @id @default(uuid()) @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  createdById String?  @map("created_by") @db.Uuid
+
+  versions ScheduleSlotVersion[]
+
+  @@map("schedule_slots")
+}
+
+/// O que a aula é, a partir de quando. "Alterar a partir de 15/10" fecha
+/// esta versão em 14/10 e abre outra — o passado continua apontando para cá.
+model ScheduleSlotVersion {
+  id             String    @id @default(uuid()) @db.Uuid
+  slotId         String    @map("slot_id") @db.Uuid
+  /// 1 = segunda … 7 = domingo
+  weekday        Int
+  /// Minutos desde a meia-noite, horário de Brasília (05:30 = 330).
+  startMin       Int       @map("start_min")
+  durationMin    Int       @map("duration_min")
+  modalityId     String    @map("modality_id") @db.Uuid
+  activityTypeId String    @map("activity_type_id") @db.Uuid
+  spaceId        String?   @map("space_id") @db.Uuid
+  /// Turma: "Série A", "Master", "Aprendiz".
+  label          String?
+  validFrom      DateTime  @map("valid_from") @db.Date
+  validTo        DateTime? @map("valid_to") @db.Date
+  changeReason   String?   @map("change_reason")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  createdById    String?   @map("created_by") @db.Uuid
+
+  slot         ScheduleSlot         @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  modality     Modality             @relation(fields: [modalityId], references: [id], onDelete: Restrict)
+  activityType ActivityType         @relation(fields: [activityTypeId], references: [id], onDelete: Restrict)
+  space        Space?               @relation(fields: [spaceId], references: [id], onDelete: SetNull)
+  teachers     SlotVersionTeacher[]
+
+  @@index([slotId, validFrom])
+  @@index([weekday, validFrom, validTo])
+  @@index([modalityId])
+  @@map("schedule_slot_versions")
+}
+
+enum AssignmentRole {
+  TITULAR
+  AUXILIAR
+  ESTAGIARIO
+}
+
+/// Quem está escalado. Cada pessoa recebe a duração cheia da aula.
+model SlotVersionTeacher {
+  versionId String         @map("version_id") @db.Uuid
+  teacherId String         @map("teacher_id") @db.Uuid
+  role      AssignmentRole @default(TITULAR)
+
+  version ScheduleSlotVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  teacher Teacher             @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+
+  @@id([versionId, teacherId])
+  @@index([teacherId])
+  @@map("slot_version_teachers")
 }
