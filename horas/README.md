@@ -7,7 +7,7 @@ grade semanal recorrente com vigência → calendário do mês gerado
 automaticamente → coordenadores registram só as exceções → fechamento
 auditável por área → exportação para a folha.
 
-**Status:** arquitetura e plano aprovados para revisão — código a partir da
+**Status:** arquitetura e plano em revisão — o código começa pela
 Etapa E0.
 
 ## Documentação
