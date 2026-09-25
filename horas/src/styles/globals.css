@@ -1,0 +1,66 @@
+@import 'tailwindcss';
+
+/* ============================================================
+   DESIGN SYSTEM — NAÇÃO CLUB (Manual da Marca · Proposta 3)
+   navy estrutura · azul Nação age · ciano pontua.
+   ============================================================ */
+
+@theme {
+  --color-navy: #022b57;
+  --color-navy-800: #063a70;
+  --color-navy-700: #0a4a8c;
+  --color-nacao: #0169e9;
+  --color-nacao-600: #0158c4;
+  --color-azul-claro: #3a86ff;
+  --color-ciano: #20c4fa;
+
+  /* Neutros com "sangue azul": nunca cinza puro. */
+  --color-tinta: #0d1b2a;
+  --color-tinta-suave: #48596b;
+  --color-tinta-fraca: #7d8ea0;
+  --color-borda: #e2e8f0;
+  --color-fundo: #f4f7fb;
+  --color-superficie: #ffffff;
+
+  --color-sucesso: #16a34a;
+  --color-atencao: #d97706;
+  --color-critico: #dc2626;
+
+  --font-titulo: 'Gotham', var(--font-montserrat), ui-sans-serif, system-ui, sans-serif;
+  --font-corpo: 'Gotham Rounded', var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-cartao: 14px;
+}
+
+/* Gotham é licenciada: usada se instalada; senão Montserrat / Nunito. */
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  background: var(--color-fundo);
+  color: var(--color-tinta);
+  font-family: var(--font-corpo);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+.font-titulo {
+  font-family: var(--font-titulo);
+  letter-spacing: -0.01em;
+}
+
+/* Foco visível e consistente: acessibilidade não é opcional. */
+:focus-visible {
+  outline: 2px solid var(--color-nacao);
+  outline-offset: 2px;
+}
+
+/* Números de hora alinham em coluna. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}

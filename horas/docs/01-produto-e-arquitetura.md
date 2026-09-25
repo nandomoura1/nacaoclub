@@ -62,7 +62,7 @@ Três princípios que viram código:
 | Formulários | **react-hook-form** + **zod** | O mesmo schema zod valida no cliente *e* no servidor |
 | Banco | **PostgreSQL 16** — Supabase em produção, Docker/Supabase CLI local | Relacional de verdade: FKs, constraints, exclusion constraints para vigência |
 | ORM | **Prisma 6** + SQL puro nas migrations quando o Prisma não expressa (exclusion constraints, views, triggers de auditoria) | Já usado no repo; tipagem ponta a ponta |
-| Auth | **Supabase Auth** (e-mail+senha, magic link, MFA para admin) | Recuperação de senha e MFA prontos; o athx já usa |
+| Auth | **Sessão própria em banco**: e-mail + senha com scrypt, token opaco (o banco guarda só o HMAC), revogável. Mesmo padrão do app Quem Chegou? | Funciona igual no local, nos testes e na Vercel + Supabase Postgres, sem serviço extra. O admin gera senha provisória (troca obrigatória no 1º acesso). MFA/TOTP e "esqueci a senha" por e-mail ficam na Fase 2. Trocar por Supabase Auth mexe só em `server/auth/session.ts` |
 | Datas | **date-fns** + `date-fns-tz`, fuso fixo **America/Sao_Paulo** | Aula é `DATE` + `TIME` locais — nunca `timestamptz` para escala |
 | Exportação | **exceljs** (XLSX), CSV nativo, **@react-pdf/renderer** (PDF) | Sem serviço externo |
 | Gráficos | **Recharts** (dashboard; financeiro na Fase 2) | Simples, suficiente |
@@ -198,7 +198,17 @@ no código. Um admin pode criar "Supervisor Kids" combinando permissões.
   `class_occurrences`/`class_exceptions` de período `FECHADO` a menos que a
   transação declare `SET LOCAL app.allow_closed_edit = 'on'` — o que só o
   caso de uso com `payroll.edit_closed` faz. Dupla trava: app + banco.
-- MFA obrigatório para ADMIN. Sessão curta, revogável.
+- Sessão de 12h, revogável. Desativar usuário ou gerar nova senha derruba
+  todas as sessões dele na hora.
+- **Senha provisória = zero permissões** até a troca, inclusive para Server
+  Actions chamadas direto (a trava está em `loadPrincipal`, não na tela).
+- Login com mensagem única para e-mail inexistente e senha errada, com o
+  mesmo custo de tempo (sem oráculo), e toda recusa auditada.
+- Auditoria somente-inclusão: trigger no banco bloqueia `UPDATE`, `DELETE`
+  e `TRUNCATE` em `audit_logs`. Hash de senha e tokens são removidos do log.
+- Dependências: o `npm audit` aponta avisos no postcss embutido no Next e no
+  CLI do Prisma. São ferramentas de build/dev que não processam entrada de
+  usuário. O app está na linha 15.5.x de backport de segurança do Next.
 
 ---
 
