@@ -63,8 +63,8 @@ Cada etapa termina com um commit verde (`typecheck` + `test` + `build`).
 
 | Etapa | Entrega | Testes que fecham a etapa |
 |---|---|---|
-| **E0 · Fundação** | App `horas/` (Next 15, TS estrito, Tailwind v4, shadcn, Prisma), design system Nação, Postgres local via Docker | smoke: build + login renderiza |
-| **E1 · Identidade e auditoria** | Supabase Auth (+ login de dev para o seed local), `users/roles/permissions/scopes`, `withPermission()`, `scopeFilter()`, `audit()` transacional, trigger append-only | RBAC por papel. Coordenador fora da área recebe 403. Audit grava antes/depois. `DELETE` em audit falha |
+| ✅ **E0 · Fundação** | App `horas/` (Next 15, TS estrito, Tailwind v4, componentes no padrão shadcn (cva + tailwind-merge), Prisma), design system Nação, Postgres local via Docker | Build + fumaça no Chromium (desktop e celular) |
+| ✅ **E1 · Identidade e auditoria** | Sessão própria (scrypt + token HMAC), `users/roles/permissions/scopes`, `assertCan()`, `areaWhere()`, `audit()` transacional, trigger somente-inclusão, telas de Usuários, Histórico e troca de senha | 43 testes: RBAC por papel, escopo por área, 403 sem gravar nada, login sem oráculo, auditoria atômica e imutável (`UPDATE`/`DELETE`/`TRUNCATE` recusados) |
 | **E2 · Cadastros** | Áreas e modalidades reais, tipos de atividade, espaços, motivos de cancelamento, professores (+ habilitações, contratos, apelidos), feriados nacionais + DF 2026–2027, configuração do corte (26) | Exclusion de vigência, soft delete, escopo |
 | **E3 · Grade + importação** | Slots + versões, editor DnD, "somente nesta data" × "a partir desta data". **Importador dos 4 layouts** com preview, apelidos e **relatório de conferência** contra o PADRÃO da HORAS MENSAIS | **Cenário 5**. Parser de cada layout com fixtures anonimizadas. Nome desconhecido bloqueia a importação |
 | **E4 · Motor da competência** | `domain/calendar` + `domain/ledger` puros, `generatePeriod` 26→25 idempotente, política de feriado, calendário, dashboard | **Cenários 1 e 2**. Fronteira 25/26. Mobilidade = 0h30. Idempotência. Invariante de previstas. Contagem de dias da semana (26/08–25/09 = 4·4·5·5·5·4·4) |
@@ -101,18 +101,28 @@ Regra: **nenhum número de hora aparece na tela sem um teste que o produza.**
 | Competência nomeada pelo mês de término | "Setembro" = 26/08–25/09, como a folha é paga (confirmar, §5) |
 | App em `horas/`, irmão de `athx/` | Deploy independente na Vercel |
 
-## 5. Perguntas que ainda ficam (nenhuma trava o início)
+## 5. Respostas da Nação (rodada 2)
 
-1. **Contraturno/Kids e Lutas** (Muay Thai, Jiu-Jitsu, Judô) estão na
-   planilha, mas não nas 3 áreas. Entram como áreas próprias, ficam dentro
-   de alguma delas ou ficam fora do sistema por ora?
-2. **Nome da competência**: 26/08–25/09 é "Setembro" (mês do fim, como
-   assumi) ou "Agosto"?
-3. **Motivos de cancelamento**: quais contam hora para o professor? Os
-   mais prováveis são chuva e sem alunos, quando o professor compareceu.
-4. **Personal** (quadras) conta hora no sistema? Hoje a fórmula não conta.
-5. **Coordenação**: as horas fixas por dia de coordenação entram como
-   atividade recorrente do coordenador (sugestão) ou continuam de fora?
-6. **Plantão do Nação Fit**: uma hora de plantão vale uma hora-aula para a
-   contagem?
-7. Quem são os **coordenadores** de cada área (para os usuários e o escopo)?
+| Pergunta | Resposta | No sistema |
+|---|---|---|
+| Contraturno/Kids e Lutas | **Entram** | Áreas próprias "Contraturno / Kids" e "Lutas", sob o admin até terem coordenador |
+| Nome da competência | 26/08–25/09 é paga na **folha de setembro** | "Setembro/2026" = 26/08–25/09 |
+| Cancelamento que conta hora | O motivo principal é **falta de professor** | "Falta de professor" é o primeiro motivo. Nenhum motivo conta hora por padrão |
+| Personal | **Não conta**: só controle do espaço | Tipo "Personal" com `conta hora = não` |
+| Coordenação | **Entra, lançada manualmente** | Lançamentos manuais de horas ([03 §6.3](03-regras-de-negocio.md#63-lançamentos-manuais-de-horas)) |
+| Plantão | **1h de plantão = 1h** | Tipo "Plantão" conta hora |
+| Coordenadores | Maria · Juliana · Rafa · Ramon | Tabela abaixo |
+
+### Áreas de coordenação
+
+| Área | Coordenação | Modalidades (seed; editável no admin) |
+|---|---|---|
+| Nação Fit (Academia) | Maria | Musculação (plantão) |
+| CrossFit | Juliana | CrossFit |
+| Aulas Coletivas | Rafa | HYROX, Funcional, GAP, Fit Dance, Mobilidade (30 min), Funcional Beach |
+| Futevôlei | Ramon | Futevôlei, Base Forte, Saque e Entra |
+| Lutas | admin | Muay Thai, Jiu-Jitsu, Judô |
+| Contraturno / Kids | admin | Natação, Funcional Kids, Futebol, Vôlei, Futevôlei Kids |
+
+> A divisão entre **CrossFit** e **Aulas Coletivas** é uma suposição:
+> trocar uma modalidade de área é uma edição no admin, sem código.

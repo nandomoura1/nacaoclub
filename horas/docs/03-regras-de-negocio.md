@@ -69,10 +69,10 @@ parametrizável e já nasce com:
 | Tipo | Exemplo | Conta hora? |
 |---|---|---|
 | Aula | CrossFit 06:00, Série B de Futevôlei | sim |
-| Plantão | Nação Fit (musculação) 05h–06h | sim |
-| Coordenação | 2h/dia fixas de coordenação | sim |
+| Plantão | Nação Fit (musculação) 05h–06h. **1h de plantão = 1h** | sim |
+| Coordenação | Lançada **manualmente** pelo admin na competência (§6.3) | sim |
 | Reunião / Curso / Evento | Reunião de equipe, curso interno, aulão | sim (padrão) |
-| Personal | Personal na quadra | **a definir pela Nação** |
+| Personal | Personal na quadra: **só controle de ocupação do espaço** | **não** |
 
 Todos usam o mesmo motor: recorrentes na grade ou avulsos por data, com uma
 ou mais pessoas. **Turma** (Série A, Aprendiz, Master…) é um rótulo da
@@ -183,15 +183,18 @@ original, professor substituto, **estado anterior e posterior** (jsonb).
 Cancelar aula não dada é operação de primeira classe. Catálogo
 `cancellation_reasons`, parametrizável:
 
-| Motivo (sugestão inicial) | Conta hora do professor? |
+| Motivo (catálogo inicial) | Conta hora do professor? |
 |---|---|
+| **Falta de professor** (o motivo mais comum: vem primeiro na lista) | não (e registra a ausência no extrato) |
 | Feriado | não |
-| Chuva / condição climática (quadras de areia) | a definir |
-| Sem alunos | a definir |
+| Chuva / condição climática | não |
+| Sem alunos | não |
 | Espaço indisponível / manutenção | não |
 | Evento da Nação | não |
-| Professor ausente sem substituto | não (e registra a ausência) |
 | Outro (texto obrigatório) | não |
+
+Nenhum motivo conta hora por padrão. O interruptor existe para exceções
+futuras, sem precisar de código.
 
 `conta_hora_professor` existe para o caso "o professor estava lá e a aula
 não aconteceu". Os relatórios mostram as canceladas **por motivo**
@@ -210,6 +213,14 @@ precisa tratar como rotina:
 | Série de dias sem uma aula (férias escolares do Contraturno, reforma de quadra) | **Suspender entre datas**: filtro por modalidade/sala/professor + intervalo, com preview ("38 aulas serão canceladas") | cancela em lote, com motivo |
 | Aula temporária por algumas semanas | Versão de grade com `valid_from` e `valid_to` | entra só no intervalo |
 | Reunião / curso que conta hora | Atividade avulsa do tipo Reunião/Curso | + horas |
+
+### 6.3 Lançamentos manuais de horas
+
+Horas que não vêm de grade nem de aula, como as de **coordenação**, são
+lançadas à mão pelo admin: competência, pessoa, tipo (Coordenação, Reunião,
+Curso, Outro), quantidade de horas e observação. Entram no extrato como
+linha própria e no total. É o equivalente, auditável, às colunas digitadas
+da HORAS MENSAIS.
 
 Tudo aparece no calendário, no extrato ("19/09 · Aulão HYROX · avulsa ·
 +1h30") e na trilha de auditoria. Nada fica escondido num `-1` de fórmula.
