@@ -6,6 +6,8 @@ import { LoginForm } from './LoginForm';
 import { needsSetup } from '@/server/services/setup-service';
 
 export const metadata: Metadata = { title: 'Entrar' };
+// Decide a cada requisição (banco vazio → primeiro acesso); nunca pré-renderizar no build.
+export const dynamic = 'force-dynamic';
 
 export default async function LoginPage({
   searchParams,
