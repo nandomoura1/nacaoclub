@@ -9,6 +9,8 @@ import { periodBounds, periodOf } from '@/domain/period';
 import { periodStartDay } from '@/server/services/period-service';
 
 export const metadata: Metadata = { title: 'Importar planilha' };
+// Gravação em lote: folga para o servidor longe do banco.
+export const maxDuration = 60;
 
 export default async function ImportarPage() {
   const principal = await requirePrincipal();

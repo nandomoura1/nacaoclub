@@ -1,9 +1,10 @@
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
-import { Pencil, Plus, Search } from 'lucide-react';
+import Link from 'next/link';
+import { FileSpreadsheet, Pencil, Plus, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { FormMessage } from '@/components/ui/alert';
 import { Input, Label, Select } from '@/components/ui/input';
@@ -52,6 +53,7 @@ export function TeachersClient({
           Mostrar inativos
         </label>
         <div className="flex-1" />
+        {canEdit && <Link href="/professores/importar" className={buttonVariants({ variant: 'secondary' })}><FileSpreadsheet /> Importar planilha</Link>}
         {canEdit && <Button onClick={() => setEditing('new')}><Plus /> Novo professor</Button>}
       </div>
 

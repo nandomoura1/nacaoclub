@@ -86,7 +86,7 @@ describe('arquivo do modelo (.xlsx)', () => {
 
   it('tem listas suspensas, Listas oculta e Grade ativa', async () => {
     const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(await buildGradeTemplate(cat, [], 'teste'));
+    await wb.xlsx.load(new Uint8Array(await buildGradeTemplate(cat, [], 'teste')).buffer);
     expect(wb.getWorksheet('Listas')!.state).toBe('hidden');
     const grade = wb.getWorksheet('Grade')!;
     expect(grade.getCell('B2').dataValidation).toMatchObject({ type: 'list', formulae: ['Listas!$A$2:$A$3'] });
