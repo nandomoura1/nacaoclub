@@ -6,7 +6,7 @@ export interface GridCell {
 }
 export type Grid = GridCell[][];
 
-export type ImportLayout = 'SALA' | 'QUADRA' | 'PLANTAO';
+export type ImportLayout = 'SALA' | 'QUADRA' | 'PLANTAO' | 'MODELO';
 
 export type PersonRole = 'TITULAR' | 'AUXILIAR' | 'ESTAGIARIO';
 

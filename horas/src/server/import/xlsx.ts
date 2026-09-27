@@ -8,6 +8,12 @@ const MAX_COLS = 60;
 function cellText(c: ExcelJS.Cell): string {
   const v = c.value;
   if (v === null || v === undefined) return '';
+  // Hora digitada como hora no Excel (07:00) chega como data de 1899: vira "07:00".
+  if (v instanceof Date) return `${String(v.getUTCHours()).padStart(2, '0')}:${String(v.getUTCMinutes()).padStart(2, '0')}`;
+  if (typeof v === 'number' && c.numFmt && /h/i.test(c.numFmt) && v >= 0 && v < 1) {
+    const min = Math.round(v * 24 * 60);
+    return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+  }
   if (typeof v === 'object' && 'result' in v) return String(v.result ?? ''); // fórmula
   if (typeof v === 'object' && 'richText' in v) return v.richText.map((t) => t.text).join('');
   try {

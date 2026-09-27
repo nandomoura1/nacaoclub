@@ -2,7 +2,9 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '@/server/db';
 import { bootstrapStructure } from '@/server/services/bootstrap';
 import { changeSlot, createSlots, endSlot, listGrade } from '@/server/services/schedule-service';
-import { commitImport, loadImportCatalog } from '@/server/services/import-service';
+import { commitImport, gradeTemplate, loadImportCatalog } from '@/server/services/import-service';
+import { readWorkbook } from '@/server/import/xlsx';
+import { todayIso } from '@/lib/today';
 import { parseSheet } from '@/domain/import/parsers';
 import { collectNames } from '@/domain/import/plan';
 import type { Grid } from '@/domain/import/types';
@@ -125,6 +127,36 @@ describe.skipIf(!hasDb)('E3 · grade com vigência e importação', () => {
 
       const log = await prisma.auditLog.findFirstOrThrow({ where: { action: 'schedule.imported' }, orderBy: { at: 'asc' } });
       expect(log.summary).toMatch(/Admin importou 7 aula\(s\) de teste\.xlsx .* 3 professor\(es\) cadastrado\(s\)/);
+    });
+
+    it('modelo padrão: o espelho da grade reimportado não duplica nada', async () => {
+      const admin = await makeUser('ADMIN', { name: 'Admin' });
+      const today = todayIso();
+      const vigentes = (await listGrade(admin.principal, today)).length;
+      expect(vigentes).toBeGreaterThan(0);
+
+      const { buffer, fileName } = await gradeTemplate(admin.principal, true);
+      expect(fileName).toMatch(/^nacao-grade-espelho-\d{8}\.xlsx$/);
+      const sheets = await readWorkbook(new Uint8Array(buffer).buffer);
+      const parsed = sheets.map((sh) => parseSheet(sh.name, sh.grid));
+      const grade = parsed.find((p) => p.layout === 'MODELO')!;
+      expect(grade.warnings).toEqual([]);
+      expect(grade.rows).toHaveLength(vigentes);
+
+      const catalog = await loadImportCatalog();
+      const decisions = Object.fromEntries(collectNames(grade.rows, catalog).map((n) => [n.key, n.auto]));
+      const r = await commitImport(admin.principal, { fileName, sheets: ['Grade'], validFrom: today, rows: grade.rows, decisions, overrides: {} }, META);
+      expect(r).toMatchObject({ created: 0, skipped: vigentes, newTeachers: 0 });
+
+      // Modelo em branco: só cabeçalho, nenhuma aula.
+      const blank = await gradeTemplate(admin.principal, false);
+      const blankRows = (await readWorkbook(new Uint8Array(blank.buffer).buffer)).flatMap((sh) => parseSheet(sh.name, sh.grid).rows);
+      expect(blankRows).toEqual([]);
+    });
+
+    it('só o admin baixa o modelo', async () => {
+      const coord = await makeUser('COORDENADOR');
+      await expect(gradeTemplate(coord.principal, true)).rejects.toThrow(AuthorizationError);
     });
 
     it('só o admin importa', async () => {

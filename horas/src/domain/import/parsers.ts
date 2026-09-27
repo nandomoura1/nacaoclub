@@ -64,7 +64,15 @@ function findHeader(g: Grid, predicate: (cells: string[]) => boolean, maxRow = 1
   return -1;
 }
 
+/** Colunas do modelo padrão (uma aula por linha). Ordem livre: acha pelo cabeçalho. */
+export const MODELO_COLUMNS = ['Área', 'Modalidade', 'Turma', 'Dia', 'Início', 'Duração (min)', 'Tipo', 'Espaço', 'Professor titular', 'Auxiliar', 'Estagiário', 'Observação'] as const;
+
+function modeloHeader(g: Grid): number {
+  return findHeader(g, (c) => c.includes('modalidade') && c.includes('dia') && c.includes('inicio'));
+}
+
 export function detectLayout(g: Grid): ImportLayout | null {
+  if (modeloHeader(g) >= 0) return 'MODELO';
   if (findHeader(g, (c) => c.includes('manha') && c.includes('professor') && c.includes('estagiario')) >= 0) return 'PLANTAO';
   const h = findHeader(g, (c) => c[0] === 'horario' && Object.keys(WEEKDAY_BY_HEADER).some((d) => c.includes(d)));
   if (h < 0) return null;
@@ -288,8 +296,64 @@ export function parsePlantaoSheet(sheet: string, g: Grid, modality = 'musculacao
   return { sheet, layout: 'PLANTAO', rows, warnings };
 }
 
+const KIND_BY_TEXT: [RegExp, ImportRow['kind']][] = [[/^plant/, 'PLANTAO'], [/^personal/, 'PERSONAL'], [/^coord/, 'COORDENACAO'], [/^aula/, 'AULA']];
+
+/** "Ana / Bia" → ["Ana", "Bia"]. */
+function splitPeople(value: string): string[] {
+  return value.split(/[/;,+]/).map(clean).filter((v) => !isEmpty(v));
+}
+
+/** Modelo padrão: cabeçalho com Modalidade / Dia / Início e uma aula por linha. */
+function parseModeloSheet(sheet: string, g: Grid): ParsedSheet {
+  const h = modeloHeader(g);
+  const header = (g[h] ?? []).map((c) => normalizeName(c.text));
+  const col = (name: string) => header.findIndex((c) => c === normalizeName(name) || c.startsWith(normalizeName(name)));
+  const cols = {
+    modalidade: col('Modalidade'), turma: col('Turma'), dia: col('Dia'), inicio: col('Início'), duracao: col('Duração'),
+    tipo: col('Tipo'), espaco: col('Espaço'), titular: col('Professor'), auxiliar: col('Auxiliar'), estagiario: col('Estagiário'),
+  };
+  const get = (r: number, c: number) => (c >= 0 ? text(g, r, c) : '');
+  const rows: ImportRow[] = [];
+  const warnings: string[] = [];
+
+  for (let r = h + 1; r < g.length; r++) {
+    const modalidade = get(r, cols.modalidade);
+    const dia = get(r, cols.dia);
+    const inicio = get(r, cols.inicio);
+    if (isEmpty(modalidade) && isEmpty(dia) && isEmpty(inicio)) continue; // linha em branco
+    const where = `linha ${r + 1}`;
+    if (isEmpty(modalidade)) { warnings.push(`${where}: sem modalidade — ignorada.`); continue; }
+    const weekday = WEEKDAY_BY_HEADER[normalizeName(dia).replace(/-feira$/, '')] ?? 0;
+    if (!weekday) { warnings.push(`${where}: dia "${dia}" não reconhecido — use Segunda … Domingo.`); continue; }
+    const startMin = parseClock(inicio.replace(/^(\d{1,2}:\d{2}):\d{2}$/, '$1')); // "07:00:00" do Excel → "07:00"
+    if (startMin === null) { warnings.push(`${where}: início "${inicio}" inválido — use 07:00.`); continue; }
+    const durText = get(r, cols.duracao);
+    const duration = isEmpty(durText) ? null : Number(durText.replace(',', '.'));
+    if (duration !== null && !(Number.isInteger(duration) && duration >= 5 && duration <= 600)) {
+      warnings.push(`${where}: duração "${durText}" inválida — informe minutos (ex.: 60).`);
+      continue;
+    }
+    const tipo = normalizeName(get(r, cols.tipo));
+    const kind = KIND_BY_TEXT.find(([re]) => re.test(tipo))?.[1] ?? 'AULA';
+    const turma = get(r, cols.turma);
+    const espaco = get(r, cols.espaco);
+    const people: ImportRow['people'] = [
+      ...splitPeople(get(r, cols.titular)).map((raw) => ({ raw, role: 'TITULAR' as const })),
+      ...splitPeople(get(r, cols.auxiliar)).map((raw) => ({ raw, role: 'AUXILIAR' as const })),
+      ...splitPeople(get(r, cols.estagiario)).map((raw) => ({ raw, role: 'ESTAGIARIO' as const })),
+    ];
+    rows.push({
+      sheet, ref: ref(r, cols.modalidade), weekday, startMin, durationMin: duration,
+      spaceHint: isEmpty(espaco) ? null : espaco, activityText: modalidade, fallbackText: null,
+      labelHint: isEmpty(turma) ? null : turma, kind, people,
+    });
+  }
+  return { sheet, layout: 'MODELO', rows, warnings };
+}
+
 export function parseSheet(sheet: string, g: Grid): ParsedSheet {
   const layout = detectLayout(g);
+  if (layout === 'MODELO') return parseModeloSheet(sheet, g);
   if (layout === 'SALA') return parseSalaSheet(sheet, g);
   if (layout === 'QUADRA') return parseQuadraSheet(sheet, g);
   if (layout === 'PLANTAO') return parsePlantaoSheet(sheet, g);

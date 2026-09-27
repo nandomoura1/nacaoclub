@@ -20,8 +20,8 @@ export default async function ImportarPage() {
   return (
     <>
       <PageHeader
-        title="Importar a planilha atual"
-        description="Lê as abas de grade (CrossFit, Nação Fit, Quadras, Contraturno), mostra tudo antes de gravar e só grava o que você confirmar."
+        title="Importar a grade"
+        description="Baixe o modelo padrão (ou o espelho da grade atual), preencha e envie. Também lê a planilha antiga. Mostra tudo antes de gravar e só grava o que você confirmar."
       />
       <ImportClient defaultFrom={defaultFrom} />
     </>

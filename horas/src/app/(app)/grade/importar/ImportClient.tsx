@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
-import { CheckCircle2, FileSpreadsheet, TriangleAlert, Upload } from 'lucide-react';
+import { CheckCircle2, Download, FileSpreadsheet, TriangleAlert, Upload } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -16,7 +16,7 @@ import { analyzeAction, commitAction } from './actions';
 type Analysis = Extract<Awaited<ReturnType<typeof analyzeAction>>, { ok: true }>['data'];
 type Committed = Extract<Awaited<ReturnType<typeof commitAction>>, { ok: true }>['data'];
 
-const LAYOUT_LABEL: Record<string, string> = { SALA: 'grade por sala', QUADRA: 'quadras (turma - professor)', PLANTAO: 'plantão por faixa' };
+const LAYOUT_LABEL: Record<string, string> = { SALA: 'grade por sala', QUADRA: 'quadras (turma - professor)', PLANTAO: 'plantão por faixa', MODELO: 'modelo padrão (uma aula por linha)' };
 
 export function ImportClient({ defaultFrom }: { defaultFrom: string }) {
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
@@ -42,7 +42,20 @@ export function ImportClient({ defaultFrom }: { defaultFrom: string }) {
 
   if (!analysis) {
     return (
-      <Card className="max-w-2xl p-6">
+      <div className="max-w-2xl space-y-4">
+      <Card className="p-6">
+        <h2 className="text-base font-extrabold text-navy">1. Baixe o modelo padrão</h2>
+        <p className="mt-1 text-sm text-tinta-suave">
+          Uma aula por linha, com listas de modalidades, dias, espaços e professores do cadastro. O <b>espelho</b> já vem com a grade atual preenchida:
+          confira, complete e envie de volta.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <a href="/grade/modelo?espelho=1" download className={buttonVariants()}><Download /> Espelho da grade atual</a>
+          <a href="/grade/modelo" download className={buttonVariants({ variant: 'secondary' })}><Download /> Modelo em branco</a>
+        </div>
+      </Card>
+      <Card className="p-6">
+        <h2 className="mb-4 text-base font-extrabold text-navy">2. Envie a planilha preenchida</h2>
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -59,7 +72,7 @@ export function ImportClient({ defaultFrom }: { defaultFrom: string }) {
           <div className="flex items-start gap-3 rounded-lg bg-fundo p-4 text-sm text-tinta-suave">
             <FileSpreadsheet className="mt-0.5 size-5 shrink-0 text-nacao" />
             <p>
-              No Google Sheets: <b>Arquivo → Fazer download → Microsoft Excel (.xlsx)</b>. Pode enviar a planilha inteira: abas que não são grade
+              Aceita o modelo padrão ou a planilha antiga. No Google Sheets: <b>Arquivo → Fazer download → Microsoft Excel (.xlsx)</b>. Pode enviar a planilha inteira: abas que não são grade
               (folha, salários, contatos) são ignoradas automaticamente e <b>não são lidas</b> para nada além de reconhecer o formato.
             </p>
           </div>
@@ -71,6 +84,7 @@ export function ImportClient({ defaultFrom }: { defaultFrom: string }) {
           <Button type="submit" disabled={pending}><Upload /> {pending ? 'Lendo a planilha…' : 'Ler e mostrar prévia'}</Button>
         </form>
       </Card>
+      </div>
     );
   }
 

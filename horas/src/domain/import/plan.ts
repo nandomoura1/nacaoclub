@@ -73,7 +73,7 @@ function decideModality(row: ImportRow, cat: ImportCatalog, overrides: ModalityO
     if (p.r === 'ignore') return { decision: 'ignore', key: p.k, text: row.activityText };
     if (p.r) {
       // Texto mapeado à mão ("Core" → Funcional) vira a turma.
-      const label = p.r.label ?? (overrides[p.k] ? titleCase(row.activityText) : null);
+      const label = row.labelHint?.trim() || (p.r.label ?? (overrides[p.k] ? titleCase(row.activityText) : null));
       return { decision: { modalityId: p.r.modalityId, label }, key: p.k, text: row.activityText };
     }
     if (row.fallbackText) {

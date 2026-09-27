@@ -1,16 +1,18 @@
 import { z } from 'zod';
 import { prisma } from '@/server/db';
 import { audit } from '@/server/audit';
-import { assertCan } from '@/server/auth/authz';
+import { areaWhere, assertCan } from '@/server/auth/authz';
 import type { Principal } from '@/server/auth/principal';
 import type { RequestMeta } from '@/server/auth/session';
 import { AppError } from '@/server/errors';
-import { formatDateBR, isIsoDate, toUtc } from '@/domain/dates';
+import { formatClock, formatDateBR, isIsoDate, toUtc } from '@/domain/dates';
 import { normalizeName } from '@/domain/names';
 import { parseSheet } from '@/domain/import/parsers';
 import { buildPlan, collectHints, collectNames, finalPerson, type ImportCatalog } from '@/domain/import/plan';
 import type { ImportRow } from '@/domain/import/types';
 import { readWorkbook } from '@/server/import/xlsx';
+import { buildGradeTemplate, type TemplateRow } from '@/server/import/template';
+import { todayIso } from '@/lib/today';
 import { onScheduleChanged } from './period-service';
 
 export const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
@@ -192,4 +194,55 @@ export async function commitImport(principal: Principal | null, input: unknown, 
     await onScheduleChanged(tx, null, data.validFrom);
     return { created, skipped, newTeachers: createdTeachers, ignoredRows: plan.ignoredRows };
   }, { timeout: 120_000, maxWait: 10_000 });
+}
+
+const KIND_LABEL: Record<string, string> = { AULA: 'Aula', PLANTAO: 'Plantão', COORDENACAO: 'Coordenação', PERSONAL: 'Personal' };
+
+/**
+ * Modelo padrão da grade (.xlsx). `mirror` = já vem preenchido com a grade
+ * vigente hoje (nas áreas que a pessoa enxerga), para conferir e completar.
+ */
+export async function gradeTemplate(principal: Principal | null, mirror: boolean): Promise<{ fileName: string; buffer: Buffer }> {
+  assertCan(principal, 'import.run');
+  const today = todayIso();
+  const [modalities, spaces, teachers] = await Promise.all([
+    prisma.modality.findMany({ where: { active: true, ...areaWhere(principal) }, select: { name: true, area: { select: { name: true } } }, orderBy: [{ area: { sortOrder: 'asc' } }, { sortOrder: 'asc' }] }),
+    prisma.space.findMany({ where: { active: true }, select: { name: true }, orderBy: { sortOrder: 'asc' } }),
+    prisma.teacher.findMany({ where: { active: true }, select: { name: true }, orderBy: { name: 'asc' } }),
+  ]);
+
+  let rows: TemplateRow[] = [];
+  if (mirror) {
+    const day = toUtc(today);
+    const versions = await prisma.scheduleSlotVersion.findMany({
+      where: { validFrom: { lte: day }, OR: [{ validTo: null }, { validTo: { gte: day } }], modality: areaWhere(principal) },
+      select: {
+        weekday: true, startMin: true, durationMin: true, label: true,
+        modality: { select: { name: true, sortOrder: true, area: { select: { name: true, sortOrder: true } } } },
+        activityType: { select: { kind: true, name: true } },
+        space: { select: { name: true } },
+        teachers: { select: { role: true, teacher: { select: { name: true } } } },
+      },
+    });
+    versions.sort((a, b) => a.modality.area.sortOrder - b.modality.area.sortOrder || a.modality.sortOrder - b.modality.sortOrder
+      || a.weekday - b.weekday || a.startMin - b.startMin || (a.label ?? '').localeCompare(b.label ?? ''));
+    const by = (v: (typeof versions)[number], role: string) => v.teachers.filter((t) => t.role === role).map((t) => t.teacher.name).sort();
+    rows = versions.map((v) => ({
+      area: v.modality.area.name, modality: v.modality.name, label: v.label, weekday: v.weekday,
+      start: formatClock(v.startMin), durationMin: v.durationMin,
+      kind: KIND_LABEL[v.activityType.kind] ?? v.activityType.name, space: v.space?.name ?? null,
+      titular: by(v, 'TITULAR'), auxiliar: by(v, 'AUXILIAR'), estagiario: by(v, 'ESTAGIARIO'),
+    }));
+  }
+
+  const title = mirror
+    ? `Espelho da grade vigente em ${formatDateBR(today)} — ${rows.length} aula(s). Confira, complete e envie de volta em Grade → Importar.`
+    : 'Modelo em branco. Preencha a aba "Grade" e envie em Grade → Importar.';
+  const buffer = await buildGradeTemplate(
+    { modalities: modalities.map((m) => ({ name: m.name, area: m.area.name })), spaces: spaces.map((x) => x.name), teachers: teachers.map((t) => t.name) },
+    rows,
+    title,
+  );
+  const stamp = today.replaceAll('-', '');
+  return { fileName: mirror ? `nacao-grade-espelho-${stamp}.xlsx` : 'nacao-grade-modelo.xlsx', buffer };
 }
