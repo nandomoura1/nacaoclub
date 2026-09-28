@@ -10,11 +10,12 @@ import { can } from '@/server/auth/authz';
 import { requirePrincipal } from '@/server/auth/session';
 import { prisma } from '@/server/db';
 import { listGrade } from '@/server/services/schedule-service';
+import { filterGrade } from '@/lib/grade-filter';
 import { GradeClient } from './GradeClient';
 
 export const metadata: Metadata = { title: 'Grade semanal' };
 
-export default async function GradePage({ searchParams }: { searchParams: Promise<{ data?: string; area?: string }> }) {
+export default async function GradePage({ searchParams }: { searchParams: Promise<{ data?: string; area?: string; modalidade?: string; professor?: string; espaco?: string }> }) {
   const principal = await requirePrincipal();
   if (!can(principal, 'schedule.view')) redirect('/hoje');
   const sp = await searchParams;
@@ -38,6 +39,12 @@ export default async function GradePage({ searchParams }: { searchParams: Promis
     }),
   ]);
 
+  const filters = {
+    modalityId: modalities.some((m) => m.id === sp.modalidade) ? sp.modalidade! : null,
+    teacherId: teachers.some((t) => t.id === sp.professor) ? sp.professor! : null,
+    spaceId: spaces.some((x) => x.id === sp.espaco) ? sp.espaco! : null,
+  };
+
   return (
     <>
       <PageHeader
@@ -52,7 +59,8 @@ export default async function GradePage({ searchParams }: { searchParams: Promis
         today={todayIso()}
         areaId={areaId}
         areas={areas}
-        grade={grade}
+        grade={filterGrade(grade, filters)}
+        filters={filters}
         canEdit={can(principal, 'schedule.edit')}
         modalities={modalities}
         activityTypes={activityTypes}

@@ -72,9 +72,9 @@ export function AppShell({
   const mobileItems = [...main, ...admin].filter((i) => i.mobile && !i.soon);
 
   return (
-    <div className="min-h-dvh lg:pl-64">
+    <div className="min-h-dvh lg:pl-64 print:pl-0">
       {/* Sidebar desktop */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-navy px-3 py-5 text-white lg:flex">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-navy px-3 py-5 text-white lg:flex print:hidden">
         <div className="mb-8 px-3">
           <Logo />
         </div>
@@ -97,7 +97,7 @@ export function AppShell({
       </aside>
 
       {/* Topo mobile */}
-      <header className="sticky top-0 z-20 flex items-center justify-between bg-navy px-4 py-3 text-white lg:hidden">
+      <header className="sticky top-0 z-20 flex items-center justify-between bg-navy px-4 py-3 text-white lg:hidden print:hidden">
         <Logo subtitle={false} />
         <form action={logoutAction}>
           <button className="flex items-center gap-2 text-xs text-white/80" aria-label="Sair">
@@ -109,11 +109,11 @@ export function AppShell({
         </form>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 pb-28 pt-6 sm:px-6 lg:px-10 lg:pb-12 lg:pt-10">{children}</main>
+      <main className="mx-auto max-w-6xl px-4 pb-28 pt-6 sm:px-6 lg:px-10 lg:pb-12 lg:pt-10 print:max-w-none print:p-0">{children}</main>
 
       {/* Navegação inferior mobile */}
       {mobileItems.length > 0 && (
-        <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-borda bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
+        <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-borda bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden print:hidden">
           {mobileItems.map((item) => {
             const Icon = ICONS[item.icon];
             const active = isActive(pathname, item.href);

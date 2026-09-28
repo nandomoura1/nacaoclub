@@ -64,3 +64,18 @@ h3,
 .tabular {
   font-variant-numeric: tabular-nums;
 }
+
+/* Impressão: página limpa, sem fundo cinza; cada página começa sem quebrar linhas de tabela. */
+@media print {
+  html,
+  body {
+    background: #fff;
+  }
+  tr,
+  .print-avoid {
+    break-inside: avoid;
+  }
+  thead {
+    display: table-header-group;
+  }
+}

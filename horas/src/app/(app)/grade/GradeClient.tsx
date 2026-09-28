@@ -2,9 +2,9 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { CalendarClock, Copy, History, MapPin, Plus, Trash2, UserPlus, Users, X } from 'lucide-react';
+import { CalendarClock, Copy, History, MapPin, Plus, Printer, Trash2, UserPlus, Users, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { FormMessage } from '@/components/ui/alert';
 import { Input, Label, Select } from '@/components/ui/input';
@@ -13,6 +13,7 @@ import { WEEKDAYS, formatClock, formatDateBR, parseClock } from '@/domain/dates'
 import { cn } from '@/lib/cn';
 import { formatMinutes } from '@/lib/format';
 import type { GradeItem } from '@/server/services/schedule-service';
+import { gradeParams, type GradeFilters } from '@/lib/grade-filter';
 import { changeSlotAction, createSlotsAction, endSlotAction, slotHistoryAction } from './actions';
 
 type Area = { id: string; name: string; color: string };
@@ -25,14 +26,14 @@ type Role = 'TITULAR' | 'AUXILIAR' | 'ESTAGIARIO';
 const ROLE_LABEL: Record<Role, string> = { TITULAR: 'Professor', AUXILIAR: 'Auxiliar', ESTAGIARIO: 'Estagiário' };
 
 interface Props {
-  date: string; today: string; areaId: string | null; areas: Area[]; grade: GradeItem[]; canEdit: boolean;
+  date: string; today: string; areaId: string | null; areas: Area[]; grade: GradeItem[]; canEdit: boolean; filters: GradeFilters;
   modalities: Mod[]; activityTypes: ActType[]; spaces: Opt[]; teachers: Teacher[];
 }
 
 type Editing = { mode: 'create'; weekday: number; base?: GradeItem } | { mode: 'edit'; item: GradeItem } | null;
 
 export function GradeClient(props: Props) {
-  const { date, today, areaId, areas, grade, canEdit } = props;
+  const { date, today, areaId, areas, grade, canEdit, filters } = props;
   const router = useRouter();
   const [editing, setEditing] = useState<Editing>(null);
   const [mobileDay, setMobileDay] = useState(() => {
@@ -51,11 +52,14 @@ export function GradeClient(props: Props) {
   const weeklyPeopleMin = grade.filter((g) => g.activityType.kind !== 'PERSONAL').reduce((s, g) => s + g.durationMin * g.people.length, 0);
   const days = WEEKDAYS.filter((w) => w.n <= 6 || byDay.get(7)!.length > 0);
 
+  const current = gradeParams({ date, areaId, ...filters });
   const go = (params: Record<string, string | null>) => {
-    const sp = new URLSearchParams({ data: date, ...(areaId ? { area: areaId } : {}) });
+    const sp = new URLSearchParams(current);
     for (const [k, v] of Object.entries(params)) (v ? sp.set(k, v) : sp.delete(k));
     router.push(`/grade?${sp}`);
   };
+  const filtered = Boolean(filters.modalityId || filters.teacherId || filters.spaceId);
+  const areaMods = props.modalities.filter((m) => !areaId || m.areaId === areaId);
 
   return (
     <>
@@ -82,6 +86,24 @@ export function GradeClient(props: Props) {
           <Stat label="horas de aula/semana" value={formatMinutes(weeklyClassMin)} />
           <Stat label="horas de professor/semana" value={formatMinutes(weeklyPeopleMin)} />
         </div>
+      </Card>
+
+      <Card className="mb-4 flex flex-col gap-2 p-3 sm:flex-row sm:flex-wrap sm:items-center">
+        <Select aria-label="Filtrar por modalidade" className="sm:w-52" value={filters.modalityId ?? ''} onChange={(e) => go({ modalidade: e.target.value || null })}>
+          <option value="">Todas as modalidades</option>
+          {areaMods.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+        </Select>
+        <Select aria-label="Filtrar por professor" className="sm:w-56" value={filters.teacherId ?? ''} onChange={(e) => go({ professor: e.target.value || null })}>
+          <option value="">Todos os professores</option>
+          {props.teachers.map((t) => <option key={t.id} value={t.id}>{t.fullName}</option>)}
+        </Select>
+        <Select aria-label="Filtrar por espaço" className="sm:w-48" value={filters.spaceId ?? ''} onChange={(e) => go({ espaco: e.target.value || null })}>
+          <option value="">Todos os espaços</option>
+          {props.spaces.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+        </Select>
+        {filtered && <Button variant="ghost" size="sm" onClick={() => go({ modalidade: null, professor: null, espaco: null })}>limpar filtros</Button>}
+        <div className="flex-1" />
+        <a href={`/grade/imprimir?${current}`} target="_blank" rel="noopener" className={buttonVariants({ variant: 'secondary' })}><Printer /> Imprimir esta grade</a>
       </Card>
 
       {/* Mobile: um dia por vez */}
