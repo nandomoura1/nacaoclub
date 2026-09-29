@@ -47,7 +47,7 @@ export function EditorClient({ week }: { week: WorkoutWeekView }) {
   return (
     <>
       {/* Barra de ações fixa */}
-      <Card className="sticky top-14 z-20 mb-4 flex flex-wrap items-center gap-2 p-3 lg:top-2">
+      <Card className="z-20 mb-4 flex flex-wrap items-center gap-2 p-3 lg:sticky lg:top-2">
         <Button onClick={save} disabled={pending || !dirty}><Save /> {pending ? 'Salvando…' : dirty ? 'Salvar' : 'Salvo'}</Button>
         <a href={dirty ? undefined : `/treinos/${week.id}/arte`} target="_blank" rel="noopener" aria-disabled={dirty}
           className={cn(buttonVariants({ variant: 'secondary' }), dirty && 'pointer-events-none opacity-50')}>
@@ -70,6 +70,13 @@ export function EditorClient({ week }: { week: WorkoutWeekView }) {
         }}><Trash2 /> Excluir semana</Button>
       </Card>
       <FormMessage error={msg.error} success={msg.ok} />
+
+      {/* Celular: Salvar sempre à mão, acima da barra inferior. */}
+      {dirty && (
+        <Button onClick={save} disabled={pending} className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-4 z-30 shadow-lg lg:hidden">
+          <Save /> {pending ? 'Salvando…' : 'Salvar'}
+        </Button>
+      )}
 
       <div className="mt-3 grid gap-4 xl:grid-cols-2">
         {days.map((d) => (

@@ -61,7 +61,7 @@ export default async function ImprimirGradePage({ searchParams }: { searchParams
 
       <div className="mb-3 flex items-end justify-between border-b-2 border-navy pb-2">
         <div>
-          <div className="text-navy"><Logo /></div>
+          <div className="text-navy"><Logo tone="light" /></div>
           <h1 className="mt-2 text-xl font-extrabold text-navy">{teacher ? `Grade de ${teacher.name}` : 'Grade semanal'}</h1>
           <p className="text-sm text-tinta-suave">Valendo em {formatDateBR(date)} · {subtitle}</p>
         </div>

@@ -67,7 +67,7 @@ export function DutyClient({ duty, people, title }: { duty: DutyView; people: Pe
 
   return (
     <>
-      <Card className="sticky top-14 z-20 mb-4 flex flex-wrap items-center gap-2 p-3 lg:top-2">
+      <Card className="z-20 mb-4 flex flex-wrap items-center gap-2 p-3 lg:sticky lg:top-2">
         <h2 className="mr-2 text-lg font-extrabold text-navy">{title}</h2>
         <a href={anyDirty ? undefined : pdfHref()} target="_blank" rel="noopener" aria-disabled={anyDirty}
           className={cn(buttonVariants({ variant: 'secondary' }), anyDirty && 'pointer-events-none opacity-50')}>
@@ -98,7 +98,7 @@ export function DutyClient({ duty, people, title }: { duty: DutyView; people: Pe
             const ofSector = people.filter((p) => p.modalityIds.includes(s.modalityId));
             const others = people.filter((p) => !p.modalityIds.includes(s.modalityId));
             return (
-              <Card key={s.id} className="p-4">
+              <Card key={s.id} className="min-w-0 p-3 sm:p-4">
                 <div className="mb-3 flex flex-wrap items-center gap-2">
                   <span className="size-3 rounded-full" style={{ background: s.color }} />
                   <h3 className="text-lg font-extrabold text-navy">{s.name}</h3>
@@ -116,7 +116,7 @@ export function DutyClient({ duty, people, title }: { duty: DutyView; people: Pe
                     const day = list.filter((x) => x.date === date).sort((a, b) => a.startMin - b.startMin);
                     const std = defaultShifts(s.defaults, type);
                     return (
-                      <div key={date} className="rounded-lg border border-borda bg-fundo/50 p-3">
+                      <div key={date} className="min-w-0 rounded-lg border border-borda bg-fundo/50 p-3">
                         <div className="mb-2 flex items-center gap-2">
                           <span className="font-bold text-tinta">{dayTitle(date, duty.holidays[date])}</span>
                           <div className="flex-1" />
@@ -129,12 +129,12 @@ export function DutyClient({ duty, people, title }: { duty: DutyView; people: Pe
                           {day.map((x) => {
                             const set = (patch: Partial<Shift>) => update(s.id, (l) => l.map((y) => (y.key === x.key ? { ...y, ...patch } : y)));
                             return (
-                              <div key={x.key} className="rounded-md border border-borda bg-white p-2">
+                              <div key={x.key} className="min-w-0 rounded-md border border-borda bg-white p-2">
                                 <div className="flex items-center gap-1">
-                                  <Input type="time" step={900} className="h-8 w-[7.75rem] text-sm" value={formatClock(x.startMin)} onChange={(e) => e.target.value && set({ startMin: toMin(e.target.value) })} aria-label="Início" />
+                                  <Input type="time" step={900} className="h-8 min-w-0 flex-1 text-sm sm:w-[7.75rem] sm:flex-none" value={formatClock(x.startMin)} onChange={(e) => e.target.value && set({ startMin: toMin(e.target.value) })} aria-label="Início" />
                                   <span className="text-tinta-suave">–</span>
-                                  <Input type="time" step={900} className="h-8 w-[7.75rem] text-sm" value={formatClock(x.endMin % 1440)} onChange={(e) => e.target.value && set({ endMin: toMin(e.target.value) || 1440 })} aria-label="Término" />
-                                  <div className="flex-1" />
+                                  <Input type="time" step={900} className="h-8 min-w-0 flex-1 text-sm sm:w-[7.75rem] sm:flex-none" value={formatClock(x.endMin % 1440)} onChange={(e) => e.target.value && set({ endMin: toMin(e.target.value) || 1440 })} aria-label="Término" />
+                                  <div className="flex-1 max-sm:hidden" />
                                   <Button variant="ghost" size="sm" aria-label="Remover turno" onClick={() => update(s.id, (l) => l.filter((y) => y.key !== x.key))}><X /></Button>
                                 </div>
                                 {x.endMin <= x.startMin && <p className="mt-1 text-xs text-critico">O término precisa ser depois do início.</p>}

@@ -45,7 +45,7 @@ function totalRow(ws: ExcelJS.Worksheet, label: string[], r: ReportRow, firstHou
 
 export async function buildReportWorkbook(r: HoursReportResult, info: string[]): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'NAÇÃO | Gestão de Horas';
+  wb.creator = 'Nação ADM';
   const fmtHours = (ws: ExcelJS.Worksheet, from: number) => { for (let c = from; c < from + HOURS.length; c++) ws.getColumn(c).numFmt = '0.00'; };
 
   const t = sheet(wb, 'Por professor', ['Horas por professor', ...info], ['Professor', 'Modalidades', ...HOURS.map((h) => h.label)], [34, 36, ...HOURS.map(() => 14)]);

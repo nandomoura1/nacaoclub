@@ -54,13 +54,13 @@ const br = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)
 
 export async function buildTeacherTemplate(cat: TeacherTemplateCatalog, rows: TeacherTemplateRow[], title: string): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'NAÇÃO | Gestão de Horas';
+  wb.creator = 'Nação ADM';
   wb.created = new Date();
 
   const ins = wb.addWorksheet('Instruções', { properties: { tabColor: { argb: BLUE } } });
   ins.getColumn(1).width = 110;
   const lines: [string, 'h1' | 'h2' | 'p'][] = [
-    ['NAÇÃO | GESTÃO DE HORAS — cadastro de professores', 'h1'],
+    ['NAÇÃO ADM — cadastro de professores', 'h1'],
     [title, 'p'],
     ['Como preencher', 'h2'],
     ['1. Use a aba "Professores": cada LINHA é uma pessoa (professor, instrutor, estagiário, coordenador).', 'p'],

@@ -51,14 +51,14 @@ const HELP = [
 
 export async function buildGradeTemplate(cat: TemplateCatalog, rows: TemplateRow[], title: string): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'NAÇÃO | Gestão de Horas';
+  wb.creator = 'Nação ADM';
   wb.created = new Date();
 
   // ——— Instruções ———
   const ins = wb.addWorksheet('Instruções', { properties: { tabColor: { argb: BLUE } } });
   ins.getColumn(1).width = 110;
   const lines: [string, 'h1' | 'h2' | 'p'][] = [
-    ['NAÇÃO | GESTÃO DE HORAS — modelo da grade horária', 'h1'],
+    ['NAÇÃO ADM — modelo da grade horária', 'h1'],
     [title, 'p'],
     ['Como preencher', 'h2'],
     ['1. Use a aba "Grade": cada LINHA é uma aula que se repete toda semana.', 'p'],

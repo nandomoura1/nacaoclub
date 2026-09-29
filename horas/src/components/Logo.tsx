@@ -1,28 +1,23 @@
 import { cn } from '@/lib/cn';
 
 /**
- * Assinatura "N" no escudo, inspirada na Proposta 3 do manual.
- * Quando a Nação fornecer o arquivo oficial, substituir por /public/logo-nacao.svg.
+ * Escudo oficial da Nação (recortado da logo por scripts/make-app-icons.mjs).
+ * `dark` = sobre fundo escuro (N branco); `light` = impressão/fundo claro.
  */
-export function ShieldMark({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 40 46" aria-hidden className={cn('h-8 w-8', className)}>
-      <path d="M3 3h34v24c0 8-7 13.5-17 17C10 40.5 3 35 3 27V3Z" fill="#0169E9" />
-      <path d="M8 8h24v18.5c0 5.5-4.8 9.4-12 12-7.2-2.6-12-6.5-12-12V8Z" fill="#fff" />
-      <path d="M13.5 29V13h3.6l7.4 10V13h3v16h-3.4l-7.6-10.2V29h-3Z" fill="#022B57" />
-    </svg>
-  );
+export function ShieldMark({ className, tone = 'dark' }: { className?: string; tone?: 'dark' | 'light' }) {
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={tone === 'dark' ? '/brand/escudo-branco.png' : '/brand/escudo-cor.png'} alt="" aria-hidden width={25} height={32} className={cn('h-8 w-auto', className)} />;
 }
 
-export function Logo({ className, subtitle = true }: { className?: string; subtitle?: boolean }) {
+export function Logo({ className, subtitle = true, tone = 'dark' }: { className?: string; subtitle?: boolean; tone?: 'dark' | 'light' }) {
   return (
     <span className={cn('inline-flex items-center gap-2.5', className)}>
-      <ShieldMark />
+      <ShieldMark tone={tone} />
       <span className="leading-none">
         <span className="font-titulo block text-[15px] font-extrabold tracking-tight">NAÇÃO</span>
         {subtitle && (
-          <span className="block text-[10px] font-semibold tracking-[0.28em] opacity-70">
-            GESTÃO DE HORAS
+          <span className="mt-1 block text-[10px] font-semibold tracking-[0.28em] opacity-70">
+            ADM
           </span>
         )}
       </span>

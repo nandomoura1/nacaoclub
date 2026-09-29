@@ -11,7 +11,10 @@ export interface NavItem {
   permission?: PermissionKey;
   /** Etapa em que a tela chega ("E5", "breve"). Itens futuros aparecem desabilitados: o roadmap fica visível. */
   soon?: string;
+  /** Atalho na barra inferior do celular (o resto fica no botão Menu). */
   mobile?: boolean;
+  /** Rótulo curto para a barra inferior. */
+  short?: string;
 }
 
 export interface NavSection {
@@ -24,14 +27,14 @@ export const NAV_HORAS: NavItem[] = [
   { href: '/calendario', label: 'Calendário', icon: 'calendario', permission: 'schedule.view', mobile: true },
   { href: '/pendencias', label: 'Pendências', icon: 'pendencias', permission: 'occurrence.exception', soon: 'E5', mobile: true },
   { href: '/grade', label: 'Grade semanal', icon: 'grade', permission: 'schedule.view' },
-  { href: '/escalas', label: 'Escalas', icon: 'escalas', permission: 'duty.edit' },
+  { href: '/escalas', label: 'Escalas', icon: 'escalas', permission: 'duty.edit', mobile: true },
   { href: '/professores', label: 'Professores', icon: 'professores', permission: 'teacher.view' },
   { href: '/fechamento', label: 'Fechamento', icon: 'fechamento', permission: 'payroll.view_hours', soon: 'E6', mobile: true },
   { href: '/relatorios', label: 'Relatórios', icon: 'relatorios', permission: 'payroll.view_hours' },
 ];
 
 export const NAV_TREINOS: NavItem[] = [
-  { href: '/treinos', label: 'Cadastro de Treino', icon: 'treinos', permission: 'workout.edit' },
+  { href: '/treinos', label: 'Cadastro de Treino', short: 'Treinos', icon: 'treinos', permission: 'workout.edit', mobile: true },
   { href: '/treinos/ia', label: 'Geração de Treino IA', icon: 'treinos-ia', permission: 'workout.edit', soon: 'breve' },
 ];
 

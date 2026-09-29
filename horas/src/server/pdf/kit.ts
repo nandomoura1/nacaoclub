@@ -22,7 +22,7 @@ export async function brandDoc(title: string): Promise<Brand> {
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
   doc.setTitle(title);
-  doc.setProducer('Nação | Gestão de Horas');
+  doc.setProducer('Nação ADM');
   // subset: as fontes vêm em WOFF; o fontkit reescreve só os glifos usados em TrueType.
   const [regular, bold, heavy, cond] = await Promise.all([
     doc.embedFont(buf(A.montserrat500), { subset: true }),

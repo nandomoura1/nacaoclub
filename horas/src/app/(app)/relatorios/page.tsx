@@ -142,7 +142,7 @@ export default async function RelatoriosPage({ searchParams }: { searchParams: P
 
       {/* Cabeçalho que só aparece no papel. */}
       <div className="mb-4 hidden items-start justify-between border-b-2 border-navy pb-3 print:flex">
-        <div className="text-navy"><Logo /></div>
+        <div className="text-navy"><Logo tone="light" /></div>
         <div className="text-right text-xs text-tinta-suave">Emitido em {formatDateTime(new Date())}<br />por {principal.name}</div>
       </div>
 
