@@ -5,6 +5,7 @@ import { Logo } from '@/components/Logo';
 import { PrintButton } from '@/components/PrintButton';
 import { buttonVariants } from '@/components/ui/button';
 import { WEEKDAYS, formatClock, formatDateBR, isIsoDate } from '@/domain/dates';
+import { LEAVE_LABEL, type LeaveType } from '@/domain/leave';
 import { filterGrade, gradeParams } from '@/lib/grade-filter';
 import { formatDateTime, formatMinutes } from '@/lib/format';
 import { todayIso } from '@/lib/today';
@@ -92,7 +93,7 @@ export default async function ImprimirGradePage({ searchParams }: { searchParams
                           {g.modality.name}{g.durationMin !== 60 && <span className="font-semibold normal-case text-tinta-suave"> · {formatMinutes(g.durationMin)}</span>}
                         </p>
                         {g.label && <p className="font-semibold text-tinta-suave">{g.label}</p>}
-                        <p className="text-tinta">{g.people.length ? g.people.map((p) => (p.role === 'TITULAR' ? p.name : `${p.name}*`)).join(', ') : <span className="font-semibold text-critico">sem professor</span>}</p>
+                        <p className="text-tinta">{g.people.length ? g.people.map((p) => `${p.role === 'TITULAR' ? p.name : `${p.name}*`}${p.leave ? ` (${LEAVE_LABEL[p.leave.type as LeaveType].toLowerCase()}${p.leave.substitute ? ` → ${p.leave.substitute}` : ''})` : ''}`).join(', ') : <span className="font-semibold text-critico">sem professor</span>}</p>
                         {(g.space || g.activityType.kind !== 'AULA') && (
                           <p className="text-[9.5px] text-tinta-fraca">{[g.activityType.kind !== 'AULA' ? g.activityType.name : null, g.space?.name].filter(Boolean).join(' · ')}</p>
                         )}

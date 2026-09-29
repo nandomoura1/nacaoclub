@@ -9,6 +9,7 @@ export async function createSlotsAction(values: Record<string, unknown>): Promis
   return runAction(async () => {
     const ids = await createSlots(await getPrincipal(), values, await requestMeta());
     revalidatePath('/grade');
+    revalidatePath('/professores', 'layout');
     return ids.length;
   });
 }
@@ -17,6 +18,7 @@ export async function changeSlotAction(slotId: string, values: Record<string, un
   return runAction(async () => {
     await changeSlot(await getPrincipal(), slotId, values, await requestMeta());
     revalidatePath('/grade');
+    revalidatePath('/professores', 'layout');
     return undefined;
   });
 }
@@ -25,6 +27,7 @@ export async function endSlotAction(slotId: string, from: string, reason?: strin
   return runAction(async () => {
     await endSlot(await getPrincipal(), slotId, from, reason, await requestMeta());
     revalidatePath('/grade');
+    revalidatePath('/professores', 'layout');
     return undefined;
   });
 }

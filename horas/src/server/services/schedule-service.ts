@@ -82,6 +82,14 @@ export async function listGrade(principal: Principal | null, date: IsoDate, area
   });
   const nextChange = new Map<string, IsoDate>();
   for (const f of futureChanges) if (!nextChange.has(f.slotId)) nextChange.set(f.slotId, fromUtc(f.validFrom));
+  // Ausências lançadas na ficha aparecem na grade da data vista.
+  const leaves = await prisma.leave.findMany({
+    where: { cancelledAt: null, startDate: { lte: d }, endDate: { gte: d }, teacherId: { in: [...new Set(rows.flatMap((r) => r.teachers.map((t) => t.teacherId)))] } },
+    select: { teacherId: true, type: true, endDate: true, substitute: { select: { name: true, displayName: true } } },
+  });
+  const leaveOf = new Map(leaves.map((l) => [l.teacherId, {
+    type: l.type as string, until: fromUtc(l.endDate), substitute: l.substitute ? l.substitute.displayName || l.substitute.name : null,
+  }]));
 
   return rows.map((v) => ({
     id: v.id,
@@ -96,7 +104,7 @@ export async function listGrade(principal: Principal | null, date: IsoDate, area
     modality: v.modality,
     activityType: v.activityType,
     space: v.space,
-    people: v.teachers.map((t) => ({ teacherId: t.teacherId, role: t.role, name: t.teacher.displayName || t.teacher.name })),
+    people: v.teachers.map((t) => ({ teacherId: t.teacherId, role: t.role, name: t.teacher.displayName || t.teacher.name, leave: leaveOf.get(t.teacherId) ?? null })),
   }));
 }
 
@@ -266,4 +274,25 @@ export async function endSlot(principal: Principal | null, slotId: string, from:
       summary: `${principal.name} encerrou a aula ${describeVersion(last)} a partir de ${formatDateBR(from)}${reason ? ` — ${reason}` : ''}`,
     });
   });
+}
+
+/**
+ * "Sair desta aula" (ficha do professor): tira só essa pessoa a partir da data.
+ * Se ela era a única, a aula continua na grade — sem professor — até alguém
+ * decidir; para acabar com a aula, use encerrar.
+ */
+export async function removeTeacherFromSlot(principal: Principal | null, slotId: string, teacherId: string, from: string, meta: RequestMeta) {
+  assertCan(principal, 'schedule.edit');
+  if (!isIsoDate(from)) throw new AppError('Data inválida.');
+  const v = await prisma.scheduleSlotVersion.findFirst({
+    where: { slotId, validFrom: { lte: toUtc(from) }, OR: [{ validTo: null }, { validTo: { gte: toUtc(from) } }] },
+    include: { teachers: true },
+  });
+  if (!v) throw new NotFoundError('Essa aula não está valendo nessa data.');
+  if (!v.teachers.some((t) => t.teacherId === teacherId)) throw new AppError('Essa pessoa não está nessa aula.');
+  await changeSlot(principal, slotId, {
+    weekday: v.weekday, startMin: v.startMin, durationMin: v.durationMin, modalityId: v.modalityId, activityTypeId: v.activityTypeId,
+    spaceId: v.spaceId ?? '', label: v.label ?? '', from, reason: 'Professor saiu da aula (ficha do professor)',
+    people: v.teachers.filter((t) => t.teacherId !== teacherId).map((t) => ({ teacherId: t.teacherId, role: t.role })),
+  }, meta);
 }

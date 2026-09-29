@@ -140,6 +140,8 @@ export async function hoursReport(principal: Principal | null, f: ReportFilter) 
     people: o.assignments.map((a) => ({
       role: a.role,
       status: a.status,
+      plannedId: a.plannedTeacherId,
+      executingId: a.executingTeacherId,
       planned: name(a.plannedTeacher),
       executing: name(a.executingTeacher),
       absenceReason: a.absenceReason,

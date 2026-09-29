@@ -654,6 +654,7 @@ enum LeaveType {
   ATESTADO
   AFASTAMENTO
   FOLGA
+  FALTA
 }
 
 enum LeaveCoverage {
@@ -674,6 +675,9 @@ model Leave {
   notes        String?
   createdById  String?       @map("created_by") @db.Uuid
   createdAt    DateTime      @default(now()) @map("created_at")
+  /// Ausência anulada (não se apaga: as aulas voltam ao previsto, com registro).
+  cancelledAt   DateTime?    @map("cancelled_at")
+  cancelledById String?      @map("cancelled_by") @db.Uuid
 
   teacher    Teacher          @relation("TeacherLeaves", fields: [teacherId], references: [id], onDelete: Restrict)
   substitute Teacher?         @relation("LeaveSubstitute", fields: [substituteId], references: [id], onDelete: Restrict)

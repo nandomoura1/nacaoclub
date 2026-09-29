@@ -9,6 +9,7 @@ import { formatDateBR, fromUtc, isIsoDate, toUtc, type IsoDate } from '@/domain/
 import { expandGrade, type GradeVersion, type HolidayPolicy } from '@/domain/calendar';
 import { computeLedger, type LedgerOccurrence } from '@/domain/ledger';
 import { periodBounds, periodLabel, periodOf, type PeriodRef } from '@/domain/period';
+import { applyLeavesToPeriod } from './leave-service';
 
 /**
  * Competência: geração a partir da grade (idempotente), realinhamento quando
@@ -105,6 +106,8 @@ async function fillPeriod(tx: Tx, period: PeriodRow, opts: { from?: IsoDate; slo
     });
     created++;
   }
+  // Férias/atestados já lançados valem também para as aulas que acabaram de nascer.
+  if (created) await applyLeavesToPeriod(tx, period);
   return created;
 }
 

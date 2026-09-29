@@ -67,7 +67,7 @@ export function TeachersClient({
             <div className="min-w-0 flex-1">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="truncate font-bold text-tinta">{t.displayName || t.name}</p>
+                  <Link href={`/professores/${t.id}`} className="block truncate font-bold text-tinta hover:text-nacao">{t.displayName || t.name}</Link>
                   <p className="truncate text-xs text-tinta-fraca">
                     {[t.displayName ? t.name : null, t.positionName, t.contractTypeName, t.level].filter(Boolean).join(' · ') || '—'}
                   </p>

@@ -10,6 +10,7 @@ import { FormMessage } from '@/components/ui/alert';
 import { Input, Label, Select } from '@/components/ui/input';
 import { Sheet } from '@/components/ui/sheet';
 import { WEEKDAYS, formatClock, formatDateBR, parseClock } from '@/domain/dates';
+import { LEAVE_LABEL, type LeaveType } from '@/domain/leave';
 import { cn } from '@/lib/cn';
 import { formatMinutes } from '@/lib/format';
 import type { GradeItem } from '@/server/services/schedule-service';
@@ -30,7 +31,8 @@ interface Props {
   modalities: Mod[]; activityTypes: ActType[]; spaces: Opt[]; teachers: Teacher[];
 }
 
-type Editing = { mode: 'create'; weekday: number; base?: GradeItem } | { mode: 'edit'; item: GradeItem } | null;
+export type Editing = { mode: 'create'; weekday: number; base?: GradeItem; presetTeacherId?: string } | { mode: 'edit'; item: GradeItem } | null;
+export type SheetProps = Pick<Props, 'canEdit' | 'modalities' | 'activityTypes' | 'spaces' | 'teachers'>;
 
 export function GradeClient(props: Props) {
   const { date, today, areaId, areas, grade, canEdit, filters } = props;
@@ -159,7 +161,7 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function SlotCard({ item, onClick }: { item: GradeItem; onClick: () => void }) {
+export function SlotCard({ item, onClick }: { item: GradeItem; onClick: () => void }) {
   const noCount = item.activityType.kind === 'PERSONAL';
   return (
     <button onClick={onClick} className="block w-full rounded-lg border border-borda bg-white p-2.5 text-left shadow-[0_1px_2px_rgba(2,43,87,0.05)] transition hover:border-nacao/40 hover:shadow-md" style={{ borderLeft: `4px solid ${item.modality.color}` }}>
@@ -169,6 +171,11 @@ function SlotCard({ item, onClick }: { item: GradeItem; onClick: () => void }) {
       <p className={cn('mt-0.5 truncate text-xs', item.people.length ? 'text-tinta' : 'font-semibold text-critico')}>
         {item.people.length ? item.people.map((p) => (p.role === 'TITULAR' ? p.name : `${p.name}*`)).join(', ') : 'sem professor'}
       </p>
+      {item.people.filter((p) => p.leave).map((p) => (
+        <p key={p.teacherId} className="truncate text-[11px] font-semibold text-atencao" title={`${LEAVE_LABEL[p.leave!.type as LeaveType]} até ${formatDateBR(p.leave!.until)}`}>
+          {p.name}: {LEAVE_LABEL[p.leave!.type as LeaveType].toLowerCase()} até {formatDateBR(p.leave!.until).slice(0, 5)}{p.leave!.substitute ? ` → ${p.leave!.substitute}` : ''}
+        </p>
+      ))}
       <div className="mt-1 flex flex-wrap gap-1">
         {item.activityType.kind !== 'AULA' && <Badge tone={noCount ? 'neutral' : 'cyan'}>{item.activityType.name}</Badge>}
         {item.space && <span className="inline-flex items-center gap-0.5 text-[10px] text-tinta-fraca"><MapPin className="size-3" />{item.space.name}</span>}
@@ -178,9 +185,9 @@ function SlotCard({ item, onClick }: { item: GradeItem; onClick: () => void }) {
   );
 }
 
-function SlotSheet({
+export function SlotSheet({
   editing, defaultFrom, canEdit, modalities, activityTypes, spaces, teachers, onClose, onDuplicate,
-}: Props & { editing: NonNullable<Editing>; defaultFrom: string; onClose: () => void; onDuplicate: (i: GradeItem) => void }) {
+}: SheetProps & { editing: NonNullable<Editing>; defaultFrom: string; onClose: () => void; onDuplicate: (i: GradeItem) => void }) {
   const base = editing.mode === 'edit' ? editing.item : editing.base;
   const aula = activityTypes.find((a) => a.kind === 'AULA') ?? activityTypes[0];
   const [v, setV] = useState({
@@ -191,7 +198,7 @@ function SlotSheet({
     activityTypeId: base?.activityType.id ?? aula?.id ?? '',
     spaceId: base?.space?.id ?? '',
     label: base?.label ?? '',
-    people: (base?.people ?? []).map((p) => ({ teacherId: p.teacherId, role: p.role as Role })),
+    people: base ? base.people.map((p) => ({ teacherId: p.teacherId, role: p.role as Role })) : editing.mode === 'create' && editing.presetTeacherId ? [{ teacherId: editing.presetTeacherId, role: 'TITULAR' as Role }] : [],
     from: defaultFrom,
     reason: '',
   });
