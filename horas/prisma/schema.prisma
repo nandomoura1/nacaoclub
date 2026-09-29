@@ -797,6 +797,8 @@ model WorkoutBlock {
   /// Um movimento/linha por linha. Base da biblioteca da metodologia Nação.
   content     String?
   notes       String?
+  /// Orientações ao professor (cues, escalas, progressões). Só no plano de aula, nunca para os alunos.
+  coachNotes  String?          @map("coach_notes")
 
   day WorkoutDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
 

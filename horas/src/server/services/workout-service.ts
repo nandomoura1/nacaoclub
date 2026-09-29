@@ -25,6 +25,7 @@ const blockSchema = z.object({
   timeCapMin: optInt,
   content: optText(2000),
   notes: optText(300),
+  coachNotes: optText(1000),
 });
 const saveSchema = z.object({
   footerTitle: optText(60),
@@ -64,7 +65,7 @@ function toData(w: Awaited<ReturnType<typeof loadWeek>>): WorkoutWeekData & { id
       title: d.title,
       blocks: d.blocks.map((b) => ({
         kind: b.kind as BlockKind, title: b.title, durationMin: b.durationMin, format: b.format,
-        timeCapMin: b.timeCapMin, content: b.content, notes: b.notes,
+        timeCapMin: b.timeCapMin, content: b.content, notes: b.notes, coachNotes: b.coachNotes,
       })),
     })),
   };

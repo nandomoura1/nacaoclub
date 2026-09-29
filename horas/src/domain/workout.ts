@@ -9,8 +9,8 @@ export type BlockKind = 'MOBILIDADE' | 'AQUECIMENTO' | 'SKILL' | 'CORE' | 'FORCA
 export const BLOCK_KINDS: { kind: BlockKind; label: string; detailed: boolean; emoji: string; icon: 'run' | 'target' | 'bar' | 'flame' | 'core' | 'ball' }[] = [
   { kind: 'MOBILIDADE', label: 'Mobilidade', detailed: false, emoji: '🧘', icon: 'run' },
   { kind: 'AQUECIMENTO', label: 'Warm-up', detailed: false, emoji: '🏃', icon: 'run' },
-  { kind: 'SKILL', label: 'Skill / Técnica', detailed: false, emoji: '🎯', icon: 'target' },
-  { kind: 'ESPECIFICO', label: 'Específico', detailed: false, emoji: '🎯', icon: 'target' },
+  { kind: 'SKILL', label: 'Skill / Técnica', detailed: true, emoji: '🎯', icon: 'target' },
+  { kind: 'ESPECIFICO', label: 'Específico', detailed: true, emoji: '🎯', icon: 'target' },
   { kind: 'CORE', label: 'Core', detailed: false, emoji: '🧱', icon: 'core' },
   { kind: 'FORCA', label: 'Força', detailed: true, emoji: '🏋️', icon: 'bar' },
   { kind: 'WOD', label: 'WOD / Metcon', detailed: true, emoji: '🔥', icon: 'flame' },
@@ -34,6 +34,8 @@ export interface WorkoutBlockData {
   timeCapMin: number | null;
   content: string | null;
   notes: string | null;
+  /** Orientações ao professor: só no plano de aula. */
+  coachNotes?: string | null;
 }
 export interface WorkoutDayData { date: IsoDate; title: string | null; blocks: WorkoutBlockData[] }
 export interface WorkoutWeekData {
@@ -125,6 +127,31 @@ export function fitFontSize(days: WorkoutDayData[], opts: { columnWidth: number;
     if (worst * size * lh <= opts.height) return size;
   }
   return opts.min;
+}
+
+/** Minutos somados do dia (blocos sem duração não contam). */
+export const dayMinutes = (d: WorkoutDayData) => d.blocks.reduce((s, b) => s + (b.durationMin ?? 0), 0);
+
+/**
+ * Plano de aula (professor): cada bloco com a janela na linha do tempo da aula
+ * ("0'–10'", "10'–20'"…). Sem duração, o bloco herda o ponto atual e não avança.
+ */
+export function lessonTimeline(d: WorkoutDayData): { block: WorkoutBlockData; from: number; to: number | null }[] {
+  let t = 0;
+  return d.blocks.map((block) => {
+    const from = t;
+    if (block.durationMin) t += block.durationMin;
+    return { block, from, to: block.durationMin ? t : null };
+  });
+}
+
+/**
+ * Versão do aluno: fases genéricas (mobilidade, warm-up, core) só com o tempo;
+ * força, técnica, WOD etc. detalhados. Orientações ao professor nunca saem.
+ */
+export function studentBlock(b: WorkoutBlockData): WorkoutBlockData {
+  const out = { ...b, coachNotes: null };
+  return KIND[b.kind].detailed ? out : { ...out, content: null, notes: null, format: null, timeCapMin: null };
 }
 
 /** Segunda-feira da semana de uma data. */

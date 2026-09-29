@@ -34,6 +34,10 @@ describe.skipIf(!hasDb)('Treinos da semana', () => {
     expect(saved.days[0]!.blocks.map((b) => b.kind)).toEqual(['AQUECIMENTO', 'FORCA', 'ESPECIFICO', 'WOD']);
     expect(saved.days[0]!.blocks[3]).toMatchObject({ title: "O'Connor", format: '3 rounds for time', durationMin: 15 });
     expect(saved.footerChips).toBe('Aulão|7H');
+    // Orientações ao professor ficam guardadas por bloco.
+    const coached = saved.days.map((d, i) => (i ? d : { ...d, blocks: d.blocks.map((b, j) => (j === 1 ? { ...b, coachNotes: 'Suba a carga aos poucos.' } : b)) }));
+    await saveWeek(admin.principal, id, { footerTitle: 'ClubFit', footerText: 'Novidade', footerChips: 'Aulão|7H', days: coached }, META);
+    expect((await getWeek(admin.principal, id)).days[0]!.blocks[1]!.coachNotes).toBe('Suba a carga aos poucos.');
 
     await expect(saveWeek(admin.principal, id, { days: [{ date: '2040-10-08', blocks: [] }] }, META)).rejects.toThrow(/não é desta semana/);
     await expect(saveWeek(admin.principal, id, { days: [{ date: '2040-10-01', blocks: [{ kind: 'WOD', durationMin: 900 }] }] }, META)).rejects.toThrow(AppError);

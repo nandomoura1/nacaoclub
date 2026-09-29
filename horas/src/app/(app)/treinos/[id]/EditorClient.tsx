@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowDown, ArrowUp, Copy, Download, Image as ImageIcon, MessageCircle, Plus, Save, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Copy, Download, FileText, Image as ImageIcon, MessageCircle, Plus, Save, Trash2, X } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { FormMessage } from '@/components/ui/alert';
@@ -16,7 +16,7 @@ import { cn } from '@/lib/cn';
 import type { WorkoutWeekView } from '@/server/services/workout-service';
 import { deleteWeekAction, saveWeekAction } from '../actions';
 
-const empty = (kind: BlockKind): WorkoutBlockData => ({ kind, title: null, durationMin: null, format: null, timeCapMin: null, content: null, notes: null });
+const empty = (kind: BlockKind): WorkoutBlockData => ({ kind, title: null, durationMin: null, format: null, timeCapMin: null, content: null, notes: null, coachNotes: null });
 const QUICK: BlockKind[] = ['MOBILIDADE', 'AQUECIMENTO', 'SKILL', 'ESPECIFICO', 'CORE', 'FORCA', 'WOD', 'FUNDAMENTO', 'JOGO'];
 
 export function EditorClient({ week }: { week: WorkoutWeekView }) {
@@ -53,6 +53,14 @@ export function EditorClient({ week }: { week: WorkoutWeekView }) {
           className={cn(buttonVariants({ variant: 'secondary' }), dirty && 'pointer-events-none opacity-50')}>
           <ImageIcon /> Arte da semana (JPG)
         </a>
+        <a href={dirty ? undefined : `/treinos/${week.id}/pdf?tipo=professor`} target="_blank" rel="noopener" aria-disabled={dirty}
+          className={cn(buttonVariants({ variant: 'secondary' }), dirty && 'pointer-events-none opacity-50')} title="Plano de aula completo, um dia por página, com as orientações ao professor">
+          <FileText /> PDF professores
+        </a>
+        <a href={dirty ? undefined : `/treinos/${week.id}/pdf?tipo=aluno`} target="_blank" rel="noopener" aria-disabled={dirty}
+          className={cn(buttonVariants({ variant: 'secondary' }), dirty && 'pointer-events-none opacity-50')} title="Resumo para os alunos: tempo de cada etapa e detalhe de força, técnica e WOD">
+          <FileText /> PDF alunos
+        </a>
         <Button variant="secondary" onClick={() => setText(whatsappText(current))}><MessageCircle /> Texto WhatsApp</Button>
         {dirty && <span className="text-xs text-atencao">Salve para gerar a arte com as mudanças.</span>}
         <div className="flex-1" />
@@ -73,6 +81,9 @@ export function EditorClient({ week }: { week: WorkoutWeekView }) {
               <div className="flex-1" />
               {d.blocks.length > 0 && !dirty && (
                 <a href={`/treinos/${week.id}/arte?dia=${d.date}`} target="_blank" rel="noopener" className={buttonVariants({ variant: 'ghost', size: 'sm' })}><Download /> Arte do dia</a>
+              )}
+              {d.blocks.length > 0 && !dirty && (
+                <a href={`/treinos/${week.id}/pdf?tipo=professor&dia=${d.date}`} target="_blank" rel="noopener" className={buttonVariants({ variant: 'ghost', size: 'sm' })}><FileText /> Plano do dia</a>
               )}
               <Button variant="ghost" size="sm" onClick={() => setText(whatsappText(current, d.date))}><MessageCircle /> Texto do dia</Button>
               <Button variant="ghost" size="sm" aria-label="Remover dia" onClick={() => { if (!d.blocks.length || confirm('Remover este dia e seus blocos?')) { setDays((all) => all.filter((x) => x.date !== d.date)); touch(); } }}><X /></Button>
@@ -163,7 +174,7 @@ function BlockEditor({ b, onChange, onRemove, onMove }: {
           <span className="text-xs text-tinta-fraca">min</span>
         </div>
         {k.detailed && (
-          <Input aria-label="Nome" className="h-8 min-w-40 flex-1 text-sm" maxLength={80} placeholder={b.kind === 'FORCA' ? 'Exercício: Snatch complex' : "Nome do WOD: O'Connor (opcional)"} value={b.title ?? ''} onChange={(e) => onChange({ title: e.target.value || null })} />
+          <Input aria-label="Nome" className="h-8 min-w-40 flex-1 text-sm" maxLength={80} placeholder={b.kind === 'FORCA' ? 'Exercício: Snatch complex' : b.kind === 'SKILL' || b.kind === 'ESPECIFICO' ? 'Técnica: Double under (opcional)' : "Nome do WOD: O'Connor (opcional)"} value={b.title ?? ''} onChange={(e) => onChange({ title: e.target.value || null })} />
         )}
         <div className="ml-auto flex">
           <button className="p-1 text-tinta-fraca hover:text-navy" aria-label="Subir" onClick={() => onMove(-1)}><ArrowUp className="size-4" /></button>
@@ -171,7 +182,7 @@ function BlockEditor({ b, onChange, onRemove, onMove }: {
           <button className="p-1 text-tinta-fraca hover:text-critico" aria-label="Remover bloco" onClick={onRemove}><X className="size-4" /></button>
         </div>
       </div>
-      {k.detailed && (
+      {k.detailed ? (
         <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_7rem]">
           <Input aria-label="Formato" className="h-8 text-sm" maxLength={120} placeholder={b.kind === 'FORCA' ? 'Esquema: 5x5 · EMOM 8\' · a cada 2\'' : 'Formato: For time · AMRAP 18\' · EMOM 25\''} value={b.format ?? ''} onChange={(e) => onChange({ format: e.target.value || null })} />
           <Input aria-label="Time cap (min)" className="h-8 text-sm" type="number" min={1} max={300} placeholder="Time cap" value={b.timeCapMin ?? ''} onChange={(e) => onChange({ timeCapMin: num(e.target.value) })} />
@@ -179,9 +190,18 @@ function BlockEditor({ b, onChange, onRemove, onMove }: {
             className="rounded-lg border border-borda p-2 text-sm sm:col-span-2"
             placeholder={'Um movimento por linha:\n15 thrusters (kg: 43/29)\n15 pull-ups\n400m run'}
             value={b.content ?? ''} onChange={(e) => onChange({ content: e.target.value || null })} />
-          <Input aria-label="Observação" className="h-8 text-sm sm:col-span-2" maxLength={300} placeholder="Observação (opcional): *Divide everything however you like" value={b.notes ?? ''} onChange={(e) => onChange({ notes: e.target.value || null })} />
+          <Input aria-label="Observação" className="h-8 text-sm sm:col-span-2" maxLength={300} placeholder="Observação para todos (opcional): *Divide everything however you like" value={b.notes ?? ''} onChange={(e) => onChange({ notes: e.target.value || null })} />
         </div>
+      ) : (
+        <textarea aria-label="Roteiro" rows={Math.max(3, (b.content ?? '').split('\n').length + 1)} maxLength={2000}
+          className="mt-2 w-full rounded-lg border border-borda p-2 text-sm"
+          placeholder={'Roteiro (só no plano do professor; o aluno vê apenas o tempo):\n2x 10 air squats\n200m run'}
+          value={b.content ?? ''} onChange={(e) => onChange({ content: e.target.value || null })} />
       )}
+      <textarea aria-label="Orientações ao professor" rows={Math.max(2, (b.coachNotes ?? '').split('\n').length)} maxLength={1000}
+        className="mt-2 w-full rounded-lg border border-dashed border-atencao/50 bg-atencao/[0.04] p-2 text-xs"
+        placeholder="🧑‍🏫 Orientações ao professor (não vai para os alunos): cues, escalas, progressões, organização da turma"
+        value={b.coachNotes ?? ''} onChange={(e) => onChange({ coachNotes: e.target.value || null })} />
     </div>
   );
 }
