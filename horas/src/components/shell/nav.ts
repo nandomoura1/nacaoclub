@@ -2,7 +2,7 @@ import type { PermissionKey } from '@/server/auth/permissions';
 
 export type NavIcon =
   | 'hoje' | 'calendario' | 'pendencias' | 'grade' | 'professores'
-  | 'fechamento' | 'relatorios' | 'escalas' | 'treinos' | 'treinos-ia' | 'usuarios' | 'historico' | 'cadastros';
+  | 'fechamento' | 'relatorios' | 'escalas' | 'treinos' | 'benchmarks' | 'treinos-ia' | 'usuarios' | 'historico' | 'cadastros';
 
 export interface NavItem {
   href: string;
@@ -35,6 +35,7 @@ export const NAV_HORAS: NavItem[] = [
 
 export const NAV_TREINOS: NavItem[] = [
   { href: '/treinos', label: 'Cadastro de Treino', short: 'Treinos', icon: 'treinos', permission: 'workout.edit', mobile: true },
+  { href: '/treinos/benchmarks', label: 'Benchmarks', icon: 'benchmarks', permission: 'workout.edit' },
   { href: '/treinos/ia', label: 'Geração de Treino IA', icon: 'treinos-ia', permission: 'workout.edit', soon: 'breve' },
 ];
 

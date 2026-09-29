@@ -7,6 +7,7 @@ import { can } from '@/server/auth/authz';
 import { requirePrincipal } from '@/server/auth/session';
 import { NotFoundError } from '@/server/errors';
 import { getWeek } from '@/server/services/workout-service';
+import { listBenchmarks } from '@/server/services/benchmark-service';
 import { EditorClient } from './EditorClient';
 
 export const metadata: Metadata = { title: 'Treinos da semana' };
@@ -16,7 +17,10 @@ export default async function SemanaPage({ params }: { params: Promise<{ id: str
   if (!can(principal, 'workout.edit')) redirect('/hoje');
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
-  const week = await getWeek(principal, id).catch((e) => { if (e instanceof NotFoundError) notFound(); throw e; });
+  const [week, benchmarks] = await Promise.all([
+    getWeek(principal, id).catch((e) => { if (e instanceof NotFoundError) notFound(); throw e; }),
+    listBenchmarks(principal),
+  ]);
 
   return (
     <>
@@ -25,7 +29,7 @@ export default async function SemanaPage({ params }: { params: Promise<{ id: str
       <p className="mb-4 mt-1 text-sm text-tinta-suave">
         Para o aluno (arte, texto e PDF alunos), mobilidade, warm-up e core saem só com o tempo; <b>força</b>, <b>técnica</b> e <b>WOD</b> saem detalhados. O <b>PDF professores</b> leva o roteiro completo de cada etapa e as orientações ao professor.
       </p>
-      <EditorClient key={week.id} week={week} />
+      <EditorClient key={week.id} week={week} benchmarks={benchmarks} />
     </>
   );
 }

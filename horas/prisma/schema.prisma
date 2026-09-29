@@ -745,6 +745,34 @@ enum WorkoutBlockKind {
   OUTRO
 }
 
+enum BenchmarkCategory {
+  GIRL
+  HERO
+  CLASSICO
+  NACAO
+}
+
+/// Biblioteca de benchmarks (Girls, Heroes, clássicos e os da própria Nação).
+/// source CROSSFIT = definição pública oficial (só ativa/desativa); NACAO = criado pela equipe.
+model WorkoutBenchmark {
+  id          String            @id @default(uuid()) @db.Uuid
+  name        String            @unique
+  category    BenchmarkCategory
+  format      String?
+  timeCapMin  Int?              @map("time_cap_min")
+  /// Um movimento por linha.
+  content     String
+  /// Pesos Rx, adaptações, história.
+  notes       String?
+  source      String            @default("NACAO")
+  active      Boolean           @default(true)
+  createdById String?           @map("created_by") @db.Uuid
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  @@map("workout_benchmarks")
+}
+
 /// Plano semanal de treinos de uma modalidade (a arte "Plano semanal de treinos").
 model WorkoutWeek {
   id          String   @id @default(uuid()) @db.Uuid

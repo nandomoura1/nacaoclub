@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import {
   BarChart3, CalendarDays, ClipboardCheck, History, LayoutGrid,
-  LogOut, Settings2, Sun, TriangleAlert, Users, UserRoundCog, Dumbbell, CalendarClock, Sparkles, Menu, X } from 'lucide-react';
+  LogOut, Settings2, Sun, TriangleAlert, Users, UserRoundCog, Dumbbell, CalendarClock, Sparkles, Menu, X, Trophy } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { cn } from '@/lib/cn';
 import { initials } from '@/lib/format';
@@ -22,6 +22,7 @@ const ICONS: Record<NavIcon, React.ComponentType<{ className?: string }>> = {
   relatorios: BarChart3,
   escalas: CalendarClock,
   treinos: Dumbbell,
+  benchmarks: Trophy,
   'treinos-ia': Sparkles,
   usuarios: UserRoundCog,
   historico: History,

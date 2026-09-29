@@ -14,18 +14,22 @@ import {
 } from '@/domain/workout';
 import { cn } from '@/lib/cn';
 import type { WorkoutWeekView } from '@/server/services/workout-service';
+import type { BenchmarkView } from '@/server/services/benchmark-service';
+import { benchmarkBlock, matchBenchmark } from '@/domain/benchmarks';
 import { deleteWeekAction, saveWeekAction } from '../actions';
 
 const empty = (kind: BlockKind): WorkoutBlockData => ({ kind, title: null, durationMin: null, format: null, timeCapMin: null, content: null, notes: null, coachNotes: null });
 const QUICK: BlockKind[] = ['MOBILIDADE', 'AQUECIMENTO', 'SKILL', 'ESPECIFICO', 'CORE', 'FORCA', 'WOD', 'FUNDAMENTO', 'JOGO'];
 
-export function EditorClient({ week }: { week: WorkoutWeekView }) {
+export function EditorClient({ week, benchmarks }: { week: WorkoutWeekView; benchmarks: BenchmarkView[] }) {
   const router = useRouter();
   const [days, setDays] = useState<WorkoutDayData[]>(week.days);
   const [footer, setFooter] = useState({ footerTitle: week.footerTitle ?? '', footerText: week.footerText ?? '', footerChips: week.footerChips ?? '' });
   const [dirty, setDirty] = useState(false);
   const [msg, setMsg] = useState<{ error?: string; ok?: string }>({});
   const [text, setText] = useState<string | null>(null);
+  const [pickFor, setPickFor] = useState<string | null>(null);
+  const [pickQ, setPickQ] = useState('');
   const [pending, start] = useTransition();
 
   const weekDates = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(week.weekStart, i)), [week.weekStart]);
@@ -123,6 +127,10 @@ export function EditorClient({ week }: { week: WorkoutWeekView }) {
                   + {KIND[k].label}
                 </button>
               ))}
+              <button onClick={() => { setPickQ(''); setPickFor(d.date); }}
+                className="rounded-full bg-nacao/10 px-2.5 py-1 text-[11px] font-bold text-nacao ring-1 ring-nacao/30 hover:bg-nacao/15">
+                🏆 + Benchmark
+              </button>
             </div>
           </Card>
         ))}
@@ -148,6 +156,26 @@ export function EditorClient({ week }: { week: WorkoutWeekView }) {
           <div><Label htmlFor="f-c">Destaques</Label><textarea id="f-c" maxLength={300} rows={3} className="w-full rounded-lg border border-borda p-2 font-mono text-xs" placeholder={'Aulão CrossFit|7H\nAulão HYROX|8H 9H 10H'} value={footer.footerChips} onChange={(e) => { setFooter({ ...footer, footerChips: e.target.value }); touch(); }} /></div>
         </div>
       </Card>
+
+      {pickFor && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-navy/40 p-4" onClick={() => setPickFor(null)}>
+          <Card className="flex max-h-[85dvh] w-full max-w-lg flex-col p-5" onClick={(e) => e.stopPropagation()}>
+            <h3 className="mb-2 font-extrabold text-navy">Benchmark para {dayName(pickFor)} {formatDateBR(pickFor).slice(0, 5)}</h3>
+            <Input autoFocus placeholder="Buscar: Fran, Murph, thruster, AMRAP…" value={pickQ} onChange={(e) => setPickQ(e.target.value)} aria-label="Buscar benchmark" />
+            <div className="mt-3 min-h-0 flex-1 divide-y divide-borda overflow-y-auto">
+              {benchmarks.filter((b) => matchBenchmark(b, pickQ)).map((b) => (
+                <button key={b.id} className="block w-full px-1 py-2 text-left hover:bg-fundo"
+                  onClick={() => { setDay(pickFor, (x) => ({ ...x, blocks: [...x.blocks, benchmarkBlock(b)] })); setPickFor(null); setMsg({ ok: `${b.name} entrou como WOD. Ajuste o tempo e salve.` }); }}>
+                  <span className="font-bold text-navy">{b.name}</span>
+                  <span className="ml-2 text-xs font-semibold text-nacao">{b.format}</span>
+                  <span className="block truncate text-xs text-tinta-suave">{b.content.split('\n').join(' · ')}</span>
+                </button>
+              ))}
+            </div>
+            <Button variant="ghost" className="mt-3 self-start" onClick={() => setPickFor(null)}>Fechar</Button>
+          </Card>
+        </div>
+      )}
 
       {text !== null && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-navy/40 p-4" onClick={() => setText(null)}>
