@@ -222,6 +222,7 @@ model Modality {
   slotVersions ScheduleSlotVersion[]
   occurrences  ClassOccurrence[]
   manualEntries ManualEntry[]
+  workoutWeeks  WorkoutWeek[]
 
   @@index([areaId])
   @@map("modalities")
@@ -720,4 +721,80 @@ model ManualEntry {
 
   @@index([periodId, teacherId])
   @@map("manual_entries")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Treinos da semana (módulo à parte: não mexe na grade nem nas horas)
+// ─────────────────────────────────────────────────────────────
+
+enum WorkoutBlockKind {
+  MOBILIDADE
+  AQUECIMENTO
+  SKILL
+  CORE
+  FORCA
+  ESPECIFICO
+  WOD
+  FUNDAMENTO
+  JOGO
+  OUTRO
+}
+
+/// Plano semanal de treinos de uma modalidade (a arte "Plano semanal de treinos").
+model WorkoutWeek {
+  id          String   @id @default(uuid()) @db.Uuid
+  modalityId  String   @map("modality_id") @db.Uuid
+  /// Segunda-feira da semana.
+  weekStart   DateTime @map("week_start") @db.Date
+  /// Rodapé de anúncio (novidade da Nação). Vazio = rodapé padrão.
+  footerTitle String?  @map("footer_title")
+  footerText  String?  @map("footer_text")
+  /// Destaques do rodapé: "Aulão CrossFit|7H" um por linha.
+  footerChips String?  @map("footer_chips")
+  createdById String?  @map("created_by") @db.Uuid
+  updatedById String?  @map("updated_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  modality Modality     @relation(fields: [modalityId], references: [id], onDelete: Restrict)
+  days     WorkoutDay[]
+
+  @@unique([modalityId, weekStart])
+  @@map("workout_weeks")
+}
+
+model WorkoutDay {
+  id     String   @id @default(uuid()) @db.Uuid
+  weekId String   @map("week_id") @db.Uuid
+  date   DateTime @db.Date
+  /// Opcional: "Aulão", "Benchmark", "Treino em dupla".
+  title  String?
+
+  week   WorkoutWeek    @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  blocks WorkoutBlock[]
+
+  @@unique([weekId, date])
+  @@map("workout_days")
+}
+
+/// Um bloco do treino. Fases genéricas usam só tipo + duração; Força e WOD vêm detalhados.
+model WorkoutBlock {
+  id          String           @id @default(uuid()) @db.Uuid
+  dayId       String           @map("day_id") @db.Uuid
+  sortOrder   Int              @default(0) @map("sort_order")
+  kind        WorkoutBlockKind
+  /// Nome do WOD/benchmark ou do exercício principal: "O'Connor", "Snatch complex".
+  title       String?
+  durationMin Int?             @map("duration_min")
+  /// "For time", "AMRAP", "EMOM", "Intervalado", "5x5"…
+  format      String?
+  timeCapMin  Int?             @map("time_cap_min")
+  /// Um movimento/linha por linha. Base da biblioteca da metodologia Nação.
+  content     String?
+  notes       String?
+
+  day WorkoutDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
+
+  @@index([dayId, sortOrder])
+  @@map("workout_blocks")
 }

@@ -2,7 +2,7 @@ import type { PermissionKey } from '@/server/auth/permissions';
 
 export type NavIcon =
   | 'hoje' | 'calendario' | 'pendencias' | 'grade' | 'professores'
-  | 'fechamento' | 'relatorios' | 'usuarios' | 'historico' | 'cadastros';
+  | 'fechamento' | 'relatorios' | 'treinos' | 'usuarios' | 'historico' | 'cadastros';
 
 export interface NavItem {
   href: string;
@@ -22,6 +22,7 @@ export const NAV_MAIN: NavItem[] = [
   { href: '/professores', label: 'Professores', icon: 'professores', permission: 'teacher.view' },
   { href: '/fechamento', label: 'Fechamento', icon: 'fechamento', permission: 'payroll.view_hours', soon: 'E6', mobile: true },
   { href: '/relatorios', label: 'Relatórios', icon: 'relatorios', permission: 'payroll.view_hours' },
+  { href: '/treinos', label: 'Treinos', icon: 'treinos', permission: 'workout.edit' },
 ];
 
 export const NAV_ADMIN: NavItem[] = [

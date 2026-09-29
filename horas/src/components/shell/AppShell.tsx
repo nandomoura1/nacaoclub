@@ -4,8 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   BarChart3, CalendarDays, ClipboardCheck, History, LayoutGrid,
-  LogOut, Settings2, Sun, TriangleAlert, Users, UserRoundCog,
-} from 'lucide-react';
+  LogOut, Settings2, Sun, TriangleAlert, Users, UserRoundCog, Dumbbell } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { cn } from '@/lib/cn';
 import { initials } from '@/lib/format';
@@ -20,6 +19,7 @@ const ICONS: Record<NavIcon, React.ComponentType<{ className?: string }>> = {
   professores: Users,
   fechamento: ClipboardCheck,
   relatorios: BarChart3,
+  treinos: Dumbbell,
   usuarios: UserRoundCog,
   historico: History,
   cadastros: Settings2,
