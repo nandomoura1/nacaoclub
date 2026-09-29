@@ -152,6 +152,29 @@ export function GradeClient(props: Props) {
   );
 }
 
+/** Turno: mostra o que vai ser criado antes de salvar (14h–19h em blocos de 1h = 5 aulas por dia). */
+function ShiftPreview({ start, end, block, split, days, onSplit }: { start: string; end: string; block: number; split: boolean; days: number; onSplit: (b: boolean) => void }) {
+  const s = parseClock(start);
+  const e = parseClock(end);
+  if (s === null || e === null || e <= s) return <p className="-mt-3 text-xs text-critico">O término precisa ser depois do início.</p>;
+  const starts: number[] = [];
+  if (split && block >= 5) for (let t = s; t < e; t += block) starts.push(t);
+  const perDay = split ? starts.length : 1;
+  return (
+    <div className="-mt-2 rounded-lg bg-nacao/5 p-3 text-xs text-tinta-suave">
+      <div className="mb-1.5 flex gap-3">
+        <label className="flex items-center gap-1.5"><input type="radio" className="accent-[#0169E9]" checked={split} onChange={() => onSplit(true)} /> Dividir em blocos de {block} min</label>
+        <label className="flex items-center gap-1.5"><input type="radio" className="accent-[#0169E9]" checked={!split} onChange={() => onSplit(false)} /> Um bloco só</label>
+      </div>
+      <p>
+        Vai criar <b className="text-navy">{perDay * Math.max(days, 1)}</b> aula(s): {perDay} por dia × {days} dia(s) —{' '}
+        {split ? starts.map((t) => formatClock(t)).join(', ') : `${formatClock(s)}–${formatClock(e)}`} · total {formatMinutes(e - s)} por dia.
+      </p>
+      {split && starts.length > 24 && <p className="mt-1 text-critico">Máximo de 24 blocos por dia.</p>}
+    </div>
+  );
+}
+
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="text-right">
@@ -201,6 +224,8 @@ export function SlotSheet({
     people: base ? base.people.map((p) => ({ teacherId: p.teacherId, role: p.role as Role })) : editing.mode === 'create' && editing.presetTeacherId ? [{ teacherId: editing.presetTeacherId, role: 'TITULAR' as Role }] : [],
     from: defaultFrom,
     reason: '',
+    end: '',
+    split: true,
   });
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<{ id: string; validFrom: string; validTo: string | null; summary: string; changeReason: string | null }[] | null>(null);
@@ -229,7 +254,11 @@ export function SlotSheet({
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (editing.mode === 'create') run(() => createSlotsAction({ ...payload(), weekdays: v.weekdays, validFrom: v.from }));
+    if (editing.mode === 'create') {
+      const endMin = v.end ? parseClock(v.end) : null;
+      if (v.end && endMin === null) return setError('Término inválido.');
+      run(() => createSlotsAction({ ...payload(), weekdays: v.weekdays, validFrom: v.from, endMin, split: v.split }));
+    }
     else run(() => changeSlotAction(editing.item.slotId, { ...payload(), weekday: v.weekdays[0], from: v.from, reason: v.reason }));
   };
 
@@ -281,16 +310,23 @@ export function SlotSheet({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className={cn('grid gap-3', editing.mode === 'create' ? 'grid-cols-3' : 'grid-cols-2')}>
           <div>
             <Label htmlFor="s-start">Início</Label>
             <Input id="s-start" type="time" step={300} required value={v.start} onChange={(e) => set('start', e.target.value)} />
           </div>
+          {editing.mode === 'create' && (
+            <div>
+              <Label htmlFor="s-end">Término (turno)</Label>
+              <Input id="s-end" type="time" step={300} value={v.end} onChange={(e) => set('end', e.target.value)} />
+            </div>
+          )}
           <div>
-            <Label htmlFor="s-dur">Duração (min)</Label>
+            <Label htmlFor="s-dur">{v.end ? 'Bloco (min)' : 'Duração (min)'}</Label>
             <Input id="s-dur" type="number" min={5} max={600} step={5} required value={v.durationMin} onChange={(e) => set('durationMin', e.target.value)} />
           </div>
         </div>
+        {editing.mode === 'create' && v.end && <ShiftPreview start={v.start} end={v.end} block={Number(v.durationMin)} split={v.split} days={v.weekdays.length} onSplit={(b) => set('split', b)} />}
 
         <div>
           <Label htmlFor="s-mod">Modalidade</Label>

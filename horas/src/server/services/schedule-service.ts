@@ -6,7 +6,7 @@ import type { Principal } from '@/server/auth/principal';
 import type { RequestMeta } from '@/server/auth/session';
 import { AppError, NotFoundError } from '@/server/errors';
 import { WEEKDAYS, formatClock, formatDateBR, fromUtc, isIsoDate, toUtc, type IsoDate } from '@/domain/dates';
-import { planChange, planEnd, ScheduleRuleError, type VersionSpan } from '@/domain/schedule';
+import { planChange, planEnd, ScheduleRuleError, splitShift, type VersionSpan } from '@/domain/schedule';
 import { onScheduleChanged } from './period-service';
 
 const isoDate = z.string().refine(isIsoDate, 'Data inválida.');
@@ -30,6 +30,9 @@ export const createSlotsSchema = z.object({
   ...slotFields,
   weekdays: z.array(z.coerce.number().int().min(1).max(7)).min(1, 'Escolha ao menos um dia.'),
   validFrom: isoDate,
+  /** Turno: com término, cria o período inteiro (em blocos de `durationMin`, ou um bloco só). */
+  endMin: z.coerce.number().int().min(1).max(1440).nullable().optional().or(z.literal('').transform(() => null)),
+  split: z.boolean().optional().default(true),
 });
 
 export const changeSlotSchema = z.object({
@@ -139,17 +142,27 @@ export async function createSlots(principal: Principal | null, input: unknown, m
   assertCan(principal, 'schedule.edit');
   const data = parse(createSlotsSchema, input);
 
+  let blocks = [{ startMin: data.startMin, durationMin: data.durationMin }];
+  if (data.endMin) {
+    try {
+      blocks = splitShift(data.startMin, data.endMin, data.durationMin, data.split);
+    } catch (e) {
+      if (e instanceof ScheduleRuleError) throw new AppError(e.message);
+      throw e;
+    }
+  }
+
   return prisma.$transaction(async (tx) => {
     const modality = await assertModalityInScope(tx, principal, data.modalityId);
     const ids: string[] = [];
-    for (const weekday of [...new Set(data.weekdays)].sort()) {
+    for (const weekday of [...new Set(data.weekdays)].sort()) for (const block of blocks) {
       const slot = await tx.scheduleSlot.create({ data: { createdById: principal.id } });
       const v = await tx.scheduleSlotVersion.create({
         data: {
           slotId: slot.id,
           weekday,
-          startMin: data.startMin,
-          durationMin: data.durationMin,
+          startMin: block.startMin,
+          durationMin: block.durationMin,
           modalityId: data.modalityId,
           activityTypeId: data.activityTypeId,
           spaceId: data.spaceId,
@@ -165,13 +178,14 @@ export async function createSlots(principal: Principal | null, input: unknown, m
         action: 'schedule.created',
         entityType: 'schedule_slot',
         entityId: slot.id,
-        after: { ...data, weekday, weekdays: undefined },
-        summary: `${principal.name} criou a aula ${describeVersion({ ...v, modality })} (${peopleNames(v)}), valendo a partir de ${formatDateBR(data.validFrom)}`,
+        after: { ...data, weekday, weekdays: undefined, startMin: block.startMin, durationMin: block.durationMin },
+        summary: `${principal.name} criou a aula ${describeVersion({ ...v, modality })} (${peopleNames(v)}), valendo a partir de ${formatDateBR(data.validFrom)}${blocks.length > 1 ? ` — turno ${formatClock(data.startMin)}–${formatClock(data.endMin!)}` : ''}`,
       });
-      await onScheduleChanged(tx, slot.id, data.validFrom);
     }
+    // Uma realinhada só para todas as aulas novas (turno com vários blocos × dias).
+    await onScheduleChanged(tx, ids, data.validFrom);
     return ids;
-  });
+  }, { timeout: 120_000, maxWait: 10_000 });
 }
 
 async function loadSpans(tx: Tx, slotId: string) {

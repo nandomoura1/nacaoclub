@@ -29,10 +29,10 @@ export async function ensurePeriod(tx: Tx, ref: PeriodRef) {
 
 type PeriodRow = Awaited<ReturnType<typeof ensurePeriod>>;
 
-async function gradeVersions(tx: Tx, start: IsoDate, end: IsoDate, slotId?: string | null): Promise<GradeVersion[]> {
+async function gradeVersions(tx: Tx, start: IsoDate, end: IsoDate, slotIds?: string[] | null): Promise<GradeVersion[]> {
   const rows = await tx.scheduleSlotVersion.findMany({
     where: {
-      ...(slotId ? { slotId } : {}),
+      ...(slotIds ? { slotId: { in: slotIds } } : {}),
       validFrom: { lte: toUtc(end) },
       OR: [{ validTo: null }, { validTo: { gte: toUtc(start) } }],
     },
@@ -55,19 +55,20 @@ async function holidaysIn(tx: Tx, start: IsoDate, end: IsoDate) {
  * Cria as aulas previstas que faltam no período (a partir de `from`).
  * Idempotente: aula que já existe (slot + data) não é recriada nem alterada.
  */
-async function fillPeriod(tx: Tx, period: PeriodRow, opts: { from?: IsoDate; slotId?: string | null } = {}) {
+async function fillPeriod(tx: Tx, period: PeriodRow, opts: { from?: IsoDate; slotIds?: string[] | null } = {}) {
   const start = fromUtc(period.startDate);
   const end = fromUtc(period.endDate);
   const [versions, holidays, holidayReason] = await Promise.all([
-    gradeVersions(tx, start, end, opts.slotId),
+    gradeVersions(tx, start, end, opts.slotIds),
     holidaysIn(tx, start, end),
     tx.cancellationReason.findFirst({ where: { name: 'Feriado' } }),
   ]);
-  const planned = expandGrade({ start, end }, versions, holidays, { slotId: opts.slotId, from: opts.from });
+  // As versões já vêm filtradas pelas aulas pedidas.
+  const planned = expandGrade({ start, end }, versions, holidays, { from: opts.from });
 
   const existing = new Set(
     (await tx.classOccurrence.findMany({
-      where: { periodId: period.id, slotId: { not: null }, ...(opts.slotId ? { slotId: opts.slotId } : {}) },
+      where: { periodId: period.id, ...(opts.slotIds ? { slotId: { in: opts.slotIds } } : { slotId: { not: null } }) },
       select: { slotId: true, date: true },
     })).map((o) => `${o.slotId}|${fromUtc(o.date)}`),
   );
@@ -155,7 +156,9 @@ async function quickSummary(tx: Tx, periodId: string) {
  * `from`. Nas competências já geradas e abertas: aulas em que ninguém mexeu
  * são refeitas pela grade nova; aulas com exceção ficam para revisão humana.
  */
-export async function onScheduleChanged(tx: Tx, slotId: string | null, from: IsoDate, _opts: { ending?: boolean } = {}): Promise<void> {
+export async function onScheduleChanged(tx: Tx, slot: string | string[] | null, from: IsoDate, _opts: { ending?: boolean } = {}): Promise<void> {
+  const slotIds = slot === null ? null : Array.isArray(slot) ? slot : [slot];
+  if (slotIds && !slotIds.length) return;
   const periods = await tx.payrollPeriod.findMany({
     where: { generatedAt: { not: null }, status: { not: 'FECHADO' }, endDate: { gte: toUtc(from) } },
   });
@@ -164,11 +167,11 @@ export async function onScheduleChanged(tx: Tx, slotId: string | null, from: Iso
       periodId: period.id,
       origin: 'GRADE',
       date: { gte: toUtc(from) },
-      ...(slotId ? { slotId } : {}),
+      ...(slotIds ? { slotId: { in: slotIds } } : {}),
     };
     await tx.classOccurrence.deleteMany({ where: { ...scope, touched: false } });
     await tx.classOccurrence.updateMany({ where: { ...scope, touched: true }, data: { needsReview: true } });
-    await fillPeriod(tx, period, { from, slotId });
+    await fillPeriod(tx, period, { from, slotIds });
   }
 }
 

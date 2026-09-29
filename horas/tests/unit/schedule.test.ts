@@ -49,3 +49,14 @@ describe('encerrar aula', () => {
     expect(() => planEnd([{ id: 'v1', validFrom: '2026-08-01', validTo: '2026-08-31' }], '2026-09-10')).toThrow(ScheduleRuleError);
   });
 });
+
+describe('turno inteiro (início e término)', () => {
+  it('14h–19h em blocos de 1h vira 5 aulas; um bloco só vira 5h', async () => {
+    const { splitShift } = await import('@/domain/schedule');
+    expect(splitShift(840, 1140, 60, true).map((b) => b.startMin / 60)).toEqual([14, 15, 16, 17, 18]);
+    expect(splitShift(840, 1140, 60, false)).toEqual([{ startMin: 840, durationMin: 300 }]);
+    expect(splitShift(840, 1110, 60, true).at(-1)).toEqual({ startMin: 1080, durationMin: 30 }); // 14h–18h30
+    expect(() => splitShift(840, 840, 60, true)).toThrow(/depois do início/);
+    expect(() => splitShift(0, 1440, 30, true)).toThrow(/máximo 24/);
+  });
+});

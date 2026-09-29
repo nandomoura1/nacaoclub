@@ -55,3 +55,18 @@ export function planEnd(versions: VersionSpan[], from: IsoDate): EndPlan {
   if (!later.length) throw new ScheduleRuleError('Esta aula já não está valendo a partir desta data.');
   return { kind: 'drop', dropVersionIds: later };
 }
+
+/**
+ * Turno inteiro de uma vez: "14h às 19h, blocos de 1h" → 14h, 15h, 16h, 17h, 18h.
+ * Sem dividir, vira um bloco só. Se não fecha certo, o último bloco é menor.
+ */
+export function splitShift(startMin: number, endMin: number, blockMin: number, split: boolean): { startMin: number; durationMin: number }[] {
+  if (!(endMin > startMin)) throw new ScheduleRuleError('O término precisa ser depois do início.');
+  if (endMin > 24 * 60) throw new ScheduleRuleError('O término passa da meia-noite.');
+  if (!split) return [{ startMin, durationMin: endMin - startMin }];
+  if (!(blockMin >= 5)) throw new ScheduleRuleError('Duração do bloco inválida.');
+  const blocks: { startMin: number; durationMin: number }[] = [];
+  for (let t = startMin; t < endMin; t += blockMin) blocks.push({ startMin: t, durationMin: Math.min(blockMin, endMin - t) });
+  if (blocks.length > 24) throw new ScheduleRuleError('Turno longo demais para dividir (máximo 24 blocos).');
+  return blocks;
+}

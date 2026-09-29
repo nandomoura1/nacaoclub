@@ -52,6 +52,30 @@ describe.skipIf(!hasDb)('E3 · grade com vigência e importação', () => {
       expect(log.summary).toMatch(/Admin alterou a aula HYROX de segunda 05:00 a partir de 15\/10\/2026: HYROX de segunda 06:00 · 60 min · João Grade — novo horário/);
     });
 
+    it('turno 14h–19h: cria os blocos de 1h em cada dia marcado, com as aulas do mês', async () => {
+      const admin = await makeUser('ADMIN', { name: 'Admin' });
+      const { crossfit, aula } = await ids();
+      const andre = await prisma.teacher.create({ data: { name: 'André Turno' } });
+      const idsCreated = await createSlots(admin.principal, {
+        weekdays: [1, 3], startMin: 840, endMin: 1140, durationMin: 60, split: true, modalityId: crossfit.id, activityTypeId: aula.id,
+        spaceId: '', label: 'Turno', people: [{ teacherId: andre.id, role: 'TITULAR' }], validFrom: '2031-01-01',
+      }, META);
+      expect(idsCreated).toHaveLength(10);
+      const mine = (await listGrade(admin.principal, '2031-01-06')).filter((g) => g.people.some((p) => p.teacherId === andre.id));
+      expect(mine.map((g) => `${g.weekday}-${g.startMin / 60}-${g.durationMin}`).sort()).toEqual(
+        ['1-14-60', '1-15-60', '1-16-60', '1-17-60', '1-18-60', '3-14-60', '3-15-60', '3-16-60', '3-17-60', '3-18-60'].sort(),
+      );
+      const one = await createSlots(admin.principal, {
+        weekdays: [5], startMin: 840, endMin: 1140, durationMin: 60, split: false, modalityId: crossfit.id, activityTypeId: aula.id,
+        spaceId: '', label: 'Turno único', people: [{ teacherId: andre.id, role: 'TITULAR' }], validFrom: '2031-01-01',
+      }, META);
+      expect(one).toHaveLength(1);
+      await expect(createSlots(admin.principal, {
+        weekdays: [5], startMin: 840, endMin: 800, durationMin: 60, modalityId: crossfit.id, activityTypeId: aula.id,
+        spaceId: '', label: '', people: [], validFrom: '2031-01-01',
+      }, META)).rejects.toThrow(/depois do início/);
+    });
+
     it('o banco impede duas versões valendo no mesmo dia (exclusion constraint)', async () => {
       const { crossfit, aula } = await ids();
       const slot = await prisma.scheduleSlot.create({ data: {} });
