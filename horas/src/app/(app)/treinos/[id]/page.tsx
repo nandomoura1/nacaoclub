@@ -20,7 +20,7 @@ export default async function SemanaPage({ params }: { params: Promise<{ id: str
 
   return (
     <>
-      <Link href="/treinos" className="mb-3 inline-flex items-center gap-1 text-sm text-tinta-suave hover:text-nacao"><ArrowLeft className="size-4" /> Treinos</Link>
+      <Link href="/treinos" className="mb-3 inline-flex items-center gap-1 text-sm text-tinta-suave hover:text-nacao"><ArrowLeft className="size-4" /> Cadastro de Treino</Link>
       <h1 className="text-2xl font-extrabold text-navy">{week.modality} · semana de {formatDateBR(week.weekStart)} a {formatDateBR(addDays(week.weekStart, 6))}</h1>
       <p className="mb-4 mt-1 text-sm text-tinta-suave">
         Para o aluno (arte, texto e PDF alunos), mobilidade, warm-up e core saem só com o tempo; <b>força</b>, <b>técnica</b> e <b>WOD</b> saem detalhados. O <b>PDF professores</b> leva o roteiro completo de cada etapa e as orientações ao professor.

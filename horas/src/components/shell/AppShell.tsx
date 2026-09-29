@@ -4,12 +4,12 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   BarChart3, CalendarDays, ClipboardCheck, History, LayoutGrid,
-  LogOut, Settings2, Sun, TriangleAlert, Users, UserRoundCog, Dumbbell, CalendarClock } from 'lucide-react';
+  LogOut, Settings2, Sun, TriangleAlert, Users, UserRoundCog, Dumbbell, CalendarClock, Sparkles } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { cn } from '@/lib/cn';
 import { initials } from '@/lib/format';
 import { logoutAction } from '@/app/login/actions';
-import type { NavIcon, NavItem } from './nav';
+import type { NavIcon, NavItem, NavSection } from './nav';
 
 const ICONS: Record<NavIcon, React.ComponentType<{ className?: string }>> = {
   hoje: Sun,
@@ -21,6 +21,7 @@ const ICONS: Record<NavIcon, React.ComponentType<{ className?: string }>> = {
   relatorios: BarChart3,
   escalas: CalendarClock,
   treinos: Dumbbell,
+  'treinos-ia': Sparkles,
   usuarios: UserRoundCog,
   historico: History,
   cadastros: Settings2,
@@ -30,13 +31,13 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function SideLink({ item, pathname }: { item: NavItem; pathname: string }) {
+function SideLink({ item, active }: { item: NavItem; active: boolean }) {
   const Icon = ICONS[item.icon];
   if (item.soon) {
     return (
       <span
         className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/35"
-        title={`Chega na etapa ${item.soon}`}
+        title={/^E\d/.test(item.soon) ? `Chega na etapa ${item.soon}` : 'Em breve'}
       >
         <Icon className="size-4" />
         <span className="flex-1">{item.label}</span>
@@ -49,7 +50,7 @@ function SideLink({ item, pathname }: { item: NavItem; pathname: string }) {
       href={item.href}
       className={cn(
         'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition-colors',
-        isActive(pathname, item.href) ? 'bg-white/12 text-white' : 'text-white/75 hover:bg-white/8 hover:text-white',
+        active ? 'bg-white/12 text-white' : 'text-white/75 hover:bg-white/8 hover:text-white',
       )}
     >
       <Icon className="size-4" />
@@ -60,39 +61,37 @@ function SideLink({ item, pathname }: { item: NavItem; pathname: string }) {
 
 export function AppShell({
   user,
-  main,
-  admin,
+  sections,
   children,
 }: {
   user: { name: string; roleLabel: string };
-  main: NavItem[];
-  admin: NavItem[];
+  sections: NavSection[];
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const mobileItems = [...main, ...admin].filter((i) => i.mobile && !i.soon);
+  const mobileItems = sections.flatMap((s) => s.items).filter((i) => i.mobile && !i.soon);
+  const all = sections.flatMap((s) => s.items).filter((i) => !i.soon);
+  // Item ativo = o de href mais longo que casa (Cadastro de Treino não acende em /treinos/ia).
+  const activeHref = all.filter((i) => isActive(pathname, i.href)).sort((a, b) => b.href.length - a.href.length)[0]?.href;
 
   return (
     <div className="min-h-dvh lg:pl-64 print:pl-0">
       {/* Sidebar desktop */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-navy px-3 py-5 text-white lg:flex print:hidden">
-        <div className="mb-8 px-3">
+        <div className="mb-6 px-3">
           <Logo />
         </div>
-        <nav className="flex-1 space-y-1">
-          {main.map((item) => (
-            <SideLink key={item.href} item={item} pathname={pathname} />
-          ))}
-          {admin.length > 0 && (
-            <>
-              <p className="px-3 pb-1 pt-6 text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">
-                Administração
+        <nav className="flex-1 space-y-1 overflow-y-auto">
+          {sections.map((section, i) => (
+            <div key={section.title} className="space-y-1">
+              <p className={cn('px-3 pb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-white/40', i > 0 ? 'pt-6' : 'pt-0')}>
+                {section.title}
               </p>
-              {admin.map((item) => (
-                <SideLink key={item.href} item={item} pathname={pathname} />
+              {section.items.map((item) => (
+                <SideLink key={item.href} item={item} active={item.href === activeHref} />
               ))}
-            </>
-          )}
+            </div>
+          ))}
         </nav>
         <UserBox user={user} />
       </aside>

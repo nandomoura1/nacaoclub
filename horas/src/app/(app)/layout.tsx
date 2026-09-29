@@ -1,7 +1,7 @@
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { AppShell } from '@/components/shell/AppShell';
-import { NAV_ADMIN, NAV_MAIN, type NavItem } from '@/components/shell/nav';
+import { NAV_SECTIONS, type NavItem } from '@/components/shell/nav';
 import { SYSTEM_ROLES, type SystemRoleKey } from '@/server/auth/permissions';
 import { getPrincipal } from '@/server/auth/session';
 import type { Principal } from '@/server/auth/principal';
@@ -26,8 +26,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <AppShell
       user={{ name: principal.name, roleLabel: roleLabel(principal) }}
-      main={visible(NAV_MAIN, principal)}
-      admin={visible(NAV_ADMIN, principal)}
+      sections={NAV_SECTIONS.map((s) => ({ ...s, items: visible(s.items, principal) })).filter((s) => s.items.length > 0)}
     >
       {children}
     </AppShell>

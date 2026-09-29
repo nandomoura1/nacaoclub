@@ -11,7 +11,7 @@ import { requirePrincipal } from '@/server/auth/session';
 import { listWeeks, workoutModalities } from '@/server/services/workout-service';
 import { NewWeekForm } from './NewWeekForm';
 
-export const metadata: Metadata = { title: 'Treinos' };
+export const metadata: Metadata = { title: 'Cadastro de Treino' };
 
 export default async function TreinosPage() {
   const principal = await requirePrincipal();
@@ -23,8 +23,8 @@ export default async function TreinosPage() {
   return (
     <>
       <PageHeader
-        title="Treinos da semana"
-        description="Lance os treinos, gere a arte em JPG no padrão Nação e o texto para os grupos de WhatsApp. Módulo à parte: não mexe na grade nem nas horas."
+        title="Cadastro de Treino"
+        description="Lance os treinos da semana e gere o plano de aula (PDF professores), o resumo dos alunos (PDF), a arte em JPG no padrão Nação e o texto para os grupos de WhatsApp. Módulo à parte: não mexe na grade nem nas horas."
       />
       <NewWeekForm modalities={modalities} defaultDate={nextMonday} />
       <Card className="mt-4 divide-y divide-borda">
