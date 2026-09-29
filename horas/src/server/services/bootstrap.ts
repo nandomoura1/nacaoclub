@@ -39,6 +39,7 @@ export const MODALITIES: { name: string; area: string; color: string; duration?:
   { name: 'Funcional Kids', area: 'Contraturno / Kids', color: '#16A34A' },
   { name: 'Futebol Kids', area: 'Contraturno / Kids', color: '#65A30D' },
   { name: 'Vôlei Kids', area: 'Contraturno / Kids', color: '#D97706' },
+  { name: 'Brinquedoteca', area: 'Contraturno / Kids', color: '#F59E0B' },
 ];
 
 export const ACTIVITY_TYPES: { name: string; kind: ActivityKind; countsHours: boolean }[] = [
@@ -67,7 +68,16 @@ export const CANCELLATION_REASONS = [
   { name: 'Outro', requiresNote: true },
 ];
 
-export const POSITIONS = ['Professor', 'Instrutor', 'Estagiário', 'Coordenador', 'Bolsista'];
+export const POSITIONS = ['Professor', 'Instrutor', 'Estagiário', 'Coordenador', 'Bolsista', 'Monitor(a)'];
+/** Setores da escala de fim de semana/feriado e turnos padrão (minutos). */
+export const DUTY_SECTORS: { name: string; modality: string; defaults: Record<'SAB' | 'DOM' | 'FERIADO', [number, number][]> }[] = [
+  { name: 'Academia', modality: 'Musculação', defaults: { SAB: [[420, 1020]], DOM: [[480, 840]], FERIADO: [[480, 840]] } },
+  { name: 'CrossFit e HYROX', modality: 'CrossFit', defaults: { SAB: [[420, 660]], DOM: [], FERIADO: [] } },
+  { name: 'Aulas Coletivas', modality: 'Funcional', defaults: { SAB: [], DOM: [], FERIADO: [] } },
+  { name: 'Futevôlei', modality: 'Futevôlei', defaults: { SAB: [], DOM: [], FERIADO: [] } },
+  { name: 'Brinquedoteca', modality: 'Brinquedoteca', defaults: { SAB: [[480, 840]], DOM: [], FERIADO: [] } },
+];
+
 export const CONTRACT_TYPES = ['CLT', 'MEI / PJ', 'Estágio', 'Horista', 'Bolsista'];
 
 export async function bootstrapStructure(tx: Tx, years: number[] = [2026, 2027]): Promise<void> {
@@ -100,6 +110,11 @@ export async function bootstrapStructure(tx: Tx, years: number[] = [2026, 2027])
   }
   for (const [i, name] of CONTRACT_TYPES.entries()) {
     await tx.contractType.upsert({ where: { name }, create: { name, sortOrder: i }, update: {} });
+  }
+  const modalityId = new Map((await tx.modality.findMany({ select: { id: true, name: true } })).map((m) => [m.name, m.id]));
+  for (const [i, d] of DUTY_SECTORS.entries()) {
+    const mid = modalityId.get(d.modality);
+    if (mid) await tx.dutySector.upsert({ where: { name: d.name }, create: { name: d.name, modalityId: mid, defaults: d.defaults, sortOrder: i + 1 }, update: {} });
   }
   for (const year of years) await ensureOfficialHolidays(tx, year);
 }

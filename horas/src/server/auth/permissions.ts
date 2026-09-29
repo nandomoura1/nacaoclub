@@ -30,6 +30,7 @@ export const PERMISSIONS = {
   'audit.view': 'Ver o histórico de alterações',
   'import.run': 'Importar planilhas',
   'workout.edit': 'Lançar treinos da semana e gerar a arte de divulgação',
+  'duty.edit': 'Lançar escalas de fim de semana e feriados',
 } as const;
 
 export type PermissionKey = keyof typeof PERMISSIONS;
@@ -63,6 +64,7 @@ export const SYSTEM_ROLES: Record<
       'payroll.approve_area',
       'payroll.adjust',
       'workout.edit',
+      'duty.edit',
     ],
   },
   CONSULTA: {

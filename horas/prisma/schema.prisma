@@ -223,6 +223,7 @@ model Modality {
   occurrences  ClassOccurrence[]
   manualEntries ManualEntry[]
   workoutWeeks  WorkoutWeek[]
+  dutySectors   DutySector[]
 
   @@index([areaId])
   @@map("modalities")
@@ -373,6 +374,7 @@ model Teacher {
   leaves          Leave[]              @relation("TeacherLeaves")
   covering        Leave[]              @relation("LeaveSubstitute")
   manualEntries   ManualEntry[]
+  duties          DutyAssignment[]
 
   @@index([active, name])
   @@map("teachers")
@@ -558,6 +560,9 @@ model ClassOccurrence {
   cancellationReason CancellationReason? @relation(fields: [cancellationReasonId], references: [id], onDelete: Restrict)
   assignments        ClassAssignment[]
   exceptions         ClassException[]
+  /// Aula nascida de uma escala de fim de semana/feriado (horas de plantão).
+  dutyShiftId        String?          @map("duty_shift_id") @db.Uuid
+  dutyShift          DutyShift?       @relation(fields: [dutyShiftId], references: [id], onDelete: Cascade)
 
   @@unique([slotId, date])
   @@index([periodId, date])
@@ -797,4 +802,56 @@ model WorkoutBlock {
 
   @@index([dayId, sortOrder])
   @@map("workout_blocks")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Escalas de fim de semana e feriados (geram horas de plantão)
+// ─────────────────────────────────────────────────────────────
+
+/// Setor escalado: Academia, CrossFit e HYROX, Brinquedoteca…
+model DutySector {
+  id         String  @id @default(uuid()) @db.Uuid
+  name       String  @unique
+  /// As horas da escala entram nesta modalidade (e na área dela).
+  modalityId String  @map("modality_id") @db.Uuid
+  /// Turnos padrão: { "SAB": [[420, 1020]], "DOM": [[480, 840]], "FERIADO": [[480, 840]] } em minutos.
+  defaults   Json    @default("{}")
+  sortOrder  Int     @default(0) @map("sort_order")
+  active     Boolean @default(true)
+
+  modality Modality    @relation(fields: [modalityId], references: [id], onDelete: Restrict)
+  shifts   DutyShift[]
+
+  @@map("duty_sectors")
+}
+
+model DutyShift {
+  id          String   @id @default(uuid()) @db.Uuid
+  sectorId    String   @map("sector_id") @db.Uuid
+  date        DateTime @db.Date
+  startMin    Int      @map("start_min")
+  endMin      Int      @map("end_min")
+  notes       String?
+  createdById String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  sector      DutySector        @relation(fields: [sectorId], references: [id], onDelete: Restrict)
+  people      DutyAssignment[]
+  occurrences ClassOccurrence[]
+
+  @@index([date, sectorId])
+  @@map("duty_shifts")
+}
+
+model DutyAssignment {
+  shiftId   String  @map("shift_id") @db.Uuid
+  teacherId String  @map("teacher_id") @db.Uuid
+  note      String?
+
+  shift   DutyShift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  teacher Teacher   @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+
+  @@id([shiftId, teacherId])
+  @@map("duty_assignments")
 }
