@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
-import { FileSpreadsheet, Pencil, Plus, Search } from 'lucide-react';
+import { CalendarDays, FileSpreadsheet, Pencil, Plus, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -86,6 +86,9 @@ export function TeachersClient({
                 ))}
                 {t.modalities.length === 0 && <span className="text-xs text-atencao">sem modalidade habilitada</span>}
               </div>
+              <Link href={`/professores/${t.id}`} className={cn(buttonVariants({ variant: 'secondary', size: 'sm' }), 'mt-3 w-full')}>
+                <CalendarDays /> Aulas, ausências e horas
+              </Link>
             </div>
           </Card>
         ))}
@@ -156,6 +159,11 @@ function TeacherSheet({ row, modalities, areas, positions, contractTypes, onClos
       onSubmit={submit}
       footer={<Button type="submit" disabled={pending}>{pending ? 'Salvando…' : 'Salvar'}</Button>}
     >
+      {row && (
+        <Link href={`/professores/${row.id}`} className="mb-4 flex items-center gap-2 rounded-lg bg-nacao/10 p-3 text-sm font-semibold text-nacao hover:bg-nacao/15">
+          <CalendarDays className="size-4" /> Lançar aulas fixas e ausências de {row.displayName || row.name} →
+        </Link>
+      )}
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2">
           <Label htmlFor="t-name">Nome completo *</Label>
