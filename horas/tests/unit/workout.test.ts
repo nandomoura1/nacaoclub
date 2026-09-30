@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import sharp from 'sharp';
-import { dayTemplate, fitFontSize, mondayOf, weekRange, whatsappText } from '@/domain/workout';
+import { dayMinutes, dayTemplate, fitFontSize, lessonMinutes, mondayOf, weekRange, whatsappText } from '@/domain/workout';
 import { dayArt, weekArt } from '@/server/workouts/art';
 import { crossfitWeek } from '../fixtures/workout-crossfit';
 
@@ -10,7 +10,9 @@ describe('treinos (puro)', () => {
     expect(mondayOf('2026-10-03')).toBe('2026-09-28');
     expect(mondayOf('2026-09-28')).toBe('2026-09-28');
     expect(mondayOf('2026-10-04')).toBe('2026-09-28'); // domingo fecha a semana
-    expect(dayTemplate('CrossFit').map((b) => b.kind)).toEqual(['AQUECIMENTO', 'FORCA', 'ESPECIFICO', 'WOD']);
+    expect(dayTemplate('CrossFit').map((b) => b.kind)).toEqual(['MOBILIDADE', 'AQUECIMENTO', 'FORCA', 'ESPECIFICO', 'WOD']);
+    expect(dayMinutes({ date: '2026-09-28', title: null, blocks: dayTemplate('CrossFit') })).toBe(lessonMinutes('CrossFit')); // aula de 55'
+    expect(lessonMinutes('Futevôlei')).toBeNull();
     expect(dayTemplate('Futevôlei').map((b) => b.kind)).toEqual(['AQUECIMENTO', 'FUNDAMENTO', 'JOGO']);
     expect(dayTemplate('Base Forte').map((b) => b.kind)).toEqual(['AQUECIMENTO', 'FUNDAMENTO', 'JOGO']);
     expect(dayTemplate('HYROX').map((b) => b.kind)).toEqual(['AQUECIMENTO', 'SKILL', 'WOD']);

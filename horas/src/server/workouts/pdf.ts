@@ -1,6 +1,6 @@
 import type { PDFFont, PDFPage, RGB } from 'pdf-lib';
 import {
-  ART_LABEL, KIND, dayMinutes, dayName, ddmm, lessonTimeline, lines, studentBlock, weekRange,
+  ART_LABEL, KIND, dayMinutes, lessonMinutes, dayName, ddmm, lessonTimeline, lines, studentBlock, weekRange,
   type WorkoutBlockData, type WorkoutDayData, type WorkoutWeekData,
 } from '@/domain/workout';
 import { A4, C, LOGO_RATIO, brandDoc, clean, wrap } from '@/server/pdf/kit';
@@ -72,7 +72,8 @@ export async function workoutPdf(week: WorkoutWeekData, mode: WorkoutPdfMode, on
     text(`${dayHeader(d.date)} · ${ddmm(d.date)}${d.title ? ` — ${d.title.toUpperCase()}` : ''}`, M + 10, y, 15, cond, C.white);
     const total = dayMinutes(d);
     if (total) {
-      const t = clean(heavy, `${teacher ? 'AULA DE ' : ''}${total}'`);
+      const ref = teacher ? lessonMinutes(week.modality) : null;
+      const t = clean(heavy, `${teacher ? 'AULA DE ' : ''}${total}'${ref && ref !== total ? ` / REF. ${ref}'` : ''}`);
       text(t, W - M - 10 - heavy.widthOfTextAtSize(t, 10), y + 1, 10, heavy, C.white);
     }
     y -= 34;

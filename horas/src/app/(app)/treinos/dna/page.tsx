@@ -6,6 +6,14 @@ import { MODALITY_LABEL, computeDna, dnaInsights } from '@/domain/programming/dn
 import { parseHistory } from '@/domain/programming/history';
 import { CROSSFIT_HISTORY } from '@/domain/programming/history.generated';
 import type { Modality } from '@/domain/programming/movements';
+import { blockVolume } from '@/domain/programming/calculator';
+import { LEVELS, LEVEL_LOAD_SAMPLES, LEVEL_RATIO } from '@/domain/programming/taxonomy';
+import {
+  INTENSITY_CLASSES, WEEK_METRICS, calibrateIntensity, classify, volumeBaseline, weeklyVolumes,
+  type IntensityClass,
+} from '@/domain/programming/volume';
+import { WEEKDAYS } from '@/domain/dates';
+import { lessonMinutes } from '@/domain/workout';
 import { cn } from '@/lib/cn';
 import { can } from '@/server/auth/authz';
 import { requirePrincipal } from '@/server/auth/session';
@@ -13,8 +21,25 @@ import { requirePrincipal } from '@/server/auth/session';
 export const metadata: Metadata = { title: 'DNA da Programação' };
 
 // O histórico é estático (vem do repositório): calcula uma vez por build.
-const DNA = computeDna(parseHistory(CROSSFIT_HISTORY));
+const SESSIONS = parseHistory(CROSSFIT_HISTORY);
+const DNA = computeDna(SESSIONS);
 const INSIGHTS = dnaInsights(DNA);
+
+// Calculadora de movimentos sobre a base: referência semanal, cobertura e intensidade.
+const BASE = volumeBaseline(weeklyVolumes(SESSIONS));
+const MODEL = calibrateIntensity(SESSIONS);
+const COVERAGE = { exato: 0, estimado: 0, 'sem-leitura': 0 };
+const BY_DAY = new Map<number, Record<IntensityClass, number>>();
+for (const s of SESSIONS) for (const b of s.blocks) {
+  if (b.kind !== 'WOD' || s.special) continue;
+  COVERAGE[blockVolume(b)!.kind]++;
+  const c = classify(b, MODEL);
+  if (!c) continue;
+  const row = BY_DAY.get(s.weekday) ?? { LOW: 0, MODERATE: 0, HIGH: 0, 'VERY HIGH': 0 };
+  row[c.cls]++;
+  BY_DAY.set(s.weekday, row);
+}
+const LESSON = lessonMinutes('CrossFit')!;
 
 /** Barra horizontal de série única: rótulo, trilho e valor em texto (a cor não carrega identidade). */
 function Bar({ label, value, max, text, hint }: { label: string; value: number; max: number; text: string; hint?: string }) {
@@ -71,7 +96,7 @@ export default async function DnaPage() {
 
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
         <Stat label="Aulas analisadas" value={String(d.period.sessions)} sub={`${d.period.weeks} semanas`} />
-        <Stat label="WOD médio" value={`${numText(d.structure.avgWodMin)}'`} sub={`aula registrada ~${numText(d.structure.avgClassMin)}'`} />
+        <Stat label="WOD médio" value={`${numText(d.structure.avgWodMin)}'`} sub={`blocos registrados ~${numText(d.structure.avgClassMin)}' · aula ${LESSON}'`} />
         <Stat label="Aulas com força" value={pctText(d.strength.sessionsShare)} sub={`${pctText(d.strength.withMetconShare)} seguidas de metcon`} />
         <Stat label="WODs em dupla" value={pctText(d.partnerShare)} />
         <Stat label="Benchmarks/Heroes" value={String(d.namedWorkouts.filter((n) => n.kind !== 'evento').reduce((s, n) => s + n.count, 0))} sub="inclui Open e Quarterfinals" />
@@ -146,6 +171,84 @@ export default async function DnaPage() {
           </dl>
         </Section>
       </div>
+
+      <h2 className="mb-2 mt-6 text-xl font-extrabold text-navy">Volume de referência</h2>
+      <p className="mb-3 text-sm text-tinta-suave">
+        Calculadora de movimentos aplicada à base: reps por padrão (thruster conta squat e push), metros, calorias, impacto e tonelagem, por atleta RX, em {BASE.weeks} semanas cheias (5+ aulas). É a régua dos alertas: acima de +30% da média das últimas 4 semanas, ou do P90 da Nação, a semana acende.
+      </p>
+      <div className="mb-4 grid gap-3 lg:grid-cols-3">
+        <Section title="Semana típica da Nação" sub="Por atleta RX. AMRAP e intervalos são estimados pelo ritmo RX." className="lg:col-span-2">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-borda text-left text-xs uppercase tracking-wide text-tinta-suave">
+                  <th className="py-2 pr-3 font-semibold">Métrica</th>
+                  <th className="px-2 py-2 text-right font-semibold">Média</th>
+                  <th className="px-2 py-2 text-right font-semibold">P50</th>
+                  <th className="px-2 py-2 text-right font-semibold">P75</th>
+                  <th className="py-2 pl-2 text-right font-semibold">P90</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-borda">
+                {WEEK_METRICS.map((m) => {
+                  const x = BASE.metrics[m.id];
+                  const f = (n: number) => n.toLocaleString('pt-BR');
+                  return (
+                    <tr key={m.id}>
+                      <td className="py-1.5 pr-3 text-tinta">{m.label} <span className="text-xs text-tinta-fraca">{m.unit}</span></td>
+                      <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-tinta">{f(x.mean)}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums text-tinta-suave">{f(x.p50)}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums text-tinta-suave">{f(x.p75)}</td>
+                      <td className="py-1.5 pl-2 text-right tabular-nums text-tinta-suave">{f(x.p90)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Section>
+        <div className="grid content-start gap-3">
+          <Section title="Carga por nível" sub="Proporção da carga RX, medida nas prescrições com as faixas.">
+            {LEVELS.map((l) => (
+              <div key={l.id} className="flex justify-between py-1 text-sm">
+                <span className="text-tinta">{l.label}</span>
+                <span className="font-semibold tabular-nums text-tinta">{Math.round(LEVEL_RATIO[l.id] * 100)}%{l.id === 'INICIANTE' ? ' *' : ''}</span>
+              </div>
+            ))}
+            <p className="mt-2 text-xs text-tinta-fraca">Base: {LEVEL_LOAD_SAMPLES.length} prescrições (set–out/2026). * Iniciante não aparece na base: regra configurável.</p>
+          </Section>
+          <Section title="Leitura dos WODs" sub="Quanto do histórico a calculadora entende. Estimado = AMRAP e estações por tempo.">
+            {(['exato', 'estimado', 'sem-leitura'] as const).map((k) => {
+              const total = COVERAGE.exato + COVERAGE.estimado + COVERAGE['sem-leitura'];
+              return <Bar key={k} label={k === 'sem-leitura' ? 'Sem leitura' : k === 'exato' ? 'Exato' : 'Estimado'} value={COVERAGE[k]} max={total} text={pctText(Math.round((COVERAGE[k] / total) * 1000) / 10)} hint={`${COVERAGE[k]} WODs`} />;
+            })}
+          </Section>
+        </div>
+      </div>
+
+      <Section title="Intensidade por dia" sub={`Índice de intensidade (carga, densidade, duração, complexidade) calibrado na base: os cortes seguem a distribuição de carga da Nação (15% · 49% · 30% · 6%). Limites: ${MODEL.thresholds.map(numText).join(' · ')}.`} className="mb-4">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-borda text-left text-xs uppercase tracking-wide text-tinta-suave">
+                <th className="py-2 pr-3 font-semibold">Dia</th>
+                {INTENSITY_CLASSES.map((c) => <th key={c} className="px-2 py-2 text-right font-semibold">{c}</th>)}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-borda">
+              {[...BY_DAY.entries()].sort((a, b) => a[0] - b[0]).map(([wd, row]) => {
+                const n = INTENSITY_CLASSES.reduce((a, c) => a + row[c], 0);
+                return (
+                  <tr key={wd}>
+                    <td className="py-1.5 pr-3 font-bold text-tinta">{WEEKDAYS[wd - 1]!.long}</td>
+                    {INTENSITY_CLASSES.map((c) => <td key={c} className="px-2 py-1.5 text-right tabular-nums text-tinta">{pctText(Math.round((row[c] / n) * 1000) / 10)}</td>)}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Section>
 
       <Section title="A semana da Nação" sub="Padrão de cada dia no período analisado." className="mb-4">
         <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">

@@ -4,12 +4,13 @@ import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowDown, ArrowUp, Copy, Download, FileText, Image as ImageIcon, MessageCircle, Plus, Save, Trash2, X } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { FormMessage } from '@/components/ui/alert';
 import { Input, Label, Select } from '@/components/ui/input';
 import { addDays, formatDateBR } from '@/domain/dates';
 import {
-  BLOCK_KINDS, KIND, dayName, dayTemplate, whatsappText,
+  BLOCK_KINDS, KIND, dayMinutes, dayName, dayTemplate, lessonMinutes, whatsappText,
   type BlockKind, type WorkoutBlockData, type WorkoutDayData,
 } from '@/domain/workout';
 import { cn } from '@/lib/cn';
@@ -87,6 +88,7 @@ export function EditorClient({ week, benchmarks }: { week: WorkoutWeekView; benc
           <Card key={d.date} className="p-4">
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <h3 className="text-lg font-extrabold text-navy">{dayName(d.date)} · {formatDateBR(d.date).slice(0, 5)}</h3>
+              <LessonClock minutes={dayMinutes(d)} target={lessonMinutes(week.modality)} />
               <Input className="h-8 w-40 text-sm" placeholder="Destaque (opcional)" value={d.title ?? ''} maxLength={40}
                 onChange={(e) => setDay(d.date, (x) => ({ ...x, title: e.target.value || null }))} />
               <div className="flex-1" />
@@ -238,5 +240,16 @@ function BlockEditor({ b, onChange, onRemove, onMove }: {
         placeholder="🧑‍🏫 Orientações ao professor (não vai para os alunos): cues, escalas, progressões, organização da turma"
         value={b.coachNotes ?? ''} onChange={(e) => onChange({ coachNotes: e.target.value || null })} />
     </div>
+  );
+}
+
+/** Tempo somado do dia contra a referência da aula (CrossFit: 55'). */
+function LessonClock({ minutes, target }: { minutes: number; target: number | null }) {
+  if (!target || !minutes) return null;
+  const diff = minutes - target;
+  return (
+    <Badge tone={diff === 0 ? 'green' : 'amber'} className="tabular-nums" title={`Aula de referência: ${target} min`}>
+      {minutes}' / {target}'{diff !== 0 && ` (${diff > 0 ? '+' : ''}${diff})`}
+    </Badge>
   );
 }
