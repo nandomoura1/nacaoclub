@@ -36,13 +36,16 @@ export const NAV_HORAS: NavItem[] = [
   { href: '/relatorios', label: 'Relatórios', icon: 'relatorios', permission: 'payroll.view_hours' },
 ];
 
+/** Modalidades com a Geração de Treino IA pronta (as outras aparecem como "breve"). */
+const AI_READY = new Set(['crossfit']);
+
 /** Cadastro de Treino + um grupo por modalidade: o DNA (e a IA que nasce dele) é de cada modalidade. */
 export const NAV_TREINOS: NavItem[] = [
   { href: '/treinos', label: 'Cadastro de Treino', short: 'Treinos', icon: 'treinos', permission: 'workout.edit', mobile: true },
   ...PROGRAM_MODALITIES.flatMap((m): NavItem[] => [
     ...(m.benchmarks ? [{ href: `/treinos/${m.slug}/benchmarks`, label: 'Benchmarks', icon: 'benchmarks', permission: 'workout.edit', group: m.name } satisfies NavItem] : []),
     { href: `/treinos/${m.slug}/dna`, label: 'DNA da Programação', icon: 'dna', permission: 'workout.edit', group: m.name },
-    { href: `/treinos/${m.slug}/ia`, label: 'Geração de Treino IA', icon: 'treinos-ia', permission: 'workout.edit', soon: 'breve', group: m.name },
+    { href: `/treinos/${m.slug}/ia`, label: 'Geração de Treino IA', icon: 'treinos-ia', permission: 'workout.edit', group: m.name, ...(AI_READY.has(m.slug) ? {} : { soon: 'breve' }) },
   ]),
 ];
 

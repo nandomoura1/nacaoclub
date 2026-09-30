@@ -1,0 +1,28 @@
+'use server';
+
+import { revalidatePath } from 'next/cache';
+import { getPrincipal, requestMeta } from '@/server/auth/session';
+import { runAction, type ActionResult } from '@/server/action-result';
+import { AppError } from '@/server/errors';
+import { AiPlanSchema, planToBlocks } from '@/domain/programming/ai-plan';
+import { modalitySlug } from '@/domain/programming/modalities';
+import { generateWorkout, type GenerateResult } from '@/server/ai/workout-generator';
+import { setDayFromAi, workoutModalities } from '@/server/services/workout-service';
+
+export async function generateWorkoutAction(slug: string, values: Record<string, unknown>): Promise<ActionResult<GenerateResult>> {
+  return runAction(async () => generateWorkout(await getPrincipal(), slug, values));
+}
+
+/** Leva o plano (já revisado pelo coach) para o Cadastro de Treino. */
+export async function insertAiDayAction(slug: string, date: string, plan: unknown, replace: boolean): Promise<ActionResult<string>> {
+  return runAction(async () => {
+    const principal = await getPrincipal();
+    const parsed = AiPlanSchema.safeParse(plan);
+    if (!parsed.success) throw new AppError('Plano inválido.');
+    const modality = (await workoutModalities(principal)).find((m) => modalitySlug(m.name) === slug);
+    if (!modality) throw new AppError('Você não tem acesso a esta modalidade no Cadastro de Treino.');
+    const r = await setDayFromAi(principal, { modalityId: modality.id, date, title: parsed.data.titulo, blocks: planToBlocks(parsed.data), replace }, await requestMeta());
+    revalidatePath('/treinos');
+    return r.weekId;
+  }, 'Treino lançado no Cadastro de Treino.');
+}

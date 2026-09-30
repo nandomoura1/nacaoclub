@@ -190,3 +190,36 @@ export async function workoutModalities(principal: Principal | null) {
 }
 
 export const isMonday = (d: IsoDate) => weekdayOf(d) === 1;
+
+/**
+ * Grava um dia vindo da Geração por IA: cria a semana se preciso e troca os
+ * blocos do dia. Dia que já tem treino só é substituído com `replace`.
+ */
+export async function setDayFromAi(
+  principal: Principal | null,
+  input: { modalityId: string; date: string; title: string | null; blocks: unknown[]; replace?: boolean },
+  meta: RequestMeta,
+): Promise<{ weekId: string; replaced: boolean }> {
+  assertCan(principal, 'workout.edit');
+  if (!isIsoDate(input.date)) throw new AppError('Data inválida.');
+  const blocks = z.array(blockSchema).min(1).max(12).safeParse(input.blocks);
+  if (!blocks.success) throw new AppError(blocks.error.issues[0]?.message ?? 'Blocos inválidos.');
+  const weekId = await createWeek(principal, { modalityId: input.modalityId, date: input.date }, meta);
+  return prisma.$transaction(async (tx) => {
+    const w = await loadWeek(tx, weekId);
+    assertAreaAccess(principal, w.modality.areaId);
+    const day = w.days.find((d) => fromUtc(d.date) === input.date);
+    if (day?.blocks.length && !input.replace) throw new AppError(`${formatDateBR(input.date)} já tem treino lançado. Confirme para substituir.`);
+    if (day) await tx.workoutDay.delete({ where: { id: day.id } });
+    await tx.workoutDay.create({
+      data: { weekId, date: toUtc(input.date), title: input.title?.slice(0, 40) || null, blocks: { create: blocks.data.map((b, i) => ({ ...b, sortOrder: i })) } },
+    });
+    await tx.workoutWeek.update({ where: { id: weekId }, data: { updatedById: principal.id } });
+    await audit(tx, { actorId: principal.id, ...meta }, {
+      action: 'workout.ai_day', entityType: 'workout_week', entityId: weekId,
+      after: { dia: input.date, blocos: blocks.data.length, substituiu: !!day?.blocks.length },
+      summary: `${principal.name} lançou o treino de ${w.modality.name} de ${formatDateBR(input.date)} gerado pela IA${day?.blocks.length ? ' (substituindo o anterior)' : ''}`,
+    });
+    return { weekId, replaced: !!day?.blocks.length };
+  });
+}
