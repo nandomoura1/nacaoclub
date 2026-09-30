@@ -54,7 +54,9 @@ export function DutyClient({ duty, people, title }: { duty: DutyView; people: Pe
     });
     if (!r.ok) return setMsg({ error: `${s.name}: ${r.error}` });
     setDirty((d) => { const n = new Set(d); n.delete(s.id); return n; });
-    setMsg({ ok: `Escala de ${s.name} salva: ${r.data.shifts} turno(s), ${hours(r.data.minutes)} de plantão lançadas nas horas.` });
+    setMsg({ ok: r.data.countsHours
+      ? `Escala de ${s.name} salva: ${r.data.shifts} turno(s), ${hours(r.data.minutes)} de plantão lançadas nas horas.`
+      : `Escala de ${s.name} salva: ${r.data.shifts} turno(s). Não entra nas horas (aulão pago pelos alunos).` });
     router.refresh();
   });
 
@@ -102,9 +104,13 @@ export function DutyClient({ duty, people, title }: { duty: DutyView; people: Pe
                 <div className="mb-3 flex flex-wrap items-center gap-2">
                   <span className="size-3 rounded-full" style={{ background: s.color }} />
                   <h3 className="text-lg font-extrabold text-navy">{s.name}</h3>
-                  {total > 0 && <Badge tone="blue">{hours(total)} de plantão</Badge>}
+                  {s.countsHours
+                    ? total > 0 && <Badge tone="blue">{hours(total)} de plantão</Badge>
+                    : <Badge tone="amber" title="O professor cobra dos próprios alunos: não é remunerado pela Nação e não entra na folha.">não conta horas</Badge>}
                   <div className="flex-1" />
-                  <Button variant="ghost" size="sm" onClick={() => fillDefaults(s)} title="Cria os turnos de funcionamento nos dias que ainda não têm"><CalendarPlus /> Turnos padrão</Button>
+                  {Object.values(s.defaults).some((d) => d?.length) && (
+                    <Button variant="ghost" size="sm" onClick={() => fillDefaults(s)} title="Cria os turnos de funcionamento nos dias que ainda não têm"><CalendarPlus /> Turnos padrão</Button>
+                  )}
                   <Button variant="ghost" size="sm" onClick={() => setText(whatsapp(s.id))}><MessageCircle /> Texto</Button>
                   {!isDirty && list.length > 0 && <a href={pdfHref(s.id)} target="_blank" rel="noopener" className={buttonVariants({ variant: 'ghost', size: 'sm' })}><FileText /> PDF</a>}
                   <Button size="sm" onClick={() => save(s)} disabled={pending || !isDirty}><Save /> {isDirty ? 'Salvar' : 'Salvo'}</Button>
@@ -123,7 +129,11 @@ export function DutyClient({ duty, people, title }: { duty: DutyView; people: Pe
                           <Button variant="ghost" size="sm" aria-label="Adicionar turno" onClick={() => update(s.id, (l) => [...l, { key: k(), date, ...(std[0] ?? { startMin: 480, endMin: 720 }), notes: null, people: [] }])}><Plus /></Button>
                         </div>
                         {day.length === 0 && (
-                          <p className="text-xs text-tinta-suave">{std.length ? `Sem turno lançado (padrão de ${TYPE_LABEL[type]}: ${std.map((r) => `${formatClock(r.startMin)}–${formatClock(r.endMin)}`).join(', ')}).` : `Não funciona no ${TYPE_LABEL[type]}. Use + para um turno extra (ex.: aulão).`}</p>
+                          <p className="text-xs text-tinta-suave">{!s.countsHours
+                            ? 'Nenhum aulão lançado. Use + para incluir (horário, professor e, na observação, qual aulão).'
+                            : std.length
+                              ? `Sem turno lançado (padrão de ${TYPE_LABEL[type]}: ${std.map((r) => `${formatClock(r.startMin)}–${formatClock(r.endMin)}`).join(', ')}).`
+                              : `Não funciona no ${TYPE_LABEL[type]}. Use + para um turno extra.`}</p>
                         )}
                         <div className="grid gap-2">
                           {day.map((x) => {
@@ -131,11 +141,10 @@ export function DutyClient({ duty, people, title }: { duty: DutyView; people: Pe
                             return (
                               <div key={x.key} className="min-w-0 rounded-md border border-borda bg-white p-2">
                                 <div className="flex items-center gap-1">
-                                  <Input type="time" step={900} className="h-8 min-w-0 flex-1 text-sm sm:w-[7.75rem] sm:flex-none" value={formatClock(x.startMin)} onChange={(e) => e.target.value && set({ startMin: toMin(e.target.value) })} aria-label="Início" />
+                                  <Input type="time" step={900} className="h-8 min-w-0 flex-1 text-sm sm:max-w-[8rem]" value={formatClock(x.startMin)} onChange={(e) => e.target.value && set({ startMin: toMin(e.target.value) })} aria-label="Início" />
                                   <span className="text-tinta-suave">–</span>
-                                  <Input type="time" step={900} className="h-8 min-w-0 flex-1 text-sm sm:w-[7.75rem] sm:flex-none" value={formatClock(x.endMin % 1440)} onChange={(e) => e.target.value && set({ endMin: toMin(e.target.value) || 1440 })} aria-label="Término" />
-                                  <div className="flex-1 max-sm:hidden" />
-                                  <Button variant="ghost" size="sm" aria-label="Remover turno" onClick={() => update(s.id, (l) => l.filter((y) => y.key !== x.key))}><X /></Button>
+                                  <Input type="time" step={900} className="h-8 min-w-0 flex-1 text-sm sm:max-w-[8rem]" value={formatClock(x.endMin % 1440)} onChange={(e) => e.target.value && set({ endMin: toMin(e.target.value) || 1440 })} aria-label="Término" />
+                                  <Button variant="ghost" size="sm" className="ml-auto shrink-0" aria-label="Remover turno" onClick={() => update(s.id, (l) => l.filter((y) => y.key !== x.key))}><X /></Button>
                                 </div>
                                 {x.endMin <= x.startMin && <p className="mt-1 text-xs text-critico">O término precisa ser depois do início.</p>}
                                 <div className="mt-2 flex flex-wrap gap-1">

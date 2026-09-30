@@ -848,6 +848,8 @@ model DutySector {
   defaults   Json    @default("{}")
   sortOrder  Int     @default(0) @map("sort_order")
   active     Boolean @default(true)
+  /// false = escala só organizacional (ex.: Aulões, pagos pelos próprios alunos): não gera horas.
+  countsHours Boolean @default(true) @map("counts_hours")
 
   modality Modality    @relation(fields: [modalityId], references: [id], onDelete: Restrict)
   shifts   DutyShift[]

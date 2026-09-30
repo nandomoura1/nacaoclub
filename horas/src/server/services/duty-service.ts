@@ -72,6 +72,7 @@ export async function loadDuty(principal: Principal | null, start: IsoDate, end:
     name: s.name,
     modality: s.modality.name,
     modalityId: s.modalityId,
+    countsHours: s.countsHours,
     color: s.modality.color,
     defaults: s.defaults as SectorDefaults,
     shifts: s.shifts.map((sh) => ({
@@ -149,7 +150,8 @@ export async function saveDuty(principal: Principal | null, input: unknown, meta
       const shift = await tx.dutyShift.create({
         data: { sectorId, date: toUtc(s.date), startMin: s.startMin, endMin: s.endMin, notes: s.notes, createdById: principal.id, people: { create: s.people.map((teacherId) => ({ teacherId })) } },
       });
-      if (!s.people.length) continue;
+      // Setor que não conta hora (Aulões): a escala existe só para organizar e divulgar.
+      if (!s.people.length || !sector.countsHours) continue;
       const dur = s.endMin - s.startMin;
       minutes += dur * s.people.length;
       await tx.classOccurrence.create({
@@ -178,9 +180,9 @@ export async function saveDuty(principal: Principal | null, input: unknown, meta
     await audit(tx, { actorId: principal.id, ...meta }, {
       action: 'duty.saved', entityType: 'duty_sector', entityId: sectorId,
       after: { setor: sector.name, de: start, ate: end, turnos: shifts.length, horas: minutes / 60 },
-      summary: `${principal.name} salvou a escala de ${sector.name} de ${formatDateBR(start)} a ${formatDateBR(end)}: ${shifts.length} turno(s), ${formatClock(minutes).replace(':', 'h')} de plantão`,
+      summary: `${principal.name} salvou a escala de ${sector.name} de ${formatDateBR(start)} a ${formatDateBR(end)}: ${shifts.length} turno(s), ${sector.countsHours ? `${formatClock(minutes).replace(':', 'h')} de plantão` : 'sem horas (não remunerado pela Nação)'}`,
     });
-    return { shifts: shifts.length, minutes, warnings: warnings.filter((w) => w.includes(sector.name)) };
+    return { shifts: shifts.length, minutes, countsHours: sector.countsHours, warnings: warnings.filter((w) => w.includes(sector.name)) };
   }, { timeout: 120_000, maxWait: 10_000 });
 }
 

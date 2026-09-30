@@ -30,7 +30,7 @@ export default async function EscalasPage({ searchParams }: { searchParams: Prom
     <>
       <PageHeader
         title="Escalas de fim de semana e feriados"
-        description="Lance quem fica em cada setor. As horas entram sozinhas como plantão de quem trabalhou (quadro de horas, relatórios e ficha). Depois é só gerar o PDF ou o texto para os grupos."
+        description="Lance quem fica em cada setor. As horas entram sozinhas como plantão de quem trabalhou (quadro de horas, relatórios e ficha); Aulões não contam hora, porque são pagos pelos próprios alunos. Depois é só gerar o PDF ou o texto para os grupos."
       />
       <Card className="mb-4 flex flex-wrap items-end gap-2 p-3">
         {/* No celular os atalhos viram uma faixa com rolagem lateral. */}

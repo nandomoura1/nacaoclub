@@ -23,7 +23,7 @@ describe.skipIf(!hasDb)('Escalas de fim de semana e feriados', () => {
   it('setores padrão com horários de funcionamento', async () => {
     const d = await loadDuty(admin.principal, '2034-10-07', '2034-10-08');
     expect(d.dates).toEqual(['2034-10-07', '2034-10-08']);
-    expect(d.sectors.map((s) => s.name)).toEqual(['Academia', 'CrossFit e HYROX', 'Aulas Coletivas', 'Futevôlei', 'Brinquedoteca']);
+    expect(d.sectors.map((s) => s.name)).toEqual(['Academia', 'CrossFit e HYROX', 'Aulões', 'Futevôlei', 'Brinquedoteca']);
     expect(d.sectors[0]!.defaults).toEqual({ SAB: [[420, 1020]], DOM: [[480, 840]], FERIADO: [[480, 840]] });
   });
 
@@ -56,6 +56,30 @@ describe.skipIf(!hasDb)('Escalas de fim de semana e feriados', () => {
     expect(report.byTeacher.find((t) => t.teacherId === ana.id)).toMatchObject({ extraMin: 360 });
     expect(report.byTeacher.find((t) => t.teacherId === bia.id)).toBeUndefined();
     expect(await prisma.classOccurrence.count({ where: { date: { gte: toUtc('2034-10-07'), lte: toUtc('2034-10-08') }, dutyShiftId: { not: null } } })).toBe(1);
+  });
+
+  it('Aulões: escala salva e aparece no relatório de escala, mas não gera horas', async () => {
+    const auloes = await prisma.dutySector.findUniqueOrThrow({ where: { name: 'Aulões' } });
+    expect(auloes.countsHours).toBe(false);
+    const dani = await prisma.teacher.create({ data: { name: `Dani Aulão ${Date.now()}` } });
+    const r = await saveDuty(admin.principal, {
+      sectorId: auloes.id, start: '2034-10-12', end: '2034-10-12',
+      shifts: [{ date: '2034-10-12', startMin: 480, endMin: 600, people: [dani.id], notes: 'Aulão HYROX' }],
+    }, META);
+    expect(r).toMatchObject({ shifts: 1, minutes: 0, countsHours: false });
+    const view = await loadDuty(admin.principal, '2034-10-12', '2034-10-12');
+    expect(view.sectors.find((s) => s.name === 'Aulões')!.shifts).toHaveLength(1);
+    expect(await prisma.classOccurrence.count({ where: { dutyShift: { sectorId: auloes.id } } })).toBe(0);
+    const report = await hoursReport(admin.principal, await parseReportFilter({ modo: 'intervalo', de: '2034-10-12', ate: '2034-10-12' }));
+    expect(report.byTeacher.find((t) => t.teacherId === dani.id)).toBeUndefined();
+
+    // Conflito com outro setor continua avisando.
+    await saveDuty(admin.principal, { sectorId: academia.id, start: '2034-10-12', end: '2034-10-12', shifts: [{ date: '2034-10-12', startMin: 540, endMin: 840, people: [dani.id] }] }, META);
+    const again = await saveDuty(admin.principal, {
+      sectorId: auloes.id, start: '2034-10-12', end: '2034-10-12',
+      shifts: [{ date: '2034-10-12', startMin: 480, endMin: 600, people: [dani.id] }],
+    }, META);
+    expect(again.warnings.some((w) => w.includes('dois turnos ao mesmo tempo'))).toBe(true);
   });
 
   it('avisa quem está em dois setores ao mesmo tempo', async () => {
