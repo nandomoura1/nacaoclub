@@ -1,0 +1,95 @@
+# Setembro/2026: JSON "nacao_crossfit.json" (estruturado pelo box) + PDF "Crossfit 14.09 a 19.09"
+## 2026-09-07
+#feriado
+## 2026-09-08
+WU 10
+TEC 8
+ESP 5
+WOD 17 | "Fight Gone Bad" 3 rounds for reps #benchmark:Fight Gone Bad | 1:00 wall ball 14/20lb; 1:00 SDHP 55/75lb; 1:00 box jump 20in; 1:00 push press 55/75lb; 1:00 row cal
+## 2026-09-09
+WU 15
+WOD 31 | 4 rounds 1' on 1' off | 4 shuttle run + max pull-up; 4 shuttle run + max burpee; 4 shuttle run + max BMU; 4 shuttle run + max bike
+## 2026-09-10
+WU 10
+TEC 8
+FOR 10 | Power snatch | a cada 2' 5 sets 4@70%; 4@75%; 3@80%; 3@82,5%; 2@85%
+WOD 14 | For time #cap "2026 CrossFit Owners and Coaches Conference Park Workout" | 50 alt DB snatch 35/50lb; 50 single-DB step-over 20/24in; 150 DU; 25 alt DB snatch; 25 step-over; 75 DU
+## 2026-09-11
+WU 15
+FOR 10 | Front squat | a cada 2' 5@75%; 4@80%; 3@85%; max@90-92% x2 (alvo 3)
+WOD 17 | 5 rounds for time | 200m run; 20 air squat; 20 push-up; 20 lunge
+## 2026-09-14
+WU 12
+TEC 10
+FOR 10 | Squat snatch | a cada 2' 5 sets 4@65%; 4@70%; 3@75%; 3@80%; 2@85%
+ESP 5 | wall walk
+WOD 12 | AMRAP 12' +1 rep/round | 2 wall walk; 2 squat snatch 41/60kg
+## 2026-09-15
+WU 20
+WOD 30 | 3 rounds for time #partner #cap | 10 BMU; 25 cal bike; 30 C2B/pull-up; 500m run sincro
+## 2026-09-16
+WU 12
+FOR 10 | Front squat | a cada 2' 5 sets 10-8-8-6-6 @65-80%
+WOD 18 | a cada 1'30" por 18' circuito | 18/12 cal row; 20 box jump over; 25 sit-up; 30 wall ball 14/20lb
+## 2026-09-17
+WU 10
+FOR 10 | Clean complex | a cada 2' 5 sets 1 power clean + 1 hang power clean + 1 split jerk @60-75% C&J
+WOD 16 | For time #cap | 15-12-9 hang power clean unbroken; 15-12-9 STOH; 12 bar-facing burpee após cada set
+## 2026-09-18
+WU 12
+WOD 28 | For time #cap | 800m run; 15 goblet squat; 3 legless / 5 rope climb; 15 goblet squat; 40 KB swing 16/24kg; 30 pull-up; 400m run
+## 2026-09-19
+MOB 5
+WOD 28 | For time #partner #cap | 100m burpee broad jump; 80 box jump step down; 50 HSPU; 300 DU; 60 double DB push press 15/22,5kg; 80 DB step-up; 100m burpee broad jump
+## 2026-09-21
+WU 15
+FOR 10 | Back squat | a cada 2' 5 sets 10-8-8-6-6 @60-80%
+ESP 8 | BMU; walking lunge; DU
+WOD 11 | AMRAP 11' | 50 DU; 15m 1DB walking lunge 15/22,5kg; 10/6 BMU; 15m walking lunge
+## 2026-09-22
+WU 12
+FOR 10 | Shoulder press | a cada 2' 5x5+ @75-80%
+ESP 8 | clean and jerk build
+WOD 15 | For time #cap | 10 shuttle run + 15 clean and jerk 45/60kg; 10 SR + 12 C&J 49/70; 10 SR + 9 C&J 55/80; 10 SR + 6 C&J 61/90
+## 2026-09-23
+WU 20
+WOD 26 | 2x For time 12' rest 2' #partner | 80 TTB; 100/70 cal row; 300m farm carry 16/24kg; 100 sit-up sincro; 100/70 air bike; 10/7 rope climb
+## 2026-09-24
+WU 12
+SKILL 12 | handstand walk
+ESP 5 | wall ball
+WOD 18 | AMRAP 18' | 20m HSW / 40m DB OH walk 15/22,5kg; 30 wall ball; 400m run
+## 2026-09-25
+WU 10
+TEC 10 | snatch
+FOR 10 | Snatch complex | a cada 2' 5 sets 1 power snatch + 1 hang power snatch + 1 high hang power snatch (find heaviest)
+ESP 6 | pull-up/C2B; box jump over; DB snatch
+WOD 12 | AMRAP 12' | 16 C2B; 20 alt DB snatch 15/22,5kg; 24 box jump over
+## 2026-09-26
+MOB 5
+WU 15
+WOD 30 | 3 rounds | 800m run; 30 DU; 20 front squat 35/50kg; 10 burpee over bar; 20 barbell lunge; 10 burpee over bar; 30 DU
+## 2026-09-28
+WU 10
+FOR 10 | Shoulder press | 4-4-4-4-4+ @75-85% (último set máx reps)
+ESP 10 | pull-up; thruster
+WOD 15 | "O'Connor" 3 rounds for time #hero:O'Connor | 15 thruster 29/43kg; 15 pull-up; 400m run
+## 2026-09-29
+WU 20
+WOD 25 | EMOM 25' | 10m HSW / 3 wall walk; 20 russian KB swing 16/24kg; 12/15 cal bike; 20m sled push; 20 sit-up
+## 2026-09-30
+WU 10
+FOR 10 | Power clean (barbell control) | EMOM 8' 4 power clean drop and go @75-80%
+ESP 5 | box jump; deadlift
+WOD 16 | "The Quick and the Dead" For time | 3-9-15-21-15-9-3 deadlift 93/65kg; box jump; 50 DU entre rounds
+## 2026-10-01
+WU 20
+WOD 24 | For time #cap | 10 BMU; 1000m run; 20 TTB; 20m DB walking lunge 15/22,5kg; 8 BMU; 800m run; 18 TTB; 20m lunge; 6 BMU; 600m run; 16 TTB; 20m lunge
+## 2026-10-02
+WU 8
+FOR 10 | Snatch complex | a cada 2' 5 sets 1 power snatch + 2 hang power snatch @65-85%
+WOD 15 | For time #cap | 15-12-9 power snatch 41/60kg; 30-24-18 burpee over bar
+## 2026-10-03
+MOB 5
+WU 15
+WOD 30 | For time #partner #cap | 150 crossover; 90 wall ball; 80 push-up; 70 cal bike/row; 60 double DB squat clean 15/22,5kg; 50 HSPU; 150 DU
