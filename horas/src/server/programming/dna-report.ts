@@ -4,6 +4,9 @@ import { computeDna } from '@/domain/programming/dna';
 import { blockVolume } from '@/domain/programming/calculator';
 import { hyroxCoverage, modalityInsights } from '@/domain/programming/insights';
 import { programModality } from '@/domain/programming/modalities';
+import { computeTechnicalDna, technicalInsights, type TechnicalDataset } from '@/domain/programming/technical';
+import futevolei from '../../../data/historico-futevolei/futevolei.json';
+import baseForte from '../../../data/historico-base-forte/base-forte.json';
 import { calibrateIntensity, classify, volumeBaseline, weeklyVolumes, type IntensityClass } from '@/domain/programming/volume';
 
 /** Histórico de cada modalidade (vem do repositório: data/historico-<slug>). */
@@ -13,10 +16,23 @@ const HISTORY: Record<string, { text: string; source: string }> = {
   hyrox: { text: HYROX_HISTORY, source: 'documento de programação Funcional + Hyrox (ago/2024–ago/2026), segmentado em data/historico-hyrox (aulas rotuladas Hyrox, Corrida Fitness ou Funcional / Hyrox). Estações da prova: formato oficial HYROX.' },
 };
 
+/** Modalidades técnicas: a base são planos de aula (JSON), não WODs. */
+const TECHNICAL: Record<string, { data: TechnicalDataset; source: string }> = {
+  futevolei: { data: futevolei as unknown as TechnicalDataset, source: 'base de planos de aula de Futevôlei — Metodologia Nação (data/historico-futevolei/futevolei.json).' },
+  'base-forte': { data: baseForte as unknown as TechnicalDataset, source: 'base de sessões Base Forte — Metodologia Nação Futevôlei (data/historico-base-forte/base-forte.json).' },
+};
+
+function buildTechnical(slug: string) {
+  const t = TECHNICAL[slug]!;
+  const dna = computeTechnicalDna(t.data);
+  return { modality: programModality(slug), empty: false as const, technical: true as const, dna, insights: technicalInsights(slug, dna), dataset: t.data, source: t.source };
+}
+
 function build(slug: string) {
+  if (TECHNICAL[slug]) return buildTechnical(slug);
   const modality = programModality(slug);
   const h = HISTORY[slug];
-  if (!h?.text.trim()) return { modality, empty: true as const };
+  if (!h?.text.trim()) return { modality, empty: true as const, technical: false as const };
   const sessions: Session[] = parseHistory(h.text);
   const dna = computeDna(sessions);
   const base = volumeBaseline(weeklyVolumes(sessions), modality.minWeekSessions);
@@ -33,7 +49,7 @@ function build(slug: string) {
     byDay.set(s.weekday, row);
   }
   return {
-    modality, empty: false as const, dna, base, model, coverage,
+    modality, empty: false as const, technical: false as const, dna, base, model, coverage,
     byDay: [...byDay.entries()].sort((a, b) => a[0] - b[0]),
     insights: modalityInsights(slug, dna, sessions, base),
     hyrox: slug === 'hyrox' ? hyroxCoverage(sessions) : null,

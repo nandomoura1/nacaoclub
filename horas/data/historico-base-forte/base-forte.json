@@ -1,0 +1,293 @@
+{
+  "schema_version": "1.0",
+  "dataset": "Treinos Base Forte Futevôlei — Metodologia Nação",
+  "finalidade": "Base estruturada para treinamento/contextualização de sistema gerador de treinos técnicos Base Forte.",
+  "metodologia": {
+    "nome": "Metodologia Nação Futevôlei",
+    "principios": [
+      "Alta repetição com filas curtas e participação constante",
+      "Progressão do simples para o complexo e do previsível para o jogo",
+      "Enquadramento e posicionamento antes da execução do fundamento",
+      "Contextualizar o fundamento dentro da construção do ponto",
+      "Adaptar complexidade ao nível da turma sem perder o objetivo técnico",
+      "Conectar recepção, deslocamento, construção, defesa e ataque",
+      "Ensinar leitura e tomada de decisão, não apenas execução motora"
+    ],
+    "padrao_entrega_professor": {
+      "energia_alta": "Presença, comunicação, atenção e participação ativa; energia alta não significa apenas gritar.",
+      "feedback": [
+        "OBSERVAR",
+        "CORRIGIR",
+        "INCENTIVAR",
+        "REPETIR"
+      ],
+      "uso_nome_aluno": "Chamar cada aluno pelo nome pelo menos 4 vezes durante a aula para orientar, corrigir, elogiar ou incentivar.",
+      "adaptacao_niveis": {
+        "aprendiz_D_C": "Priorizar movimento, enquadramento, posicionamento e domínio básico.",
+        "intermediario": "Enquadramento + fundamento + deslocamento.",
+        "avancado": "Enquadramento + fundamento + deslocamento + decisão + transição/continuidade."
+      }
+    }
+  },
+  "caracteristica": "Sessões de aprofundamento técnico com alto volume, progressão e aplicação em jogo.",
+  "sessoes": [
+    {
+      "id": "BF-001",
+      "tema": "Levantada de ombro",
+      "objetivo": "Desenvolver ombro como ferramenta de construção e direcionamento.",
+      "blocos": [
+        "Mobilidade + ativação",
+        "Técnica da levantada de ombro",
+        "Controle e direcionamento",
+        "Deslocamento + levantada",
+        "Situações de jogo",
+        "Mini jogos"
+      ],
+      "fundamentos": [
+        "Ombro"
+      ],
+      "progressao": [
+        "Parado",
+        "Direcionado",
+        "Após deslocamento",
+        "Recepção → ombro → ataque"
+      ],
+      "mini_jogo": "Incentivar construção com ombro; ponto normal 1, construção de qualidade com ombro 2.",
+      "conceito": "Levantar para facilitar o ataque."
+    },
+    {
+      "id": "BF-002",
+      "tema": "Levantada de cabeça",
+      "objetivo": "Desenvolver controle, altura e direção na levantada de cabeça.",
+      "blocos": [
+        "Mobilidade + ativação",
+        "Técnica de cabeça",
+        "Controle",
+        "Direcionamento",
+        "Deslocamento",
+        "Situações de jogo",
+        "Mini jogos"
+      ],
+      "fundamentos": [
+        "Cabeça"
+      ],
+      "progressao": [
+        "Parado",
+        "Direcionado",
+        "Após deslocamento",
+        "Recepção → cabeça → ataque"
+      ],
+      "mini_jogo": "Valorizar levantada de cabeça que gere condição real de ataque.",
+      "conceito": "A levantada deve servir ao atacante."
+    },
+    {
+      "id": "BF-003",
+      "tema": "Levantada de peito",
+      "objetivo": "Desenvolver peito como fundamento de levantamento e construção.",
+      "blocos": [
+        "Mobilidade + ativação",
+        "Técnica de peito",
+        "Controle e domínio",
+        "Direcionamento",
+        "Deslocamento",
+        "Situações de jogo",
+        "Mini jogos"
+      ],
+      "fundamentos": [
+        "Peito"
+      ],
+      "progressao": [
+        "Parado",
+        "Controle de altura",
+        "Direcionamento",
+        "Após deslocamento",
+        "Construção"
+      ],
+      "mini_jogo": "Pontuação extra para construção de qualidade usando peito.",
+      "conceito": "Controlar para construir."
+    },
+    {
+      "id": "BF-004",
+      "tema": "Levantada de chapa",
+      "objetivo": "Desenvolver chapa para controle, precisão e levantamento.",
+      "duracao_minutos": 55,
+      "blocos": [
+        {
+          "nome": "Mobilidade + ativação",
+          "duracao": 8
+        },
+        {
+          "nome": "Técnica da chapa",
+          "duracao": 15,
+          "conteudo": [
+            "Estacionária",
+            "Após deslocamento",
+            "Direcionada",
+            "Chapa + segunda bola/ataque"
+          ]
+        },
+        {
+          "nome": "Específico",
+          "duracao": 12,
+          "conteudo": [
+            "Recepção → levantada de chapa → ataque"
+          ]
+        },
+        {
+          "nome": "Mini jogos 2x2",
+          "duracao": 15,
+          "conteudo": [
+            "Uso obrigatório/incentivado da chapa"
+          ]
+        },
+        {
+          "nome": "Desafio",
+          "duracao": 5,
+          "conteudo": [
+            "Recepção → chapa → ataque → ponto"
+          ]
+        }
+      ],
+      "fundamentos": [
+        "Chapa"
+      ],
+      "progressao": [
+        "Estacionária",
+        "Deslocamento",
+        "Direcionamento",
+        "Construção + ataque"
+      ],
+      "mini_jogo": "Ponto normal 1; ponto com boa levantada de chapa 2.",
+      "conceito": "Precisão da segunda bola melhora a terceira."
+    },
+    {
+      "id": "BF-005",
+      "tema": "Chapa — fundamento completo",
+      "objetivo": "Desenvolver chapa como ferramenta de controle, direcionamento e construção.",
+      "blocos": [
+        "Mobilidade + ativação",
+        "Técnica da chapa",
+        "Controle e direcionamento",
+        "Deslocamento + chapa",
+        "Situações de jogo",
+        "Mini jogos"
+      ],
+      "fundamentos": [
+        "Chapa"
+      ],
+      "progressao": [
+        "Contato/superfície",
+        "Alvos",
+        "Variação de altura",
+        "Deslocamento",
+        "Recepção → chapa → construção → ataque"
+      ],
+      "mini_jogo": "Ponto normal 1; ponto construído com chapa de qualidade 2.",
+      "coaching": [
+        "Superfície correta",
+        "Estabilidade",
+        "Controle de força",
+        "Direção",
+        "Preparação para próxima ação"
+      ],
+      "conceito": "Escolher para onde levar a bola."
+    },
+    {
+      "id": "BF-006",
+      "tema": "Peitada — fundamento completo",
+      "objetivo": "Desenvolver peitada para domínio, controle e construção.",
+      "blocos": [
+        "Mobilidade + ativação",
+        "Técnica da peitada",
+        "Controle e domínio",
+        "Deslocamento + peitada",
+        "Situações de jogo",
+        "Mini jogos"
+      ],
+      "fundamentos": [
+        "Peito"
+      ],
+      "progressao": [
+        "Posicionamento e contato",
+        "Amortecimento",
+        "Direcionamento",
+        "Após deslocamento",
+        "Recepção → peitada → construção → ataque"
+      ],
+      "mini_jogo": "Ponto normal 1; ponto construído com peitada de qualidade 2.",
+      "coaching": [
+        "Chegar equilibrado",
+        "Amortecer",
+        "Controlar altura",
+        "Direcionar"
+      ],
+      "conceito": "Mover → ajustar → peitar → controlar → recuperar."
+    },
+    {
+      "id": "BF-007",
+      "tema": "Levantada de ombro — construção",
+      "objetivo": "Aprimorar levantada de ombro com controle, direção e deslocamento.",
+      "blocos": [
+        "Mobilidade + ativação",
+        "Técnica da levantada de ombro",
+        "Controle e direcionamento",
+        "Deslocamento + levantada",
+        "Situações de jogo",
+        "Mini jogos focados na levantada de ombro"
+      ],
+      "fundamentos": [
+        "Ombro"
+      ],
+      "progressao": [
+        "Parado",
+        "Alvos",
+        "Variação de altura",
+        "Deslocamento",
+        "Recepção → deslocamento → ombro → ataque"
+      ],
+      "mini_jogo": "Ponto normal 1; ponto construído com boa levantada de ombro 2.",
+      "coaching": [
+        "Posicionamento",
+        "Contato",
+        "Direção",
+        "Altura"
+      ],
+      "conceito": "Boa levantada coloca o parceiro em condição de atacar."
+    },
+    {
+      "id": "BF-008",
+      "tema": "Levantada de cabeça + ataque",
+      "objetivo": "Conectar qualidade da levantada de cabeça à preparação e execução do ataque.",
+      "blocos": [
+        "Mobilidade + ativação",
+        "Técnica da levantada de cabeça",
+        "Controle e posicionamento",
+        "Levantada + preparação para o ataque",
+        "Ataque após levantada",
+        "Situações de jogo",
+        "Mini jogos com foco em levantada + ataque"
+      ],
+      "fundamentos": [
+        "Cabeça",
+        "Ataque"
+      ],
+      "progressao": [
+        "Cabeça parada",
+        "Cabeça após deslocamento",
+        "Zona de levantamento",
+        "Levantada + aproximação",
+        "Ataque controlado",
+        "Ataque real"
+      ],
+      "mini_jogo": "Ponto normal 1; ponto após boa levantada de cabeça + ataque 2.",
+      "coaching": [
+        "Enquadramento",
+        "Contato",
+        "Altura",
+        "Direção",
+        "Posição do atacante"
+      ],
+      "conceito": "Receber → levantar de cabeça → preparar → atacar."
+    }
+  ]
+}

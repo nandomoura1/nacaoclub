@@ -57,3 +57,26 @@ describe('histórico segmentado Funcional / Hyrox', () => {
     expect(cov.find((c) => c.id === 'run')!.share).toBeGreaterThan(70);
   });
 });
+
+describe('modalidades técnicas (planos de aula)', () => {
+  it('Futevôlei: fases, fundamentos e lacunas', async () => {
+    const { computeTechnicalDna, technicalInsights } = await import('@/domain/programming/technical');
+    const fv = (await import('../../data/historico-futevolei/futevolei.json')).default;
+    const d = computeTechnicalDna(fv as never);
+    expect(d.sessions).toBe(24);
+    expect(d.phases.find((p) => p.phase === 'Fundamentos')!.count).toBe(0);
+    expect(d.fundamentals[0]!.share).toBeGreaterThanOrEqual(45);
+    expect(d.missing).toContain('saque');
+    const ins = technicalInsights('futevolei', d);
+    expect(ins.some((i) => i.title === 'Fase sem aulas')).toBe(true);
+  });
+
+  it('Base Forte: construção com pontuação dobrada no mini jogo', async () => {
+    const { computeTechnicalDna } = await import('@/domain/programming/technical');
+    const bf = (await import('../../data/historico-base-forte/base-forte.json')).default;
+    const d = computeTechnicalDna(bf as never);
+    expect(d.sessions).toBe(8);
+    expect(d.rules).toEqual([['Pontuação dobrada para o fundamento', 8]]);
+    expect(d.blocks[0]).toMatchObject({ name: 'Mobilidade + ativação', count: 8, avgMin: 8 });
+  });
+});

@@ -1,0 +1,847 @@
+{
+  "schema_version": "1.0",
+  "dataset": "Treinos Futevôlei — Metodologia Nação",
+  "finalidade": "Base estruturada para treinamento/contextualização de sistema gerador de planos de aula.",
+  "metodologia": {
+    "nome": "Metodologia Nação Futevôlei",
+    "principios": [
+      "Alta repetição com filas curtas e participação constante",
+      "Progressão do simples para o complexo e do previsível para o jogo",
+      "Enquadramento e posicionamento antes da execução do fundamento",
+      "Contextualizar o fundamento dentro da construção do ponto",
+      "Adaptar complexidade ao nível da turma sem perder o objetivo técnico",
+      "Conectar recepção, deslocamento, construção, defesa e ataque",
+      "Ensinar leitura e tomada de decisão, não apenas execução motora"
+    ],
+    "padrao_entrega_professor": {
+      "energia_alta": "Presença, comunicação, atenção e participação ativa; energia alta não significa apenas gritar.",
+      "feedback": [
+        "OBSERVAR",
+        "CORRIGIR",
+        "INCENTIVAR",
+        "REPETIR"
+      ],
+      "uso_nome_aluno": "Chamar cada aluno pelo nome pelo menos 4 vezes durante a aula para orientar, corrigir, elogiar ou incentivar.",
+      "adaptacao_niveis": {
+        "aprendiz_D_C": "Priorizar movimento, enquadramento, posicionamento e domínio básico.",
+        "intermediario": "Enquadramento + fundamento + deslocamento.",
+        "avancado": "Enquadramento + fundamento + deslocamento + decisão + transição/continuidade."
+      }
+    }
+  },
+  "fases_metodologicas": [
+    "Fundamentos",
+    "Recepção",
+    "Construção do jogo",
+    "Defesa",
+    "Jogo estruturado",
+    "Inteligência de jogo"
+  ],
+  "sessoes": [
+    {
+      "id": "FV-001",
+      "fase": "Recepção",
+      "tema": "Recepção livre",
+      "dia": "Segunda-feira",
+      "objetivo": "Consolidar recepção livre com escolha adequada do fundamento e continuidade da construção.",
+      "mobilidade": {
+        "quantidade_exercicios": 4
+      },
+      "aquecimento": [
+        "Enquadramento para recepção",
+        "Repetições controladas com fundamentos livres"
+      ],
+      "fundamentos": [
+        "Recepção livre"
+      ],
+      "progressao": [
+        "Bola previsível",
+        "Variação de direção e altura",
+        "Recepção + construção"
+      ],
+      "dinamica_jogo": {
+        "descricao": "Jogo condicionado iniciando pela recepção livre e seguindo a jogada.",
+        "regra": "Priorizar qualidade da primeira bola."
+      },
+      "foco_coaching": [
+        "Enquadrar antes do contato",
+        "Chegar equilibrado",
+        "Direcionar a primeira bola"
+      ],
+      "conceito": "Receber → deslocar → construir → atacar"
+    },
+    {
+      "id": "FV-002",
+      "fase": "Recepção",
+      "tema": "Recepção livre",
+      "dia": "Terça-feira",
+      "objetivo": "Aumentar volume e consistência da recepção livre em contexto progressivamente variável.",
+      "mobilidade": {
+        "quantidade_exercicios": 4
+      },
+      "aquecimento": [
+        "Movimentação e enquadramento",
+        "Recepção com variações"
+      ],
+      "fundamentos": [
+        "Recepção livre"
+      ],
+      "progressao": [
+        "Controle",
+        "Direcionamento",
+        "Recepção + segunda bola + ataque"
+      ],
+      "dinamica_jogo": {
+        "descricao": "Jogo com recepção livre e continuidade.",
+        "regra": "Construir antes de acelerar a jogada."
+      },
+      "foco_coaching": [
+        "Leitura da trajetória",
+        "Posicionamento",
+        "Controle"
+      ],
+      "conceito": "Ler → enquadrar → receber → construir"
+    },
+    {
+      "id": "FV-003",
+      "fase": "Jogo estruturado",
+      "tema": "Joguinho — recepção, levantamento e ataque",
+      "dia": "Quarta-feira",
+      "objetivo": "Integrar recepção, levantamento e ataque em espaço reduzido.",
+      "mobilidade": {
+        "quantidade_exercicios": 4
+      },
+      "aquecimento": [
+        "Fundamentos curtos",
+        "Quadrinha"
+      ],
+      "fundamentos": [
+        "Recepção",
+        "Levantamento",
+        "Ataque"
+      ],
+      "progressao": [
+        "Receber",
+        "Receber + levantar",
+        "Receber + levantar + atacar"
+      ],
+      "dinamica_jogo": {
+        "descricao": "Joguinho em quadrinha com construção de três ações.",
+        "regra": "Uso da mão pode ser adaptado conforme nível."
+      },
+      "foco_coaching": [
+        "Muitas repetições",
+        "Pouca fila",
+        "Qualidade antes da velocidade"
+      ],
+      "conceito": "Receber → levantar → atacar"
+    },
+    {
+      "id": "FV-004",
+      "fase": "Jogo estruturado",
+      "tema": "Joguinho — consolidação",
+      "dia": "Quinta-feira",
+      "objetivo": "Consolidar a construção completa do ponto em jogo reduzido.",
+      "mobilidade": {
+        "quantidade_exercicios": 4
+      },
+      "aquecimento": [
+        "Fundamentos curtos",
+        "Quadrinha"
+      ],
+      "fundamentos": [
+        "Recepção",
+        "Levantamento",
+        "Ataque"
+      ],
+      "progressao": [
+        "Construção controlada",
+        "Maior imprevisibilidade",
+        "Jogo"
+      ],
+      "dinamica_jogo": {
+        "descricao": "Jogo reduzido com continuidade após a construção.",
+        "regra": "Adaptar permissões técnicas ao nível."
+      },
+      "foco_coaching": [
+        "Tomada de decisão",
+        "Posicionamento após contato",
+        "Continuidade"
+      ],
+      "conceito": "Ler → decidir → executar → se posicionar → jogar"
+    },
+    {
+      "id": "FV-005",
+      "fase": "Recepção",
+      "tema": "Recepção superior + ataque livre",
+      "dia": "Segunda-feira",
+      "objetivo": "Desenvolver recepção superior e transformá-la em construção para ataque livre.",
+      "mobilidade": {
+        "quantidade_exercicios": 4
+      },
+      "aquecimento": [
+        "Enquadramento",
+        "Recepção superior com controle"
+      ],
+      "fundamentos": [
+        "Recepção superior",
+        "Ataque livre"
+      ],
+      "progressao": [
+        "Recepção isolada",
+        "Recepção + construção",
+        "Recepção + ataque"
+      ],
+      "dinamica_jogo": {
+        "descricao": "Jogo iniciando com recepção superior.",
+        "regra": "Ataque livre."
+      },
+      "foco_coaching": [
+        "Enquadramento",
+        "Direcionamento",
+        "Continuidade"
+      ],
+      "conceito": "Receber bem para ampliar as opções de ataque"
+    },
+    {
+      "id": "FV-006",
+      "fase": "Recepção",
+      "tema": "Recepção superior + ataque sem cabeça",
+      "dia": "Terça-feira",
+      "objetivo": "Consolidar recepção superior e ampliar repertório ofensivo restringindo ataque de cabeça.",
+      "mobilidade": {
+        "quantidade_exercicios": 4
+      },
+      "aquecimento": [
+        "Recepção superior",
+        "Construção"
+      ],
+      "fundamentos": [
+        "Recepção superior",
+        "Ataques alternativos"
+      ],
+      "progressao": [
+        "Recepção",
+        "Construção",
+        "Ataque com restrição"
+      ],
+      "dinamica_jogo": {
+        "descricao": "Jogo condicionado.",
+        "regra": "Primeiro ataque não pode ser de cabeça."
+      },
+      "foco_coaching": [
+        "Escolha do fundamento",
+        "Adaptação",
+        "Qualidade da primeira bola"
+      ],
+      "conceito": "Restrição como estímulo à variedade técnica"
+    },
+    {
+      "id": "FV-007",
+      "fase": "Recepção",
+      "tema": "Recepção de chapa + ataque livre",
+      "dia": "Quarta-feira",
+      "objetivo": "Desenvolver chapa como fundamento de recepção com direcionamento.",
+      "mobilidade": {
+        "quantidade_exercicios": 4
+      },
+      "aquecimento": [
+        "Técnica de chapa",
+        "Enquadramento"
+      ],
+      "fundamentos": [
+        "Chapa",
+        "Ataque livre"
+      ],
+      "progressao": [
+        "Chapa parada",
+        "Chapa após deslocamento",
+        "Recepção de chapa + ataque"
+      ],
+      "dinamica_jogo": {
+        "descricao": "Jogo condicionado iniciando com chapa.",
+        "regra": "Ataque livre."
+      },
+      "foco_coaching": [
+        "Superfície de contato",
+        "Controle",
+        "Direção"
+      ],
+      "conceito": "Recepção direcionada facilita a construção"
+    },
+    {
+      "id": "FV-008",
+      "fase": "Recepção",
+      "tema": "Recepção de chapa + ataque sem cabeça",
+      "dia": "Quinta-feira",
+      "objetivo": "Consolidar chapa na recepção e estimular variedade ofensiva.",
+      "mobilidade": {
+        "quantidade_exercicios": 4
+      },
+      "aquecimento": [
+        "Chapa",
+        "Deslocamento + chapa"
+      ],
+      "fundamentos": [
+        "Chapa",
+        "Ataques alternativos"
+      ],
+      "progressao": [
+        "Controle",
+        "Direcionamento",
+        "Jogo condicionado"
+      ],
+      "dinamica_jogo": {
+        "descricao": "Jogo iniciando com recepção de chapa.",
+        "regra": "Ataque não pode ser de cabeça."
+      },
+      "foco_coaching": [
+        "Escolha técnica",
+        "Direcionamento",
+        "Continuidade"
+      ],
+      "conceito": "Controlar a primeira bola para decidir melhor a terceira"
+    },
+    {
+      "id": "FV-009",
+      "fase": "Construção do jogo",
+      "tema": "Recepção livre + ataque de fundo",
+      "dia": "Segunda-feira",
+      "objetivo": "Integrar recepção livre à construção de ataque profundo.",
+      "mobilidade": {
+        "quantidade_exercicios": 4
+      },
+      "aquecimento": [
+        "Quadrinha somente com recepção",
+        "Aumento progressivo do número de recepções"
+      ],
+      "fundamentos": [
+        "Recepção livre",
+        "Ataque de fundo"
+      ],
+      "progressao": [
+        "1 recepção",
+        "Até 4 recepções/ataques",
+        "Jogo"
+      ],
+      "dinamica_jogo": {
+        "descricao": "Jogo com construção livre.",
+        "regra": "Primeiro ataque deve ser de fundo."
+      },
+      "foco_coaching": [
+        "Controle",
+        "Leitura de espaço",
+        "Profundidade"
+      ],
+      "conceito": "Receber → construir → atacar o fundo"
+    },
+    {
+      "id": "FV-010",
+      "fase": "Construção do jogo",
+      "tema": "Recepção livre + ataque de fundo",
+      "dia": "Terça-feira",
+      "objetivo": "Reforçar construção para ataque profundo com maior consistência.",
+      "mobilidade": {
+        "quantidade_exercicios": 4
+      },
+      "aquecimento": [
+        "Quadrinha de recepção",
+        "Volume progressivo"
+      ],
+      "fundamentos": [
+        "Recepção livre",
+        "Ataque de fundo"
+      ],
+      "progressao": [
+        "Controle",
+        "Construção",
+        "Jogo condicionado"
+      ],
+      "dinamica_jogo": {
+        "descricao": "Jogo com continuidade.",
+        "regra": "Primeiro ataque no fundo."
+      },
+      "foco_coaching": [
+        "Direcionamento",
+        "Preparação ofensiva",
+        "Leitura"
+      ],
+      "conceito": "Construir espaço antes de finalizar"
+    },
+    {
+      "id": "FV-011",
+      "fase": "Construção do jogo",
+      "tema": "Recepção livre + ataque curto",
+      "dia": "Quarta-feira",
+      "objetivo": "Integrar recepção livre à escolha e execução de ataque curto.",
+      "mobilidade": {
+        "quantidade_exercicios": 4
+      },
+      "aquecimento": [
+        "Quadrinha de recepção",
+        "Aumento de repetições"
+      ],
+      "fundamentos": [
+        "Recepção livre",
+        "Ataque curto"
+      ],
+      "progressao": [
+        "Recepção",
+        "Construção",
+        "Ataque curto"
+      ],
+      "dinamica_jogo": {
+        "descricao": "Jogo condicionado.",
+        "regra": "Primeiro ataque deve ser curto."
+      },
+      "foco_coaching": [
+        "Controle de força",
+        "Leitura do defensor",
+        "Precisão"
+      ],
+      "conceito": "Receber → construir → explorar espaço curto"
+    },
+    {
+      "id": "FV-012",
+      "fase": "Construção do jogo",
+      "tema": "Recepção livre + ataque curto",
+      "dia": "Quinta-feira",
+      "objetivo": "Consolidar ataque curto após construção de recepção livre.",
+      "mobilidade": {
+        "quantidade_exercicios": 4
+      },
+      "aquecimento": [
+        "Quadrinha",
+        "Recepção em volume"
+      ],
+      "fundamentos": [
+        "Recepção livre",
+        "Ataque curto"
+      ],
+      "progressao": [
+        "Controle",
+        "Direcionamento",
+        "Jogo"
+      ],
+      "dinamica_jogo": {
+        "descricao": "Jogo condicionado.",
+        "regra": "Primeiro ataque curto."
+      },
+      "foco_coaching": [
+        "Leitura",
+        "Precisão",
+        "Tomada de decisão"
+      ],
+      "conceito": "Variação de profundidade gera vantagem"
+    },
+    {
+      "id": "FV-013",
+      "fase": "Defesa",
+      "tema": "Defesa paralela",
+      "dia": "Segunda-feira",
+      "objetivo": "Desenvolver enquadramento e defesa de bolas paralelas, conectando defesa à transição ofensiva.",
+      "mobilidade": {
+        "quantidade_exercicios": 4
+      },
+      "aquecimento": [
+        "Movimentação/enquadramento para defesa paralela"
+      ],
+      "fundamentos": [
+        "Chapa",
+        "Peito do pé"
+      ],
+      "progressao": [
+        "Chapa na frente: deslocar para trás e atacar/defender frente",
+        "Chapa no fundo: deslocar para frente e defender fundo",
+        "Peito do pé: deslocar para trás e defender frente",
+        "Avançados executam sequência"
+      ],
+      "dinamica_jogo": {
+        "descricao": "Jogo iniciado por ataque/defesa na paralela.",
+        "regra": "Defesa paralela como gatilho inicial."
+      },
+      "foco_coaching": [
+        "Enquadramento",
+        "Deslocamento",
+        "Recuperação após defesa"
+      ],
+      "conceito": "Defesa → recuperação → construção"
+    },
+    {
+      "id": "FV-014",
+      "fase": "Defesa",
+      "tema": "Defesa diagonal",
+      "dia": "Terça-feira",
+      "objetivo": "Desenvolver enquadramento e defesa diagonal com deslocamentos variados.",
+      "mobilidade": {
+        "quantidade_exercicios": 4
+      },
+      "aquecimento": [
+        "Movimentação/enquadramento diagonal"
+      ],
+      "fundamentos": [
+        "Chapa",
+        "Cabeça"
+      ],
+      "progressao": [
+        "Chapa na frente",
+        "Cabeça no canto",
+        "Chapa no meio deslocando para antena",
+        "Avançados em sequência",
+        "Ao separar exercícios: defender e ir à rede saltar"
+      ],
+      "dinamica_jogo": {
+        "descricao": "Jogo iniciado com defesa diagonal.",
+        "regra": "Defesa diagonal como gatilho."
+      },
+      "foco_coaching": [
+        "Leitura de trajetória",
+        "Enquadramento",
+        "Transição para rede"
+      ],
+      "conceito": "Defender e imediatamente voltar ao jogo"
+    },
+    {
+      "id": "FV-015",
+      "fase": "Defesa",
+      "tema": "Defesa de ombro / bola sobre o corpo",
+      "dia": "Quarta-feira",
+      "objetivo": "Desenvolver enquadramento e defesa de ombro em bolas altas/sobre o corpo.",
+      "mobilidade": {
+        "quantidade_exercicios": 4
+      },
+      "aquecimento": [
+        "Enquadramento para bola sobre o corpo"
+      ],
+      "fundamentos": [
+        "Ombro"
+      ],
+      "progressao": [
+        "Defesa de ombro",
+        "Defesa + ir à rede + salto",
+        "Avançado: defender + atacar",
+        "Priorizar mais defesas que ataques"
+      ],
+      "dinamica_jogo": {
+        "descricao": "Jogo iniciado por defesa de ombro.",
+        "regra": "Defesa de ombro como ação inicial."
+      },
+      "foco_coaching": [
+        "Orientação corporal",
+        "Controle",
+        "Transição"
+      ],
+      "conceito": "Defender sem encerrar a participação na jogada"
+    },
+    {
+      "id": "FV-016",
+      "fase": "Defesa",
+      "tema": "Defesa livre + construção",
+      "dia": "Quinta-feira",
+      "objetivo": "Integrar defesa livre, enquadramento da levantada e construção em três toques.",
+      "mobilidade": {
+        "quantidade_exercicios": 4
+      },
+      "aquecimento": [
+        "Enquadrar primeira bola livre",
+        "Enquadrar levantada e movimentação do levantador"
+      ],
+      "fundamentos": [
+        "Defesa livre",
+        "Levantamento",
+        "Construção"
+      ],
+      "progressao": [
+        "Defesa",
+        "Defesa + enquadramento da levantada",
+        "Avançado: defesa + levantamento + envio",
+        "Reagir ao ataque e trabalhar três toques"
+      ],
+      "dinamica_jogo": {
+        "descricao": "Jogo começa com ataque; se a outra dupla defender, ganha o direito de atacar e o jogo segue livre.",
+        "regra": "Reduzir quadra para níveis inferiores quando necessário."
+      },
+      "foco_coaching": [
+        "Reação",
+        "Três toques",
+        "Posicionamento do levantador"
+      ],
+      "conceito": "Defender → organizar → construir → atacar"
+    },
+    {
+      "id": "FV-017",
+      "fase": "Inteligência de jogo",
+      "tema": "Marcação paralela",
+      "dia": "Segunda-feira",
+      "objetivo": "Ensinar leitura, posicionamento e enquadramento da marcação paralela e conectá-los à defesa e ataque.",
+      "mobilidade": {
+        "quantidade_exercicios": 4
+      },
+      "aquecimento": [
+        "Movimentação de marcação paralela sem bola",
+        "Movimentação com enquadramento",
+        "Níveis superiores executam fundamento"
+      ],
+      "fundamentos": [
+        "Defesa paralela + ataque da mesma bola"
+      ],
+      "progressao": [
+        "Movimento sem bola",
+        "Enquadramento",
+        "Defesa controlada",
+        "Defesa + ataque"
+      ],
+      "dinamica_jogo": {
+        "descricao": "Defesa saindo da rede na paralela e continuidade.",
+        "regra": "Jogo segue após defesa."
+      },
+      "foco_coaching": [
+        "Não correr atrás da bola",
+        "Posicionar em função da jogada",
+        "Distância do parceiro"
+      ],
+      "conceito": "Posicionar → enquadrar → defender → atacar"
+    },
+    {
+      "id": "FV-018",
+      "fase": "Inteligência de jogo",
+      "tema": "Marcação diagonal",
+      "dia": "Terça-feira",
+      "objetivo": "Desenvolver leitura e posicionamento para fechar a diagonal.",
+      "mobilidade": {
+        "quantidade_exercicios": 4
+      },
+      "aquecimento": [
+        "Movimentação diagonal sem bola",
+        "Enquadramento",
+        "Níveis superiores executam defesa"
+      ],
+      "fundamentos": [
+        "Defesa diagonal + ataque da mesma bola"
+      ],
+      "progressao": [
+        "Posição",
+        "Deslocamento",
+        "Defesa",
+        "Defesa + ataque"
+      ],
+      "dinamica_jogo": {
+        "descricao": "Defesa saindo da rede, ajustando a marcação e continuando o jogo.",
+        "regra": "Cobrar posicionamento antes do contato."
+      },
+      "foco_coaching": [
+        "Marcação começa antes do ataque",
+        "Profundidade",
+        "Distância lateral"
+      ],
+      "conceito": "Leitura → posicionamento → defesa → recuperação"
+    },
+    {
+      "id": "FV-019",
+      "fase": "Inteligência de jogo",
+      "tema": "Marcação diagonal — leitura da dupla",
+      "dia": "Quarta-feira",
+      "objetivo": "Ensinar relação entre bola, adversário, parceiro e espaço na defesa diagonal.",
+      "mobilidade": {
+        "quantidade_exercicios": 4
+      },
+      "aquecimento": [
+        "Dinâmica em dupla na quadra inteira",
+        "Defensor enquadra quem levanta",
+        "Bola livre ao outro lado",
+        "Reposicionar antes de novo estímulo"
+      ],
+      "fundamentos": [
+        "Jogo posicionado com foco no defensor da diagonal"
+      ],
+      "progressao": [
+        "Organizar posição",
+        "Enquadrar",
+        "Defender em níveis superiores",
+        "Alternar defensor a cada bola"
+      ],
+      "dinamica_jogo": {
+        "descricao": "Jogo posicionado, sem pressa.",
+        "regra": "Quem tomar ponto na diagonal faz 10 polichinelos."
+      },
+      "foco_coaching": [
+        "Primeiro posiciona, depois joga",
+        "Cobertura",
+        "Comunicação"
+      ],
+      "conceito": "Bola + adversário + parceiro + espaço"
+    },
+    {
+      "id": "FV-020",
+      "fase": "Inteligência de jogo",
+      "tema": "Marcação paralela — leitura da dupla",
+      "dia": "Quinta-feira",
+      "objetivo": "Aprofundar organização coletiva e leitura na marcação paralela.",
+      "mobilidade": {
+        "quantidade_exercicios": 4
+      },
+      "aquecimento": [
+        "Dinâmica em dupla na quadra inteira",
+        "Enquadramento do levantador",
+        "Reposicionamento antes do estímulo seguinte"
+      ],
+      "fundamentos": [
+        "Jogo posicionado com foco no defensor da paralela"
+      ],
+      "progressao": [
+        "Organização",
+        "Enquadramento",
+        "Defesa",
+        "Continuidade"
+      ],
+      "dinamica_jogo": {
+        "descricao": "Jogo controlado com trabalho do defensor da paralela.",
+        "regra": "Quem tomar ponto na paralela faz 10 polichinelos."
+      },
+      "foco_coaching": [
+        "Posição inicial",
+        "Distância do parceiro",
+        "Leitura do atacante"
+      ],
+      "conceito": "A defesa começa antes do contato"
+    },
+    {
+      "id": "FV-021",
+      "fase": "Inteligência de jogo",
+      "tema": "Reação + defesa de lob",
+      "dia": "Segunda-feira",
+      "objetivo": "Reconhecer bola longa, girar, acelerar para o fundo e defender.",
+      "mobilidade": {
+        "quantidade_exercicios": 4
+      },
+      "aquecimento": [
+        "Explicar giro para executar peito do pé após lob",
+        "Giro sem bola",
+        "Giro + simulação do fundamento"
+      ],
+      "fundamentos": [
+        "Cabeça",
+        "Peito do pé"
+      ],
+      "progressao": [
+        "Alto volume com joelho no chão e giro",
+        "Movimento livre",
+        "Reação com estímulo contrário",
+        "Defesa + continuidade para avançados"
+      ],
+      "dinamica_jogo": {
+        "descricao": "Reagir a uma bola para frente, pegá-la com a mão e descartar; imediatamente reagir e defender um lob.",
+        "regra": "Primeiro estímulo força mudança de direção."
+      },
+      "foco_coaching": [
+        "Reconheceu → girou → acelerou",
+        "Evitar correr longamente de costas",
+        "Chegar equilibrado"
+      ],
+      "conceito": "Não adivinhar. Ler e reagir."
+    },
+    {
+      "id": "FV-022",
+      "fase": "Inteligência de jogo",
+      "tema": "Reação + defesa de pingo",
+      "dia": "Terça-feira",
+      "objetivo": "Reconhecer bola curta, mudar direção e avançar com controle para defender.",
+      "mobilidade": {
+        "quantidade_exercicios": 4
+      },
+      "aquecimento": [
+        "Reação para frente",
+        "Primeiro passo + aceleração + enquadramento"
+      ],
+      "fundamentos": [
+        "Peito do pé",
+        "Chapa"
+      ],
+      "progressao": [
+        "Alto volume técnico",
+        "Variação de distância/direção/altura",
+        "Estímulo longo seguido de pingo",
+        "Avançado: defesa + levantamento + ataque"
+      ],
+      "dinamica_jogo": {
+        "descricao": "Reagir a uma bola para trás, pegar com a mão e descartar; imediatamente buscar e defender um pingo.",
+        "regra": "Velocidade para chegar + controle para defender."
+      },
+      "foco_coaching": [
+        "Não basta chegar",
+        "Equilíbrio",
+        "Escolha do fundamento"
+      ],
+      "conceito": "Ler → mudar direção → controlar"
+    },
+    {
+      "id": "FV-023",
+      "fase": "Jogo estruturado",
+      "tema": "Joguinho — reação ao lob",
+      "dia": "Quarta-feira",
+      "objetivo": "Aplicar reação a bola longa em situação imprevisível de jogo.",
+      "mobilidade": {
+        "quantidade_exercicios": 4
+      },
+      "aquecimento": [
+        "Fundamentos curtos em volume",
+        "Dinâmica de jogo na quadrinha"
+      ],
+      "fundamentos": [
+        "Chapa",
+        "Peito do pé",
+        "Cabeça",
+        "Fundamentos curtos"
+      ],
+      "progressao": [
+        "Quadrinha",
+        "Estímulo de bola longa",
+        "Defesa do lob + recuperação"
+      ],
+      "dinamica_jogo": {
+        "descricao": "Reagir à bola longa (lob) e continuar o jogo.",
+        "regra": "Após defesa, jogo segue normalmente."
+      },
+      "foco_coaching": [
+        "Momento da leitura",
+        "Giro",
+        "Equilíbrio",
+        "Voltar para a jogada"
+      ],
+      "conceito": "Defender é o começo da próxima ação"
+    },
+    {
+      "id": "FV-024",
+      "fase": "Jogo estruturado",
+      "tema": "Joguinho — reação à bola curta",
+      "dia": "Quinta-feira",
+      "objetivo": "Aplicar leitura e reação ao pingo dentro do jogo.",
+      "mobilidade": {
+        "quantidade_exercicios": 4
+      },
+      "aquecimento": [
+        "Fundamentos curtos em volume",
+        "Dinâmica na quadrinha"
+      ],
+      "fundamentos": [
+        "Fundamentos curtos",
+        "Defesa de pingo"
+      ],
+      "progressao": [
+        "Quadrinha",
+        "Leitura de bola curta",
+        "Defesa + construção"
+      ],
+      "dinamica_jogo": {
+        "descricao": "Reagir à bola curta e continuar o jogo.",
+        "regra": "Após a defesa, jogo livre."
+      },
+      "foco_coaching": [
+        "Acelerar sem perder controle",
+        "Enquadrar",
+        "Construir após defender"
+      ],
+      "conceito": "Ler → acelerar → defender → construir"
+    }
+  ]
+}

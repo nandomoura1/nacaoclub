@@ -6,6 +6,7 @@ import { LEVELS, LEVEL_LOAD_SAMPLES, LEVEL_RATIO } from '@/domain/programming/ta
 import { INTENSITY_CLASSES, WEEK_METRICS } from '@/domain/programming/volume';
 import { cn } from '@/lib/cn';
 import { getDnaReport } from '@/server/programming/dna-report';
+import { TechnicalReport } from './TechnicalReport';
 
 /** Barra horizontal de série única: rótulo, trilho e valor em texto (a cor não carrega identidade). */
 function Bar({ label, value, max, text, hint }: { label: string; value: number; max: number; text: string; hint?: string }) {
@@ -23,7 +24,7 @@ function Bar({ label, value, max, text, hint }: { label: string; value: number; 
 
 function Section({ title, sub, children, className }: { title: string; sub?: string; children: React.ReactNode; className?: string }) {
   return (
-    <Card className={cn('p-4 sm:p-5', className)}>
+    <Card className={cn('min-w-0 p-4 sm:p-5', className)}>
       <h2 className="text-lg font-extrabold text-navy">{title}</h2>
       {sub && <p className="mb-3 text-xs text-tinta-suave">{sub}</p>}
       <div className={sub ? '' : 'mt-3'}>{children}</div>
@@ -61,6 +62,7 @@ export function DnaReport({ slug }: { slug: string }) {
       </>
     );
   }
+  if (r.technical) return <TechnicalReport name={name} dna={r.dna} insights={r.insights} dataset={r.dataset} source={r.source} />;
   const { dna: d, base, model, coverage, byDay, insights, hyrox } = r;
   const crossfit = slug === 'crossfit';
   const byMod = (['G', 'W', 'M', 'O'] as Modality[])
