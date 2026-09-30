@@ -129,10 +129,12 @@ export function EditorClient({ week, benchmarks }: { week: WorkoutWeekView; benc
                   + {KIND[k].label}
                 </button>
               ))}
-              <button onClick={() => { setPickQ(''); setPickFor(d.date); }}
-                className="rounded-full bg-nacao/10 px-2.5 py-1 text-[11px] font-bold text-nacao ring-1 ring-nacao/30 hover:bg-nacao/15">
-                🏆 + Benchmark
-              </button>
+              {benchmarks.length > 0 && (
+                <button onClick={() => { setPickQ(''); setPickFor(d.date); }}
+                  className="rounded-full bg-nacao/10 px-2.5 py-1 text-[11px] font-bold text-nacao ring-1 ring-nacao/30 hover:bg-nacao/15">
+                  🏆 + Benchmark
+                </button>
+              )}
             </div>
           </Card>
         ))}

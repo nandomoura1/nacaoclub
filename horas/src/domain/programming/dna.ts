@@ -80,7 +80,7 @@ const top = (c: Count, n = 99) => Object.entries(c).sort((a, b) => b[1] - a[1]).
 
 export interface Dna {
   period: { from: string; to: string; sessions: number; weeks: number; specialDays: number };
-  structure: { avgClassMin: number | null; avgWodMin: number | null; blockShare: Record<string, number>; avgBlockMin: Record<string, number | null>; wodsPerSession: number | null };
+  structure: { avgClassMin: number | null; declaredClassMin: number | null; avgWodMin: number | null; blockShare: Record<string, number>; avgBlockMin: Record<string, number | null>; wodsPerSession: number | null };
   timeDomains: { id: TimeDomain; label: string; range: string; count: number; share: number }[];
   formats: { format: WodFormat; count: number; share: number }[];
   partnerShare: number;
@@ -242,6 +242,8 @@ export function computeDna(all: Session[]): Dna {
     period: { from: sessions[0]?.date ?? '', to: sessions.at(-1)?.date ?? '', sessions: sessions.length, weeks, specialDays: all.length - sessions.length },
     structure: {
       avgClassMin: avg(classMin),
+      // Duração da aula declarada no planejamento (tag "#aula:48").
+      declaredClassMin: avg(sessions.flatMap((s) => s.tags.filter((t) => t.startsWith('aula:')).map((t) => Number(t.slice(5))).filter((n) => n > 0))),
       avgWodMin: avg(wods.filter((w) => w.b.minutes).map((w) => w.b.minutes!)),
       blockShare: Object.fromEntries(Object.entries(blockShare).map(([k, v]) => [k, pct(v, sessions.length)])),
       avgBlockMin: blockMinAvg,

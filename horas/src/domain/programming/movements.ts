@@ -28,12 +28,17 @@ const m = (id: string, name: string, modality: Modality, family: Family, re: Reg
 
 export const MOVEMENTS: MovementDef[] = [
   // ── Compostos que precisam vir antes das partes ────────────────────────
+  m('man-maker', 'Man maker', 'O', 'burpee', /man[- ]?makers?/i),
   m('burpee-pull-up', 'Burpee pull-up', 'G', 'burpee', /burpee[s]?[- ]pull[- ]?ups?/i),
   m('burpee-box-jump', 'Burpee box jump over', 'G', 'burpee', /burpee[s]? box jump[s]?( over)?|bbjo/i),
   m('burpee-over-bar', 'Burpee over bar', 'G', 'burpee', /(lateral |bar[- ]facing )?burpee[s]? over (the )?(bar|barbell)|bar[- ]facing burpees?|\bbob\b|\bbfb\b/i),
   m('burpee-broad-jump', 'Burpee broad jump', 'G', 'burpee', /burpee[s]? broad jump/i),
   m('db-burpee', 'Burpee com DB', 'O', 'burpee', /(burpee[s]? over (the )?(db|dumbbell|dumbell|sand ?bag|ktb|kb))|db burpee|double db burpees?|dumbbell burpee|db burpee step[- ]?over/i),
-  m('burpee', 'Burpee', 'G', 'burpee', /burpees?|up[- ]downs?/i),
+  m('squat-thrust', 'Meio sugado (squat thrust)', 'G', 'burpee', /meio[- ]sugados?|squat thrusts?|half burpees?/i),
+  m('burpee', 'Burpee', 'G', 'burpee', /burpees?|up[- ]downs?|sugados?/i),
+  m('broad-jump', 'Broad jump', 'G', 'jump', /broad jumps?|salto horizontal/i),
+  m('jump-squat', 'Jump squat', 'G', 'jump', /jump squats?|squat jumps?|agachamento com salto/i),
+  m('jumping-jack', 'Polichinelo / jumping jack', 'G', 'jump', /jump(ing)? jacks?|polichinelos?/i),
   m('box-jump-over', 'Box jump over', 'G', 'jump', /box[- ]jump[- ]?overs?|\bbjo\b/i),
   m('box-jump', 'Box jump', 'G', 'jump', /box[- ]?jumps?|seated box jump/i),
   m('sdhp', 'Sumo deadlift high pull', 'W', 'olympic-other', /sumo deadlift high[- ]pulls?|\bsdhp\b/i, 34),
@@ -41,7 +46,7 @@ export const MOVEMENTS: MovementDef[] = [
   m('db-clean-jerk', 'DB clean and jerk / press', 'O', 'clean', /(db|dumbbell|dumbell)s? hang clean (and|&|to) (jerk|press|overhead)|single[- ]arm (db|dumbbell) hang clean and jerk|db hang clean and press/i),
   m('db-squat-clean', 'DB squat clean', 'O', 'clean', /(double )?(db|dumbbell|dumbell)s? (squat |hang power |hang )?clean/i),
   m('db-thruster', 'DB thruster', 'O', 'squat', /(double[- ])?(db|dumbbell|dumbell)s? thrusters?/i),
-  m('db-press', 'DB press / push press', 'O', 'press', /(double[- ])?(db|dumbbell|dumbell)s? (push )?press(es)?|single[- ]arm (db )?push press|single[- ]db push press|db bench press|arnold press|db push jerk|single[- ]db push jerk/i),
+  m('db-press', 'DB press / push press', 'O', 'press', /(double[- ])?(db|dumbbell|dumbell)s? (push )?press(es)?|single[- ]arm (db )?push press|single[- ]db push press|db bench press|arnold press|db push jerk|single[- ]db push jerk|plate (push )?press/i),
   m('db-sto', 'DB shoulder to overhead', 'O', 'press', /(db|dumbbell)s? shoulder[- ]to[- ]overheads?/i),
   m('db-deadlift', 'DB/KB deadlift', 'O', 'hinge', /(db|dumbbell|kb|ktb|kettlebell)s? deadlifts?/i),
   m('devil-press', 'Devil press', 'O', 'burpee', /devil'?s? press(es)?/i),
@@ -52,6 +57,7 @@ export const MOVEMENTS: MovementDef[] = [
   m('kb-swing', 'Kettlebell swing', 'O', 'swing', /(american |russian |heavy russian |kb |ktb |kettlebell )(kettlebell |kb |ktb )?swings?|\bkbs\b|kettlebell swings?|ktb swings?|kb swings?/i),
   m('kb-sdhp', 'KB sumo deadlift high pull', 'O', 'olympic-other', /(kb|ktb|kettlebell) sdhp/i),
   m('carry', 'Carry (farmer / OH / suitcase)', 'O', 'carry', /farm(er)?s?[- ]?(carry|walk|hold)|suitcase carry|oh (plate )?(carry|walk)|overhead (plate )?(carry|walk)|front[- ]rack (carry|farm|hold)|front rack carry|bear hug/i),
+  m('sled-pull', 'Sled pull', 'O', 'carry', /sled pulls?|puxada (de |do )?tren[óo]/i),
   m('sled', 'Sled push', 'O', 'carry', /sled/i),
   m('wall-ball', 'Wall ball', 'O', 'medball', /wall[- ]?balls?( shots?)?/i),
   m('medball-other', 'Medball (clean, run, slam)', 'O', 'medball', /med[- ]?ball|slam ball|sand ?bag (clean|press)/i),
@@ -80,6 +86,7 @@ export const MOVEMENTS: MovementDef[] = [
   m('curtis-p', 'Curtis P complex', 'W', 'clean', /curtis[- ]?p/i, 34),
 
   // ── Ginástica ─────────────────────────────────────────────────────────
+  m('horizontal-row', 'Remada (TRX, argola, DB, barra)', 'G', 'pull', /remadas?|(trx|ring|argola) rows?|plank rows?/i),
   m('ring-muscle-up', 'Ring muscle-up', 'G', 'pull', /ring muscle[- ]ups?|\brmu\b/i),
   m('bar-muscle-up', 'Bar muscle-up', 'G', 'pull', /bar muscle[- ]ups?|\bbmu\b|bar m\.?u/i),
   m('muscle-up', 'Muscle-up', 'G', 'pull', /muscle[- ]ups?|\bmu\b/i),
@@ -90,35 +97,39 @@ export const MOVEMENTS: MovementDef[] = [
   m('k2e', 'Knees-to-elbows / knee raise', 'G', 'core', /knees?[- ]to[- ]elbows?|\bkte\b|knee raises?|knees? to chest|leg raises?|feet raises?/i),
   m('hspu', 'Handstand push-up', 'G', 'inverted', /handstand push[- ]?ups?|hand stand push[- ]?ups?|\bhspu\b|pike push[- ]?ups?/i),
   m('hs-walk', 'Handstand walk / wall walk', 'G', 'inverted', /handstand walk|hand stand walk|\bhsw\b|wall walks?/i),
-  m('dip', 'Dip', 'G', 'push', /(ring |box |strict )?dips?\b/i),
-  m('push-up', 'Push-up', 'G', 'push', /push[- ]?ups?|hand[- ]release/i),
+  m('dip', 'Dip', 'G', 'push', /(ring |box |strict )?dips?\b|tr[ií]ceps mergulho|mergulho/i),
+  m('push-up', 'Push-up', 'G', 'push', /push[- ]?ups?|hand[- ]release|flex[ãa]o(?! plantar)( de bra[çc]os?)?/i),
   m('pistol', 'Pistol / single-leg squat', 'G', 'squat', /pistols?|single[- ]leg squats?|b[uú]lgaro|bulgarian split/i),
   m('air-squat', 'Air squat', 'G', 'squat', /air squats?|\bsquats?\b/i),
-  m('lunge', 'Lunge (peso corporal)', 'G', 'lunge', /lunges?/i),
-  m('sit-up', 'Sit-up / V-up / GHD', 'G', 'core', /(abmat |ghd |synchronized |synchro |turkish )?sit[- ]?ups?|v[- ]?ups?|back extensions?|tuck[- ]?ups?/i),
+  m('lunge', 'Lunge (peso corporal)', 'G', 'lunge', /lunges?|afundos?/i),
+  m('mountain-climber', 'Escalador / mountain climber', 'G', 'core', /mountain climbers?|escaladore?s?/i),
+  m('bird-dog', 'Perdigueiro / bird dog', 'G', 'core', /perdigueiros?|bird[- ]dogs?/i),
+  m('glute-bridge', 'Elevação pélvica / hip thrust', 'G', 'hinge', /eleva[çc][ãa]o (de )?pelve|eleva[çc][ãa]o p[ée]lvica|glute bridges?|hip thrusts?/i),
+  m('sit-up', 'Sit-up / V-up / GHD', 'G', 'core', /\babd(ominal)?\b[^;]*|(abmat |ghd |synchronized |synchro |turkish )?sit[- ]?ups?|v[- ]?ups?|back extensions?|tuck[- ]?ups?/i),
   m('core-hold', 'Core isométrico (hollow, L-sit, prancha)', 'G', 'core', /hollow|l[- ]sit|plank|prancha|superman|flutter|russian twist|pallof|leg pike/i),
 
   // ── Monoestruturais ───────────────────────────────────────────────────
   m('double-under', 'Double-under / crossover', 'M', 'rope', /double[- ]?unders?|\bdu\b|d\.u\.?|crossovers?|cross over/i),
   m('single-under', 'Single-under', 'M', 'rope', /single[- ]?unders?|\bsu\b|s\.u\.?/i),
   m('shuttle-run', 'Shuttle run', 'M', 'run', /shuttle runs?/i),
-  m('run', 'Corrida', 'M', 'run', /\brun\b|running|\bmile\b|\d+ ?m (run|sprint)|sprint|\bjog\b|corrida|tiro/i),
+  m('run', 'Corrida', 'M', 'run', /\brun\b|running|\bmile\b|\d+ ?m (run|sprint)|sprint|\bjog\b|corrida|tiro|trote/i),
   m('row', 'Remo', 'M', 'row', /\brow(ing)?\b(?! for load)|remo/i),
   m('bike', 'Bike', 'M', 'bike', /bike|echo|assault/i),
-  m('ski', 'Ski', 'M', 'ski', /\bski\b/i),
+  m('ski', 'Ski', 'M', 'ski', /\bski\b|skierg/i),
 ];
 
 export const MOVEMENT = Object.fromEntries(MOVEMENTS.map((d) => [d.id, d])) as Record<string, MovementDef>;
 
 /** "pull-ups" em "barbell row", "bent over row" etc. não são remo. */
-const NOT_ROW = /(barbell|bent over|renegade|ring|plate|db|dumbbell|kb|ktb|double db|supinated|low bar|unilateral) rows?/gi;
+const NOT_ROW = /(barbell|bent over|renegade|ring|plate|db|dumbbell|kb|ktb|double db|supinated|low bar|unilateral|upright|trx|serrote) rows?/gi;
 
 /**
  * Movimentos presentes num trecho de texto (um item de lista). Cada regra
  * consome o trecho casado, então compostos não contam em dobro.
  */
 export function detectMovements(text: string): MovementDef[] {
-  let t = ` ${text.toLowerCase().replace(NOT_ROW, ' ')} `;
+  // Remada com implemento é padrão de puxada horizontal, não o ergômetro.
+  let t = ` ${text.toLowerCase().replace(NOT_ROW, ' remada ')} `;
   const found: MovementDef[] = [];
   for (const def of MOVEMENTS) {
     const re = new RegExp(def.re.source, 'gi');

@@ -20,7 +20,11 @@ describe('DNA · dicionário de movimentos', () => {
 
   it('remo é remo; "barbell row" não é monoestrutural', () => {
     expect(ids('500m row')).toEqual(['row']);
-    expect(ids('10 barbell row')).toEqual([]);
+    expect(ids('10 barbell row')).toEqual(['horizontal-row']);
+    expect(ids('15 remada TRX pronada')).toEqual(['horizontal-row']);
+    expect(ids('10 perdigueiro D; 10 meio sugado')).toEqual(['squat-thrust', 'bird-dog']);
+    expect(ids('15 flexão plantar')).toEqual([]);
+    expect(ids('100m sled pull')).toEqual(['sled-pull']);
     expect(ids('20/25 cal row/bike')).toEqual(expect.arrayContaining(['row', 'bike']));
   });
 

@@ -8,6 +8,7 @@ import { requirePrincipal } from '@/server/auth/session';
 import { NotFoundError } from '@/server/errors';
 import { getWeek } from '@/server/services/workout-service';
 import { listBenchmarks } from '@/server/services/benchmark-service';
+import { modalitySlug } from '@/domain/programming/modalities';
 import { EditorClient } from './EditorClient';
 
 export const metadata: Metadata = { title: 'Treinos da semana' };
@@ -17,10 +18,9 @@ export default async function SemanaPage({ params }: { params: Promise<{ id: str
   if (!can(principal, 'workout.edit')) redirect('/hoje');
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
-  const [week, benchmarks] = await Promise.all([
-    getWeek(principal, id).catch((e) => { if (e instanceof NotFoundError) notFound(); throw e; }),
-    listBenchmarks(principal),
-  ]);
+  const week = await getWeek(principal, id).catch((e) => { if (e instanceof NotFoundError) notFound(); throw e; });
+  // O botão + Benchmark mostra a biblioteca da modalidade da semana.
+  const benchmarks = await listBenchmarks(principal, { modality: modalitySlug(week.modality) });
 
   return (
     <>

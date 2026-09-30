@@ -1,11 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import {
   BarChart3, CalendarDays, ClipboardCheck, History, LayoutGrid,
-  LogOut, Settings2, Sun, TriangleAlert, Users, UserRoundCog, Dumbbell, CalendarClock, Sparkles, Menu, X, Trophy, Dna } from 'lucide-react';
+  LogOut, Settings2, Sun, TriangleAlert, Users, UserRoundCog, Dumbbell, CalendarClock, Sparkles, Menu, X, Trophy, Dna, ChevronRight } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { cn } from '@/lib/cn';
 import { initials } from '@/lib/format';
@@ -34,12 +34,12 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function SideLink({ item, active }: { item: NavItem; active: boolean }) {
+function SideLink({ item, active, nested }: { item: NavItem; active: boolean; nested?: boolean }) {
   const Icon = ICONS[item.icon];
   if (item.soon) {
     return (
       <span
-        className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/35"
+        className={cn('flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/35', nested && 'py-1.5 pl-9')}
         title={/^E\d/.test(item.soon) ? `Chega na etapa ${item.soon}` : 'Em breve'}
       >
         <Icon className="size-4" />
@@ -53,6 +53,7 @@ function SideLink({ item, active }: { item: NavItem; active: boolean }) {
       href={item.href}
       className={cn(
         'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition-colors',
+        nested && 'py-1.5 pl-9',
         active ? 'bg-white/12 text-white' : 'text-white/75 hover:bg-white/8 hover:text-white',
       )}
     >
@@ -166,12 +167,46 @@ function SectionsNav({ sections, activeHref }: { sections: NavSection[]; activeH
           <p className={cn('px-3 pb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-white/40', i > 0 ? 'pt-6' : 'pt-0')}>
             {section.title}
           </p>
-          {section.items.map((item) => (
-            <SideLink key={item.href} item={item} active={item.href === activeHref} />
-          ))}
+          {groupItems(section.items).map((g) =>
+            g.group
+              ? <NavGroup key={g.group} title={g.group} items={g.items} activeHref={activeHref} />
+              : <Fragment key={g.items[0]!.href}>{g.items.map((item) => <SideLink key={item.href} item={item} active={item.href === activeHref} />)}</Fragment>,
+          )}
         </div>
       ))}
     </nav>
+  );
+}
+
+/** Itens seguidos do mesmo subgrupo ficam juntos; itens sem grupo passam direto. */
+function groupItems(items: NavItem[]): { group?: string; items: NavItem[] }[] {
+  const out: { group?: string; items: NavItem[] }[] = [];
+  for (const item of items) {
+    const last = out.at(-1);
+    if (last && last.group === item.group) last.items.push(item);
+    else out.push({ group: item.group, items: [item] });
+  }
+  return out;
+}
+
+/** Subgrupo recolhível (a modalidade em Treinos). Abre sozinho quando a página atual está nele. */
+function NavGroup({ title, items, activeHref }: { title: string; items: NavItem[]; activeHref: string | undefined }) {
+  const hasActive = items.some((i) => i.href === activeHref);
+  const [open, setOpen] = useState(hasActive);
+  useEffect(() => { if (hasActive) setOpen(true); }, [hasActive]);
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className={cn('flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-sm font-bold transition-colors hover:bg-white/8', hasActive ? 'text-white' : 'text-white/70')}
+      >
+        <ChevronRight className={cn('size-4 transition-transform', open && 'rotate-90')} />
+        {title}
+      </button>
+      {open && <div className="space-y-0.5">{items.map((item) => <SideLink key={item.href} item={item} active={item.href === activeHref} nested />)}</div>}
+    </div>
   );
 }
 

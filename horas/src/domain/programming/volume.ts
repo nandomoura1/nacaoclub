@@ -98,10 +98,11 @@ const stat = (xs: number[]): Stat => ({
 /** Semana cheia = 5+ aulas regulares (evita semanas de feriado distorcerem a referência). */
 export const FULL_WEEK = 5;
 
-export function volumeBaseline(weeks: WeekVolume[]): { weeks: number; metrics: Record<WeekMetric, Stat> } {
-  const full = weeks.filter((w) => w.sessions >= FULL_WEEK);
+export function volumeBaseline(weeks: WeekVolume[], minSessions = FULL_WEEK): { weeks: number; minSessions: number; metrics: Record<WeekMetric, Stat> } {
+  const full = weeks.filter((w) => w.sessions >= minSessions);
   return {
     weeks: full.length,
+    minSessions,
     metrics: Object.fromEntries(WEEK_METRICS.map((m) => [m.id, stat(full.map((w) => w.values[m.id]))])) as Record<WeekMetric, Stat>,
   };
 }

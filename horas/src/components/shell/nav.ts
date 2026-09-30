@@ -1,4 +1,5 @@
 import type { PermissionKey } from '@/server/auth/permissions';
+import { PROGRAM_MODALITIES } from '@/domain/programming/modalities';
 
 export type NavIcon =
   | 'hoje' | 'calendario' | 'pendencias' | 'grade' | 'professores'
@@ -15,6 +16,8 @@ export interface NavItem {
   mobile?: boolean;
   /** Rótulo curto para a barra inferior. */
   short?: string;
+  /** Subgrupo dentro da seção (ex.: a modalidade em Treinos); vira um grupo recolhível. */
+  group?: string;
 }
 
 export interface NavSection {
@@ -33,11 +36,14 @@ export const NAV_HORAS: NavItem[] = [
   { href: '/relatorios', label: 'Relatórios', icon: 'relatorios', permission: 'payroll.view_hours' },
 ];
 
+/** Cadastro de Treino + um grupo por modalidade: o DNA (e a IA que nasce dele) é de cada modalidade. */
 export const NAV_TREINOS: NavItem[] = [
   { href: '/treinos', label: 'Cadastro de Treino', short: 'Treinos', icon: 'treinos', permission: 'workout.edit', mobile: true },
-  { href: '/treinos/benchmarks', label: 'Benchmarks', icon: 'benchmarks', permission: 'workout.edit' },
-  { href: '/treinos/dna', label: 'DNA da Programação', icon: 'dna', permission: 'workout.edit' },
-  { href: '/treinos/ia', label: 'Geração de Treino IA', icon: 'treinos-ia', permission: 'workout.edit', soon: 'breve' },
+  ...PROGRAM_MODALITIES.flatMap((m): NavItem[] => [
+    ...(m.benchmarks ? [{ href: `/treinos/${m.slug}/benchmarks`, label: 'Benchmarks', icon: 'benchmarks', permission: 'workout.edit', group: m.name } satisfies NavItem] : []),
+    { href: `/treinos/${m.slug}/dna`, label: 'DNA da Programação', icon: 'dna', permission: 'workout.edit', group: m.name },
+    { href: `/treinos/${m.slug}/ia`, label: 'Geração de Treino IA', icon: 'treinos-ia', permission: 'workout.edit', soon: 'breve', group: m.name },
+  ]),
 ];
 
 export const NAV_ADMIN: NavItem[] = [

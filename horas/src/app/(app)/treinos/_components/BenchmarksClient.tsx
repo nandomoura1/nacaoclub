@@ -11,14 +11,14 @@ import { Input, Label } from '@/components/ui/input';
 import { BENCHMARK_CATEGORIES, benchmarkText, matchBenchmark, type BenchmarkCategory } from '@/domain/benchmarks';
 import { cn } from '@/lib/cn';
 import type { BenchmarkView } from '@/server/services/benchmark-service';
-import { saveBenchmarkAction, setBenchmarkActiveAction } from './actions';
+import { saveBenchmarkAction, setBenchmarkActiveAction } from './benchmark-actions';
 
 const LABEL = Object.fromEntries(BENCHMARK_CATEGORIES.map((c) => [c.value, c.label])) as Record<BenchmarkCategory, string>;
 const TONE: Record<BenchmarkCategory, 'blue' | 'navy' | 'cyan' | 'amber'> = { GIRL: 'blue', HERO: 'navy', CLASSICO: 'cyan', NACAO: 'amber' };
 type Form = { id: string | null; name: string; format: string; timeCapMin: string; content: string; notes: string };
 const EMPTY: Form = { id: null, name: '', format: '', timeCapMin: '', content: '', notes: '' };
 
-export function BenchmarksClient({ items }: { items: BenchmarkView[] }) {
+export function BenchmarksClient({ items, modality }: { items: BenchmarkView[]; modality: { slug: string; name: string } }) {
   const router = useRouter();
   const [q, setQ] = useState('');
   const [cat, setCat] = useState<BenchmarkCategory | null>(null);
@@ -34,7 +34,7 @@ export function BenchmarksClient({ items }: { items: BenchmarkView[] }) {
   const count = (c: BenchmarkCategory) => items.filter((b) => b.active && b.category === c).length;
 
   const save = () => form && start(async () => {
-    const r = await saveBenchmarkAction(form.id, { name: form.name, format: form.format, timeCapMin: form.timeCapMin, content: form.content, notes: form.notes });
+    const r = await saveBenchmarkAction(form.id, { name: form.name, format: form.format, timeCapMin: form.timeCapMin, content: form.content, notes: form.notes, modality: modality.slug });
     if (!r.ok) return setMsg({ error: r.error });
     setForm(null);
     setMsg({ ok: `Benchmark ${form.name} salvo.` });
@@ -46,14 +46,14 @@ export function BenchmarksClient({ items }: { items: BenchmarkView[] }) {
       <Card className="mb-4 flex flex-wrap items-center gap-2 p-3">
         <div className="relative min-w-0 flex-1 basis-56">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-tinta-fraca" />
-          <Input className="pl-9" placeholder="Buscar: Fran, thruster, AMRAP…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar benchmark" />
+          <Input className="pl-9" placeholder={modality.slug === 'crossfit' ? 'Buscar: Fran, thruster, AMRAP…' : 'Buscar por nome ou movimento…'} value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar benchmark" />
         </div>
         <Button onClick={() => { setMsg({}); setForm(EMPTY); }}><Plus /> Novo benchmark da Nação</Button>
         <div className="-mx-3 flex w-[calc(100%+1.5rem)] gap-2 overflow-x-auto px-3 pb-1">
           <button onClick={() => setCat(null)} className={cn('shrink-0 rounded-full border px-3 py-1.5 text-sm font-semibold', !cat ? 'border-navy bg-navy text-white' : 'border-borda text-tinta')}>
             Todos
           </button>
-          {BENCHMARK_CATEGORIES.map((c) => (
+          {BENCHMARK_CATEGORIES.filter((c) => modality.slug === 'crossfit' || count(c.value) > 0).map((c) => (
             <button key={c.value} onClick={() => setCat(cat === c.value ? null : c.value)}
               className={cn('shrink-0 whitespace-nowrap rounded-full border px-3 py-1.5 text-sm font-semibold', cat === c.value ? 'border-navy bg-navy text-white' : 'border-borda text-tinta')}>
               {c.label} <span className="opacity-60">{count(c.value)}</span>
@@ -66,7 +66,13 @@ export function BenchmarksClient({ items }: { items: BenchmarkView[] }) {
       </Card>
       <FormMessage error={msg.error} success={msg.ok} />
 
-      {visible.length === 0 && <Card className="p-6 text-sm text-tinta-suave">Nenhum benchmark encontrado{q ? ` para "${q}"` : ''}.</Card>}
+      {visible.length === 0 && (
+        <Card className="p-6 text-sm text-tinta-suave">
+          {items.length === 0
+            ? `Nenhum benchmark de ${modality.name} ainda. Use "Novo benchmark da Nação" para cadastrar os treinos de referência da modalidade (testes, simulados, circuitos que se repetem).`
+            : `Nenhum benchmark encontrado${q ? ` para "${q}"` : ''}.`}
+        </Card>
+      )}
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {visible.map((b) => (
           <Card key={b.id} className={cn('flex min-w-0 flex-col p-4', !b.active && 'opacity-55')}>

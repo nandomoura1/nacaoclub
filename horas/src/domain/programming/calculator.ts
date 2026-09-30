@@ -91,7 +91,8 @@ function stations(items: string[]): { list: Station[]; noQty: { def: MovementDef
     // "20m HSW / 40m DB OH walk": vale a primeira opção (RX). "(2 pull-up)" é adaptação.
     const clean = raw.replace(/\([^)]*\)/g, ' ');
     for (const part of clean.split(PARTS)) {
-      const first = part.split(/\s+\/\s+(?=\d)/)[0]!;
+      // "A- bike / Row", "1- Row": rótulo da estação sai; "1-2-3…" (escada) fica.
+      const first = part.split(/\s+\/\s+(?=\d)/)[0]!.replace(/^[a-z]\s*[-–)]\s+|^\d\s*[-–)]\s+(?=[a-zà-ú])/i, '');
       const defs = detectMovements(first);
       if (!defs.length) continue;
       const def = defs[0]!;
@@ -181,9 +182,15 @@ export function wodVolume(b: SessionBlock): BlockVolume {
     return finish(b, { kind, rounds, athletes: 1, lines: [...out.values()], partnerDivided: true });
   } else if (fmt === 'EMOM / a cada' && /emom\s*\d+\s*(?:'|min|$)/.test(title)) {
     const emomMin = Number(title.match(/emom\s*(\d+)/)![1]);
-    const slots = Math.max(list.length, ...b.items.map((i) => Number(i.match(/^min\s*(\d+)/i)?.[1] ?? 0)));
+    // Estação sem número ("A- bike / Row") = trabalho por tempo: o "on" do título ou 40" [HIPÓTESE].
+    const on = Number(title.match(/(\d+)\s*"\s*on/)?.[1] ?? 40);
+    const timedNoQty = noQty.map(({ def, load }): Station => ({ def, load, timed: true, unit: 's', perRound: on }));
+    const all = [...list, ...timedNoQty];
+    const slots = Math.max(all.length, ...b.items.map((i) => Number(i.match(/^min\s*(\d+)/i)?.[1] ?? 0)));
     const perStation = emomMin / Math.max(1, slots);
-    for (const x of list) add(x.def, unitOf(x), (x.timed ? timedReps(x) : x.perRound) * perStation, x.load);
+    for (const x of all) add(x.def, unitOf(x), (x.timed ? timedReps(x) : x.perRound) * perStation, x.load);
+    if (timedNoQty.length) kind = 'estimado';
+    noQty.length = 0;
     rounds = Math.round(perStation * 10) / 10;
   } else {
     for (const x of list) add(x.def, unitOf(x), (x.timed ? timedReps(x) : x.perRound) * rounds, x.load);
