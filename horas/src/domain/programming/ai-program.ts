@@ -9,7 +9,7 @@ import { addDays, isIsoDate, weekdayOf, type IsoDate } from '@/domain/dates';
  */
 
 export const PROGRAM_KINDS = [
-  { id: 'periodizacao', label: 'Periodização nova', help: 'Objetivo definido (ex.: força no back squat, preparar Murph), com fases, progressão, deload e teste.' },
+  { id: 'periodizacao', label: 'Periodização nova', help: 'Objetivo definido (ex.: força, condicionamento, preparar um benchmark ou prova), com fases, progressão, deload e teste.' },
   { id: 'continuidade', label: 'Continuidade da programação', help: 'Segue a programação dos últimos 14 ou 30 dias, mantendo o DNA e equilibrando o que ficou para trás.' },
 ] as const;
 
@@ -31,7 +31,7 @@ export const programRequestSchema = z.object({
 export type ProgramRequest = z.output<typeof programRequestSchema>;
 
 export const CAPACITY_LABEL: Record<ProgramRequest['capacity'], string> = {
-  geral: 'CrossFit geral (sem capacidade específica)', forca: 'Força', lpo: 'Levantamento olímpico', ginastica: 'Ginástica / skill',
+  geral: 'Condicionamento geral (sem capacidade específica)', forca: 'Força', lpo: 'Levantamento olímpico', ginastica: 'Ginástica / skill',
   engine: 'Engine / condicionamento', benchmark: 'Preparar um benchmark', competicao: 'Preparação para competição',
 };
 export const LEVEL_LABEL: Record<ProgramRequest['level'], string> = {
@@ -78,7 +78,7 @@ export const ProgramWeekSchema = z4.object({
 export const ProgramPlanSchema = z4.object({
   titulo: z4.string().describe('Nome curto da planilha.'),
   modelo: z4.string().describe('Modelo de periodização escolhido (linear, ondulatória, blocos, step loading, continuidade…).'),
-  estrategia: z4.string().describe('A estratégia em 3–5 frases: por que este modelo, como progride, como protege o CrossFit geral.'),
+  estrategia: z4.string().describe('A estratégia em 3–5 frases: por que este modelo, como progride, como protege a aula geral da modalidade.'),
   objetivoFinal: z4.string(),
   fases: z4.array(z4.object({ nome: z4.string(), semanas: z4.string().describe('Ex.: "1–3"'), objetivo: z4.string() })),
   semanas: z4.array(ProgramWeekSchema),

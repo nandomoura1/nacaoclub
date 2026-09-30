@@ -19,7 +19,8 @@ export function ProgramForm({ slug, defaultStart, enabled }: { slug: string; def
   const router = useRouter();
   const [f, setF] = useState<Form>({
     kind: 'periodizacao', title: '', startDate: defaultStart, length: '4', unit: 'semanas', weekdays: [1, 2, 3, 4, 5, 6],
-    goal: '', capacity: 'forca', movement: '', test: '3RM', level: 'geral', window: 14,
+    goal: '', movement: '', level: 'geral', window: 14,
+    ...(slug === 'crossfit' ? { capacity: 'forca', test: '3RM' } : { capacity: 'engine', test: 'nenhum' }),
   });
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -109,7 +110,7 @@ export function ProgramForm({ slug, defaultStart, enabled }: { slug: string; def
             </div>
             <div>
               <Label htmlFor="pg-mov">Movimento (opcional)</Label>
-              <Input id="pg-mov" maxLength={80} placeholder="Ex.: back squat, muscle-up, Murph" value={f.movement} onChange={(e) => set('movement', e.target.value)} />
+              <Input id="pg-mov" maxLength={80} placeholder={slug === 'crossfit' ? 'Ex.: back squat, muscle-up, Murph' : 'Ex.: KB swing, corrida, prancha'} value={f.movement} onChange={(e) => set('movement', e.target.value)} />
             </div>
             <div>
               <Label htmlFor="pg-test">Teste ao final</Label>
@@ -130,7 +131,7 @@ export function ProgramForm({ slug, defaultStart, enabled }: { slug: string; def
           <Label htmlFor="pg-goal">{perio ? 'Objetivo' : 'Observações (opcional)'}</Label>
           <textarea id="pg-goal" maxLength={600} rows={2}
             className="w-full rounded-lg border border-borda bg-white px-3 py-2 text-sm outline-none focus:border-nacao"
-            placeholder={perio ? 'Ex.: aumentar a força no back squat com 2 estímulos por semana, sem descaracterizar o CrossFit geral' : 'Ex.: semana de Open, evitar corrida às sextas'}
+            placeholder={perio ? (slug === 'crossfit' ? 'Ex.: aumentar a força no back squat com 2 estímulos por semana, sem descaracterizar o CrossFit geral' : 'Ex.: melhorar o condicionamento e a resistência muscular em 6 semanas, com 1 dia de força com halteres') : (slug === 'crossfit' ? 'Ex.: semana de Open, evitar corrida às sextas' : 'Ex.: evitar corrida às sextas, turma cheia às 18h')}
             value={f.goal} onChange={(e) => set('goal', e.target.value)} />
         </div>
 

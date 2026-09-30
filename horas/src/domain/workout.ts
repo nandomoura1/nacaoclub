@@ -132,10 +132,12 @@ export function fitFontSize(days: WorkoutDayData[], opts: { columnWidth: number;
 /**
  * Duração de referência da aula por modalidade (min). CrossFit da Nação: 55'
  * — os blocos registrados somam ~41' em média; o resto é briefing, montagem,
- * transições e desaquecimento, que o plano de aula precisa prever.
+ * transições e desaquecimento, que o plano de aula precisa prever. Funcional:
+ * 50' (média declarada no histórico: 49,6').
  */
 export function lessonMinutes(modality: string): number | null {
-  return /crossfit/i.test(modality) ? 55 : null;
+  if (/crossfit/i.test(modality)) return 55;
+  return /funcional/i.test(modality) ? 50 : null;
 }
 
 /** Minutos somados do dia (blocos sem duração não contam). */

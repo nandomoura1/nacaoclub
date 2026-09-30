@@ -12,6 +12,7 @@ describe('treinos (puro)', () => {
     expect(mondayOf('2026-10-04')).toBe('2026-09-28'); // domingo fecha a semana
     expect(dayTemplate('CrossFit').map((b) => b.kind)).toEqual(['MOBILIDADE', 'AQUECIMENTO', 'FORCA', 'ESPECIFICO', 'WOD']);
     expect(dayMinutes({ date: '2026-09-28', title: null, blocks: dayTemplate('CrossFit') })).toBe(lessonMinutes('CrossFit')); // aula de 55'
+    expect(lessonMinutes('Funcional')).toBe(50);
     expect(lessonMinutes('Futevôlei')).toBeNull();
     expect(dayTemplate('Futevôlei').map((b) => b.kind)).toEqual(['AQUECIMENTO', 'FUNDAMENTO', 'JOGO']);
     expect(dayTemplate('Base Forte').map((b) => b.kind)).toEqual(['AQUECIMENTO', 'FUNDAMENTO', 'JOGO']);

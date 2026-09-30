@@ -53,4 +53,14 @@ describe('plano da IA', () => {
     expect(msg).toContain('Quarta, 07/10/2026');
     expect(msg).toContain('Foco pedido pelo coach: HSPU');
   });
+
+  it('prompt do Funcional: aula de 50\', vocabulário e regras próprias; técnicas ainda sem IA', () => {
+    const sys = systemPrompt('funcional');
+    expect(sys).toContain('Aula de 50 minutos');
+    expect(sys).toContain('É FUNCIONAL, não CrossFit');
+    expect(sys).not.toContain('Fran, Cindy');
+    expect(systemPrompt('crossfit')).not.toContain('É FUNCIONAL');
+    expect(() => systemPrompt('hyrox')).toThrow();
+    expect(() => systemPrompt('futevolei')).toThrow();
+  });
 });

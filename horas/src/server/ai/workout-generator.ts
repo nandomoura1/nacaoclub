@@ -9,12 +9,13 @@ import { AppError } from '@/server/errors';
 import { addDays, formatDateBR, fromUtc, isIsoDate, toUtc, weekdayOf, WEEKDAYS, type IsoDate } from '@/domain/dates';
 import { lessonMinutes, mondayOf, type BlockKind } from '@/domain/workout';
 import { parseHistory, type Session } from '@/domain/programming/history';
-import { CROSSFIT_HISTORY } from '@/domain/programming/history.generated';
+import { CROSSFIT_HISTORY, FUNCIONAL_HISTORY } from '@/domain/programming/history.generated';
 import { AiPlanSchema, checkPlan, dayToSession, sessionText, type AiPlan, type PlanCheck } from '@/domain/programming/ai-plan';
 import { modalitySlug, programModality } from '@/domain/programming/modalities';
 import { addBlock, WEEK_METRICS, type WeekMetric } from '@/domain/programming/volume';
 import { blockVolume } from '@/domain/programming/calculator';
 import { LEVEL_RATIO } from '@/domain/programming/taxonomy';
+import type { Dna } from '@/domain/programming/dna';
 import { getDnaReport } from '@/server/programming/dna-report';
 
 /**
@@ -39,7 +40,28 @@ export const requestSchema = z.object({
 });
 export type GenerateRequest = z.input<typeof requestSchema>;
 
-const HISTORY: Record<string, string> = { crossfit: CROSSFIT_HISTORY };
+const HISTORY: Record<string, string> = { crossfit: CROSSFIT_HISTORY, funcional: FUNCIONAL_HISTORY };
+
+/** O que muda no prompt de cada modalidade: vocabulário, estrutura da aula e regras próprias. */
+const FLAVOR: Record<string, { language: string; structure: (d: Dna) => string; loading: (d: Dna) => string; rules: string }> = {
+  crossfit: {
+    language: 'com os nomes de movimentos em inglês como a Nação usa ("thruster", "pull-up", "wall ball")',
+    structure: (d) => `mobilidade ~5', warm-up ~${d.structure.avgBlockMin.WU ?? 12}', específico/técnica ~${d.structure.avgBlockMin.ESP ?? 9}', força ~${d.structure.avgBlockMin.FOR ?? 11}' (em ${pct(d.strength.sessionsShare)} das aulas; ${pct(d.strength.withMetconShare)} delas seguidas de metcon), WOD ~${d.structure.avgWodMin}'`,
+    loading: (d) => `Carga no WOD (barra, vs carga moderada Rx): ${d.loading.map((l) => `${l.cls} ${pct(l.share)}`).join(', ')}.
+Força: séries de 3–5 reps dominam; intensidade típica ${d.strength.avgPctMin}–${d.strength.avgPctMax}% do RM; intervalo mais usado ${d.strength.intervals[0]?.[0] ?? "a cada 2'"}; complexos de LPO ${pct(d.strength.complexShare)}.`,
+    rules: '- Use benchmarks oficiais (Fran, Cindy, heroes) só pelo nome e prescrição corretos; se não tiver certeza, crie um WOD da Nação.',
+  },
+  funcional: {
+    language: 'com o vocabulário que os professores do Funcional usam, misturando português e inglês ("meio sugado", "perdigueiro", "remada TRX", "Double Db Snatch", "KB swing", "polichinelo")',
+    structure: (d) => `warm-up ~${Math.round(d.structure.avgBlockMin.WU ?? 12)}' (em quase toda aula, com mobilidade dentro), específico ~${Math.round(d.structure.avgBlockMin.ESP ?? 6)}' passando exercício por exercício, WOD ~${Math.round(d.structure.avgWodMin ?? 25)}' e, às vezes, acessório/core ~${Math.round(d.structure.avgBlockMin.ACC ?? 9)}'. Força estruturada é rara (${pct(d.strength.sessionsShare)} das aulas)`,
+    loading: () => 'Carga: implementos (halteres, KB, medicine ball, anilha) em peso moderado para muitas repetições com boa técnica; quando houver bloco de força, 3–4 séries de 8–12 reps com halteres/KB.',
+    rules: `- É FUNCIONAL, não CrossFit: implementos leves e médios (halteres, KB, medicine ball, slam ball, anilha, TRX, caixa, corda, bike/remo, corrida), barra só leve/moderada em movimentos simples (deadlift, SDHP, push press), sem LPO pesado e sem ginástica avançada (muscle-up, HSPU, rope climb, T2B). Movimentos simples de executar bem em turma grande.
+- O circuito é a casa: EMOM, "a cada X'", intervalado (on/off) e rounds; for time e AMRAP também aparecem. Prefira WODs longos (21–35') e contínuos, variando com tiros curtos quando a semana pedir.
+- Core em quase toda aula (prancha, perdigueiro, abdominal, escalador) e mais puxar (remadas) para equilibrar o empurrar.
+- Carga por implemento, escrita F/M: "12 KB swing 12/16kg", "10 Double Db Snatch 2x10/2x15kg", "15 wall ball 4/6kg". Sem % de RM.
+- Os níveis ajustam implemento, amplitude e ritmo; sem benchmarks de CrossFit.`,
+  },
+};
 
 /** Dias programados da modalidade entre duas datas: banco (Cadastro de Treino) por cima do histórico. */
 export async function programmedDays(slug: string, from: IsoDate, to: IsoDate): Promise<Session[]> {
@@ -62,24 +84,26 @@ export async function programmedDays(slug: string, from: IsoDate, to: IsoDate): 
   return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
+const pct = (n: number) => `${String(n).replace('.', ',')}%`;
+
 /** Parte estável do prompt (cacheável): quem é o copiloto e o DNA da modalidade. */
 export function systemPrompt(slug: string): string {
   const r = getDnaReport(slug);
   if (r.empty || r.technical) throw new AppError('Esta modalidade ainda não tem geração de treino.');
+  const flavor = FLAVOR[slug];
+  if (!flavor) throw new AppError('Esta modalidade ainda não tem geração de treino.');
   const d = r.dna;
   const lesson = lessonMinutes(r.modality.name) ?? 55;
-  const pct = (n: number) => `${String(n).replace('.', ',')}%`;
   const topMoves = (mod: string) => d.movements.filter((m) => m.modality === mod).slice(0, 10).map((m) => `${m.name} ${String(m.perWeek).replace('.', ',')}/sem`).join('; ');
   const examples = parseHistory(HISTORY[slug] ?? '').filter((s) => !s.special).slice(-12).map(sessionText).join('\n');
-  return `Você é o copiloto de programação do Head Coach do ${r.modality.name} da Nação Club (Brasília). Você propõe o plano de aula de um dia; o coach revisa e decide. Escreva em português do Brasil, com os nomes de movimentos em inglês como a Nação usa ("thruster", "pull-up", "wall ball").
+  return `Você é o copiloto de programação do Head Coach do ${r.modality.name} da Nação Club (Brasília). Você propõe o plano de aula de um dia; o coach revisa e decide. Escreva em português do Brasil, ${flavor.language}.
 
 # Como a Nação programa (DNA medido em ${d.period.sessions} aulas, ${d.period.weeks} semanas)
-Aula de ${lesson} minutos. Estrutura típica: mobilidade ~5', warm-up ~${d.structure.avgBlockMin.WU ?? 12}', específico/técnica ~${d.structure.avgBlockMin.ESP ?? 9}', força ~${d.structure.avgBlockMin.FOR ?? 11}' (em ${pct(d.strength.sessionsShare)} das aulas; ${pct(d.strength.withMetconShare)} delas seguidas de metcon), WOD ~${d.structure.avgWodMin}'.
+Aula de ${lesson} minutos. Estrutura típica: ${flavor.structure(d)}.
 Time domains dos WODs: ${d.timeDomains.map((t) => `${t.label} ${t.range} ${pct(t.share)}`).join(', ')}.
 Formatos: ${d.formats.slice(0, 5).map((f) => `${f.format} ${pct(f.share)}`).join(', ')}. WODs em dupla: ${pct(d.partnerShare)}.
 Tamanho do WOD: couplet ${pct(d.modality.size['2'])}, triplet ${pct(d.modality.size['3'])}, 4+ movimentos ${pct(d.modality.size['4+'])}.
-Carga no WOD (barra, vs carga moderada Rx): ${d.loading.map((l) => `${l.cls} ${pct(l.share)}`).join(', ')}.
-Força: séries de 3–5 reps dominam; intensidade típica ${d.strength.avgPctMin}–${d.strength.avgPctMax}% do RM; intervalo mais usado ${d.strength.intervals[0]?.[0] ?? "a cada 2'"}; complexos de LPO ${pct(d.strength.complexShare)}.
+${flavor.loading(d)}
 Semana: ${d.weekdays.filter((w) => w.sessions).map((w) => `${w.label}: força ${pct(w.strengthShare)}, WOD ${w.avgWodMin}', dupla ${pct(w.partnerShare)}`).join(' | ')}.
 Movimentos mais frequentes — ginástica: ${topMoves('G')}. Barra: ${topMoves('W')}. Monoestrutural: ${topMoves('M')}. Objetos: ${topMoves('O')}.
 
@@ -94,7 +118,7 @@ ${r.insights.filter((i) => i.tone === 'lacuna').map((i) => `- ${i.title}: ${i.te
 - Um movimento por linha no conteúdo, com reps e carga F/M em kg: "15 thruster 29/43kg", "400m run", "12/15 cal bike".
 - Níveis: RX, Intermediário (~${Math.round(LEVEL_RATIO.INTERMEDIARIO * 100)}% da carga RX), Scale (~${Math.round(LEVEL_RATIO.SCALE * 100)}%), Iniciante. Escalar preserva o estímulo: ajuste carga, movimento e volume, não só o peso.
 - Controle de fadiga: sem força pesada do mesmo padrão com menos de 48 h; evite repetir o padrão dominante e o time domain dos dias anteriores; não passe do volume semanal típico.
-- Use benchmarks oficiais (Fran, Cindy, heroes) só pelo nome e prescrição corretos; se não tiver certeza, crie um WOD da Nação.
+${flavor.rules}
 - Orientações ao professor: objetivo, pacing, erros comuns, escala e organização do espaço — é o roteiro de quem dá a aula.
 - Em "decisoes", explique cada escolha citando o DNA, as lacunas e os dias anteriores.
 
