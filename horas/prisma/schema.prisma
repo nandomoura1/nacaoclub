@@ -890,3 +890,29 @@ model DutyAssignment {
   @@id([shiftId, teacherId])
   @@map("duty_assignments")
 }
+
+/// Planilha gerada pela IA: estratégia (periodização ou continuidade) de N dias
+/// e as aulas completas geradas dia a dia. Só vira treino oficial quando o
+/// coach lança os dias no Cadastro de Treino.
+model TrainingProgram {
+  id          String   @id @default(uuid()) @db.Uuid
+  /// Slug da modalidade (crossfit, funcional…).
+  modality    String
+  title       String
+  /// "periodizacao" (objetivo com fases) ou "continuidade" (segue a programação recente).
+  kind        String
+  startDate   DateTime @map("start_date") @db.Date
+  endDate     DateTime @map("end_date") @db.Date
+  /// Pedido do coach (objetivo, prazo, dias da semana, janela).
+  request     Json
+  /// Estratégia: fases, semanas e o tema de cada dia.
+  plan        Json
+  /// Aulas geradas: { "AAAA-MM-DD": { plan, check, generatedAt } }.
+  days        Json     @default("{}")
+  createdById String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([modality, createdAt])
+  @@map("training_programs")
+}

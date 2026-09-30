@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
 import { z } from 'zod';
+import type { z as z4 } from 'zod/v4';
 import { prisma } from '@/server/db';
 import { assertCan } from '@/server/auth/authz';
 import type { Principal } from '@/server/auth/principal';
@@ -33,13 +34,15 @@ export const requestSchema = z.object({
   wodMinutes: z.enum(['auto', 'curto', 'medio', 'longo']).default('auto'),
   partner: z.boolean().default(false),
   avoid: z.string().trim().max(300).optional().default(''),
+  /** Janela de programação recente que a IA considera: 14 ou 30 dias. */
+  window: z.coerce.number().refine((n) => n === 14 || n === 30, 'Janela inválida.').default(14),
 });
 export type GenerateRequest = z.input<typeof requestSchema>;
 
 const HISTORY: Record<string, string> = { crossfit: CROSSFIT_HISTORY };
 
 /** Dias programados da modalidade entre duas datas: banco (Cadastro de Treino) por cima do histórico. */
-async function programmedDays(slug: string, from: IsoDate, to: IsoDate): Promise<Session[]> {
+export async function programmedDays(slug: string, from: IsoDate, to: IsoDate): Promise<Session[]> {
   const byDate = new Map<string, Session>();
   for (const s of parseHistory(HISTORY[slug] ?? '')) if (s.date >= from && s.date <= to && !s.special) byDate.set(s.date, s);
   const modalities = (await prisma.modality.findMany({ select: { id: true, name: true } })).filter((m) => modalitySlug(m.name) === slug);
@@ -99,7 +102,7 @@ ${r.insights.filter((i) => i.tone === 'lacuna').map((i) => `- ${i.title}: ${i.te
 ${examples}`;
 }
 
-export function describeRequest(req: z.output<typeof requestSchema>, recent: Session[], week: Record<WeekMetric, number>, slug: string): string {
+export function describeRequest(req: z.output<typeof requestSchema>, recent: Session[], week: Record<WeekMetric, number>, slug: string, extraContext = ''): string {
   const r = getDnaReport(slug);
   const base = !r.empty && !r.technical ? r.base.metrics : null;
   const wd = WEEKDAYS[weekdayOf(req.date) - 1]!.long;
@@ -116,7 +119,7 @@ export function describeRequest(req: z.output<typeof requestSchema>, recent: Ses
 
 Volume já programado nesta semana (antes deste dia): ${volume}.
 
-Programação dos últimos dias e dos próximos já lançados:
+${extraContext ? `${extraContext}\n\n` : ''}Programação dos últimos ${req.window} dias e dos próximos já lançados:
 ${recent.length ? recent.map(sessionText).join('\n') : '(nenhum dia registrado no período)'}`;
 }
 
@@ -138,50 +141,71 @@ export function fakePlan(): AiPlan {
 
 export interface GenerateResult { plan: AiPlan; check: PlanCheck; model: string }
 
-export async function generateWorkout(principal: Principal | null, slug: string, input: unknown): Promise<GenerateResult> {
+export const isFake = () => process.env.AI_FAKE === '1';
+
+/** Chamada ao modelo com saída estruturada (schema zod v4) e erros traduzidos para o coach. */
+export async function askModel<S extends z4.ZodType>(schema: S, system: string, user: string, maxTokens = 16000): Promise<z4.infer<S>> {
+  if (!process.env.ANTHROPIC_API_KEY) throw new AppError('A geração por IA ainda não está configurada (falta a chave ANTHROPIC_API_KEY no servidor).');
+  // Abaixo do limite da função na Vercel (300 s); com timeout explícito o SDK aceita max_tokens alto sem streaming.
+  const client = new Anthropic({ timeout: 280_000, maxRetries: 1 });
+  try {
+    const response = await client.beta.messages.parse({
+      model: MODEL,
+      max_tokens: maxTokens,
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+      output_config: { effort: 'medium', format: betaZodOutputFormat(schema) },
+      system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
+      messages: [{ role: 'user', content: user }],
+    });
+    if (response.stop_reason === 'refusal') throw new AppError('A IA não gerou este pedido. Ajuste e tente de novo.');
+    if (response.stop_reason === 'max_tokens' || !response.parsed_output) throw new AppError('A resposta da IA veio incompleta. Tente de novo.');
+    return response.parsed_output as z4.infer<S>;
+  } catch (e) {
+    if (e instanceof AppError) throw e;
+    if (e instanceof Anthropic.APIConnectionTimeoutError) throw new AppError('A IA demorou demais para responder. Tente de novo (ou um período menor).');
+    if (e instanceof Anthropic.RateLimitError) throw new AppError('Muitos pedidos à IA agora. Espere um minuto e tente de novo.');
+    if (e instanceof Anthropic.AuthenticationError) throw new AppError('A chave da IA é inválida. Confira ANTHROPIC_API_KEY no servidor.');
+    if (e instanceof Anthropic.APIError) throw new AppError(`A IA não respondeu (erro ${e.status ?? 'de conexão'}). Tente de novo.`);
+    throw e;
+  }
+}
+
+/** Volume da semana do dia, antes dele. */
+function weekVolume(recent: Session[], date: IsoDate): Record<WeekMetric, number> {
+  const weekStart = mondayOf(date);
+  const week = Object.fromEntries(WEEK_METRICS.map((m) => [m.id, 0])) as Record<WeekMetric, number>;
+  for (const s of recent) if (s.date >= weekStart && s.date < date) for (const b of s.blocks) { const v = blockVolume(b); if (v) addBlock(week, v); }
+  for (const k of Object.keys(week) as WeekMetric[]) week[k] = Math.round(week[k]);
+  return week;
+}
+
+/**
+ * Aula de um dia. `extraContext` (planilha: estratégia, fase, tema do dia) e
+ * `extraDays` (dias da planilha já gerados e ainda não lançados) entram no contexto.
+ */
+export async function generateWorkout(
+  principal: Principal | null, slug: string, input: unknown,
+  opts: { extraContext?: string; extraDays?: Session[] } = {},
+): Promise<GenerateResult> {
   assertCan(principal, 'workout.edit');
   const parsed = requestSchema.safeParse(input);
   if (!parsed.success) throw new AppError(parsed.error.issues[0]?.message ?? 'Pedido inválido.');
   const req = parsed.data;
   const modality = programModality(slug);
-  const recent = await programmedDays(slug, addDays(req.date, -14), addDays(req.date, 6));
-  const weekStart = mondayOf(req.date);
-  const week = Object.fromEntries(WEEK_METRICS.map((m) => [m.id, 0])) as Record<WeekMetric, number>;
-  for (const s of recent) if (s.date >= weekStart && s.date < req.date) for (const b of s.blocks) { const v = blockVolume(b); if (v) addBlock(week, v); }
-  for (const k of Object.keys(week) as WeekMetric[]) week[k] = Math.round(week[k]);
+  const byDate = new Map((await programmedDays(slug, addDays(req.date, -req.window), addDays(req.date, 6))).map((s) => [s.date, s]));
+  for (const s of opts.extraDays ?? []) if (s.date >= addDays(req.date, -req.window) && s.date <= addDays(req.date, 6)) byDate.set(s.date, s);
+  const recent = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+  const week = weekVolume(recent, req.date);
 
-  let plan: AiPlan;
-  if (process.env.AI_FAKE === '1') {
-    plan = fakePlan();
-  } else {
-    if (!process.env.ANTHROPIC_API_KEY) throw new AppError('A geração por IA ainda não está configurada (falta a chave ANTHROPIC_API_KEY no servidor).');
-    const client = new Anthropic();
-    try {
-      const response = await client.beta.messages.parse({
-        model: MODEL,
-        max_tokens: 16000,
-        betas: ['server-side-fallback-2026-07-01'],
-        fallbacks: 'default',
-        output_config: { effort: 'medium', format: betaZodOutputFormat(AiPlanSchema) },
-        system: [{ type: 'text', text: systemPrompt(slug), cache_control: { type: 'ephemeral' } }],
-        messages: [{ role: 'user', content: describeRequest(req, recent.filter((s) => s.date !== req.date), week, slug) }],
-      });
-      if (response.stop_reason === 'refusal') throw new AppError('A IA não gerou este treino. Ajuste o pedido e tente de novo.');
-      if (response.stop_reason === 'max_tokens' || !response.parsed_output) throw new AppError('A resposta da IA veio incompleta. Tente de novo.');
-      plan = response.parsed_output;
-    } catch (e) {
-      if (e instanceof AppError) throw e;
-      if (e instanceof Anthropic.RateLimitError) throw new AppError('Muitos pedidos à IA agora. Espere um minuto e tente de novo.');
-      if (e instanceof Anthropic.AuthenticationError) throw new AppError('A chave da IA é inválida. Confira ANTHROPIC_API_KEY no servidor.');
-      if (e instanceof Anthropic.APIError) throw new AppError(`A IA não respondeu (erro ${e.status ?? 'de conexão'}). Tente de novo.`);
-      throw e;
-    }
-  }
+  const plan: AiPlan = isFake()
+    ? fakePlan()
+    : await askModel(AiPlanSchema, systemPrompt(slug), describeRequest(req, recent.filter((s) => s.date !== req.date), week, slug, opts.extraContext));
 
   const r = getDnaReport(slug);
   const check = checkPlan({
-    plan, date: req.date, targetMin: lessonMinutes(modality.name), recent,
+    plan, date: req.date, targetMin: lessonMinutes(modality.name), recent: recent.filter((s) => s.date !== req.date),
     weekSoFar: week, baseline: !r.empty && !r.technical ? r.base.metrics : null,
   });
-  return { plan, check, model: process.env.AI_FAKE === '1' ? 'exemplo local' : MODEL };
+  return { plan, check, model: isFake() ? 'exemplo local' : MODEL };
 }
