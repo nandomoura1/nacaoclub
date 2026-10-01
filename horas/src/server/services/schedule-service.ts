@@ -90,11 +90,12 @@ export async function listGrade(principal: Principal | null, date: IsoDate, area
   // Ausências lançadas na ficha aparecem na grade da data vista.
   const leaves = await prisma.leave.findMany({
     where: { cancelledAt: null, startDate: { lte: d }, endDate: { gte: d }, teacherId: { in: [...new Set(rows.flatMap((r) => r.teachers.map((t) => t.teacherId)))] } },
-    select: { teacherId: true, type: true, endDate: true, substitute: { select: { name: true, displayName: true } } },
+    select: { teacherId: true, slotId: true, type: true, endDate: true, substitute: { select: { name: true, displayName: true } } },
   });
-  const leaveOf = new Map(leaves.map((l) => [l.teacherId, {
-    type: l.type as string, until: fromUtc(l.endDate), substitute: l.substitute ? l.substitute.displayName || l.substitute.name : null,
-  }]));
+  // Substituição por aula vale só naquela aula; ausência geral, em todas as aulas do professor.
+  const info = (l: (typeof leaves)[number]) => ({ type: l.type as string, until: fromUtc(l.endDate), substitute: l.substitute ? l.substitute.displayName || l.substitute.name : null });
+  const leaveOf = new Map(leaves.filter((l) => !l.slotId).map((l) => [l.teacherId, info(l)]));
+  const slotLeaveOf = new Map(leaves.filter((l) => l.slotId).map((l) => [`${l.slotId}:${l.teacherId}`, info(l)]));
 
   return rows.map((v) => ({
     id: v.id,
@@ -111,7 +112,7 @@ export async function listGrade(principal: Principal | null, date: IsoDate, area
     modality: v.modality,
     activityType: v.activityType,
     space: v.space,
-    people: v.teachers.map((t) => ({ teacherId: t.teacherId, role: t.role, name: t.teacher.displayName || t.teacher.name, leave: leaveOf.get(t.teacherId) ?? null })),
+    people: v.teachers.map((t) => ({ teacherId: t.teacherId, role: t.role, name: t.teacher.displayName || t.teacher.name, leave: slotLeaveOf.get(`${v.slotId}:${t.teacherId}`) ?? leaveOf.get(t.teacherId) ?? null })),
   }));
 }
 

@@ -423,6 +423,7 @@ model ScheduleSlot {
   createdById String?  @map("created_by") @db.Uuid
 
   versions ScheduleSlotVersion[]
+  leaves   Leave[]
 
   @@map("schedule_slots")
 }
@@ -682,6 +683,8 @@ model Leave {
   endDate      DateTime      @map("end_date") @db.Date
   coverage     LeaveCoverage @default(PENDENTE)
   substituteId String?       @map("substitute_id") @db.Uuid
+  /// Substituição só nesta aula da grade (vazio = todas as aulas do professor).
+  slotId       String?       @map("slot_id") @db.Uuid
   notes        String?
   createdById  String?       @map("created_by") @db.Uuid
   createdAt    DateTime      @default(now()) @map("created_at")
@@ -691,9 +694,11 @@ model Leave {
 
   teacher    Teacher          @relation("TeacherLeaves", fields: [teacherId], references: [id], onDelete: Restrict)
   substitute Teacher?         @relation("LeaveSubstitute", fields: [substituteId], references: [id], onDelete: Restrict)
+  slot       ScheduleSlot?    @relation(fields: [slotId], references: [id], onDelete: Restrict)
   exceptions ClassException[]
 
   @@index([teacherId, startDate, endDate])
+  @@index([slotId])
   @@map("leaves")
 }
 

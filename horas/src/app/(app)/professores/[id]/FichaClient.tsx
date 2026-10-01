@@ -2,13 +2,14 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { CalendarOff, Plus, Trash2, Undo2 } from 'lucide-react';
+import { CalendarOff, Plus, Repeat, Trash2, Undo2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { FormMessage } from '@/components/ui/alert';
+import { Sheet } from '@/components/ui/sheet';
 import { Input, Label, Select } from '@/components/ui/input';
-import { WEEKDAYS, formatDateBR } from '@/domain/dates';
+import { WEEKDAYS, addDays, formatClock, formatDateBR } from '@/domain/dates';
 import { COVERAGE_LABEL, LEAVE_LABEL, type LeaveCoverage, type LeaveType } from '@/domain/leave';
 import { cn } from '@/lib/cn';
 import { formatMinutes } from '@/lib/format';
@@ -19,9 +20,10 @@ import { cancelLeaveAction, previewLeaveAction, saveLeaveAction } from './action
 
 /* ───────────────────────── Aulas fixas ───────────────────────── */
 
-export function AulasTab({ teacherId, teacherName, date, today, grade, sheet }: {
-  teacherId: string; teacherName: string; date: string; today: string; grade: GradeItem[]; sheet: SheetProps;
+export function AulasTab({ teacherId, teacherName, date, today, grade, sheet, canSubstitute }: {
+  teacherId: string; teacherName: string; date: string; today: string; grade: GradeItem[]; sheet: SheetProps; canSubstitute: boolean;
 }) {
+  const [substituting, setSubstituting] = useState<GradeItem | null>(null);
   const router = useRouter();
   const [editing, setEditing] = useState<Editing>(null);
   const [removing, setRemoving] = useState<GradeItem | null>(null);
@@ -48,13 +50,22 @@ export function AulasTab({ teacherId, teacherName, date, today, grade, sheet }: 
               {d.items.map((g) => (
                 <div key={g.id}>
                   <SlotCard item={g} onClick={() => setEditing({ mode: 'edit', item: g })} />
+                  {(sheet.canEdit || canSubstitute) && <div className="mt-1 flex gap-1">
+                  {canSubstitute && (
+                    <button className="inline-flex flex-1 items-center justify-center gap-1 rounded-md border border-borda bg-white py-1 text-xs font-semibold text-tinta-suave hover:border-nacao hover:text-nacao"
+                      aria-label={`Substituir ${g.modality.name} ${d.long}`}
+                      onClick={() => { setMsg({}); setSubstituting(g); }}>
+                      <Repeat className="size-3.5" /> Substituir
+                    </button>
+                  )}
                   {sheet.canEdit && (
-                    <button className="mt-1 inline-flex w-full items-center justify-center gap-1 rounded-md border border-borda bg-white py-1 text-xs font-semibold text-tinta-suave hover:border-critico hover:text-critico"
+                    <button className="inline-flex flex-1 items-center justify-center gap-1 rounded-md border border-borda bg-white py-1 text-xs font-semibold text-tinta-suave hover:border-critico hover:text-critico"
                       aria-label={`Excluir horário ${g.modality.name} ${d.long}`}
                       onClick={() => { setMsg({}); setRemoving(g); }}>
                       <Trash2 className="size-3.5" /> Excluir
                     </button>
                   )}
+                  </div>}
                 </div>
               ))}
               {d.items.length === 0 && <p className="rounded-lg border border-dashed border-borda p-3 text-center text-xs text-tinta-fraca">livre</p>}
@@ -65,6 +76,10 @@ export function AulasTab({ teacherId, teacherName, date, today, grade, sheet }: 
 
       <FormMessage error={msg.error} success={msg.ok} />
 
+      {substituting && (
+        <SubstituteSheet item={substituting} teacherId={teacherId} teacherName={teacherName} teachers={sheet.teachers} defaultStart={date > today ? date : today}
+          onClose={(ok) => { setSubstituting(null); if (ok) { setMsg({ ok }); router.refresh(); } }} />
+      )}
       {removing && (
         <RemoveSlotSheet item={removing} teacher={{ id: teacherId, name: removing.people.find((p) => p.teacherId === teacherId)?.name ?? teacherName }}
           defaultFrom={date > today ? date : today}
@@ -82,6 +97,93 @@ export function AulasTab({ teacherId, teacherName, date, today, grade, sheet }: 
         />
       )}
     </>
+  );
+}
+
+/**
+ * Substituição de UMA aula por um período (ex.: alguém puxa a aula de segunda
+ * durante as férias). Cada aula pode ter o seu substituto.
+ */
+function SubstituteSheet({ item, teacherId, teacherName, teachers, defaultStart, onClose }: {
+  item: GradeItem; teacherId: string; teacherName: string; teachers: SheetProps['teachers']; defaultStart: string; onClose: (ok?: string) => void;
+}) {
+  const [v, setV] = useState({ substituteId: '', type: 'FERIAS' as LeaveType, startDate: defaultStart, endDate: addDays(defaultStart, 13), notes: '' });
+  const [preview, setPreview] = useState<Preview | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const set = <K extends keyof typeof v>(k: K, val: (typeof v)[K]) => { setV((p) => ({ ...p, [k]: val })); setPreview(null); };
+  const others = teachers.filter((t) => t.id !== teacherId);
+  const able = others.filter((t) => t.modalityIds.includes(item.modality.id));
+  const rest = others.filter((t) => !able.includes(t));
+  const what = `${item.modality.name} · ${WEEKDAYS[item.weekday - 1]!.long} ${formatClock(item.startMin)}`;
+  const payload = () => ({ ...v, coverage: 'SUBSTITUIR', slotId: item.slotId });
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (!v.substituteId) return setError('Escolha quem vai dar a aula.');
+    start(async () => {
+      if (!preview) {
+        const r = await previewLeaveAction(teacherId, payload());
+        return r.ok ? setPreview(r.data) : setError(r.error);
+      }
+      const r = await saveLeaveAction(teacherId, payload());
+      if (!r.ok) return setError(r.error);
+      onClose(`Substituição lançada: ${r.data.applied} aula(s) de ${what}${r.data.closed ? ` · ${r.data.closed} em competência fechada ficaram como estavam` : ''}.`);
+    });
+  };
+
+  return (
+    <Sheet title="Substituir aula" onClose={() => onClose()} onSubmit={submit}
+      footer={<>
+        <Button type="submit" disabled={pending}><Repeat /> {pending ? 'Conferindo…' : preview ? 'Lançar substituição' : 'Conferir'}</Button>
+        <Button type="button" variant="ghost" onClick={() => onClose()}>Cancelar</Button>
+      </>}>
+      <div className="space-y-4">
+        <div className="rounded-lg border border-borda p-3" style={{ borderLeft: `4px solid ${item.modality.color}` }}>
+          <p className="font-extrabold text-navy">{what}</p>
+          <p className="text-sm text-tinta-suave">{formatClock(item.startMin)}–{formatClock(item.startMin + item.durationMin)} · hoje com {teacherName}</p>
+        </div>
+        <div>
+          <Label htmlFor="sb-who">Quem dá a aula</Label>
+          <Select id="sb-who" value={v.substituteId} onChange={(e) => set('substituteId', e.target.value)}>
+            <option value="">Escolha o substituto</option>
+            {able.length > 0 && <optgroup label={`Dão ${item.modality.name}`}>{able.map((t) => <option key={t.id} value={t.id}>{t.fullName}</option>)}</optgroup>}
+            <optgroup label="Outros">{rest.map((t) => <option key={t.id} value={t.id}>{t.fullName}</option>)}</optgroup>
+          </Select>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label htmlFor="sb-from">De</Label>
+            <Input id="sb-from" type="date" required value={v.startDate} onChange={(e) => e.target.value && set('startDate', e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor="sb-to">Até</Label>
+            <Input id="sb-to" type="date" required min={v.startDate} value={v.endDate} onChange={(e) => e.target.value && set('endDate', e.target.value)} />
+          </div>
+        </div>
+        <div>
+          <Label htmlFor="sb-type">Motivo</Label>
+          <Select id="sb-type" value={v.type} onChange={(e) => set('type', e.target.value as LeaveType)}>
+            {(['FERIAS', 'ATESTADO', 'AFASTAMENTO', 'FOLGA'] as LeaveType[]).map((t) => <option key={t} value={t}>{LEAVE_LABEL[t]}</option>)}
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="sb-notes">Observação (opcional)</Label>
+          <Input id="sb-notes" maxLength={500} value={v.notes} onChange={(e) => set('notes', e.target.value)} placeholder="Ex.: combinado com a coordenação" />
+        </div>
+        {preview && (
+          <div className="rounded-lg bg-fundo p-3 text-sm text-tinta">
+            <p><b>{preview.count}</b> aula(s) passam para o substituto{preview.closed ? ` (${preview.closed} em competência fechada não mudam)` : ''}.</p>
+            {preview.sample.length > 0 && <p className="mt-1 text-xs text-tinta-suave">{preview.sample.join(' · ')}{preview.count > preview.sample.length ? ' …' : ''}</p>}
+            {preview.note && <p className="mt-1 text-xs text-tinta-suave">{preview.note}</p>}
+            {preview.conflicts.length > 0 && <p className="mt-2 text-xs font-semibold text-atencao">Atenção: {preview.conflicts.join('; ')}</p>}
+            <p className="mt-2 text-xs text-tinta-suave">As horas vão para o substituto nesse período; depois a aula volta sozinha para {teacherName}. Dá para anular na aba Ausências e exceções.</p>
+          </div>
+        )}
+        <FormMessage error={error} />
+      </div>
+    </Sheet>
   );
 }
 
@@ -194,10 +296,10 @@ export function AusenciasTab({ teacherId, leaves, substitutes, canManage, today 
           <div key={l.id} className={cn('flex items-start gap-3 p-4', l.cancelled && 'opacity-55')}>
             <div className="min-w-0 flex-1">
               <p className="font-semibold text-tinta">
-                {LEAVE_LABEL[l.type]} · {formatDateBR(l.startDate)}{l.endDate !== l.startDate ? ` a ${formatDateBR(l.endDate)}` : ''}
+                {l.slot ? `Substituição · ${l.slot}` : LEAVE_LABEL[l.type]} · {formatDateBR(l.startDate)}{l.endDate !== l.startDate ? ` a ${formatDateBR(l.endDate)}` : ''}
                 {l.cancelled && <Badge tone="neutral" className="ml-2">anulada</Badge>}
               </p>
-              <p className="text-xs text-tinta-suave">{COVERAGE_LABEL[l.coverage]}{l.substitute ? `: ${l.substitute}` : ''} · {l.classes} aula(s){l.notes ? ` · ${l.notes}` : ''}</p>
+              <p className="text-xs text-tinta-suave">{l.slot ? `${LEAVE_LABEL[l.type]} · dá a aula: ${l.substitute}` : `${COVERAGE_LABEL[l.coverage]}${l.substitute ? `: ${l.substitute}` : ''}`} · {l.classes} aula(s){l.notes ? ` · ${l.notes}` : ''}</p>
             </div>
             {canManage && !l.cancelled && (
               <Button variant="ghost" size="sm" disabled={pending} onClick={() => {

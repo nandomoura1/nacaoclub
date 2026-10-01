@@ -6,9 +6,9 @@ import { assertCan } from '@/server/auth/authz';
 import type { Principal } from '@/server/auth/principal';
 import type { RequestMeta } from '@/server/auth/session';
 import { AppError, NotFoundError } from '@/server/errors';
-import { addDays, formatClock, formatDateBR, fromUtc, isIsoDate, toUtc, type IsoDate } from '@/domain/dates';
+import { WEEKDAYS, addDays, formatClock, formatDateBR, fromUtc, isIsoDate, toUtc, type IsoDate } from '@/domain/dates';
 import {
-  COVERAGE_LABEL, LEAVE_LABEL, exceptionTypeOf, isAffectable, leaveEffect, overlaps,
+  COVERAGE_LABEL, LEAVE_LABEL, exceptionTypeOf, isAffectable, leaveEffect, overlaps, revertState,
   type LeaveCoverage, type LeaveType,
 } from '@/domain/leave';
 
@@ -26,10 +26,12 @@ export const leaveSchema = z.object({
   endDate: z.string().refine(isIsoDate, 'Data final inválida.'),
   coverage: z.enum(['PENDENTE', 'CANCELAR', 'SUBSTITUIR']),
   substituteId: z.string().uuid().nullable().or(z.literal('').transform(() => null)).optional(),
+  /** Só esta aula da grade (substituição por aula). */
+  slotId: z.string().uuid().nullable().or(z.literal('').transform(() => null)).optional(),
   notes: z.string().trim().max(500).optional().transform((v) => v || null),
 });
 
-type LeaveRow = { id: string; teacherId: string; type: LeaveType; coverage: LeaveCoverage; substituteId: string | null; startDate: Date; endDate: Date; createdById: string | null };
+type LeaveRow = { id: string; teacherId: string; type: LeaveType; coverage: LeaveCoverage; substituteId: string | null; slotId: string | null; startDate: Date; endDate: Date; createdById: string | null };
 
 /** Coordenador só lança ausência de quem dá aula nas áreas dele. */
 async function assertTeacherInScope(db: Tx, principal: Principal, teacherId: string) {
@@ -58,6 +60,7 @@ async function applyLeave(tx: Tx, leave: LeaveRow, range?: { start: IsoDate; end
     where: {
       date: { gte: toUtc(start), lte: toUtc(end) },
       assignments: { some: { plannedTeacherId: leave.teacherId } },
+      ...(leave.slotId ? { slotId: leave.slotId } : {}),
     },
     include: { assignments: true, period: { select: { status: true } }, exceptions: { where: { leaveId: leave.id }, select: { assignmentId: true } } },
   });
@@ -68,7 +71,7 @@ async function applyLeave(tx: Tx, leave: LeaveRow, range?: { start: IsoDate; end
 
   for (const o of occ) {
     const done = new Set(o.exceptions.map((e) => e.assignmentId));
-    const targets = o.assignments.filter((a) => isAffectable(a, leave.teacherId, o.status) && !done.has(a.id));
+    const targets = o.assignments.filter((a) => isAffectable(a, leave.teacherId, o.status, !!leave.slotId) && !done.has(a.id));
     if (!targets.length) continue;
     if (o.period.status === 'FECHADO') { closed++; continue; }
 
@@ -83,7 +86,7 @@ async function applyLeave(tx: Tx, leave: LeaveRow, range?: { start: IsoDate; end
           assignmentId: a.id,
           type: exceptionTypeOf(leave.type, leave.coverage),
           leaveId: leave.id,
-          notes: `${LEAVE_LABEL[leave.type]} · ${COVERAGE_LABEL[leave.coverage]}`,
+          notes: leave.slotId ? `${LEAVE_LABEL[leave.type]} · substituição nesta aula` : `${LEAVE_LABEL[leave.type]} · ${COVERAGE_LABEL[leave.coverage]}`,
           before: { status: a.status, executingTeacherId: a.executingTeacherId, absenceReason: a.absenceReason, occurrenceStatus: o.status, cancellationReasonId: o.cancellationReasonId },
           after: { ...effect },
           createdById: leave.createdById,
@@ -107,6 +110,8 @@ export async function applyLeavesToPeriod(tx: Tx, period: { startDate: Date; end
   const leaves = await tx.leave.findMany({
     where: { cancelledAt: null, startDate: { lte: period.endDate }, endDate: { gte: period.startDate } },
   });
+  // Substituições por aula primeiro: a aula já nasce com o substituto, e as férias (todas as aulas) cuidam do resto.
+  leaves.sort((a, b) => Number(!a.slotId) - Number(!b.slotId));
   for (const l of leaves) await applyLeave(tx, l, { start: fromUtc(period.startDate), end: fromUtc(period.endDate) });
 }
 
@@ -118,11 +123,11 @@ export async function previewLeave(principal: Principal | null, teacherId: strin
   const d = parsed.data;
   const end = d.type === 'FALTA' && !d.endDate ? d.startDate : d.endDate;
   const occ = await prisma.classOccurrence.findMany({
-    where: { date: { gte: toUtc(d.startDate), lte: toUtc(end) }, assignments: { some: { plannedTeacherId: teacherId } } },
+    where: { date: { gte: toUtc(d.startDate), lte: toUtc(end) }, assignments: { some: { plannedTeacherId: teacherId } }, ...(d.slotId ? { slotId: d.slotId } : {}) },
     include: { assignments: true, modality: { select: { name: true } }, period: { select: { status: true } } },
     orderBy: [{ date: 'asc' }, { startMin: 'asc' }],
   });
-  const affected = occ.filter((o) => o.assignments.some((a) => isAffectable(a, teacherId, o.status)));
+  const affected = occ.filter((o) => o.assignments.some((a) => isAffectable(a, teacherId, o.status, !!d.slotId)));
   const conflicts: string[] = [];
   if (d.coverage === 'SUBSTITUIR' && d.substituteId) {
     const busy = await prisma.classOccurrence.findMany({
@@ -154,19 +159,30 @@ export async function saveLeave(principal: Principal | null, teacherId: string, 
   if (addDays(d.startDate, MAX_DAYS) < d.endDate) throw new AppError('Ausência longa demais (máximo 400 dias).');
   if (d.coverage === 'SUBSTITUIR' && !d.substituteId) throw new AppError('Escolha quem vai substituir.');
   if (d.substituteId === teacherId) throw new AppError('O substituto não pode ser o próprio professor.');
+  if (d.slotId && d.coverage !== 'SUBSTITUIR') throw new AppError('Substituição por aula precisa de um substituto.');
 
   return prisma.$transaction(async (tx) => {
     const teacher = await assertTeacherInScope(tx, principal, teacherId);
-    const active = await tx.leave.findMany({ where: { teacherId, cancelledAt: null }, select: { startDate: true, endDate: true, type: true } });
+    let slotLabel: string | null = null;
+    if (d.slotId) {
+      const v = await tx.scheduleSlotVersion.findFirst({
+        where: { slotId: d.slotId, validFrom: { lte: toUtc(d.endDate) }, OR: [{ validTo: null }, { validTo: { gte: toUtc(d.startDate) } }], teachers: { some: { teacherId } } },
+        include: { modality: { select: { name: true } } }, orderBy: { validFrom: 'desc' },
+      });
+      if (!v) throw new AppError('Este professor não está nessa aula no período escolhido.');
+      slotLabel = `${v.modality.name} ${WEEKDAYS[v.weekday - 1]!.short.toLowerCase()} ${formatClock(v.startMin)}`;
+    }
+    // Ausências do professor não se sobrepõem; substituições da MESMA aula também não. Uma substituição por aula pode cair dentro das férias.
+    const active = await tx.leave.findMany({ where: { teacherId, cancelledAt: null, slotId: d.slotId ?? null }, select: { startDate: true, endDate: true, type: true, slotId: true } });
     const clash = active.find((l) => overlaps({ start: d.startDate, end: d.endDate }, { start: fromUtc(l.startDate), end: fromUtc(l.endDate) }));
-    if (clash) throw new AppError(`Já existe ${LEAVE_LABEL[clash.type].toLowerCase()} de ${formatDateBR(fromUtc(clash.startDate))} a ${formatDateBR(fromUtc(clash.endDate))}. Anule ou ajuste antes.`);
+    if (clash) throw new AppError(`Já existe ${clash.slotId ? 'substituição nesta aula' : LEAVE_LABEL[clash.type].toLowerCase()} de ${formatDateBR(fromUtc(clash.startDate))} a ${formatDateBR(fromUtc(clash.endDate))}. Anule ou ajuste antes.`);
     const substitute = d.coverage === 'SUBSTITUIR' ? await tx.teacher.findUnique({ where: { id: d.substituteId! }, select: { name: true } }) : null;
     if (d.coverage === 'SUBSTITUIR' && !substitute) throw new AppError('Substituto não encontrado.');
 
     const leave = await tx.leave.create({
       data: {
         teacherId, type: d.type, startDate: toUtc(d.startDate), endDate: toUtc(d.endDate), coverage: d.coverage,
-        substituteId: d.coverage === 'SUBSTITUIR' ? d.substituteId! : null, notes: d.notes, createdById: principal.id,
+        substituteId: d.coverage === 'SUBSTITUIR' ? d.substituteId! : null, slotId: d.slotId ?? null, notes: d.notes, createdById: principal.id,
       },
     });
     const r = await applyLeave(tx, leave);
@@ -174,8 +190,10 @@ export async function saveLeave(principal: Principal | null, teacherId: string, 
       action: 'leave.created',
       entityType: 'leave',
       entityId: leave.id,
-      after: { professor: teacher.name, tipo: d.type, de: d.startDate, ate: d.endDate, cobertura: d.coverage, substituto: substitute?.name ?? null, aulas_afetadas: r.applied },
-      summary: `${principal.name} lançou ${LEAVE_LABEL[d.type].toLowerCase()} de ${teacher.name} (${formatDateBR(d.startDate)}${d.endDate !== d.startDate ? ` a ${formatDateBR(d.endDate)}` : ''}) — ${COVERAGE_LABEL[d.coverage].toLowerCase()}${substitute ? `: ${substitute.name}` : ''}; ${r.applied} aula(s) afetada(s)`,
+      after: { professor: teacher.name, tipo: d.type, de: d.startDate, ate: d.endDate, cobertura: d.coverage, substituto: substitute?.name ?? null, aula: slotLabel, aulas_afetadas: r.applied },
+      summary: slotLabel
+        ? `${principal.name} lançou substituição de ${teacher.name} na aula ${slotLabel} (${formatDateBR(d.startDate)} a ${formatDateBR(d.endDate)}, ${LEAVE_LABEL[d.type].toLowerCase()}): ${substitute!.name}; ${r.applied} aula(s)`
+        : `${principal.name} lançou ${LEAVE_LABEL[d.type].toLowerCase()} de ${teacher.name} (${formatDateBR(d.startDate)}${d.endDate !== d.startDate ? ` a ${formatDateBR(d.endDate)}` : ''}) — ${COVERAGE_LABEL[d.coverage].toLowerCase()}${substitute ? `: ${substitute.name}` : ''}; ${r.applied} aula(s) afetada(s)`,
     });
     return { id: leave.id, applied: r.applied, closed: r.closed };
   }, { timeout: 120_000, maxWait: 10_000 });
@@ -192,8 +210,9 @@ export async function cancelLeave(principal: Principal | null, leaveId: string, 
 
     const exceptions = await tx.classException.findMany({
       where: { leaveId, type: { not: 'REVERSAO' } },
-      include: { occurrence: { select: { id: true, status: true, period: { select: { status: true } } } } },
+      include: { occurrence: { select: { id: true, date: true, status: true, period: { select: { status: true } } } } },
     });
+    const others = await tx.leave.findMany({ where: { teacherId: leave.teacherId, cancelledAt: null, slotId: null, coverage: 'PENDENTE', id: { not: leaveId } }, select: { startDate: true, endDate: true } });
     const reverted = new Set((await tx.classException.findMany({ where: { revertsExceptionId: { in: exceptions.map((e) => e.id) } }, select: { revertsExceptionId: true } })).map((e) => e.revertsExceptionId));
     let restored = 0;
     let closed = 0;
@@ -201,12 +220,17 @@ export async function cancelLeave(principal: Principal | null, leaveId: string, 
       if (reverted.has(e.id) || !e.assignmentId) continue;
       if (e.occurrence.period.status === 'FECHADO') { closed++; continue; }
       const before = (e.before ?? {}) as { status?: string; executingTeacherId?: string | null; absenceReason?: string | null; occurrenceStatus?: string; cancellationReasonId?: string | null };
+      const current = await tx.classAssignment.findUnique({ where: { id: e.assignmentId }, select: { status: true, executingTeacherId: true, plannedTeacherId: true } });
+      if (!current) continue;
+      const covered = others.some((l) => l.startDate <= e.occurrence.date && e.occurrence.date <= l.endDate);
+      const target = revertState(current, (e.after ?? {}) as { status?: string; executingTeacherId?: string | null }, before, current.plannedTeacherId, covered);
+      if (!target) continue; // alguém mexeu depois (ex.: substituição por aula): fica como está
       await tx.classAssignment.update({
         where: { id: e.assignmentId },
         data: {
-          status: (before.status ?? 'PREVISTA') as Prisma.ClassAssignmentUpdateInput['status'],
-          executingTeacherId: before.executingTeacherId ?? null,
-          absenceReason: (before.absenceReason ?? null) as Prisma.ClassAssignmentUpdateInput['absenceReason'],
+          status: target.status as Prisma.ClassAssignmentUpdateInput['status'],
+          executingTeacherId: target.executingTeacherId,
+          absenceReason: target.absenceReason as Prisma.ClassAssignmentUpdateInput['absenceReason'],
         },
       });
       if (e.occurrence.status === 'CANCELADA' && before.occurrenceStatus && before.occurrenceStatus !== 'CANCELADA') {
@@ -236,13 +260,17 @@ export async function listLeaves(principal: Principal | null, teacherId: string)
   assertCan(principal, 'schedule.view');
   const rows = await prisma.leave.findMany({
     where: { teacherId },
-    include: { substitute: { select: { name: true } }, _count: { select: { exceptions: { where: { type: { not: 'REVERSAO' } } } } } },
+    include: {
+      substitute: { select: { name: true } },
+      slot: { select: { versions: { orderBy: { validFrom: 'desc' }, take: 1, select: { weekday: true, startMin: true, modality: { select: { name: true } } } } } },
+      _count: { select: { exceptions: { where: { type: { not: 'REVERSAO' } } } } } },
     orderBy: { startDate: 'desc' },
   });
   return rows.map((l) => ({
     id: l.id, type: l.type as LeaveType, coverage: l.coverage as LeaveCoverage,
     startDate: fromUtc(l.startDate), endDate: fromUtc(l.endDate), substitute: l.substitute?.name ?? null,
     notes: l.notes, cancelled: Boolean(l.cancelledAt), classes: l._count.exceptions,
+    slot: l.slot?.versions[0] ? `${l.slot.versions[0].modality.name} · ${WEEKDAYS[l.slot.versions[0].weekday - 1]!.long} ${formatClock(l.slot.versions[0].startMin)}` : null,
   }));
 }
 export type LeaveItem = Awaited<ReturnType<typeof listLeaves>>[number];

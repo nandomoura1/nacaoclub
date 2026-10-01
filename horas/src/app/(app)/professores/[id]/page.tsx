@@ -117,6 +117,7 @@ async function AulasSection({ principal, teacherId, teacherName, date, today }: 
       date={date}
       today={today}
       grade={filterGrade(grade, { teacherId, modalityId: null, spaceId: null })}
+      canSubstitute={can(principal, 'leave.manage')}
       sheet={{
         canEdit: can(principal, 'schedule.edit'),
         modalities, activityTypes, spaces,

@@ -122,4 +122,44 @@ describe.skipIf(!hasDb)('E5 · ausências lançadas na ficha do professor', () =
     expect(after.people.map((p) => p.teacherId)).toEqual([bia.id]);
     await expect(removeTeacherFromSlot(admin.principal, slotId!, ana.id, '2034-08-10', META)).rejects.toThrow(/não está nessa aula/);
   });
+
+  it('substituição por aula: um substituto só na aula de terça, por cima das férias, inclusive em competência gerada depois', async () => {
+    const { ana, bia, hours } = await setup(2034, 9); // 26/08 a 25/09/2034: terças 29/08, 05, 12, 19/09; quintas 31/08, 07, 14, 21/09
+    const grade = await listGrade(admin.principal, '2034-09-10');
+    const tue = grade.find((g) => g.label === `aus-${n}-2`)!;
+    const thu = grade.find((g) => g.label === `aus-${n}-4`)!;
+    const sub = { type: 'FERIAS', startDate: '2034-09-04', endDate: '2034-09-30', coverage: 'SUBSTITUIR', substituteId: bia.id, slotId: tue.slotId };
+
+    const ferias = await saveLeave(admin.principal, ana.id, { type: 'FERIAS', startDate: '2034-09-04', endDate: '2034-09-17', coverage: 'PENDENTE' }, META);
+    expect(ferias.applied).toBe(4);
+    expect(await previewLeave(admin.principal, ana.id, sub)).toMatchObject({ count: 3 }); // 05 e 12 (pendentes) + 19/09
+    const s = await saveLeave(admin.principal, ana.id, sub, META);
+    expect(s.applied).toBe(3);
+    expect((await hours()).find((t) => t.teacherId === bia.id)).toMatchObject({ substitutionMin: 180 });
+
+    // Na grade: a terça mostra o substituto; a quinta, as férias.
+    const g2 = await listGrade(admin.principal, '2034-09-10');
+    expect(g2.find((g) => g.slotId === tue.slotId)!.people[0]!.leave).toMatchObject({ substitute: bia.name });
+    expect(g2.find((g) => g.slotId === thu.slotId)!.people[0]!.leave).toMatchObject({ type: 'FERIAS', substitute: null });
+
+    await expect(saveLeave(admin.principal, ana.id, { ...sub, startDate: '2034-09-20', endDate: '2034-09-22' }, META)).rejects.toThrow(/substituição nesta aula/);
+    await expect(saveLeave(admin.principal, bia.id, { ...sub, substituteId: ana.id }, META)).rejects.toThrow(/não está nessa aula/);
+    await expect(saveLeave(admin.principal, ana.id, { ...sub, coverage: 'PENDENTE', substituteId: '' }, META)).rejects.toThrow(/precisa de um substituto/);
+
+    // Competência gerada depois já nasce com o substituto (terça 26/09).
+    await generatePeriod(admin.principal, { year: 2034, month: 10 }, META);
+    const oct = (await periodOverview(admin.principal, { year: 2034, month: 10 })).teachers;
+    expect(oct.find((t) => t.teacherId === bia.id)).toMatchObject({ substitutionMin: 60 });
+
+    // Anular as férias não desfaz a substituição; anular a substituição devolve a aula à Ana.
+    await cancelLeave(admin.principal, ferias.id, META);
+    let h = await hours();
+    expect(h.find((t) => t.teacherId === bia.id)).toMatchObject({ substitutionMin: 180 });
+    expect(h.find((t) => t.teacherId === ana.id)).toMatchObject({ ownMin: 300, absenceMin: 180 });
+    await cancelLeave(admin.principal, s.id, META);
+    h = await hours();
+    expect(h.find((t) => t.teacherId === bia.id)).toBeUndefined();
+    expect(h.find((t) => t.teacherId === ana.id)).toMatchObject({ ownMin: 480, absenceMin: 0 });
+    expect((await listLeaves(admin.principal, ana.id)).find((l) => l.id === s.id)).toMatchObject({ slot: 'CrossFit · Terça 22:00', cancelled: true });
+  });
 });
