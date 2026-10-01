@@ -83,6 +83,8 @@ export async function listGrade(principal: Principal | null, date: IsoDate, area
     select: { slotId: true, validFrom: true },
     orderBy: { validFrom: 'asc' },
   });
+  const firsts = await prisma.scheduleSlotVersion.groupBy({ by: ['slotId'], where: { slotId: { in: rows.map((r) => r.slotId) } }, _min: { validFrom: true } });
+  const since = new Map(firsts.map((f) => [f.slotId, fromUtc(f._min.validFrom!)]));
   const nextChange = new Map<string, IsoDate>();
   for (const f of futureChanges) if (!nextChange.has(f.slotId)) nextChange.set(f.slotId, fromUtc(f.validFrom));
   // Ausências lançadas na ficha aparecem na grade da data vista.
@@ -104,6 +106,8 @@ export async function listGrade(principal: Principal | null, date: IsoDate, area
     validFrom: fromUtc(v.validFrom),
     validTo: v.validTo ? fromUtc(v.validTo) : null,
     nextChange: nextChange.get(v.slotId) ?? null,
+    /** Primeira data da aula na grade (lançamento). */
+    since: since.get(v.slotId) ?? fromUtc(v.validFrom),
     modality: v.modality,
     activityType: v.activityType,
     space: v.space,
@@ -257,6 +261,15 @@ export async function changeSlot(principal: Principal | null, slotId: string, in
   });
 }
 
+/** Competência fechada não muda: excluir a partir de uma data só se nenhuma aula dela já foi fechada. */
+async function assertOpenFrom(tx: Tx, slotId: string, from: IsoDate) {
+  const closed = await tx.classOccurrence.findFirst({
+    where: { slotId, date: { gte: toUtc(from) }, period: { status: 'FECHADO' } },
+    select: { date: true }, orderBy: { date: 'desc' },
+  });
+  if (closed) throw new AppError(`Esta aula já tem horas em competência fechada (até ${formatDateBR(fromUtc(closed.date))}). Escolha uma data depois disso.`);
+}
+
 /** Encerra a aula a partir da data (a última acontece no dia anterior). */
 export async function endSlot(principal: Principal | null, slotId: string, from: string, reason: string | undefined, meta: RequestMeta) {
   assertCan(principal, 'schedule.edit');
@@ -266,6 +279,7 @@ export async function endSlot(principal: Principal | null, slotId: string, from:
     const { versions, spans } = await loadSpans(tx, slotId);
     const last = versions[versions.length - 1]!;
     assertAreaAccess(principal, last.modality.areaId);
+    await assertOpenFrom(tx, slotId, from);
     let plan;
     try {
       plan = planEnd(spans, from);
@@ -276,11 +290,16 @@ export async function endSlot(principal: Principal | null, slotId: string, from:
     if (plan.kind === 'close') {
       await tx.scheduleSlotVersion.update({ where: { id: plan.versionId }, data: { validTo: toUtc(plan.closeAt) } });
     }
-    // O período gerado é realinhado ANTES de apagar versões futuras (FK).
-    await onScheduleChanged(tx, slotId, from, { ending: true });
+    // Versões que somem: as aulas geradas delas saem antes (FK); as que alguém
+    // mexeu ficam soltas, para revisão. Só depois o período é realinhado —
+    // senão ele recriaria as aulas a partir das versões que vão sumir.
     if (plan.dropVersionIds.length) {
+      const dropped = { slotVersionId: { in: plan.dropVersionIds } };
+      await tx.classOccurrence.deleteMany({ where: { ...dropped, touched: false } });
+      await tx.classOccurrence.updateMany({ where: dropped, data: { slotVersionId: null, needsReview: true } });
       await tx.scheduleSlotVersion.deleteMany({ where: { id: { in: plan.dropVersionIds } } });
     }
+    await onScheduleChanged(tx, slotId, from, { ending: true });
     await audit(tx, { actorId: principal.id, ...meta }, {
       action: 'schedule.ended',
       entityType: 'schedule_slot',
@@ -304,6 +323,7 @@ export async function removeTeacherFromSlot(principal: Principal | null, slotId:
   });
   if (!v) throw new NotFoundError('Essa aula não está valendo nessa data.');
   if (!v.teachers.some((t) => t.teacherId === teacherId)) throw new AppError('Essa pessoa não está nessa aula.');
+  await assertOpenFrom(prisma, slotId, from);
   await changeSlot(principal, slotId, {
     weekday: v.weekday, startMin: v.startMin, durationMin: v.durationMin, modalityId: v.modalityId, activityTypeId: v.activityTypeId,
     spaceId: v.spaceId ?? '', label: v.label ?? '', from, reason: 'Professor saiu da aula (ficha do professor)',

@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { Card, PageHeader } from '@/components/ui/card';
 import { addDays, formatDateBR, weekdayOf } from '@/domain/dates';
 import { PROGRAM_KINDS } from '@/domain/programming/ai-program';
-import { programModality } from '@/domain/programming/modalities';
+import { isTechnicalSlug, programModality } from '@/domain/programming/modalities';
 import { todayIso } from '@/lib/today';
 import { cn } from '@/lib/cn';
 import { can } from '@/server/auth/authz';
@@ -26,7 +26,9 @@ export async function AiPage({ slug, mode }: { slug: string; mode?: string }) {
     <>
       <PageHeader
         title={`Geração de Treino IA · ${m.name}`}
-        description={`O copiloto usa o DNA de ${m.name}, as lacunas e os últimos 14 ou 30 dias de treinos da Nação. O motor confere tempo de aula, volume e fadiga; o coach revisa e lança no Cadastro de Treino.`}
+        description={isTechnicalSlug(slug)
+          ? `O copiloto usa a metodologia de ${m.name} (fases, fundamentos, progressão e jogo condicionado), as lacunas e as aulas dos últimos 14 ou 30 dias. O coach revisa e lança no Cadastro de Treino.`
+          : `O copiloto usa o DNA de ${m.name}, as lacunas e os últimos 14 ou 30 dias de treinos da Nação. O motor confere tempo de aula, volume e fadiga; o coach revisa e lança no Cadastro de Treino.`}
       />
       <div className="mb-4 flex flex-wrap gap-2">
         <Link href={`/treinos/${slug}/ia`} className={tab(!planilha)}>Treino do dia</Link>

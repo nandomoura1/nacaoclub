@@ -18,6 +18,7 @@ import type { GradeItem } from '@/server/services/schedule-service';
 import type { WeekDuty } from '@/server/services/duty-service';
 import { gradeParams, type GradeFilters } from '@/lib/grade-filter';
 import { changeSlotAction, createSlotsAction, endSlotAction, slotHistoryAction } from './actions';
+import { removeFromSlotAction } from '../professores/[id]/actions';
 
 type Area = { id: string; name: string; color: string };
 type Mod = { id: string; name: string; color: string; areaId: string; defaultDurationMin: number };
@@ -233,6 +234,7 @@ export function SlotSheet({
   editing, defaultFrom, canEdit, modalities, activityTypes, spaces, teachers, onClose, onDuplicate,
 }: SheetProps & { editing: NonNullable<Editing>; defaultFrom: string; onClose: () => void; onDuplicate: (i: GradeItem) => void }) {
   const base = editing.mode === 'edit' ? editing.item : editing.base;
+  const [removing, setRemoving] = useState(false);
   const aula = activityTypes.find((a) => a.kind === 'AULA') ?? activityTypes[0];
   const [v, setV] = useState({
     weekdays: [editing.mode === 'edit' ? editing.item.weekday : editing.weekday],
@@ -290,6 +292,10 @@ export function SlotSheet({
     return { able, others };
   }, [teachers, v.modalityId]);
 
+  if (removing && editing.mode === 'edit') {
+    return <RemoveSlotSheet item={editing.item} defaultFrom={v.from} onClose={(changed) => (changed ? onClose() : setRemoving(false))} />;
+  }
+
   return (
     <Sheet
       title={editing.mode === 'create' ? 'Nova aula na grade' : `${editing.item.modality.name} · ${WEEKDAYS[editing.item.weekday - 1]!.long} ${formatClock(editing.item.startMin)}`}
@@ -301,13 +307,8 @@ export function SlotSheet({
           {editing.mode === 'edit' && (
             <>
               <Button type="button" variant="secondary" onClick={() => onDuplicate(editing.item)}><Copy /> Duplicar</Button>
-              <Button type="button" variant="ghost" className="text-critico" disabled={pending}
-                onClick={() => {
-                  if (confirm(`Encerrar esta aula? A última acontece em ${formatDateBR(v.from)} menos um dia. O histórico é mantido.`)) {
-                    run(() => endSlotAction(editing.item.slotId, v.from, v.reason));
-                  }
-                }}>
-                <Trash2 /> Encerrar
+              <Button type="button" variant="ghost" className="text-critico" disabled={pending} onClick={() => setRemoving(true)}>
+                <Trash2 /> Excluir
               </Button>
             </>
           )}
@@ -448,5 +449,87 @@ export function SlotSheet({
       )}
       <FormMessage error={error} />
     </Sheet>
+  );
+}
+
+/**
+ * Excluir um horário já lançado, em um passo: tira só a pessoa ou a aula
+ * inteira, a partir de uma data — ou desde o lançamento, quando foi engano.
+ * Competência fechada não muda (o servidor confere).
+ */
+export function RemoveSlotSheet({ item, teacher, defaultFrom, onClose }: {
+  item: GradeItem; teacher?: { id: string; name: string }; defaultFrom: string; onClose: (changed: boolean) => void;
+}) {
+  const shared = !!teacher && item.people.length > 1;
+  const [scope, setScope] = useState<'pessoa' | 'aula'>(shared ? 'pessoa' : 'aula');
+  const singleVersion = item.since === item.validFrom && !item.nextChange;
+  const [when, setWhen] = useState<'data' | 'lancamento'>('data');
+  const [from, setFrom] = useState(defaultFrom < item.since ? item.since : defaultFrom);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const date = when === 'lancamento' ? item.since : from;
+  const what = `${item.modality.name} · ${WEEKDAYS[item.weekday - 1]!.long} ${formatClock(item.startMin)}`;
+  const others = item.people.filter((p) => p.teacherId !== teacher?.id).map((p) => p.name).join(', ');
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    start(async () => {
+      const r = scope === 'pessoa'
+        ? await removeFromSlotAction(item.slotId, teacher!.id, date)
+        : await endSlotAction(item.slotId, date, when === 'lancamento' ? 'Excluída: lançada por engano' : 'Excluída da grade');
+      if (!r.ok) return setError(r.error);
+      onClose(true);
+    });
+  };
+
+  return (
+    <Sheet title="Excluir horário" onClose={() => onClose(false)} onSubmit={submit}
+      footer={<>
+        <Button type="submit" className="bg-critico hover:bg-critico/90" disabled={pending}><Trash2 /> {pending ? 'Excluindo…' : 'Excluir'}</Button>
+        <Button type="button" variant="ghost" onClick={() => onClose(false)}>Cancelar</Button>
+      </>}>
+      <div className="space-y-5">
+        <div className="rounded-lg border border-borda p-3" style={{ borderLeft: `4px solid ${item.modality.color}` }}>
+          <p className="font-extrabold text-navy">{what}</p>
+          <p className="text-sm text-tinta-suave">{formatClock(item.startMin)}–{formatClock(item.startMin + item.durationMin)} · {item.people.map((p) => p.name).join(', ') || 'sem professor'}</p>
+          <p className="text-xs text-tinta-fraca">Na grade desde {formatDateBR(item.since)}</p>
+        </div>
+
+        {shared && (
+          <fieldset className="space-y-2">
+            <legend className="mb-1.5 text-xs font-semibold text-tinta-suave">O que excluir</legend>
+            <Choice checked={scope === 'pessoa'} onChange={() => setScope('pessoa')} title={`Só ${teacher!.name}`} help={`A aula continua com ${others}.`} />
+            <Choice checked={scope === 'aula'} onChange={() => setScope('aula')} title="A aula inteira" help="Sai da grade para todos." />
+          </fieldset>
+        )}
+
+        <fieldset className="space-y-2">
+          <legend className="mb-1.5 text-xs font-semibold text-tinta-suave">A partir de quando</legend>
+          <Choice checked={when === 'data'} onChange={() => setWhen('data')} title="A partir de uma data" help="As aulas antes dessa data continuam no histórico e nas horas.">
+            {when === 'data' && <Input type="date" aria-label="Excluir a partir de" className="mt-2 w-44" min={item.since} value={from} onChange={(e) => e.target.value && setFrom(e.target.value)} />}
+          </Choice>
+          {singleVersion && (
+            <Choice checked={when === 'lancamento'} onChange={() => setWhen('lancamento')} title={`Desde o lançamento (${formatDateBR(item.since)})`} help="Foi lançado por engano: apaga o horário inteiro, como se nunca tivesse existido." />
+          )}
+        </fieldset>
+
+        <p className="rounded-lg bg-fundo p-3 text-sm text-tinta">
+          {scope === 'pessoa' ? <><b>{teacher!.name}</b> sai de </> : <>A aula <b>{what}</b> sai da grade </>}
+          {when === 'lancamento' ? <>desde o lançamento.</> : <>a partir de <b>{formatDateBR(date)}</b>.</>} As horas previstas a partir daí são refeitas sozinhas; competência fechada não muda.
+        </p>
+        <FormMessage error={error} />
+      </div>
+    </Sheet>
+  );
+}
+
+function Choice({ checked, onChange, title, help, children }: { checked: boolean; onChange: () => void; title: string; help: string; children?: React.ReactNode }) {
+  return (
+    <label className={cn('block cursor-pointer rounded-lg border p-3 text-sm', checked ? 'border-nacao bg-nacao/5' : 'border-borda')}>
+      <span className="flex items-center gap-2 font-bold text-navy"><input type="radio" className="accent-[#0169E9]" checked={checked} onChange={onChange} />{title}</span>
+      <span className="mt-0.5 block text-tinta-suave">{help}</span>
+      {children}
+    </label>
   );
 }

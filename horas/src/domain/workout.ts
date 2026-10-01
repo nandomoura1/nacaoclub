@@ -133,10 +133,11 @@ export function fitFontSize(days: WorkoutDayData[], opts: { columnWidth: number;
  * Duração de referência da aula por modalidade (min). CrossFit da Nação: 55'
  * — os blocos registrados somam ~41' em média; o resto é briefing, montagem,
  * transições e desaquecimento, que o plano de aula precisa prever. Funcional:
- * 50' (média declarada no histórico: 49,6'). Hyrox: 50' (declarada: 50').
+ * 50' (média declarada no histórico: 49,6'). Hyrox: 50' (declarada: 50'). Futevôlei: 55' [HIPÓTESE: aula de 60' na grade, como o CrossFit].
  */
 export function lessonMinutes(modality: string): number | null {
   if (/crossfit/i.test(modality)) return 55;
+  if (/^futev[oô]lei$/i.test(modality.trim())) return 55;
   return /^(funcional|hyrox)$/i.test(modality.trim()) ? 50 : null;
 }
 
@@ -182,6 +183,7 @@ export function dayTemplate(modality: string): WorkoutBlockData[] {
   // 50': warm-up com mobilidade ~12', específico ~7', WOD longo (médias do DNA).
   if (/hyrox/.test(m)) return [b('AQUECIMENTO', 12), b('SKILL', 7), b('WOD', 31)];
   if (m.trim() === 'funcional') return [b('AQUECIMENTO', 12), b('ESPECIFICO', 7), b('WOD', 26), b('CORE', 5)];
+  if (m.trim() === 'futevôlei' || m.trim() === 'futevolei') return [b('AQUECIMENTO', 12), b('FUNDAMENTO', 23), b('JOGO', 20)];
   if (/futev|base forte|saque|beach|v[oô]lei/.test(m)) return [b('AQUECIMENTO', 10), b('FUNDAMENTO', 20), b('JOGO', 20)];
   return [b('AQUECIMENTO', 8), b('SKILL', 8), b('WOD', 25)];
 }

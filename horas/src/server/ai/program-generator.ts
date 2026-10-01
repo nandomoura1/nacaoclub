@@ -11,7 +11,7 @@ import {
   CAPACITY_LABEL, HORIZON_LABEL, LEVEL_LABEL, ProgramPlanSchema, dayInPlan, horizon, normalizePlan, programRequestSchema, trainingDates,
   type ProgramPlan, type ProgramRequest,
 } from '@/domain/programming/ai-program';
-import { modalitySlug, programModality } from '@/domain/programming/modalities';
+import { isTechnicalSlug, modalitySlug, programModality } from '@/domain/programming/modalities';
 import type { Session } from '@/domain/programming/history';
 import { askModel, generateWorkout, isFake, programmedDays, systemPrompt } from './workout-generator';
 import { setDayFromAi, workoutModalities } from '@/server/services/workout-service';
@@ -32,7 +32,13 @@ const PERIODIZATION_RULES = `# Como montar a periodização (regras do sistema d
 - O ciclo específico ocupa no máximo 1–2 estímulos por semana. O resto da semana segue o DNA da modalidade na Nação (aula geral e variada): nunca transforme todas as aulas no objetivo.
 - Sem força pesada do mesmo padrão com menos de 48 h. Varie time domains e modalidades ao longo da semana; equilibre as lacunas do DNA.`;
 
-function describeProgram(req: ProgramRequest, dates: IsoDate[], recent: Session[]): string {
+const TECHNICAL_RULES = `# Como montar a planilha técnica (Metodologia Nação)
+- Uma fase da metodologia por semana, como a Nação faz (Fundamentos → Recepção → Construção do jogo → Defesa → Jogo estruturado → Inteligência de jogo); o objetivo do coach decide quais fases entram e em que ordem. Em prazos longos, o ciclo de fases se repete com mais complexidade (mais deslocamento, decisão e transição).
+- Cada aula tem um fundamento central e termina em jogo condicionado cuja regra reforça o tema. Dentro da semana o tema pode se repetir em dois dias seguidos para consolidar, com a progressão avançando no segundo dia.
+- Na última semana, aulas de jogo estruturado e um "teste" técnico (ex.: % de recepções que chegam no levantador, sequência de ataques certos).
+- No campo "forca" de cada dia escreva o FUNDAMENTO e a progressão do dia; no campo "wod" escreva o JOGO condicionado e a regra. "volume"/"intensidade" = densidade de repetições e exigência de decisão.`;
+
+function describeProgram(req: ProgramRequest, dates: IsoDate[], recent: Session[], technical = false): string {
   const h = horizon(req);
   const byWeek = new Map<IsoDate, IsoDate[]>();
   for (const d of dates) byWeek.set(mondayOf(d), [...(byWeek.get(mondayOf(d)) ?? []), d]);
@@ -40,8 +46,8 @@ function describeProgram(req: ProgramRequest, dates: IsoDate[], recent: Session[
   const what = req.kind === 'periodizacao'
     ? `Crie uma PERIODIZAÇÃO NOVA.
 - Objetivo do coach: ${req.goal || '(não descrito)'}
-- Capacidade: ${CAPACITY_LABEL[req.capacity]}${req.movement ? ` · movimento: ${req.movement}` : ''}
-- Teste ao final: ${req.test}
+${technical ? `- Fundamento a priorizar: ${req.movement || 'livre, pela metodologia'}` : `- Capacidade: ${CAPACITY_LABEL[req.capacity]}${req.movement ? ` · movimento: ${req.movement}` : ''}
+- Teste ao final: ${req.test}`}
 - Perfil: ${LEVEL_LABEL[req.level]}`
     : `Crie uma CONTINUIDADE da programação: siga a partir dos últimos ${req.window} dias, mantendo o DNA da Nação e equilibrando o que ficou para trás (padrões, time domains, lacunas). ${req.goal ? `Observação do coach: ${req.goal}` : ''}`;
   return `${what}
@@ -49,9 +55,9 @@ function describeProgram(req: ProgramRequest, dates: IsoDate[], recent: Session[
 - ${dates.length} aulas, só nestas datas (use exatamente estas, uma entrada por data):
 ${weeks}
 
-${req.kind === 'periodizacao' ? PERIODIZATION_RULES : '# Continuidade\n- Sem objetivo único: varie estímulos e cubra as lacunas, sem repetir o padrão dominante nem o time domain em dias seguidos.'}
+${technical ? TECHNICAL_RULES : req.kind === 'periodizacao' ? PERIODIZATION_RULES : '# Continuidade\n- Sem objetivo único: varie estímulos e cubra as lacunas, sem repetir o padrão dominante nem o time domain em dias seguidos.'}
 
-Para cada dia, descreva o tema, o bloco de força/skill (com esquema e %, ou vazio) e o estímulo do WOD (time domain, formato, modalidades). A aula completa será escrita depois, dia a dia, a partir deste plano.
+${technical ? 'Para cada dia, descreva o tema, o fundamento com a progressão (campo "forca") e o jogo condicionado com a regra (campo "wod").' : 'Para cada dia, descreva o tema, o bloco de força/skill (com esquema e %, ou vazio) e o estímulo do WOD (time domain, formato, modalidades).'} A aula completa será escrita depois, dia a dia, a partir deste plano.
 
 Programação dos últimos ${req.window} dias (para continuar a partir dela):
 ${recent.length ? recent.map(sessionText).join('\n') : '(nenhum dia registrado no período)'}`;
@@ -93,12 +99,12 @@ export async function createProgram(principal: Principal | null, slug: string, i
   const req = parsed.data;
   programModality(slug);
   await modalityIdFor(principal, slug);
-  if (req.kind === 'periodizacao' && !req.goal && req.capacity === 'geral') throw new AppError('Descreva o objetivo da periodização ou escolha a capacidade.');
+  if (req.kind === 'periodizacao' && !req.goal && req.capacity === 'geral' && !(isTechnicalSlug(slug) && req.movement)) throw new AppError('Descreva o objetivo da periodização ou escolha a capacidade.');
   const dates = trainingDates(req);
   if (!dates.length) throw new AppError('Nenhum dia de aula no período escolhido.');
   const recent = await programmedDays(slug, addDays(req.startDate, -req.window), addDays(req.startDate, -1));
   const plan = normalizePlan(
-    isFake() ? fakeProgram(dates) : await askModel(ProgramPlanSchema, systemPrompt(slug), describeProgram(req, dates, recent), 32000),
+    isFake() ? fakeProgram(dates) : await askModel(ProgramPlanSchema, systemPrompt(slug), describeProgram(req, dates, recent, isTechnicalSlug(slug)), 32000),
     dates,
   );
   const title = (req.title || plan.titulo).slice(0, 80);
@@ -142,13 +148,13 @@ export async function generateProgramDay(principal: Principal | null, id: string
   if (!at) throw new AppError('Esta data não está na planilha.');
   const earlier: Session[] = Object.entries(program.days)
     .filter(([d]) => d < date)
-    .map(([d, r]) => dayToSession({ date: d, title: r.plan.titulo, blocks: planToBlocks(r.plan) }));
+    .map(([d, r]) => dayToSession({ date: d, title: r.plan.titulo, blocks: planToBlocks(r.plan, program.modality) }));
   const p = program.plan;
   const context = `# Esta aula faz parte da planilha "${program.title}" (${p.modelo})
 Estratégia: ${p.estrategia}
 Objetivo final: ${p.objetivoFinal}
 Semana ${at.week.semana} — fase ${at.week.fase}; foco: ${at.week.foco}; volume ${at.week.volume}; intensidade ${at.week.intensidade}${at.week.deload ? '; SEMANA DE DELOAD' : ''}.
-Plano deste dia (siga-o): tema "${at.day.tema}"; força/skill: ${at.day.forca || 'sem bloco de força'}; WOD: ${at.day.wod}; intensidade ${at.day.intensidade}.
+Plano deste dia (siga-o): tema "${at.day.tema}"; ${isTechnicalSlug(program.modality) ? `fundamento: ${at.day.forca}; jogo: ${at.day.wod}` : `força/skill: ${at.day.forca || 'sem bloco de força'}; WOD: ${at.day.wod}`}; intensidade ${at.day.intensidade}.
 Resto da semana na planilha: ${at.week.dias.filter((d) => d.data !== date).map((d) => `${d.data}: ${d.tema}`).join(' | ')}`;
   const r = await generateWorkout(principal, program.modality, {
     date, focus: at.day.tema, strength: at.day.forca.trim() ? 'sim' : 'nao', wodMinutes: 'auto',
@@ -177,7 +183,7 @@ export async function insertProgramDays(principal: Principal | null, id: string,
   const weekIds = new Set<string>();
   for (const d of ready) {
     const r = program.days[d]!;
-    const { weekId } = await setDayFromAi(principal, { modalityId, date: d, title: r.plan.titulo, blocks: planToBlocks(r.plan), replace: true }, meta);
+    const { weekId } = await setDayFromAi(principal, { modalityId, date: d, title: r.plan.titulo, blocks: planToBlocks(r.plan, program.modality), replace: true }, meta);
     weekIds.add(weekId);
   }
   return { inserted: ready.length, weekIds: [...weekIds] };

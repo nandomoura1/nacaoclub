@@ -15,11 +15,12 @@ describe('treinos (puro)', () => {
     expect(lessonMinutes('Funcional')).toBe(50);
     expect(lessonMinutes('HYROX')).toBe(50);
     expect(lessonMinutes('Funcional Kids')).toBeNull();
-    expect(lessonMinutes('Futevôlei')).toBeNull();
+    expect(lessonMinutes('Futevôlei')).toBe(55);
+    expect(lessonMinutes('Base Forte')).toBeNull();
     expect(dayTemplate('Futevôlei').map((b) => b.kind)).toEqual(['AQUECIMENTO', 'FUNDAMENTO', 'JOGO']);
     expect(dayTemplate('Base Forte').map((b) => b.kind)).toEqual(['AQUECIMENTO', 'FUNDAMENTO', 'JOGO']);
     expect(dayTemplate('HYROX').map((b) => b.kind)).toEqual(['AQUECIMENTO', 'SKILL', 'WOD']);
-    for (const m of ['HYROX', 'Funcional']) expect(dayMinutes({ date: '2026-09-28', title: null, blocks: dayTemplate(m) })).toBe(lessonMinutes(m)); // aula de 50'
+    for (const m of ['HYROX', 'Funcional', 'Futevôlei']) expect(dayMinutes({ date: '2026-09-28', title: null, blocks: dayTemplate(m) })).toBe(lessonMinutes(m)); // aula de 50'
   });
 
   it('texto de WhatsApp: fases numa linha, Força e WOD detalhados, rodapé', () => {

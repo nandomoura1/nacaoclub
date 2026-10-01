@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '@/server/db';
 import { bootstrapStructure } from '@/server/services/bootstrap';
-import { changeSlot, createSlots } from '@/server/services/schedule-service';
+import { changeSlot, createSlots, endSlot, listGrade, removeTeacherFromSlot } from '@/server/services/schedule-service';
 import { decideHoliday, generatePeriod, listOccurrences, periodOverview } from '@/server/services/period-service';
 import { saveHoliday } from '@/server/services/holiday-service';
 import { toUtc } from '@/domain/dates';
@@ -134,6 +134,30 @@ describe.skipIf(!hasDb)('E4 · competência, geração e horas', () => {
     }, META);
     const after = await prisma.classOccurrence.findUniqueOrThrow({ where: { id: touched.id } });
     expect(after).toMatchObject({ startMin: 300, needsReview: true, touched: true });
+  });
+
+  it('excluir horário: desde o lançamento some com tudo; competência fechada trava a data', async () => {
+    const t = await teacher('Exclui Engano');
+    const engano = await slot(1, t.id, { validFrom: '2031-03-03' }); // segundas
+    await generatePeriod(admin.principal, { year: 2031, month: 3 }, META); // 26/02 a 25/03/2031
+    expect(await hoursOf(2031, 3, t.id)).toMatchObject({ totalMin: 240 }); // 03, 10, 17, 24
+    const item = (await listGrade(admin.principal, '2031-03-10')).find((g) => g.slotId === engano)!;
+    expect(item.since).toBe('2031-03-03');
+    await endSlot(admin.principal, engano, item.since, 'lançada por engano', META);
+    expect((await hoursOf(2031, 3, t.id))?.totalMin ?? 0).toBe(0);
+    expect((await listGrade(admin.principal, '2031-03-10')).some((g) => g.slotId === engano)).toBe(false);
+
+    const dupla = await teacher('Exclui Dupla');
+    const fixa = await createSlots(admin.principal, {
+      weekdays: [3], startMin: 300, durationMin: 60, modalityId: hyrox.id, activityTypeId: aula.id, spaceId: '', label: 'dupla',
+      people: [{ teacherId: t.id, role: 'TITULAR' }, { teacherId: dupla.id, role: 'AUXILIAR' }], validFrom: '2031-04-01',
+    }, META).then((ids) => ids[0]!);
+    await generatePeriod(admin.principal, { year: 2031, month: 5 }, META); // 26/04 a 25/05/2031
+    await prisma.payrollPeriod.update({ where: { year_month: { year: 2031, month: 5 } }, data: { status: 'FECHADO' } });
+    await expect(endSlot(admin.principal, fixa, '2031-05-01', undefined, META)).rejects.toThrow(/competência fechada/);
+    await expect(removeTeacherFromSlot(admin.principal, fixa, dupla.id, '2031-05-01', META)).rejects.toThrow(/competência fechada/);
+    await removeTeacherFromSlot(admin.principal, fixa, dupla.id, '2031-05-26', META);
+    expect((await listGrade(admin.principal, '2031-06-04')).find((g) => g.slotId === fixa)!.people.map((p) => p.name)).toEqual(['Exclui Engano']);
   });
 
   it('competência fechada não é regerada; competências não se sobrepõem', async () => {

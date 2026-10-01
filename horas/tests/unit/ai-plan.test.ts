@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { checkPlan, planToBlocks, toSessionBlock, type AiPlan } from '@/domain/programming/ai-plan';
+import { checkPlan, dayToSession, planToBlocks, sessionText, toSessionBlock, type AiPlan } from '@/domain/programming/ai-plan';
 import { parseHistory } from '@/domain/programming/history';
-import { fakePlan, systemPrompt, describeRequest, requestSchema } from '@/server/ai/workout-generator';
+import { fakePlan, fakeTechnicalPlan, systemPrompt, describeRequest, requestSchema } from '@/server/ai/workout-generator';
 import { WEEK_METRICS, type WeekMetric } from '@/domain/programming/volume';
 
 const zero = Object.fromEntries(WEEK_METRICS.map((m) => [m.id, 0])) as Record<WeekMetric, number>;
@@ -64,6 +64,23 @@ describe('plano da IA', () => {
     expect(hy).toContain('Aula de 50 minutos');
     expect(hy).toContain('É HYROX');
     expect(hy).toContain('# Lacunas');
-    expect(() => systemPrompt('futevolei')).toThrow();
+    expect(() => systemPrompt('base-forte')).toThrow();
+  });
+
+  it('Futevôlei: prompt da metodologia (fundamento → jogo), níveis próprios e blocos técnicos', () => {
+    const sys = systemPrompt('futevolei');
+    expect(sys).toContain('somam exatamente 55.');
+    expect(sys).toContain('Metodologia Nação Futevôlei');
+    expect(sys).toContain('FUNDAMENTO');
+    expect(sys).not.toContain('Fran, Cindy');
+    const req = requestSchema.parse({ date: '2026-10-07', focus: 'recepção' });
+    const msg = describeRequest(req, [], zero, 'futevolei');
+    expect(msg).toContain('Tema/fundamento pedido pelo coach: recepção');
+    expect(msg).not.toContain('Força');
+    const blocks = planToBlocks(fakeTechnicalPlan(), 'futevolei');
+    expect(blocks.map((b) => b.kind)).toEqual(['MOBILIDADE', 'AQUECIMENTO', 'FUNDAMENTO', 'JOGO']);
+    expect(blocks.reduce((s, b) => s + (b.durationMin ?? 0), 0)).toBe(55);
+    expect(blocks[2]!.coachNotes).toContain('Aprendiz (D/C):');
+    expect(sessionText(dayToSession({ date: '2026-10-07', title: null, blocks }))).toContain('TEC 20 | Jogo: "Primeira bola vale dobro"');
   });
 });

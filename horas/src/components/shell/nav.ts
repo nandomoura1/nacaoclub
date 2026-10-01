@@ -37,7 +37,7 @@ export const NAV_HORAS: NavItem[] = [
 ];
 
 /** Modalidades com a Geração de Treino IA pronta (as outras aparecem como "breve"). */
-const AI_READY = new Set(['crossfit', 'funcional', 'hyrox']);
+const AI_READY = new Set(['crossfit', 'funcional', 'hyrox', 'futevolei']);
 
 /** Cadastro de Treino + um grupo por modalidade: o DNA (e a IA que nasce dele) é de cada modalidade. */
 export const NAV_TREINOS: NavItem[] = [

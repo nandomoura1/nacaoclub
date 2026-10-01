@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { CalendarOff, LogOut, Plus, Undo2 } from 'lucide-react';
+import { CalendarOff, Plus, Trash2, Undo2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -14,8 +14,8 @@ import { cn } from '@/lib/cn';
 import { formatMinutes } from '@/lib/format';
 import type { GradeItem } from '@/server/services/schedule-service';
 import type { LeaveItem } from '@/server/services/leave-service';
-import { SlotCard, SlotSheet, type Editing, type SheetProps } from '../../grade/GradeClient';
-import { cancelLeaveAction, previewLeaveAction, removeFromSlotAction, saveLeaveAction } from './actions';
+import { RemoveSlotSheet, SlotCard, SlotSheet, type Editing, type SheetProps } from '../../grade/GradeClient';
+import { cancelLeaveAction, previewLeaveAction, saveLeaveAction } from './actions';
 
 /* ───────────────────────── Aulas fixas ───────────────────────── */
 
@@ -24,9 +24,8 @@ export function AulasTab({ teacherId, teacherName, date, today, grade, sheet }: 
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState<Editing>(null);
-  const [from, setFrom] = useState(date > today ? date : today);
+  const [removing, setRemoving] = useState<GradeItem | null>(null);
   const [msg, setMsg] = useState<{ error?: string; ok?: string }>({});
-  const [pending, start] = useTransition();
   const byDay = useMemo(() => WEEKDAYS.map((w) => ({ ...w, items: grade.filter((g) => g.weekday === w.n) })), [grade]);
   const weekly = grade.filter((g) => g.activityType.kind !== 'PERSONAL').reduce((s, g) => s + g.durationMin, 0);
 
@@ -49,18 +48,11 @@ export function AulasTab({ teacherId, teacherName, date, today, grade, sheet }: 
               {d.items.map((g) => (
                 <div key={g.id}>
                   <SlotCard item={g} onClick={() => setEditing({ mode: 'edit', item: g })} />
-                  {sheet.canEdit && g.people.length > 1 && (
-                    <button disabled={pending} className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-semibold text-tinta-fraca hover:text-critico"
-                      onClick={() => {
-                        if (!confirm(`Tirar ${teacherName} desta aula a partir de ${formatDateBR(from)}? A aula continua com ${g.people.filter((p) => p.teacherId !== teacherId).map((p) => p.name).join(', ')}.`)) return;
-                        setMsg({});
-                        start(async () => {
-                          const r = await removeFromSlotAction(g.slotId, teacherId, from);
-                          setMsg(r.ok ? { ok: r.message } : { error: r.error });
-                          router.refresh();
-                        });
-                      }}>
-                      <LogOut className="size-3" /> sair desta aula
+                  {sheet.canEdit && (
+                    <button className="mt-1 inline-flex w-full items-center justify-center gap-1 rounded-md border border-borda bg-white py-1 text-xs font-semibold text-tinta-suave hover:border-critico hover:text-critico"
+                      aria-label={`Excluir horário ${g.modality.name} ${d.long}`}
+                      onClick={() => { setMsg({}); setRemoving(g); }}>
+                      <Trash2 className="size-3.5" /> Excluir
                     </button>
                   )}
                 </div>
@@ -71,14 +63,13 @@ export function AulasTab({ teacherId, teacherName, date, today, grade, sheet }: 
         ))}
       </div>
 
-      {sheet.canEdit && (
-        <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-tinta-suave">
-          <Label htmlFor="sair-de" className="mb-0">“Sair desta aula” vale a partir de</Label>
-          <Input id="sair-de" type="date" className="w-40" value={from} onChange={(e) => e.target.value && setFrom(e.target.value)} />
-          <span>(para aula só dele, abra a aula e use Encerrar ou troque o professor)</span>
-        </div>
-      )}
       <FormMessage error={msg.error} success={msg.ok} />
+
+      {removing && (
+        <RemoveSlotSheet item={removing} teacher={{ id: teacherId, name: removing.people.find((p) => p.teacherId === teacherId)?.name ?? teacherName }}
+          defaultFrom={date > today ? date : today}
+          onClose={(changed) => { setRemoving(null); if (changed) { setMsg({ ok: 'Horário excluído. As horas a partir da data já foram refeitas.' }); router.refresh(); } }} />
+      )}
 
       {editing && (
         <SlotSheet

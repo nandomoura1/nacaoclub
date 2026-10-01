@@ -12,6 +12,7 @@ import { formatDateBR, weekdayOf, WEEKDAYS } from '@/domain/dates';
 import { HORIZON_LABEL, PROGRAM_KINDS, horizon } from '@/domain/programming/ai-program';
 import type { ProgramDayResult, ProgramView as Program } from '@/server/ai/program-generator';
 import { cn } from '@/lib/cn';
+import { isTechnicalSlug } from '@/domain/programming/modalities';
 import { deleteProgramAction, generateProgramDayAction, insertProgramDaysAction } from './ai-actions';
 import { PlanDetails } from './AiGenerator';
 
@@ -26,6 +27,7 @@ export function ProgramView({ program, slug, modality, enabled }: { program: Pro
   const [msg, setMsg] = useState<{ error?: string; ok?: string }>({});
   const [links, setLinks] = useState<string[]>([]);
   const p = program.plan;
+  const technical = isTechnicalSlug(slug);
   const total = p.semanas.reduce((s, w) => s + w.dias.length, 0);
   const done = Object.keys(days).length;
 
@@ -138,7 +140,7 @@ export function ProgramView({ program, slug, modality, enabled }: { program: Pro
                         <span className="w-20 shrink-0 font-bold text-navy">{dayLabel(d.data)}</span>
                         <div className="min-w-0 flex-1">
                           <p className="font-semibold text-tinta">{d.tema}</p>
-                          <p className="text-tinta-suave">{d.forca ? <><b>Força:</b> {d.forca} · </> : null}<b>WOD:</b> {d.wod}</p>
+                          <p className="text-tinta-suave">{d.forca ? <><b>{technical ? 'Fundamento' : 'Força'}:</b> {d.forca} · </> : null}<b>{technical ? 'Jogo' : 'WOD'}:</b> {d.wod}</p>
                         </div>
                         <Badge tone={INT_TONE[d.intensidade]}>{d.intensidade}</Badge>
                         {r ? (
@@ -151,7 +153,7 @@ export function ProgramView({ program, slug, modality, enabled }: { program: Pro
                       </div>
                       {r && isOpen && (
                         <div className="mt-3">
-                          <PlanDetails plan={r.plan} check={r.check} date={d.data} modality={modality} model="IA">
+                          <PlanDetails plan={r.plan} check={r.check} date={d.data} slug={slug} modality={modality} model="IA">
                             <Button className="w-full" variant="ghost" disabled={!!busy || !enabled} onClick={() => generate([d.data], w.semana)}><Sparkles /> Refazer esta aula</Button>
                             <Button className="w-full" disabled={!!busy} onClick={() => insert([d.data], w.semana)}><Upload /> Lançar {formatDateBR(d.data)}</Button>
                           </PlanDetails>

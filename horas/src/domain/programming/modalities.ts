@@ -30,3 +30,13 @@ export function programModality(slug: string): ProgramModality {
   if (!m) throw new Error(`Modalidade sem programação: ${slug}`);
   return m;
 }
+
+/** Modalidades técnicas: aula de fundamento → progressão → jogo, sem WOD nem carga. */
+export const isTechnicalSlug = (slug: string) => slug === 'futevolei' || slug === 'base-forte';
+
+/** Rótulos dos quatro níveis do plano da IA (escalas.rx … escalas.iniciante) por modalidade. */
+export function levelLabels(slug: string): [key: 'rx' | 'intermediario' | 'scale' | 'iniciante', label: string][] {
+  return isTechnicalSlug(slug)
+    ? [['rx', 'Avançado'], ['intermediario', 'Intermediário'], ['scale', 'Aprendiz (D/C)'], ['iniciante', 'Primeira aula']]
+    : [['rx', 'RX'], ['intermediario', 'Intermediário'], ['scale', 'Scale'], ['iniciante', 'Iniciante']];
+}

@@ -22,7 +22,7 @@ export async function insertAiDayAction(slug: string, date: string, plan: unknow
     if (!parsed.success) throw new AppError('Plano inválido.');
     const modality = (await workoutModalities(principal)).find((m) => modalitySlug(m.name) === slug);
     if (!modality) throw new AppError('Você não tem acesso a esta modalidade no Cadastro de Treino.');
-    const r = await setDayFromAi(principal, { modalityId: modality.id, date, title: parsed.data.titulo, blocks: planToBlocks(parsed.data), replace }, await requestMeta());
+    const r = await setDayFromAi(principal, { modalityId: modality.id, date, title: parsed.data.titulo, blocks: planToBlocks(parsed.data, slug), replace }, await requestMeta());
     revalidatePath('/treinos');
     return r.weekId;
   }, 'Treino lançado no Cadastro de Treino.');

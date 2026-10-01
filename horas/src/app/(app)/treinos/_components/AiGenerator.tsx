@@ -11,11 +11,11 @@ import { formatDateBR, weekdayOf, WEEKDAYS } from '@/domain/dates';
 import { KIND, type BlockKind } from '@/domain/workout';
 import type { GenerateResult } from '@/server/ai/workout-generator';
 import { cn } from '@/lib/cn';
+import { isTechnicalSlug, levelLabels } from '@/domain/programming/modalities';
 import { generateWorkoutAction, insertAiDayAction } from './ai-actions';
 
 type Form = { date: string; focus: string; strength: 'auto' | 'sim' | 'nao'; wodMinutes: 'auto' | 'curto' | 'medio' | 'longo'; partner: boolean; avoid: string; window: 14 | 30 };
 
-const LEVELS = [['rx', 'RX'], ['intermediario', 'Intermediário'], ['scale', 'Scale'], ['iniciante', 'Iniciante']] as const;
 const ALERT_STYLE = {
   ok: { icon: CheckCircle2, cls: 'border-emerald-200 bg-emerald-50 text-emerald-900' },
   aviso: { icon: CircleAlert, cls: 'border-amber-200 bg-amber-50 text-amber-900' },
@@ -53,6 +53,7 @@ export function AiGenerator({ slug, modality, defaultDate, enabled }: { slug: st
   }
 
   const wd = WEEKDAYS[weekdayOf(f.date) - 1]?.long;
+  const technical = isTechnicalSlug(slug);
   const p = result?.plan;
   const c = result?.check;
 
@@ -71,15 +72,15 @@ export function AiGenerator({ slug, modality, defaultDate, enabled }: { slug: st
             <Input id="ai-date" type="date" required value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} />
             {wd && <p className="mt-1 text-xs text-tinta-suave">{wd}</p>}
           </div>
-          <div>
+          {!technical && <div>
             <Label htmlFor="ai-str">Força</Label>
             <Select id="ai-str" value={f.strength} onChange={(e) => setF({ ...f, strength: e.target.value as Form['strength'] })}>
               <option value="auto">Automático (DNA do dia)</option>
               <option value="sim">Com bloco de força</option>
               <option value="nao">Sem força</option>
             </Select>
-          </div>
-          <div>
+          </div>}
+          {!technical && <div>
             <Label htmlFor="ai-wod">Duração do WOD</Label>
             <Select id="ai-wod" value={f.wodMinutes} onChange={(e) => setF({ ...f, wodMinutes: e.target.value as Form['wodMinutes'] })}>
               <option value="auto">Automático (variar)</option>
@@ -87,25 +88,25 @@ export function AiGenerator({ slug, modality, defaultDate, enabled }: { slug: st
               <option value="medio">Médio (11–20')</option>
               <option value="longo">Longo (21'+)</option>
             </Select>
-          </div>
+          </div>}
           <div>
             <Label htmlFor="ai-win">Baseado nos últimos</Label>
             <Select id="ai-win" value={f.window} onChange={(e) => setF({ ...f, window: Number(e.target.value) as Form['window'] })}>
               <option value={14}>14 dias de treinos</option>
               <option value={30}>30 dias de treinos</option>
             </Select>
-            <label className="mt-2 flex items-center gap-2 text-sm text-tinta">
+            {!technical && <label className="mt-2 flex items-center gap-2 text-sm text-tinta">
               <input type="checkbox" className="accent-[#0169E9]" checked={f.partner} onChange={(e) => setF({ ...f, partner: e.target.checked })} />
               WOD em dupla
-            </label>
+            </label>}
           </div>
-          <div className="sm:col-span-2">
-            <Label htmlFor="ai-focus">Foco do dia (opcional)</Label>
-            <Input id="ai-focus" maxLength={400} placeholder="Ex.: semana 3 do ciclo de back squat; trabalhar HSPU; treino de 15 minutos" value={f.focus} onChange={(e) => setF({ ...f, focus: e.target.value })} />
+          <div className={technical ? 'sm:col-span-2 lg:col-span-1' : 'sm:col-span-2'}>
+            <Label htmlFor="ai-focus">{technical ? 'Tema / fundamento (opcional)' : 'Foco do dia (opcional)'}</Label>
+            <Input id="ai-focus" maxLength={400} placeholder={technical ? 'Ex.: recepção de saque com deslocamento; defesa e contra-ataque' : 'Ex.: semana 3 do ciclo de back squat; trabalhar HSPU; treino de 15 minutos'} value={f.focus} onChange={(e) => setF({ ...f, focus: e.target.value })} />
           </div>
           <div>
             <Label htmlFor="ai-avoid">Evitar (opcional)</Label>
-            <Input id="ai-avoid" maxLength={300} placeholder="Ex.: corrida (chuva), rope climb" value={f.avoid} onChange={(e) => setF({ ...f, avoid: e.target.value })} />
+            <Input id="ai-avoid" maxLength={300} placeholder={technical ? 'Ex.: ataque de cabeça (turma iniciante)' : 'Ex.: corrida (chuva), rope climb'} value={f.avoid} onChange={(e) => setF({ ...f, avoid: e.target.value })} />
           </div>
           <div className="flex items-end">
             <Button type="submit" className="w-full" disabled={generating || !enabled}>
@@ -119,7 +120,7 @@ export function AiGenerator({ slug, modality, defaultDate, enabled }: { slug: st
       {weekId && <p className="mb-4 text-sm"><Link className="font-semibold text-nacao hover:underline" href={`/treinos/${weekId}`}>Abrir a semana no Cadastro de Treino →</Link></p>}
 
       {p && c && result && (
-        <PlanDetails plan={p} check={c} date={result.date} modality={modality} model={result.model}>
+        <PlanDetails plan={p} check={c} date={result.date} slug={slug} modality={modality} model={result.model}>
           <Button className="w-full" disabled={saving} onClick={() => insert(false)}>
             <Upload /> {saving ? 'Lançando…' : `Lançar em ${formatDateBR(result.date)}`}
           </Button>
@@ -130,9 +131,10 @@ export function AiGenerator({ slug, modality, defaultDate, enabled }: { slug: st
 }
 
 /** Aula gerada: blocos, escalas, conferência do motor e o porquê. `children` = ações (lançar). */
-export function PlanDetails({ plan: p, check: c, date, modality, model, children }: {
-  plan: GenerateResult['plan']; check: GenerateResult['check']; date: string; modality: string; model: string; children?: React.ReactNode;
+export function PlanDetails({ plan: p, check: c, date, slug, modality, model, children }: {
+  plan: GenerateResult['plan']; check: GenerateResult['check']; date: string; slug: string; modality: string; model: string; children?: React.ReactNode;
 }) {
+  const technical = isTechnicalSlug(slug);
   return (
     <div className="grid gap-4 lg:grid-cols-3">
       <div className="min-w-0 space-y-3 lg:col-span-2">
@@ -140,7 +142,7 @@ export function PlanDetails({ plan: p, check: c, date, modality, model, children
           <p className="text-xs font-semibold uppercase tracking-wide text-tinta-suave">{modality} · {WEEKDAYS[weekdayOf(date) - 1]!.long} {formatDateBR(date)}</p>
           <h2 className="text-xl font-extrabold text-navy">{p.titulo}</h2>
           <p className="mt-1 text-sm text-tinta"><b>Objetivo:</b> {p.objetivo}</p>
-          <p className="text-sm text-tinta"><b>Estímulo:</b> {p.estimulo}</p>
+          <p className="text-sm text-tinta"><b>{technical ? 'Conceito' : 'Estímulo'}:</b> {p.estimulo}</p>
         </Card>
         {p.blocos.map((b, i) => (
           <Card key={i} className="p-4">
@@ -156,9 +158,9 @@ export function PlanDetails({ plan: p, check: c, date, modality, model, children
           </Card>
         ))}
         <Card className="p-4">
-          <h3 className="font-extrabold text-navy">Escalas</h3>
+          <h3 className="font-extrabold text-navy">{technical ? 'Níveis' : 'Escalas'}</h3>
           <dl className="mt-2 grid gap-2 sm:grid-cols-2">
-            {LEVELS.map(([k, label]) => <div key={k}><dt className="text-xs font-bold uppercase text-tinta-suave">{label}</dt><dd className="text-sm text-tinta">{p.escalas[k]}</dd></div>)}
+            {levelLabels(slug).map(([k, label]) => <div key={k}><dt className="text-xs font-bold uppercase text-tinta-suave">{label}</dt><dd className="text-sm text-tinta">{p.escalas[k]}</dd></div>)}
           </dl>
         </Card>
       </div>
@@ -166,7 +168,7 @@ export function PlanDetails({ plan: p, check: c, date, modality, model, children
       <div className="min-w-0 space-y-3">
         <Card className="p-4">
           <h3 className="font-extrabold text-navy">Conferência do motor</h3>
-          <p className="mb-2 text-xs text-tinta-suave">Tempo de aula, volume e fadiga contra os dias programados e a referência da Nação.</p>
+          <p className="mb-2 text-xs text-tinta-suave">{technical ? 'Tempo de aula contra a referência da Nação.' : 'Tempo de aula, volume e fadiga contra os dias programados e a referência da Nação.'}</p>
           <ul className="space-y-2">
             {c.alerts.map((a, i) => {
               const S = ALERT_STYLE[a.level];

@@ -1,4 +1,5 @@
 import { z } from 'zod/v4';
+import { isTechnicalSlug, levelLabels } from './modalities';
 import type { IsoDate } from '@/domain/dates';
 import { addDays, weekdayOf } from '@/domain/dates';
 import type { BlockKind, WorkoutBlockData, WorkoutDayData } from '@/domain/workout';
@@ -45,12 +46,13 @@ export type AiPlan = z.infer<typeof AiPlanSchema>;
 export type AiBlock = z.infer<typeof AiBlockSchema>;
 
 /** Plano da IA → blocos do Cadastro de Treino. Estímulo e escalas vão no roteiro do professor do WOD. */
-export function planToBlocks(plan: AiPlan): WorkoutBlockData[] {
-  const wodIndex = plan.blocos.findIndex((b) => b.tipo === 'WOD');
-  const e = plan.escalas;
+export function planToBlocks(plan: AiPlan, slug = ''): WorkoutBlockData[] {
+  const main = plan.blocos.findIndex((b) => b.tipo === 'WOD');
+  const wodIndex = main >= 0 ? main : plan.blocos.findIndex((b) => b.tipo === 'FUNDAMENTO');
+  const technical = isTechnicalSlug(slug);
   const extra = [
-    plan.estimulo && `Estímulo: ${plan.estimulo}`,
-    `Escalas — RX: ${e.rx} | Intermediário: ${e.intermediario} | Scale: ${e.scale} | Iniciante: ${e.iniciante}`,
+    plan.estimulo && `${technical ? 'Objetivo técnico' : 'Estímulo'}: ${plan.estimulo}`,
+    `${technical ? 'Níveis' : 'Escalas'} — ${levelLabels(slug).map(([k, l]) => `${l}: ${plan.escalas[k]}`).join(' | ')}`,
   ].filter(Boolean).join('\n');
   return plan.blocos.map((b, i) => ({
     kind: b.tipo as BlockKind,
@@ -65,7 +67,7 @@ export function planToBlocks(plan: AiPlan): WorkoutBlockData[] {
 }
 
 const SESSION_KIND: Partial<Record<BlockKind, SessionBlockKind>> = {
-  MOBILIDADE: 'MOB', AQUECIMENTO: 'WU', SKILL: 'SKILL', ESPECIFICO: 'ESP', FORCA: 'FOR', WOD: 'WOD', CORE: 'ACC',
+  MOBILIDADE: 'MOB', AQUECIMENTO: 'WU', SKILL: 'SKILL', ESPECIFICO: 'ESP', FORCA: 'FOR', WOD: 'WOD', CORE: 'ACC', FUNDAMENTO: 'TEC', JOGO: 'TEC',
 };
 
 /** Bloco do Cadastro de Treino → bloco do motor (mesmo formato do histórico). */
@@ -77,7 +79,7 @@ export function toSessionBlock(b: WorkoutBlockData): SessionBlock | null {
   if (kind === 'FOR') {
     return { kind, minutes: b.durationMin, title: b.title ?? '', detail: [b.format, ...lines].filter(Boolean).join('; '), items: lines, tags: [] };
   }
-  const title = [b.title && `"${b.title}"`, b.format].filter(Boolean).join(' ');
+  const title = [b.kind === 'JOGO' && 'Jogo:', b.title && `"${b.title}"`, b.format].filter(Boolean).join(' ');
   return {
     kind, minutes: b.timeCapMin ?? b.durationMin, title, detail: lines.join('; '), items: lines,
     tags: partner ? [/trio/i.test(`${b.title} ${b.format}`) ? 'trio' : 'partner'] : [],

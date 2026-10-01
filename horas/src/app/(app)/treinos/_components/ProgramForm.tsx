@@ -10,6 +10,7 @@ import { Input, Label, Select } from '@/components/ui/input';
 import { isIsoDate, WEEKDAYS } from '@/domain/dates';
 import { CAPACITY_LABEL, HORIZON_LABEL, LEVEL_LABEL, PROGRAM_KINDS, horizon, trainingDates, type ProgramRequest } from '@/domain/programming/ai-program';
 import { cn } from '@/lib/cn';
+import { isTechnicalSlug } from '@/domain/programming/modalities';
 import { createProgramAction } from './ai-actions';
 
 type Form = Omit<ProgramRequest, 'length'> & { length: string };
@@ -17,6 +18,7 @@ type Form = Omit<ProgramRequest, 'length'> & { length: string };
 const HINTS = {
   crossfit: { movement: 'Ex.: back squat, muscle-up, Murph', goal: 'Ex.: aumentar a força no back squat com 2 estímulos por semana, sem descaracterizar o CrossFit geral', notes: 'Ex.: semana de Open, evitar corrida às sextas' },
   funcional: { movement: 'Ex.: KB swing, corrida, prancha', goal: 'Ex.: melhorar o condicionamento e a resistência muscular em 6 semanas, com 1 dia de força com halteres', notes: 'Ex.: evitar corrida às sextas, turma cheia às 18h' },
+  futevolei: { movement: 'Ex.: recepção, defesa, ataque de cabeça', goal: 'Ex.: em 4 semanas, turma intermediária recebendo e construindo com qualidade; fechar com jogo estruturado', notes: 'Ex.: turma com muitos iniciantes às 19h' },
   hyrox: { movement: 'Ex.: sled pull, wall ball, corrida 1 km', goal: 'Ex.: preparar a turma para a prova de 15/11 (Open), com simulado de meia prova na semana 6', notes: 'Ex.: priorizar sled pull e SkiErg, que ficaram para trás' },
 };
 
@@ -26,7 +28,7 @@ export function ProgramForm({ slug, defaultStart, enabled }: { slug: string; def
   const [f, setF] = useState<Form>({
     kind: 'periodizacao', title: '', startDate: defaultStart, length: '4', unit: 'semanas', weekdays: [1, 2, 3, 4, 5, 6],
     goal: '', movement: '', level: 'geral', window: 14,
-    ...(slug === 'crossfit' ? { capacity: 'forca', test: '3RM' } : { capacity: 'engine', test: slug === 'hyrox' ? 'benchmark' : 'nenhum' }),
+    ...(slug === 'crossfit' ? { capacity: 'forca', test: '3RM' } : isTechnicalSlug(slug) ? { capacity: 'geral', test: 'nenhum' } : { capacity: 'engine', test: slug === 'hyrox' ? 'benchmark' : 'nenhum' }),
   });
   const hint = slug in HINTS ? (slug as keyof typeof HINTS) : 'funcional';
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +50,7 @@ export function ProgramForm({ slug, defaultStart, enabled }: { slug: string; def
   });
 
   const perio = f.kind === 'periodizacao';
+  const technical = isTechnicalSlug(slug);
   return (
     <Card className="p-4">
       <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); submit(); }}>
@@ -109,22 +112,22 @@ export function ProgramForm({ slug, defaultStart, enabled }: { slug: string; def
 
         {perio && (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div>
+            {!technical && <div>
               <Label htmlFor="pg-cap">Capacidade</Label>
               <Select id="pg-cap" value={f.capacity} onChange={(e) => set('capacity', e.target.value as Form['capacity'])}>
                 {Object.entries(CAPACITY_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </Select>
-            </div>
+            </div>}
             <div>
-              <Label htmlFor="pg-mov">Movimento (opcional)</Label>
+              <Label htmlFor="pg-mov">{technical ? 'Fundamento (opcional)' : 'Movimento (opcional)'}</Label>
               <Input id="pg-mov" maxLength={80} placeholder={HINTS[hint].movement} value={f.movement} onChange={(e) => set('movement', e.target.value)} />
             </div>
-            <div>
+            {!technical && <div>
               <Label htmlFor="pg-test">Teste ao final</Label>
               <Select id="pg-test" value={f.test} onChange={(e) => set('test', e.target.value as Form['test'])}>
                 {['nenhum', '1RM', '3RM', '5RM', 'benchmark', 'max reps'].map((t) => <option key={t} value={t}>{t}</option>)}
               </Select>
-            </div>
+            </div>}
             <div>
               <Label htmlFor="pg-lvl">Perfil dos alunos</Label>
               <Select id="pg-lvl" value={f.level} onChange={(e) => set('level', e.target.value as Form['level'])}>

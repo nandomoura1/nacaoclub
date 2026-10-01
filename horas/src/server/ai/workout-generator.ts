@@ -11,7 +11,8 @@ import { lessonMinutes, mondayOf, type BlockKind } from '@/domain/workout';
 import { parseHistory, type Session } from '@/domain/programming/history';
 import { CROSSFIT_HISTORY, FUNCIONAL_HISTORY, HYROX_HISTORY } from '@/domain/programming/history.generated';
 import { AiPlanSchema, checkPlan, dayToSession, sessionText, type AiPlan, type PlanCheck } from '@/domain/programming/ai-plan';
-import { modalitySlug, programModality } from '@/domain/programming/modalities';
+import { isTechnicalSlug, modalitySlug, programModality } from '@/domain/programming/modalities';
+import { fundamentalLabel, type TechnicalSession } from '@/domain/programming/technical';
 import { addBlock, WEEK_METRICS, type WeekMetric } from '@/domain/programming/volume';
 import { blockVolume } from '@/domain/programming/calculator';
 import { LEVEL_RATIO } from '@/domain/programming/taxonomy';
@@ -97,8 +98,66 @@ export async function programmedDays(slug: string, from: IsoDate, to: IsoDate): 
 
 const pct = (n: number) => `${String(n).replace('.', ',')}%`;
 
+/** Modalidades técnicas com geração por IA (a base são planos de aula, não WODs). */
+const TECHNICAL_AI = new Set(['futevolei']);
+
+const planText = (s: TechnicalSession) => [
+  `## ${s.id} · ${s.fase ?? ''} · ${s.dia ?? ''} — ${s.tema}`,
+  `Objetivo: ${s.objetivo}`,
+  s.aquecimento?.length ? `Aquecimento: ${s.aquecimento.join('; ')}` : '',
+  `Fundamentos: ${s.fundamentos.join('; ')}`,
+  `Progressão: ${s.progressao.join(' → ')}`,
+  s.dinamica_jogo ? `Jogo: ${s.dinamica_jogo.descricao} Regra: ${s.dinamica_jogo.regra}` : s.mini_jogo ? `Jogo: ${s.mini_jogo}` : '',
+  (s.foco_coaching ?? s.coaching)?.length ? `Foco do professor: ${(s.foco_coaching ?? s.coaching)!.join('; ')}` : '',
+  s.conceito ? `Conceito: ${s.conceito}` : '',
+].filter(Boolean).join('\n');
+
+/** Prompt das modalidades técnicas: metodologia, fases, fundamentos, progressão e jogo condicionado. */
+function technicalPrompt(slug: string): string {
+  const r = getDnaReport(slug);
+  if (r.empty || !r.technical || !TECHNICAL_AI.has(slug)) throw new AppError('Esta modalidade ainda não tem geração de treino.');
+  const d = r.dna;
+  const m = d.methodology;
+  const lesson = lessonMinutes(r.modality.name) ?? 55;
+  const lv = m.padrao_entrega_professor.adaptacao_niveis;
+  return `Você é o copiloto de programação do Head Coach do ${r.modality.name} da Nação Club (Brasília). Você propõe o plano de aula de um dia; o coach revisa e decide. Escreva em português do Brasil, com o vocabulário da ${m.nome} (enquadramento, recepção, levantamento/construção, chapa, peito, cabeça, ataque, defesa, jogo condicionado).
+
+# ${m.nome} (base de ${d.sessions} planos de aula)
+Princípios:
+${m.principios.map((p) => `- ${p}`).join('\n')}
+Fases metodológicas: ${d.phases.map((p) => `${p.phase} ${pct(p.share)}`).join(', ')}.
+Fundamentos mais trabalhados: ${d.fundamentals.slice(0, 8).map((f) => `${f.label} ${pct(f.share)}`).join(', ')}.${d.missing.length ? ` Fora da base: ${d.missing.map(fundamentalLabel).join(', ')}.` : ''}
+Progressão: ~${String(d.progression.avgSteps).replace('.', ',')} etapas por aula; ${pct(d.progression.endsInGame)} terminam em construção, ataque ou jogo; ${pct(d.progression.startsIsolated)} começam com o fundamento isolado.
+Regras de jogo condicionado mais usadas: ${d.rules.slice(0, 6).map(([rule]) => rule).join('; ')}.
+Foco do professor mais frequente: ${d.coaching.slice(0, 8).map(([c]) => c).join('; ')}.
+Semana: ${d.weekdays.map((w) => `${w.day}: ${w.phases.join(', ')}`).join(' | ')}.
+Entrega do professor: ${m.padrao_entrega_professor.energia_alta} Feedback ${m.padrao_entrega_professor.feedback.join(' → ')}. ${m.padrao_entrega_professor.uso_nome_aluno}
+Níveis: aprendiz (D/C) — ${lv.aprendiz_D_C ?? ''}; intermediário — ${lv.intermediario ?? ''}; avançado — ${lv.avancado ?? ''}
+
+# Assinatura (preservar)
+${r.insights.filter((i) => i.tone === 'assinatura').map((i) => `- ${i.title}: ${i.text}`).join('\n')}
+
+# Lacunas (equilibrar quando couber no dia)
+${r.insights.filter((i) => i.tone === 'lacuna').map((i) => `- ${i.title}: ${i.text}`).join('\n')}
+
+# Regras
+- Os minutos dos blocos somam exatamente ${lesson}.
+- Use só os tipos MOBILIDADE (opcional, ~4 exercícios), AQUECIMENTO (enquadramento e bola desde o início), FUNDAMENTO (o tema do dia) e JOGO (jogo condicionado). Nada de WOD, força ou carga.
+- Um tema e um fundamento central por aula, ligado a uma fase da metodologia. Em FUNDAMENTO, cada linha do conteúdo é uma etapa da progressão, do simples (bola previsível, fundamento isolado) ao complexo (variação, deslocamento, decisão), com a organização: duplas/trios, quem lança, filas curtas, repetições ou tempo.
+- JOGO: título com o nome do jogo, a regra no formato (ex.: "ponto só vale se a recepção chegar no levantador") e a pontuação no conteúdo. A regra precisa reforçar o tema do dia.
+- orientacoesProfessor: 3 focos de coaching, erros comuns, organização da quadra e o padrão de entrega (feedback ${m.padrao_entrega_professor.feedback.join(' → ')}; nome do aluno 4+ vezes).
+- escalas: rx = Avançado, intermediario = Intermediário, scale = Aprendiz (D/C), iniciante = Primeira aula. Mesma meta técnica, complexidade ajustada (bola mais previsível, menos deslocamento, sem decisão para quem está começando).
+- estimulo = o objetivo técnico/tático da aula e o conceito (ex.: "Receber → deslocar → construir → atacar").
+- Siga a fase da semana (uma fase por semana, como a Nação faz). Se o dia anterior teve o mesmo tema, avance a progressão (mais deslocamento, decisão, transição) em vez de repetir igual; traga o que a base não cobre (lacunas) quando couber.
+- Em "decisoes", explique cada escolha citando a metodologia, as lacunas e os dias anteriores.
+
+# Planos de aula reais da Nação
+${r.dataset.sessoes.slice(0, 14).map(planText).join('\n\n')}`;
+}
+
 /** Parte estável do prompt (cacheável): quem é o copiloto e o DNA da modalidade. */
 export function systemPrompt(slug: string): string {
+  if (isTechnicalSlug(slug)) return technicalPrompt(slug);
   const r = getDnaReport(slug);
   if (r.empty || r.technical) throw new AppError('Esta modalidade ainda não tem geração de treino.');
   const flavor = FLAVOR[slug];
@@ -138,6 +197,14 @@ ${examples}`;
 }
 
 export function describeRequest(req: z.output<typeof requestSchema>, recent: Session[], week: Record<WeekMetric, number>, slug: string, extraContext = ''): string {
+  if (isTechnicalSlug(slug)) {
+    return `Programe a aula de ${WEEKDAYS[weekdayOf(req.date) - 1]!.long}, ${formatDateBR(req.date)}.
+- Tema/fundamento pedido pelo coach: ${req.focus || 'nenhum — siga a metodologia, a fase da semana e equilibre os fundamentos'}
+- Evitar: ${req.avoid || 'nada específico'}
+
+${extraContext ? `${extraContext}\n\n` : ''}Aulas dos últimos ${req.window} dias e dos próximos já lançadas:
+${recent.length ? recent.map(sessionText).join('\n') : '(nenhuma aula registrada no período)'}`;
+  }
   const r = getDnaReport(slug);
   const base = !r.empty && !r.technical ? r.base.metrics : null;
   const wd = WEEKDAYS[weekdayOf(req.date) - 1]!.long;
@@ -170,6 +237,22 @@ export function fakePlan(): AiPlan {
       { tipo: 'WOD', minutos: 18, titulo: '', formato: 'For time 21-15-9', timeCapMin: 10, conteudo: ['pull-up', 'DU x2'], notasAluno: 'Sub 8 min.', orientacoesProfessor: 'Quebre cedo os pull-ups.' },
     ],
     escalas: { rx: 'Como prescrito.', intermediario: 'Jumping pull-up.', scale: 'Ring row, single-under.', iniciante: 'Ring row, 30 SU.' },
+    decisoes: ['Exemplo local (AI_FAKE): sem chamada ao modelo.'],
+  };
+}
+
+/** Aula técnica de exemplo (AI_FAKE=1). */
+export function fakeTechnicalPlan(): AiPlan {
+  const blank = { formato: '', timeCapMin: null, notasAluno: '' };
+  return {
+    titulo: 'Recepção livre + construção', objetivo: 'Primeira bola de qualidade para construir o ponto.', estimulo: 'Receber → deslocar → construir → atacar.',
+    blocos: [
+      { ...blank, tipo: 'MOBILIDADE', minutos: 5, titulo: '', conteudo: ['Tornozelo', 'Quadril', 'Coluna torácica', 'Ombro'], orientacoesProfessor: 'Chame cada aluno pelo nome.' },
+      { ...blank, tipo: 'AQUECIMENTO', minutos: 10, titulo: 'Enquadramento', conteudo: ['Duplas: controle com fundamentos livres', 'Enquadrar antes do contato'], orientacoesProfessor: 'Observar → corrigir → incentivar → repetir.' },
+      { ...blank, tipo: 'FUNDAMENTO', minutos: 20, titulo: 'Recepção livre', conteudo: ['Bola previsível, trios, 10 repetições por aluno', 'Variação de direção e altura', 'Recepção + construção'], orientacoesProfessor: 'Filas curtas, alta repetição.' },
+      { ...blank, tipo: 'JOGO', minutos: 20, titulo: 'Primeira bola vale dobro', formato: 'Jogo condicionado começando pela recepção', conteudo: ['Ponto normal: 1', 'Recepção que chega no levantador e vira ataque: 2'], orientacoesProfessor: 'Regra reforça o tema.' },
+    ],
+    escalas: { rx: 'Recepção com decisão e transição.', intermediario: 'Recepção + deslocamento.', scale: 'Enquadramento e domínio básico.', iniciante: 'Bola na mão do lançador, só enquadrar e tocar.' },
     decisoes: ['Exemplo local (AI_FAKE): sem chamada ao modelo.'],
   };
 }
@@ -233,14 +316,15 @@ export async function generateWorkout(
   const recent = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
   const week = weekVolume(recent, req.date);
 
+  const technical = isTechnicalSlug(slug);
   const plan: AiPlan = isFake()
-    ? fakePlan()
+    ? (technical ? fakeTechnicalPlan() : fakePlan())
     : await askModel(AiPlanSchema, systemPrompt(slug), describeRequest(req, recent.filter((s) => s.date !== req.date), week, slug, opts.extraContext));
 
   const r = getDnaReport(slug);
   const check = checkPlan({
     plan, date: req.date, targetMin: lessonMinutes(modality.name), recent: recent.filter((s) => s.date !== req.date),
-    weekSoFar: week, baseline: !r.empty && !r.technical ? r.base.metrics : null,
+    weekSoFar: technical ? {} : week, baseline: !r.empty && !r.technical ? r.base.metrics : null,
   });
   return { plan, check, model: isFake() ? 'exemplo local' : MODEL };
 }
