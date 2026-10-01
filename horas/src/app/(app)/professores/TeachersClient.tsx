@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
-import { CalendarDays, FileSpreadsheet, Pencil, Plus, Search } from 'lucide-react';
+import { CalendarDays, FileSpreadsheet, MessageCircle, Pencil, Plus, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -86,9 +86,15 @@ export function TeachersClient({
                 ))}
                 {t.modalities.length === 0 && <span className="text-xs text-atencao">sem modalidade habilitada</span>}
               </div>
-              <Link href={`/professores/${t.id}`} className={cn(buttonVariants({ variant: 'secondary', size: 'sm' }), 'mt-3 w-full')}>
-                <CalendarDays /> Aulas, ausências e horas
-              </Link>
+              <div className="mt-3 flex gap-2">
+                <Link href={`/professores/${t.id}`} className={cn(buttonVariants({ variant: 'secondary', size: 'sm' }), 'min-w-0 flex-1')}>
+                  <CalendarDays /> Aulas, ausências e horas
+                </Link>
+                <Link href={`/professores/${t.id}?compartilhar=1`} aria-label={`Compartilhar a grade de ${t.displayName || t.name} no WhatsApp`} title="Compartilhar grade no WhatsApp"
+                  className={cn(buttonVariants({ variant: 'secondary', size: 'sm' }), 'shrink-0 text-[#128C7E]')}>
+                  <MessageCircle />
+                </Link>
+              </div>
             </div>
           </Card>
         ))}

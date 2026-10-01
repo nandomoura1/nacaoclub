@@ -28,6 +28,8 @@ model AppSettings {
   id             Int      @id @default(1)
   periodStartDay Int      @default(26) @map("period_start_day")
   timezone       String   @default("America/Sao_Paulo")
+  /// Orientações gerais (conduta, tarefas, rotina) que vão no texto da grade de todo professor.
+  teacherGuidelines String? @map("teacher_guidelines")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   @@map("app_settings")
@@ -359,6 +361,8 @@ model Teacher {
   contractTypeId     String?   @map("contract_type_id") @db.Uuid
   level              String?
   notes              String?
+  /// Orientações só deste professor, no texto da grade compartilhado.
+  guidelines         String?
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")
   createdById        String?   @map("created_by") @db.Uuid

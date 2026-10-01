@@ -5,6 +5,7 @@ import { getPrincipal, requestMeta } from '@/server/auth/session';
 import { runAction, type ActionResult } from '@/server/action-result';
 import { removeTeacherFromSlot } from '@/server/services/schedule-service';
 import { cancelLeave, previewLeave, saveLeave } from '@/server/services/leave-service';
+import { saveGuidelines } from '@/server/services/teacher-share-service';
 
 const refresh = () => { revalidatePath('/professores', 'layout'); revalidatePath('/grade'); revalidatePath('/calendario'); };
 
@@ -34,4 +35,12 @@ export async function cancelLeaveAction(leaveId: string) {
     refresh();
     return r;
   });
+}
+
+export async function saveGuidelinesAction(teacherId: string, values: { general: string; specific: string }): Promise<ActionResult> {
+  return runAction(async () => {
+    await saveGuidelines(await getPrincipal(), teacherId, values, await requestMeta());
+    revalidatePath('/professores', 'layout');
+    return undefined;
+  }, 'Orientações salvas.');
 }

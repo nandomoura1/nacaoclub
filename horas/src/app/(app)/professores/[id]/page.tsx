@@ -19,6 +19,8 @@ import { listLeaves } from '@/server/services/leave-service';
 import { periodStartDay } from '@/server/services/period-service';
 import { hoursReport, parseReportFilter } from '@/server/services/report-service';
 import { listGrade } from '@/server/services/schedule-service';
+import { teacherShareData } from '@/server/services/teacher-share-service';
+import { ShareGrade } from './ShareClient';
 import { AulasTab, AusenciasTab } from './FichaClient';
 
 export const metadata: Metadata = { title: 'Ficha do professor' };
@@ -37,7 +39,7 @@ const STATUS: Record<string, string> = {
 
 export default async function FichaPage({ params, searchParams }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ aba?: string; data?: string; competencia?: string }>;
+  searchParams: Promise<{ aba?: string; data?: string; competencia?: string; compartilhar?: string }>;
 }) {
   const principal = await requirePrincipal();
   if (!can(principal, 'teacher.view')) redirect('/hoje');
@@ -57,6 +59,7 @@ export default async function FichaPage({ params, searchParams }: {
   const today = todayIso();
   const date = sp.data && isIsoDate(sp.data) ? sp.data : today;
   const base = `/professores/${id}`;
+  const share = can(principal, 'schedule.view') ? await teacherShareData(principal, id, date) : null;
 
   return (
     <>
@@ -74,7 +77,8 @@ export default async function FichaPage({ params, searchParams }: {
             ))}
           </div>
         </div>
-        <div className="flex gap-2 print:hidden">
+        <div className="flex flex-wrap gap-2 print:hidden">
+          {share && <ShareGrade teacherId={id} data={share} autoOpen={sp.compartilhar === '1'} />}
           <a href={`/grade/imprimir?professor=${id}&data=${date}`} target="_blank" rel="noopener" className={buttonVariants({ variant: 'secondary' })}><Printer /> Imprimir grade dele</a>
         </div>
       </div>
