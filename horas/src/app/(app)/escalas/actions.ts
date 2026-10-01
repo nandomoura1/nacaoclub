@@ -9,6 +9,9 @@ export async function saveDutyAction(input: unknown): Promise<ActionResult<{ shi
   return runAction(async () => {
     const r = await saveDuty(await getPrincipal(), input, await requestMeta());
     revalidatePath('/escalas');
+    revalidatePath('/grade');
+    revalidatePath('/calendario');
+    revalidatePath('/hoje');
     revalidatePath('/professores');
     revalidatePath('/relatorios');
     return r;

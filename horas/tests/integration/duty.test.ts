@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '@/server/db';
 import { toUtc } from '@/domain/dates';
 import { bootstrapStructure } from '@/server/services/bootstrap';
-import { loadDuty, saveDuty } from '@/server/services/duty-service';
+import { dutyForWeek, loadDuty, saveDuty } from '@/server/services/duty-service';
 import { hoursReport, parseReportFilter } from '@/server/services/report-service';
 import { AppError, AuthorizationError } from '@/server/errors';
 import { META, hasDb, makeUser } from './helpers';
@@ -49,6 +49,11 @@ describe.skipIf(!hasDb)('Escalas de fim de semana e feriados', () => {
 
     const view = await loadDuty(admin.principal, '2034-10-07', '2034-10-08');
     expect(view.sectors[0]!.shifts.map((s) => [s.startMin, s.people.length, s.notes])).toEqual([[420, 2, 'Manhã'], [720, 1, null], [480, 0, null]]);
+
+    // A Grade semanal mostra a escala da semana vista (qualquer dia da semana serve).
+    const week = await dutyForWeek(admin.principal, '2034-10-04');
+    expect(week).toMatchObject({ start: '2034-10-02', end: '2034-10-08' });
+    expect(week.shifts.filter((s) => s.sector === 'Academia').map((s) => [s.weekday, s.startMin, s.people.length])).toEqual([[6, 420, 2], [6, 720, 1], [7, 480, 0]]);
 
     // Reescreve: só a Ana no domingo. As horas antigas saem.
     await saveDuty(admin.principal, { sectorId: academia.id, start: '2034-10-07', end: '2034-10-08', shifts: [{ date: '2034-10-08', startMin: 480, endMin: 840, people: [ana.id] }] }, META);

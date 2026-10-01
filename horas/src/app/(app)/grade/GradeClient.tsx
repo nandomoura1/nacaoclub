@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { CalendarClock, Copy, History, MapPin, Plus, Printer, Trash2, UserPlus, Users, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -9,11 +10,12 @@ import { Card } from '@/components/ui/card';
 import { FormMessage } from '@/components/ui/alert';
 import { Input, Label, Select } from '@/components/ui/input';
 import { Sheet } from '@/components/ui/sheet';
-import { WEEKDAYS, formatClock, formatDateBR, parseClock } from '@/domain/dates';
+import { WEEKDAYS, addDays, formatClock, formatDateBR, parseClock } from '@/domain/dates';
 import { LEAVE_LABEL, type LeaveType } from '@/domain/leave';
 import { cn } from '@/lib/cn';
 import { formatMinutes } from '@/lib/format';
 import type { GradeItem } from '@/server/services/schedule-service';
+import type { WeekDuty } from '@/server/services/duty-service';
 import { gradeParams, type GradeFilters } from '@/lib/grade-filter';
 import { changeSlotAction, createSlotsAction, endSlotAction, slotHistoryAction } from './actions';
 
@@ -27,7 +29,7 @@ type Role = 'TITULAR' | 'AUXILIAR' | 'ESTAGIARIO';
 const ROLE_LABEL: Record<Role, string> = { TITULAR: 'Professor', AUXILIAR: 'Auxiliar', ESTAGIARIO: 'Estagiário' };
 
 interface Props {
-  date: string; today: string; areaId: string | null; areas: Area[]; grade: GradeItem[]; canEdit: boolean; filters: GradeFilters;
+  date: string; today: string; areaId: string | null; areas: Area[]; grade: GradeItem[]; duty: WeekDuty; canEdit: boolean; filters: GradeFilters;
   modalities: Mod[]; activityTypes: ActType[]; spaces: Opt[]; teachers: Teacher[];
 }
 
@@ -35,7 +37,7 @@ export type Editing = { mode: 'create'; weekday: number; base?: GradeItem; prese
 export type SheetProps = Pick<Props, 'canEdit' | 'modalities' | 'activityTypes' | 'spaces' | 'teachers'>;
 
 export function GradeClient(props: Props) {
-  const { date, today, areaId, areas, grade, canEdit, filters } = props;
+  const { date, today, areaId, areas, grade, duty, canEdit, filters } = props;
   const router = useRouter();
   const [editing, setEditing] = useState<Editing>(null);
   const [mobileDay, setMobileDay] = useState(() => {
@@ -52,7 +54,13 @@ export function GradeClient(props: Props) {
 
   const weeklyClassMin = grade.reduce((s, g) => s + g.durationMin, 0);
   const weeklyPeopleMin = grade.filter((g) => g.activityType.kind !== 'PERSONAL').reduce((s, g) => s + g.durationMin * g.people.length, 0);
-  const days = WEEKDAYS.filter((w) => w.n <= 6 || byDay.get(7)!.length > 0);
+  const dutyByDay = useMemo(() => {
+    const map = new Map<number, WeekDuty['shifts']>();
+    for (const s of duty.shifts) map.set(s.weekday, [...(map.get(s.weekday) ?? []), s]);
+    return map;
+  }, [duty]);
+  const dateOf = (n: number) => addDays(duty.start, n - 1);
+  const days = WEEKDAYS.filter((w) => w.n <= 6 || byDay.get(7)!.length > 0 || dutyByDay.has(7));
 
   const current = gradeParams({ date, areaId, ...filters });
   const go = (params: Record<string, string | null>) => {
@@ -132,7 +140,20 @@ export function GradeClient(props: Props) {
               {byDay.get(w.n)!.map((g) => (
                 <SlotCard key={g.id} item={g} onClick={() => setEditing({ mode: 'edit', item: g })} />
               ))}
-              {byDay.get(w.n)!.length === 0 && <p className="rounded-lg border border-dashed border-borda p-3 text-center text-xs text-tinta-fraca">sem aulas</p>}
+              {dutyByDay.get(w.n) && (
+                <Link href={`/escalas?de=${dateOf(w.n)}&ate=${dateOf(w.n)}`} className="block rounded-lg border border-nacao/30 bg-nacao/5 p-2.5 hover:border-nacao">
+                  <p className="text-[11px] font-extrabold uppercase tracking-wide text-nacao">
+                    Escala {formatDateBR(dateOf(w.n)).slice(0, 5)}{duty.holidays[dateOf(w.n)] ? ` · ${duty.holidays[dateOf(w.n)]}` : ''}
+                  </p>
+                  {dutyByDay.get(w.n)!.map((s) => (
+                    <div key={s.id} className="mt-1.5 border-l-4 pl-2" style={{ borderColor: s.color }}>
+                      <p className="tabular text-[11px] font-bold text-tinta-fraca">{formatClock(s.startMin)}–{formatClock(s.endMin)} · {s.sector}</p>
+                      <p className={cn('truncate text-xs', s.people.length ? 'text-tinta' : 'font-semibold text-critico')}>{s.people.length ? s.people.map((p) => p.name).join(', ') : 'sem ninguém'}</p>
+                    </div>
+                  ))}
+                </Link>
+              )}
+              {byDay.get(w.n)!.length === 0 && !dutyByDay.get(w.n) && <p className="rounded-lg border border-dashed border-borda p-3 text-center text-xs text-tinta-fraca">sem aulas</p>}
             </div>
           </section>
         ))}

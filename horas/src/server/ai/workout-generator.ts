@@ -9,7 +9,7 @@ import { AppError } from '@/server/errors';
 import { addDays, formatDateBR, fromUtc, isIsoDate, toUtc, weekdayOf, WEEKDAYS, type IsoDate } from '@/domain/dates';
 import { lessonMinutes, mondayOf, type BlockKind } from '@/domain/workout';
 import { parseHistory, type Session } from '@/domain/programming/history';
-import { CROSSFIT_HISTORY, FUNCIONAL_HISTORY } from '@/domain/programming/history.generated';
+import { CROSSFIT_HISTORY, FUNCIONAL_HISTORY, HYROX_HISTORY } from '@/domain/programming/history.generated';
 import { AiPlanSchema, checkPlan, dayToSession, sessionText, type AiPlan, type PlanCheck } from '@/domain/programming/ai-plan';
 import { modalitySlug, programModality } from '@/domain/programming/modalities';
 import { addBlock, WEEK_METRICS, type WeekMetric } from '@/domain/programming/volume';
@@ -40,7 +40,7 @@ export const requestSchema = z.object({
 });
 export type GenerateRequest = z.input<typeof requestSchema>;
 
-const HISTORY: Record<string, string> = { crossfit: CROSSFIT_HISTORY, funcional: FUNCIONAL_HISTORY };
+const HISTORY: Record<string, string> = { crossfit: CROSSFIT_HISTORY, funcional: FUNCIONAL_HISTORY, hyrox: HYROX_HISTORY };
 
 /** O que muda no prompt de cada modalidade: vocabulário, estrutura da aula e regras próprias. */
 const FLAVOR: Record<string, { language: string; structure: (d: Dna) => string; loading: (d: Dna) => string; rules: string }> = {
@@ -60,6 +60,17 @@ Força: séries de 3–5 reps dominam; intensidade típica ${d.strength.avgPctMi
 - Core em quase toda aula (prancha, perdigueiro, abdominal, escalador) e mais puxar (remadas) para equilibrar o empurrar.
 - Carga por implemento, escrita F/M: "12 KB swing 12/16kg", "10 Double Db Snatch 2x10/2x15kg", "15 wall ball 4/6kg". Sem % de RM.
 - Os níveis ajustam implemento, amplitude e ritmo; sem benchmarks de CrossFit.`,
+  },
+  hyrox: {
+    language: 'com os nomes das estações e movimentos como a prova usa ("SkiErg", "sled push", "sled pull", "burpee broad jump", "row", "farmers carry", "sandbag lunges", "wall ball")',
+    structure: (d) => `warm-up ~${Math.round(d.structure.avgBlockMin.WU ?? 10)}' (sempre, com mobilidade e ativação), específico ~${Math.round(d.structure.avgBlockMin.ESP ?? 6)}' (técnica da estação do dia ou ritmo de corrida) e WOD ~${Math.round(d.structure.avgWodMin ?? 26)}'. Força estruturada quase não aparece (${pct(d.strength.sessionsShare)} das aulas)`,
+    loading: () => 'Carga de referência = pesos oficiais HYROX, F/M. Open: sled push 102/152kg, sled pull 78/103kg (com o trenó), farmers carry 2x16/2x24kg, sandbag lunges 10/20kg, wall ball 4/6kg. Pro: sled push 152/202kg, sled pull 103/153kg, farmers 2x24/2x32kg, sandbag 20/30kg, wall ball 6/9kg. Em treino, sled e sandbag podem ficar abaixo do peso de prova para manter o ritmo.',
+    rules: `- É HYROX: a prova é 8 × (1 km de corrida + 1 estação), nesta ordem: SkiErg 1.000 m, sled push 50 m, sled pull 50 m, burpee broad jump 80 m, row 1.000 m, farmers carry 200 m, sandbag lunges 100 m, wall ball 100 reps. Toda aula prepara para ela.
+- Corrida em quase toda aula, e de preferência compromissada: correr entre as estações, cansado, como na prova (ex.: "400m run" + estação, em rounds). Distâncias em metros.
+- O estímulo é resistência: WODs longos (21–40') em EMOM/"a cada", for time e intervalado; tiros curtos (até 5') 1×/semana no máximo para ritmo de prova.
+- Distribua as 8 estações na semana e priorize as pouco treinadas (lacunas abaixo); lunge com sandbag/DB, não só peso corporal.
+- Escreva estações por distância/reps como na prova (frações dela no treino: "25m sled push", "250m ski", "20m burpee broad jump", "50 wall ball 4/6kg").
+- Níveis: RX = pesos Open (Pro para quem compete na Pro); Intermediário e Scale reduzem peso do sled/sandbag e as distâncias; Iniciante troca corrida por bike/remo se precisar. Sem benchmarks de CrossFit.`,
   },
 };
 

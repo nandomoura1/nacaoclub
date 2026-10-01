@@ -10,6 +10,7 @@ import { can } from '@/server/auth/authz';
 import { requirePrincipal } from '@/server/auth/session';
 import { prisma } from '@/server/db';
 import { listGrade } from '@/server/services/schedule-service';
+import { dutyForWeek } from '@/server/services/duty-service';
 import { filterGrade } from '@/lib/grade-filter';
 import { GradeClient } from './GradeClient';
 
@@ -25,8 +26,9 @@ export default async function GradePage({ searchParams }: { searchParams: Promis
   const areas = await prisma.coordinationArea.findMany({ where: { deletedAt: null, active: true, ...scoped }, orderBy: { sortOrder: 'asc' }, select: { id: true, name: true, color: true } });
   const areaId = sp.area && areas.some((a) => a.id === sp.area) ? sp.area : null;
 
-  const [grade, modalities, activityTypes, spaces, teachers] = await Promise.all([
+  const [grade, duty, modalities, activityTypes, spaces, teachers] = await Promise.all([
     listGrade(principal, date, areaId),
+    dutyForWeek(principal, date, areaId),
     prisma.modality.findMany({
       where: { active: true, ...(principal.areaIds === null ? {} : { areaId: { in: [...principal.areaIds] } }) },
       orderBy: [{ sortOrder: 'asc' }], select: { id: true, name: true, color: true, areaId: true, defaultDurationMin: true },
@@ -49,7 +51,7 @@ export default async function GradePage({ searchParams }: { searchParams: Promis
     <>
       <PageHeader
         title="Grade semanal"
-        description="A grade padrão que se repete toda semana. Toda mudança vale a partir de uma data — o passado nunca é reescrito."
+        description="A grade padrão que se repete toda semana. Toda mudança vale a partir de uma data — o passado nunca é reescrito. A escala de fim de semana e feriados da semana vista aparece em azul, por cima da grade."
         actions={can(principal, 'import.run') ? (
           <Link href="/grade/importar" className={buttonVariants({ variant: 'secondary' })}><Upload /> Importar planilha</Link>
         ) : undefined}
@@ -60,6 +62,7 @@ export default async function GradePage({ searchParams }: { searchParams: Promis
         areaId={areaId}
         areas={areas}
         grade={filterGrade(grade, filters)}
+        duty={filters.teacherId ? { ...duty, shifts: duty.shifts.filter((s) => s.people.some((p) => p.id === filters.teacherId)) } : duty}
         filters={filters}
         canEdit={can(principal, 'schedule.edit')}
         modalities={modalities}

@@ -133,11 +133,11 @@ export function fitFontSize(days: WorkoutDayData[], opts: { columnWidth: number;
  * Duração de referência da aula por modalidade (min). CrossFit da Nação: 55'
  * — os blocos registrados somam ~41' em média; o resto é briefing, montagem,
  * transições e desaquecimento, que o plano de aula precisa prever. Funcional:
- * 50' (média declarada no histórico: 49,6').
+ * 50' (média declarada no histórico: 49,6'). Hyrox: 50' (declarada: 50').
  */
 export function lessonMinutes(modality: string): number | null {
   if (/crossfit/i.test(modality)) return 55;
-  return /funcional/i.test(modality) ? 50 : null;
+  return /^(funcional|hyrox)$/i.test(modality.trim()) ? 50 : null;
 }
 
 /** Minutos somados do dia (blocos sem duração não contam). */
@@ -179,7 +179,9 @@ export function dayTemplate(modality: string): WorkoutBlockData[] {
   const b = (kind: BlockKind, durationMin: number | null): WorkoutBlockData => ({ kind, durationMin, title: null, format: null, timeCapMin: null, content: null, notes: null });
   // 55': mobilidade + warm-up 12' + força 11' + específico 9' + WOD 18' (médias do DNA).
   if (/crossfit/.test(m)) return [b('MOBILIDADE', 5), b('AQUECIMENTO', 12), b('FORCA', 11), b('ESPECIFICO', 9), b('WOD', 18)];
-  if (/hyrox/.test(m)) return [b('AQUECIMENTO', 8), b('SKILL', 7), b('WOD', 30)];
+  // 50': warm-up com mobilidade ~12', específico ~7', WOD longo (médias do DNA).
+  if (/hyrox/.test(m)) return [b('AQUECIMENTO', 12), b('SKILL', 7), b('WOD', 31)];
+  if (m.trim() === 'funcional') return [b('AQUECIMENTO', 12), b('ESPECIFICO', 7), b('WOD', 26), b('CORE', 5)];
   if (/futev|base forte|saque|beach|v[oô]lei/.test(m)) return [b('AQUECIMENTO', 10), b('FUNDAMENTO', 20), b('JOGO', 20)];
   return [b('AQUECIMENTO', 8), b('SKILL', 8), b('WOD', 25)];
 }

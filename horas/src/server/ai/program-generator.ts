@@ -28,7 +28,7 @@ type DaysMap = Record<string, ProgramDayResult>;
 const PERIODIZATION_RULES = `# Como montar a periodização (regras do sistema da Nação)
 - Escolha o modelo pelo objetivo e pelo prazo: força em até 4 semanas = linear curto (3 semanas subindo + teste); 6–8 semanas = acumulação → intensificação → teste, com 2 estímulos/semana (dia pesado + dia leve); 10–12 semanas = step loading 3:1 (3 semanas subindo, 1 de deload). LPO: técnica → força → potência. Ginástica/skill: drills → volume submáximo → densidade → teste. Engine: base aeróbia → limiar → intervalos curtos. Benchmark: preparação → desenvolvimento → teste, subindo 10–15% por semana o volume dos componentes.
 - Reps por zona (Prilepin): 70–80% → 12–24 reps totais; 80–90% → 10–20; acima de 90% → 4–10. Deload: volume −40%.
-- Teste: 3RM para turmas gerais; 1RM só avançado/competição. Funcional: sem RM de barra; teste por reps máximas, tempo ou carga de implemento. A semana de teste tem WODs leves e sem o padrão testado.
+- Teste: 3RM para turmas gerais; 1RM só avançado/competição. Funcional: sem RM de barra; teste por reps máximas, tempo ou carga de implemento. Hyrox: teste = simulado (meia prova ou prova completa) ou tempo de uma estação/1 km; capacidades viram corrida, estações e resistência. A semana de teste tem WODs leves e sem o padrão testado.
 - O ciclo específico ocupa no máximo 1–2 estímulos por semana. O resto da semana segue o DNA da modalidade na Nação (aula geral e variada): nunca transforme todas as aulas no objetivo.
 - Sem força pesada do mesmo padrão com menos de 48 h. Varie time domains e modalidades ao longo da semana; equilibre as lacunas do DNA.`;
 

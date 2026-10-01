@@ -5,7 +5,7 @@ import { assertAreaAccess, assertCan } from '@/server/auth/authz';
 import type { Principal } from '@/server/auth/principal';
 import type { RequestMeta } from '@/server/auth/session';
 import { AppError, NotFoundError } from '@/server/errors';
-import { addDays, eachDay, formatClock, formatDateBR, fromUtc, isIsoDate, toUtc, type IsoDate } from '@/domain/dates';
+import { addDays, eachDay, formatClock, formatDateBR, fromUtc, isIsoDate, toUtc, weekdayOf, type IsoDate } from '@/domain/dates';
 import { dayType, dutyWarnings, type SectorDefaults } from '@/domain/duty';
 import { LEAVE_LABEL, type LeaveType } from '@/domain/leave';
 import { periodLabel, periodOf } from '@/domain/period';
@@ -85,6 +85,40 @@ export async function loadDuty(principal: Principal | null, start: IsoDate, end:
 }
 
 export type DutyView = Awaited<ReturnType<typeof loadDuty>>;
+
+/**
+ * Escala da semana (segunda a domingo) de uma data, para a Grade semanal: a
+ * grade é o padrão que se repete; a escala é datada e aparece por cima dela.
+ */
+export async function dutyForWeek(principal: Principal | null, date: IsoDate, areaId?: string | null) {
+  assertCan(principal, 'schedule.view');
+  const start = addDays(date, 1 - weekdayOf(date));
+  const end = addDays(start, 6);
+  const [shifts, holidays] = await Promise.all([
+    prisma.dutyShift.findMany({
+      where: {
+        date: { gte: toUtc(start), lte: toUtc(end) },
+        sector: { active: true, ...sectorScope(principal), ...(areaId ? { modality: { areaId } } : {}) },
+      },
+      orderBy: [{ date: 'asc' }, { startMin: 'asc' }],
+      include: {
+        sector: { select: { name: true, sortOrder: true, modality: { select: { color: true } } } },
+        people: { include: { teacher: { select: { id: true, name: true, displayName: true } } } },
+      },
+    }),
+    prisma.holiday.findMany({ where: { date: { gte: toUtc(start), lte: toUtc(end) } } }),
+  ]);
+  return {
+    start, end,
+    holidays: Object.fromEntries(holidays.map((h) => [fromUtc(h.date), h.name])) as Record<IsoDate, string>,
+    shifts: shifts.map((s) => ({
+      id: s.id, date: fromUtc(s.date), weekday: weekdayOf(fromUtc(s.date)), startMin: s.startMin, endMin: s.endMin, notes: s.notes,
+      sector: s.sector.name, color: s.sector.modality.color,
+      people: s.people.map((p) => ({ id: p.teacher.id, name: p.teacher.displayName || p.teacher.name })),
+    })),
+  };
+}
+export type WeekDuty = Awaited<ReturnType<typeof dutyForWeek>>;
 
 async function warningsFor(db: Tx, shifts: Parameters<typeof dutyWarnings>[0], start: IsoDate, end: IsoDate) {
   const ids = [...new Set(shifts.flatMap((s) => s.people.map((p) => p.id)))];
