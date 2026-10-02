@@ -52,35 +52,78 @@ const H2 = ({ children }: { children: React.ReactNode }) => <h2 className="mb-2 
 export function dnaRange(sp: { de?: string; ate?: string }): DnaRange {
   const from = sp.de && isIsoDate(sp.de) ? sp.de : null;
   const to = sp.ate && isIsoDate(sp.ate) ? sp.ate : null;
-  return from && to && to < from ? { from: to, to: from } : { from, to };
+  // "Até" antes do "de" = sobrou do período anterior (o coach mudou só o "de"): vale até hoje.
+  return from && to && to < from ? { from, to: null } : { from, to };
 }
 
-/** Filtro de período do DNA: atalhos e datas livres (formulário GET, funciona sem JS). */
+const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const monthEnd = (ym: string) => { const [y, m] = ym.split('-').map(Number) as [number, number]; return addDays(`${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, '0')}-01`, -1); };
+
+/**
+ * Filtro de período do DNA: atalhos, régua de meses com o número de aulas
+ * (mostra onde a base tem dado) e datas livres. Formulário GET, funciona sem JS.
+ */
 function PeriodFilter({ slug, range, r }: { slug: string; range: DnaRange; r: DnaReportData }) {
   const today = todayIso();
-  const presets = [
+  const av = r.available;
+  const href = (from: string | null, to: string | null) => `/treinos/${slug}/dna${from ? `?de=${from}${to ? `&ate=${to}` : ''}` : ''}`;
+  const active = (from: string | null, to: string | null) => (range.from ?? null) === from && (range.to ?? null) === to;
+  const presets: [string, string | null, string | null][] = [
     ['Toda a base', null, null], ['Últimos 30 dias', addDays(today, -29), today], ['Últimos 90 dias', addDays(today, -89), today],
     ['Últimos 6 meses', addDays(today, -182), today], ['Este ano', `${today.slice(0, 4)}-01-01`, today],
-  ] as const;
-  const href = (from: string | null, to: string | null) => `/treinos/${slug}/dna${from ? `?de=${from}&ate=${to}` : ''}`;
-  const active = (from: string | null, to: string | null) => (range.from ?? null) === from && (range.to ?? null) === to;
+  ];
+  // A base parou antes de hoje (nada lançado depois): atalho para as últimas semanas que têm aula.
+  if (av.to && av.to < addDays(today, -29)) presets.splice(1, 0, [`Últimas 4 semanas com aula (até ${formatDateBR(av.to)})`, addDays(av.to, -27), av.to]);
+  const years = [...new Set(av.months.map((m) => m.month.slice(0, 4)))];
   const total = r.counts.history + r.counts.launched;
+  const chip = (on: boolean) => cn('rounded-full border px-3 py-1 text-xs font-semibold', on ? 'border-navy bg-navy text-white' : 'border-borda text-tinta hover:border-nacao');
   return (
     <Card className="mb-4 p-4 print:hidden">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-bold text-navy">Período analisado</span>
-        {presets.map(([label, from, to]) => (
-          <a key={label} href={href(from, to)} className={cn('rounded-full border px-3 py-1 text-xs font-semibold', active(from, to) ? 'border-navy bg-navy text-white' : 'border-borda text-tinta hover:border-nacao')}>{label}</a>
-        ))}
-        <form className="flex flex-wrap items-center gap-2" action={`/treinos/${slug}/dna`}>
-          <input aria-label="De" type="date" name="de" defaultValue={range.from ?? ''} required className="rounded-lg border border-borda px-2 py-1 text-sm" />
-          <span className="text-xs text-tinta-suave">a</span>
-          <input aria-label="Até" type="date" name="ate" defaultValue={range.to ?? ''} required className="rounded-lg border border-borda px-2 py-1 text-sm" />
-          <button className="rounded-lg bg-nacao px-3 py-1 text-xs font-bold text-white">Analisar</button>
-        </form>
+        {presets.map(([label, from, to]) => <a key={label} href={href(from, to)} className={chip(active(from, to))}>{label}</a>)}
       </div>
+
+      {av.months.length > 0 ? (
+        <div className="mt-3">
+          <p className="mb-1 text-xs text-tinta-suave">
+            Aulas com data na base: <b>{formatDateBR(av.from!)}</b> a <b>{formatDateBR(av.to!)}</b>. Clique num mês para analisar só ele (o número é de aulas).
+          </p>
+          <div className="space-y-1">
+            {years.map((y) => (
+              <div key={y} className="flex flex-wrap items-center gap-1">
+                <span className="w-10 text-xs font-bold text-tinta-suave">{y}</span>
+                {av.months.filter((m) => m.month.startsWith(y)).map((m) => {
+                  const from = `${m.month}-01`, to = monthEnd(m.month);
+                  const label = `${MONTHS[Number(m.month.slice(5)) - 1]} · ${m.count}`;
+                  return m.count
+                    ? <a key={m.month} href={href(from, to)} title={`${m.count} aula(s) em ${MONTHS[Number(m.month.slice(5)) - 1]}/${y}`}
+                        className={cn('rounded-md border px-2 py-0.5 text-[11px] font-semibold tabular-nums', active(from, to) ? 'border-navy bg-navy text-white' : 'border-borda bg-white text-tinta hover:border-nacao')}>{label}</a>
+                    : <span key={m.month} className="rounded-md border border-dashed border-borda px-2 py-0.5 text-[11px] tabular-nums text-tinta-fraca" title="Sem aula neste mês">{label}</span>;
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <p className="mt-2 text-xs text-tinta-suave">
+          {r.technical
+            ? 'Os planos de aula da metodologia não têm data. Para analisar por período, lance as aulas no Cadastro de Treino: elas entram aqui com a data.'
+            : 'Ainda não há aulas com data nesta modalidade.'}
+        </p>
+      )}
+
+      <form className="mt-3 flex flex-wrap items-center gap-2" action={`/treinos/${slug}/dna`}>
+        <span className="text-xs font-semibold text-tinta-suave">Datas livres:</span>
+        <input aria-label="De" type="date" name="de" defaultValue={range.from ?? ''} required min={av.from ?? undefined} className="rounded-lg border border-borda px-2 py-1 text-sm" />
+        <span className="text-xs text-tinta-suave">a</span>
+        <input aria-label="Até (opcional)" type="date" name="ate" defaultValue={range.to ?? ''} className="rounded-lg border border-borda px-2 py-1 text-sm" />
+        <button className="rounded-lg bg-nacao px-3 py-1 text-xs font-bold text-white">Analisar</button>
+        <span className="text-xs text-tinta-fraca">(sem &quot;até&quot; = até hoje)</span>
+      </form>
+
       <p className="mt-2 text-xs text-tinta-suave">
-        {range.from ? <>De <b>{formatDateBR(range.from)}</b> a <b>{formatDateBR(range.to ?? today)}</b> · </> : <>Toda a base · </>}
+        {range.from || range.to ? <>De <b>{range.from ? formatDateBR(range.from) : 'o início'}</b> a <b>{range.to ? formatDateBR(range.to) : 'hoje'}</b> · </> : <>Toda a base · </>}
         {total} aula(s): {r.counts.history} do histórico{r.technical ? ' (planos da metodologia)' : ''} + {r.counts.launched} lançada(s) no Cadastro de Treino.
         {' '}A base aprende sozinha: cada treino lançado entra no DNA e na Geração de Treino IA.
         {!r.empty && total < 12 ? ' Período curto: use os números como indicação.' : ''}
@@ -98,7 +141,14 @@ export async function DnaReport({ slug, range = {} }: { slug: string; range?: Dn
         <>
           <PageHeader title={`DNA da Programação · ${name}`} description={`A assinatura de programação de ${name} no período escolhido.`} />
           <PeriodFilter slug={slug} range={range} r={r} />
-          <Card className="p-6 text-sm text-tinta-suave">Nenhuma aula de {name} neste período. {r.technical ? 'Os planos da metodologia não têm data: no período, entram só as aulas lançadas no Cadastro de Treino.' : 'Escolha outro período ou lance os treinos no Cadastro de Treino.'}</Card>
+          <Card className="p-6 text-sm text-tinta">
+            <p className="font-bold text-navy">Nenhuma aula de {name} neste período.</p>
+            <p className="mt-1 text-tinta-suave">
+              {r.available.to
+                ? <>A base de {name} tem aulas de {formatDateBR(r.available.from!)} a {formatDateBR(r.available.to)}{r.available.to < (range.from ?? '') ? ' — nada lançado no Cadastro de Treino depois disso' : ''}. Escolha um mês com aula na régua acima ou <a className="font-semibold text-nacao hover:underline" href={`/treinos/${slug}/dna?de=${addDays(r.available.to, -27)}&ate=${r.available.to}`}>veja as últimas 4 semanas com aula</a>.</>
+                : r.technical ? 'Os planos da metodologia não têm data: no período, entram só as aulas lançadas no Cadastro de Treino.' : 'Lance os treinos no Cadastro de Treino para analisar por período.'}
+            </p>
+          </Card>
         </>
       );
     }

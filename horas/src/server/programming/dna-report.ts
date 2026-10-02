@@ -52,6 +52,26 @@ async function launchedDays(slug: string): Promise<WorkoutDayData[]> {
   }));
 }
 
+/** Onde a base tem aula: primeira e última data e aulas por mês (para o filtro de período). */
+function dateCoverage(dates: string[]) {
+  const sorted = [...dates].sort();
+  const byMonth = new Map<string, number>();
+  for (const d of sorted) byMonth.set(d.slice(0, 7), (byMonth.get(d.slice(0, 7)) ?? 0) + 1);
+  // Meses vazios entre o primeiro e o último também aparecem (com 0).
+  const months: { month: string; count: number }[] = [];
+  if (sorted.length) {
+    let [y, m] = sorted[0]!.slice(0, 7).split('-').map(Number) as [number, number];
+    const last = sorted.at(-1)!.slice(0, 7);
+    for (;;) {
+      const key = `${y}-${String(m).padStart(2, '0')}`;
+      months.push({ month: key, count: byMonth.get(key) ?? 0 });
+      if (key >= last) break;
+      if (++m > 12) { m = 1; y++; }
+    }
+  }
+  return { from: sorted[0] ?? null, to: sorted.at(-1) ?? null, months };
+}
+
 const inRange = (date: string | undefined, r: DnaRange) => !!date && (!r.from || date >= r.from) && (!r.to || date <= r.to);
 const ranged = (r: DnaRange) => !!(r.from || r.to);
 const lines = (t: string | null | undefined) => (t ?? '').split('\n').map((l) => l.trim()).filter(Boolean);
@@ -77,7 +97,10 @@ function buildTechnical(slug: string, launched: WorkoutDayData[], range: DnaRang
   // Os planos da metodologia não têm data: entram só na base completa. Com período, só as aulas lançadas no período.
   const sessoes = ranged(range) ? extra.filter((s) => inRange(s.date, range)) : [...t.data.sessoes, ...extra];
   const modality = programModality(slug);
-  const meta = { range, counts: { history: ranged(range) ? 0 : t.data.sessoes.length, launched: sessoes.length - (ranged(range) ? 0 : t.data.sessoes.length) } };
+  const meta = {
+    range, counts: { history: ranged(range) ? 0 : t.data.sessoes.length, launched: sessoes.length - (ranged(range) ? 0 : t.data.sessoes.length) },
+    available: dateCoverage(extra.map((s) => s.date!)),
+  };
   if (!sessoes.length) return { modality, empty: true as const, technical: true as const, ...meta };
   const dataset = { ...t.data, sessoes };
   const dna = computeTechnicalDna(dataset);
@@ -98,7 +121,10 @@ function build(slug: string, launched: WorkoutDayData[], range: DnaRange) {
   // Contagem igual à do DNA: dias especiais (eventos) ficam fora.
   const regular = sessions.filter((x) => !x.special);
   const launchedIn = regular.filter((x) => launchedDates.has(x.date)).length;
-  const meta = { range, counts: { history: regular.length - launchedIn, launched: launchedIn } };
+  const meta = {
+    range, counts: { history: regular.length - launchedIn, launched: launchedIn },
+    available: dateCoverage([...byDate.values()].filter((x) => !x.special).map((x) => x.date)),
+  };
   if (!regular.length) return { modality, empty: true as const, technical: false as const, ...meta };
   const dna = computeDna(sessions);
   const base = volumeBaseline(weeklyVolumes(sessions), modality.minWeekSessions);
