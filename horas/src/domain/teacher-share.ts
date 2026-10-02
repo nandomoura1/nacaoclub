@@ -11,7 +11,29 @@ export interface ShareDuty { date: IsoDate; startMin: number; endMin: number; se
 
 const ROLE: Record<string, string> = { AUXILIAR: 'auxiliar', ESTAGIARIO: 'estagiário' };
 
-/** Sugestão para o primeiro uso: o coordenador edita e salva. */
+/** Orientações de uma área de coordenação (Musculação, Aulas Coletivas…). */
+export interface ShareArea { id: string; name: string; modalities: string[]; guidelines: string }
+
+/** Sugestão para o primeiro uso de cada área: o coordenador edita e salva. */
+export function guidelinesTemplate(area: Pick<ShareArea, 'modalities'>): string {
+  return area.modalities.some((m) => /muscula/i.test(m)) ? MUSCULACAO_TEMPLATE : GUIDELINES_TEMPLATE;
+}
+
+const MUSCULACAO_TEMPLATE = `Conduta
+- Chegar 10 min antes do turno, uniformizado.
+- Ficar no salão, disponível: abordar os alunos pelo nome; celular só para o trabalho.
+- Avisar a coordenação com antecedência sobre falta ou troca de turno.
+
+Tarefas
+- Montar e revisar fichas de treino; acompanhar alunos novos nas primeiras semanas.
+- Corrigir execução e orientar carga com segurança.
+- Organizar anilhas, halteres e acessórios durante e no fim do turno.
+
+Rotina
+- Ronda no salão a cada 15 min.
+- Registrar ocorrências (aluno machucado, equipamento quebrado).
+- Trocas de turno só com aprovação da coordenação.`;
+
 export const GUIDELINES_TEMPLATE = `Conduta
 - Chegar 10 min antes da aula, uniformizado.
 - Receber os alunos pelo nome; celular só para a aula.
@@ -27,7 +49,7 @@ Rotina
 - Trocas de horário só com aprovação da coordenação.`;
 
 export function teacherGradeText(input: {
-  name: string; date: IsoDate; slots: ShareSlot[]; duties: ShareDuty[]; general: string; specific: string;
+  name: string; date: IsoDate; slots: ShareSlot[]; duties: ShareDuty[]; areas: Pick<ShareArea, 'name' | 'guidelines'>[]; specific: string;
 }): string {
   const { name, date, slots, duties } = input;
   const out = [`*Sua grade na Nação — ${name}*`, `Valendo a partir de ${formatDateBR(date)}`];
@@ -53,12 +75,11 @@ export function teacherGradeText(input: {
       out.push(`• ${WEEKDAYS[weekdayOf(d.date) - 1]!.short.toLowerCase()} ${formatDateBR(d.date).slice(0, 5)} ${formatClock(d.startMin)}–${formatClock(d.endMin)} ${d.sector}`);
     }
   }
-  const general = input.general.trim(), specific = input.specific.trim();
-  if (general || specific) {
-    out.push('', '*Atribuições e orientações*');
-    if (general) out.push(boldTitles(general));
-    if (specific) out.push(...(general ? [''] : []), `*Para você, ${name.split(' ')[0]}*`, specific);
-  }
+  // Uma seção por área do professor (ex.: quem dá Musculação e Coletivas recebe as duas).
+  const areas = input.areas.filter((a) => a.guidelines.trim());
+  const specific = input.specific.trim();
+  for (const a of areas) out.push('', `*Atribuições e orientações — ${a.name}*`, boldTitles(a.guidelines.trim()));
+  if (specific) out.push('', `*Para você, ${name.split(' ')[0]}*`, specific);
   return out.join('\n');
 }
 

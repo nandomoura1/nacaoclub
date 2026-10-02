@@ -1,12 +1,12 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { Copy, MessageCircle, Save, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FormMessage } from '@/components/ui/alert';
 import { Label } from '@/components/ui/input';
 import { Sheet } from '@/components/ui/sheet';
-import { GUIDELINES_TEMPLATE, teacherGradeText, whatsappLink } from '@/domain/teacher-share';
+import { guidelinesTemplate, teacherGradeText, whatsappLink } from '@/domain/teacher-share';
 import type { TeacherShareData } from '@/server/services/teacher-share-service';
 import { saveGuidelinesAction } from './actions';
 
@@ -15,20 +15,25 @@ const AREA = 'w-full rounded-lg border border-borda bg-white px-3 py-2 text-sm o
 /** Compartilhar a grade do professor no WhatsApp, com as orientações (conduta, tarefas, rotina). */
 export function ShareGrade({ teacherId, data, autoOpen = false }: { teacherId: string; data: TeacherShareData; autoOpen?: boolean }) {
   const [open, setOpen] = useState(autoOpen);
-  const [general, setGeneral] = useState(data.general || (data.canEdit ? GUIDELINES_TEMPLATE : ''));
+  // Orientações por área (Musculação, Aulas Coletivas…): áreas ainda sem texto começam com uma sugestão.
+  const [areaText, setAreaText] = useState<Record<string, string>>(() =>
+    Object.fromEntries(data.areas.map((a) => [a.id, a.guidelines || (a.canEdit ? guidelinesTemplate(a) : '')])));
   const [specific, setSpecific] = useState(data.specific);
   const [msg, setMsg] = useState<{ error?: string; ok?: string }>({});
   const [pending, start] = useTransition();
-  const text = useMemo(() => teacherGradeText({ ...data, general, specific }), [data, general, specific]);
-  const [saved, setSaved] = useState({ general: data.general.trim(), specific: data.specific.trim() });
-  const dirty = general.trim() !== saved.general || specific.trim() !== saved.specific;
+  const areas = data.areas.map((a) => ({ ...a, guidelines: areaText[a.id] ?? '' }));
+  const text = teacherGradeText({ ...data, areas, specific });
+  const [saved, setSaved] = useState(() => ({ areas: Object.fromEntries(data.areas.map((a) => [a.id, a.guidelines.trim()])) as Record<string, string>, specific: data.specific.trim() }));
+  const editable = data.areas.filter((a) => a.canEdit);
+  const dirty = editable.some((a) => (areaText[a.id] ?? '').trim() !== saved.areas[a.id]) || specific.trim() !== saved.specific;
   const first = data.name.split(' ')[0];
 
   const save = () => start(async () => {
     setMsg({});
-    const r = await saveGuidelinesAction(teacherId, { general, specific });
+    const payload = Object.fromEntries(editable.map((a) => [a.id, areaText[a.id] ?? '']));
+    const r = await saveGuidelinesAction(teacherId, { areas: payload, specific });
     if (!r.ok) return setMsg({ error: r.error });
-    setSaved({ general: general.trim(), specific: specific.trim() });
+    setSaved({ areas: { ...saved.areas, ...Object.fromEntries(editable.map((a) => [a.id, (areaText[a.id] ?? '').trim()])) }, specific: specific.trim() });
     setMsg({ ok: 'Orientações salvas: valem para os próximos compartilhamentos.' });
   });
 
@@ -46,12 +51,18 @@ export function ShareGrade({ teacherId, data, autoOpen = false }: { teacherId: s
           </>}>
           <div className="space-y-4">
             {!data.phone && <p className="rounded-lg bg-atencao/10 p-2 text-xs text-tinta">Sem telefone no cadastro: o WhatsApp abre para você escolher o contato.</p>}
-            <div>
-              <Label htmlFor="sh-general">Orientações gerais (todos os professores)</Label>
-              <textarea id="sh-general" rows={8} maxLength={4000} disabled={!data.canEdit} className={AREA} value={general} onChange={(e) => setGeneral(e.target.value)}
-                placeholder="Conduta, tarefas e rotina que valem para toda a equipe." />
-              {!saved.general && data.canEdit && <p className="mt-1 text-xs text-tinta-fraca">Sugestão inicial: ajuste e salve. Vale para todos os professores.</p>}
-            </div>
+            {data.areas.length === 0 && <p className="text-xs text-tinta-suave">Sem modalidade nem aula na grade: não há orientações de área para este professor.</p>}
+            {data.areas.map((a) => (
+              <div key={a.id}>
+                <Label htmlFor={`sh-area-${a.id}`}>Orientações · {a.name} <span className="font-normal text-tinta-fraca">(todos os professores da área)</span></Label>
+                <textarea id={`sh-area-${a.id}`} rows={7} maxLength={4000} disabled={!a.canEdit} className={AREA} value={areaText[a.id] ?? ''}
+                  onChange={(e) => setAreaText((x) => ({ ...x, [a.id]: e.target.value }))}
+                  placeholder={`Conduta, tarefas e rotina dos professores de ${a.name}.`} />
+                <p className="mt-1 text-xs text-tinta-fraca">
+                  {a.modalities.join(', ')}{!saved.areas[a.id] && a.canEdit ? ' · sugestão inicial: ajuste e salve.' : ''}{!a.canEdit && data.canEdit ? ' · só a coordenação desta área edita.' : ''}
+                </p>
+              </div>
+            ))}
             <div>
               <Label htmlFor="sh-specific">Orientações para {first} (opcional)</Label>
               <textarea id="sh-specific" rows={3} maxLength={2000} disabled={!data.canEdit} className={AREA} value={specific} onChange={(e) => setSpecific(e.target.value)}

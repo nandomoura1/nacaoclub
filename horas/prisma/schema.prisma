@@ -28,7 +28,7 @@ model AppSettings {
   id             Int      @id @default(1)
   periodStartDay Int      @default(26) @map("period_start_day")
   timezone       String   @default("America/Sao_Paulo")
-  /// Orientações gerais (conduta, tarefas, rotina) que vão no texto da grade de todo professor.
+  /// Não usado: as orientações agora são por área (coordination_areas.teacher_guidelines).
   teacherGuidelines String? @map("teacher_guidelines")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
@@ -137,6 +137,8 @@ model CoordinationArea {
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
+  /// Orientações (conduta, tarefas, rotina) para os professores desta área, no texto da grade.
+  teacherGuidelines String? @map("teacher_guidelines")
 
   userScopes UserAreaScope[]
   modalities Modality[]
