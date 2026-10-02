@@ -51,13 +51,16 @@ describe.skipIf(!hasDb)('DNA por período, aprendendo com o Cadastro de Treino',
     expect(all.counts).toMatchObject({ history: 24 });
   });
 
-  it('Funcional e Hyrox: régua de meses mostra onde a base tem aula (histórico até 08/08/2026)', async () => {
+  it('Funcional e Hyrox: régua de meses mostra onde a base tem aula (documento até 08/08/2026 + planilha de set–out/2026)', async () => {
     for (const slug of ['funcional', 'hyrox']) {
       const r = await getDnaReport(slug);
-      expect(r.available).toMatchObject({ from: slug === 'funcional' ? '2024-08-05' : '2024-08-10', to: '2026-08-08' });
+      expect(r.available).toMatchObject({ from: slug === 'funcional' ? '2024-08-05' : '2024-08-10', to: slug === 'funcional' ? '2026-10-02' : '2026-10-03' });
       const months = r.available.months.map((m) => m.month);
       expect(months[0]).toBe('2024-08');
-      expect(months.at(-1)).toBe('2026-08');
+      expect(months.at(-1)).toBe('2026-10');
+      // Planilha "Hyrox": Funcional 28/09–02/10 (3 em set + 2 em out); Hyrox 21/09–03/10 (6 em set + 2 em out).
+      const sep = (await getDnaReport(slug, { from: '2026-09-01', to: '2026-10-31' })).counts.history;
+      expect(sep).toBe(slug === 'funcional' ? 5 : 8);
       expect(new Set(months).size).toBe(months.length); // meses contínuos, sem repetir
       const mar = await getDnaReport(slug, { from: '2026-03-01', to: '2026-03-31' });
       expect(mar.empty).toBe(false);

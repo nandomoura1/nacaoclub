@@ -17,12 +17,12 @@ import { cn } from '@/lib/cn';
 import type { WorkoutWeekView } from '@/server/services/workout-service';
 import type { BenchmarkView } from '@/server/services/benchmark-service';
 import { benchmarkBlock, matchBenchmark } from '@/domain/benchmarks';
-import { deleteWeekAction, saveWeekAction } from '../actions';
+import { changeWeekModalityAction, deleteWeekAction, saveWeekAction } from '../actions';
 
 const empty = (kind: BlockKind): WorkoutBlockData => ({ kind, title: null, durationMin: null, format: null, timeCapMin: null, content: null, notes: null, coachNotes: null });
 const QUICK: BlockKind[] = ['MOBILIDADE', 'AQUECIMENTO', 'SKILL', 'ESPECIFICO', 'CORE', 'FORCA', 'WOD', 'FUNDAMENTO', 'JOGO'];
 
-export function EditorClient({ week, benchmarks }: { week: WorkoutWeekView; benchmarks: BenchmarkView[] }) {
+export function EditorClient({ week, benchmarks, modalities }: { week: WorkoutWeekView; benchmarks: BenchmarkView[]; modalities: { id: string; name: string }[] }) {
   const router = useRouter();
   const [days, setDays] = useState<WorkoutDayData[]>(week.days);
   const [footer, setFooter] = useState({ footerTitle: week.footerTitle ?? '', footerText: week.footerText ?? '', footerChips: week.footerChips ?? '' });
@@ -69,6 +69,24 @@ export function EditorClient({ week, benchmarks }: { week: WorkoutWeekView; benc
         <Button variant="secondary" onClick={() => setText(whatsappText(current))}><MessageCircle /> Texto WhatsApp</Button>
         {dirty && <span className="text-xs text-atencao">Salve para gerar a arte com as mudanças.</span>}
         <div className="flex-1" />
+        <label className="flex items-center gap-2 text-sm text-tinta-suave">
+          Modalidade
+          <Select aria-label="Modalidade do treino" className="h-9 w-40" value={week.modalityId} disabled={pending} onChange={(e) => {
+            const to = modalities.find((m) => m.id === e.target.value);
+            if (!to) return;
+            if (dirty) { e.target.value = week.modalityId; return setMsg({ error: 'Salve as mudanças antes de trocar a modalidade.' }); }
+            if (!confirm(`Mover os treinos desta semana de ${week.modality} para ${to.name}? A arte, os PDFs e o DNA passam a contar como ${to.name}.`)) { e.target.value = week.modalityId; return; }
+            start(async () => {
+              const r = await changeWeekModalityAction(week.id, to.id);
+              if (!r.ok) { setMsg({ error: r.error }); return; }
+              if (r.data !== week.id) router.push(`/treinos/${r.data}`);
+              router.refresh();
+            });
+          }}>
+            {!modalities.some((m) => m.id === week.modalityId) && <option value={week.modalityId}>{week.modality}</option>}
+            {modalities.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </Select>
+        </label>
         <Button variant="ghost" className="text-critico" disabled={pending} onClick={() => {
           if (!confirm('Excluir os treinos desta semana? Não dá para desfazer.')) return;
           start(async () => { const r = await deleteWeekAction(week.id); if (r.ok) router.push('/treinos'); else setMsg({ error: r.error }); });

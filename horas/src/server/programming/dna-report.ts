@@ -17,8 +17,8 @@ import { calibrateIntensity, classify, volumeBaseline, weeklyVolumes, type Inten
 /** Histórico de cada modalidade (vem do repositório: data/historico-<slug>). */
 const HISTORY: Record<string, { text: string; source: string }> = {
   crossfit: { text: CROSSFIT_HISTORY, source: 'planilhas e PDFs semanais do CrossFit (Drive), transcritos em data/historico-crossfit. Nos arquivos em que as colunas vinham misturadas, o dia da semana de cada bloco é aproximado; os totais por semana não mudam.' },
-  funcional: { text: FUNCIONAL_HISTORY, source: 'documento de programação Funcional + Hyrox (ago/2024–ago/2026), segmentado em data/historico-funcional. Aulas "Funcional / Hyrox" entram nas duas modalidades; o ano de cada data foi inferido pela sequência e conferido pelo dia da semana.' },
-  hyrox: { text: HYROX_HISTORY, source: 'documento de programação Funcional + Hyrox (ago/2024–ago/2026), segmentado em data/historico-hyrox (aulas rotuladas Hyrox, Corrida Fitness ou Funcional / Hyrox). Estações da prova: formato oficial HYROX.' },
+  funcional: { text: FUNCIONAL_HISTORY, source: 'documento de programação Funcional + Hyrox (ago/2024–ago/2026) + planilha de set–out/2026, segmentado em data/historico-funcional. Aulas "Funcional / Hyrox" entram nas duas modalidades; o ano de cada data foi inferido pela sequência e conferido pelo dia da semana.' },
+  hyrox: { text: HYROX_HISTORY, source: 'documento de programação Funcional + Hyrox (ago/2024–ago/2026) + planilha de set–out/2026, segmentado em data/historico-hyrox (aulas rotuladas Hyrox, Corrida Fitness ou Funcional / Hyrox). Estações da prova: formato oficial HYROX.' },
 };
 
 /** Modalidades técnicas: a base são planos de aula (JSON), não WODs. */

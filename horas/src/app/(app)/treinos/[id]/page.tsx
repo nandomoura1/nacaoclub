@@ -6,7 +6,7 @@ import { addDays, formatDateBR } from '@/domain/dates';
 import { can } from '@/server/auth/authz';
 import { requirePrincipal } from '@/server/auth/session';
 import { NotFoundError } from '@/server/errors';
-import { getWeek } from '@/server/services/workout-service';
+import { getWeek, workoutModalities } from '@/server/services/workout-service';
 import { listBenchmarks } from '@/server/services/benchmark-service';
 import { modalitySlug } from '@/domain/programming/modalities';
 import { EditorClient } from './EditorClient';
@@ -23,7 +23,10 @@ export default async function SemanaPage({ params }: { params: Promise<{ id: str
   const week = await getWeek(principal, id).catch((e) => { if (e instanceof NotFoundError) notFound(); throw e; });
   if (!canEdit) return <WeekReadOnly week={week} />;
   // O botão + Benchmark mostra a biblioteca da modalidade da semana.
-  const benchmarks = await listBenchmarks(principal, { modality: modalitySlug(week.modality) });
+  const [benchmarks, modalities] = await Promise.all([
+    listBenchmarks(principal, { modality: modalitySlug(week.modality) }),
+    workoutModalities(principal),
+  ]);
 
   return (
     <>
@@ -32,7 +35,7 @@ export default async function SemanaPage({ params }: { params: Promise<{ id: str
       <p className="mb-4 mt-1 text-sm text-tinta-suave">
         Para o aluno (arte, texto e PDF alunos), mobilidade, warm-up e core saem só com o tempo; <b>força</b>, <b>técnica</b> e <b>WOD</b> saem detalhados. O <b>PDF professores</b> leva o roteiro completo de cada etapa e as orientações ao professor.
       </p>
-      <EditorClient key={week.id} week={week} benchmarks={benchmarks} />
+      <EditorClient key={week.id} week={week} benchmarks={benchmarks} modalities={modalities} />
     </>
   );
 }

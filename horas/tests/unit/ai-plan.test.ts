@@ -3,6 +3,7 @@ import { checkPlan, dayToSession, planToBlocks, sessionText, toSessionBlock, typ
 import { parseHistory } from '@/domain/programming/history';
 import { fakePlan, fakeTechnicalPlan, systemPrompt, describeRequest, requestSchema } from '@/server/ai/workout-generator';
 import { WEEK_METRICS, type WeekMetric } from '@/domain/programming/volume';
+import { PERSONAL_KINDS, toPersonalBlocks } from '@/domain/personal';
 
 const zero = Object.fromEntries(WEEK_METRICS.map((m) => [m.id, 0])) as Record<WeekMetric, number>;
 
@@ -16,6 +17,19 @@ describe('plano da IA', () => {
     expect(blocks[4]!.coachNotes).toContain('Escalas — RX: Como prescrito. | Intermediário: Jumping pull-up.');
     expect(blocks[2]!.coachNotes).toBe('Cotovelos altos.');
     expect(blocks[0]!.title).toBeNull();
+  });
+
+  it('vira treino Personal (aulão): tipos do Personal, cap no formato e orientações nas notas', () => {
+    const blocks = toPersonalBlocks(planToBlocks(fakePlan()));
+    expect(blocks.every((b) => (PERSONAL_KINDS as readonly string[]).includes(b.kind))).toBe(true);
+    const wod = blocks.find((b) => b.kind === 'WOD')!;
+    expect(wod.format).toBe("For time 21-15-9 · cap 10'");
+    expect(wod.content).toBe('pull-up\nDU x2');
+    expect(wod.notes).toContain('Professor: Quebre cedo os pull-ups.');
+    expect(wod.notes.length).toBeLessThanOrEqual(600);
+    const tech = toPersonalBlocks(planToBlocks(fakeTechnicalPlan(), 'futevolei'));
+    expect(tech.map((b) => b.kind)).not.toContain('FUNDAMENTO');
+    expect(tech.some((b) => b.kind === 'OUTRO' && b.title.startsWith('Jogo'))).toBe(true);
   });
 
   it('bloco de WOD vira bloco do motor com cap como duração', () => {

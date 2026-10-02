@@ -2,7 +2,7 @@
 
 import { Fragment, useState, useTransition } from 'react';
 import Link from 'next/link';
-import { CheckCircle2, CircleAlert, Sparkles, TriangleAlert, Upload } from 'lucide-react';
+import { CheckCircle2, CircleAlert, Dumbbell, Sparkles, TriangleAlert, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { FormMessage } from '@/components/ui/alert';
@@ -12,7 +12,7 @@ import { KIND, type BlockKind } from '@/domain/workout';
 import type { GenerateResult } from '@/server/ai/workout-generator';
 import { cn } from '@/lib/cn';
 import { isTechnicalSlug, levelLabels } from '@/domain/programming/modalities';
-import { generateWorkoutAction, insertAiDayAction } from './ai-actions';
+import { generateWorkoutAction, insertAiDayAction, saveAiPersonalAction } from './ai-actions';
 
 type Form = { date: string; focus: string; strength: 'auto' | 'sim' | 'nao'; wodMinutes: 'auto' | 'curto' | 'medio' | 'longo'; partner: boolean; avoid: string; window: 14 | 30 };
 
@@ -22,17 +22,21 @@ const ALERT_STYLE = {
   alerta: { icon: TriangleAlert, cls: 'border-red-200 bg-red-50 text-red-900' },
 };
 
-export function AiGenerator({ slug, modality, defaultDate, enabled }: { slug: string; modality: string; defaultDate: string; enabled: boolean }) {
+export function AiGenerator({ slug, modality, defaultDate, enabled, teachers = [], myTeacherId = null }: {
+  slug: string; modality: string; defaultDate: string; enabled: boolean; teachers?: { id: string; name: string }[]; myTeacherId?: string | null;
+}) {
   const [f, setF] = useState<Form>({ date: defaultDate, focus: '', strength: 'auto', wodMinutes: 'auto', partner: false, avoid: '', window: 14 });
   const [result, setResult] = useState<(GenerateResult & { date: string }) | null>(null);
   const [msg, setMsg] = useState<{ error?: string; ok?: string }>({});
   const [weekId, setWeekId] = useState<string | null>(null);
+  const [personal, setPersonal] = useState<{ open: boolean; teacherId: string; title: string; student: string; id: string | null }>({ open: false, teacherId: myTeacherId ?? '', title: '', student: '', id: null });
   const [generating, startGen] = useTransition();
   const [saving, startSave] = useTransition();
 
   const generate = () => startGen(async () => {
     setMsg({});
     setWeekId(null);
+    setPersonal((x) => ({ ...x, open: false, id: null }));
     const r = await generateWorkoutAction(slug, f);
     if (!r.ok) return setMsg({ error: r.error });
     setResult({ ...r.data, date: f.date });
@@ -49,6 +53,17 @@ export function AiGenerator({ slug, modality, defaultDate, enabled }: { slug: st
       }
       setWeekId(r.data);
       setMsg({ ok: `Treino de ${formatDateBR(result.date)} lançado no Cadastro de Treino.` });
+    });
+  }
+
+  function savePersonal(): void {
+    if (!result) return;
+    startSave(async () => {
+      setMsg({});
+      const r = await saveAiPersonalAction(slug, result.date, result.plan, personal);
+      if (!r.ok) return setMsg({ error: r.error });
+      setPersonal((x) => ({ ...x, open: false, id: r.data }));
+      setMsg({ ok: `Treino de ${formatDateBR(result.date)} salvo em Treinos Personal.` });
     });
   }
 
@@ -117,13 +132,47 @@ export function AiGenerator({ slug, modality, defaultDate, enabled }: { slug: st
       </Card>
 
       <FormMessage error={msg.error} success={msg.ok} />
-      {weekId && <p className="mb-4 text-sm"><Link className="font-semibold text-nacao hover:underline" href={`/treinos/${weekId}`}>Abrir a semana no Cadastro de Treino →</Link></p>}
+      {(weekId || personal.id) && (
+        <p className="mb-4 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+          {weekId && <Link className="font-semibold text-nacao hover:underline" href={`/treinos/${weekId}`}>Abrir a semana no Cadastro de Treino →</Link>}
+          {personal.id && <Link className="font-semibold text-nacao hover:underline" href={`/treinos/personal/${personal.id}`}>Abrir em Treinos Personal →</Link>}
+        </p>
+      )}
 
       {p && c && result && (
         <PlanDetails plan={p} check={c} date={result.date} slug={slug} modality={modality} model={result.model}>
           <Button className="w-full" disabled={saving} onClick={() => insert(false)}>
-            <Upload /> {saving ? 'Lançando…' : `Lançar em ${formatDateBR(result.date)}`}
+            <Upload /> {saving ? 'Salvando…' : `Lançar em ${formatDateBR(result.date)}`}
           </Button>
+          {teachers.length > 0 && (personal.open ? (
+            <form className="mt-3 grid gap-2 rounded-lg border border-borda p-3" onSubmit={(e) => { e.preventDefault(); savePersonal(); }}>
+              <p className="text-xs font-bold uppercase tracking-wide text-tinta-suave">Salvar em Treinos Personal (aulão)</p>
+              <div>
+                <Label htmlFor="ai-p-teacher">Professor do aulão</Label>
+                <Select id="ai-p-teacher" required value={personal.teacherId} onChange={(e) => setPersonal({ ...personal, teacherId: e.target.value })}>
+                  <option value="">Escolha…</option>
+                  {teachers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="ai-p-title">Nome do treino</Label>
+                <Input id="ai-p-title" required minLength={2} maxLength={120} value={personal.title} onChange={(e) => setPersonal({ ...personal, title: e.target.value })} />
+              </div>
+              <div>
+                <Label htmlFor="ai-p-student">Turma / aluno (opcional)</Label>
+                <Input id="ai-p-student" maxLength={120} placeholder="Ex.: Aulão de sábado" value={personal.student} onChange={(e) => setPersonal({ ...personal, student: e.target.value })} />
+              </div>
+              <div className="flex gap-2">
+                <Button type="submit" className="flex-1" disabled={saving || !personal.teacherId}><Dumbbell /> {saving ? 'Salvando…' : 'Salvar no Personal'}</Button>
+                <Button type="button" variant="ghost" onClick={() => setPersonal({ ...personal, open: false })}>Cancelar</Button>
+              </div>
+            </form>
+          ) : (
+            <Button variant="secondary" className="mt-2 w-full" disabled={saving}
+              onClick={() => setPersonal({ ...personal, open: true, title: personal.title || `Aulão ${modality}${result.plan.titulo ? ` · ${result.plan.titulo}` : ''}`.slice(0, 120) })}>
+              <Dumbbell /> Salvar também no Personal (aulão)
+            </Button>
+          ))}
         </PlanDetails>
       )}
     </>

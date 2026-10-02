@@ -1,5 +1,5 @@
 import { WEEKDAYS, formatDateBR, weekdayOf } from './dates';
-import { KIND, type BlockKind } from './workout';
+import { KIND, type BlockKind, type WorkoutBlockData } from './workout';
 
 /** Blocos que fazem sentido num treino de Personal. */
 export const PERSONAL_KINDS = ['MOBILIDADE', 'AQUECIMENTO', 'ESPECIFICO', 'FORCA', 'CORE', 'WOD', 'OUTRO'] as const satisfies readonly BlockKind[];
@@ -24,4 +24,23 @@ export function personalWhatsapp(w: { title: string; student: string; date: stri
     if (b.notes) out.push(`_${b.notes}_`);
   }
   return out.join('\n');
+}
+
+/** Tipos do Cadastro de Treino que não existem no Personal. */
+const TO_PERSONAL: Partial<Record<BlockKind, (typeof PERSONAL_KINDS)[number]>> = { SKILL: 'ESPECIFICO', FUNDAMENTO: 'ESPECIFICO', JOGO: 'OUTRO' };
+
+/** Blocos do Cadastro de Treino (ex.: aula gerada pela IA) → blocos de um treino Personal (aulão). */
+export function toPersonalBlocks(blocks: WorkoutBlockData[]): PersonalBlockData[] {
+  return blocks.map((b) => {
+    const kind = (PERSONAL_KINDS as readonly string[]).includes(b.kind) ? b.kind : TO_PERSONAL[b.kind] ?? 'OUTRO';
+    const title = b.kind === 'JOGO' ? ['Jogo', b.title].filter(Boolean).join(': ') : b.title ?? '';
+    return {
+      kind,
+      title: title.slice(0, 120),
+      durationMin: b.durationMin,
+      format: [b.format, b.timeCapMin && `cap ${b.timeCapMin}'`].filter(Boolean).join(' · ').slice(0, 160),
+      content: (b.content ?? '').slice(0, 2000),
+      notes: [b.notes, b.coachNotes && `Professor: ${b.coachNotes}`].filter(Boolean).join('\n\n').slice(0, 600),
+    };
+  }).filter(hasContent);
 }

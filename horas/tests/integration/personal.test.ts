@@ -5,6 +5,9 @@ import { createSlots } from '@/server/services/schedule-service';
 import { deletePersonalWorkout, listPersonalWorkouts, personalSlots, savePersonalWorkout } from '@/server/services/personal-workout-service';
 import { createWeek, getWeek, listWeeks } from '@/server/services/workout-service';
 import { AuthorizationError } from '@/server/errors';
+import { toPersonalBlocks } from '@/domain/personal';
+import { planToBlocks } from '@/domain/programming/ai-plan';
+import { fakePlan } from '@/server/ai/workout-generator';
 import { META, hasDb, makeUser } from './helpers';
 
 /** Perfil Professor: treinos Personal das próprias aulas e leitura do Cadastro de Treino. Datas de 2037. */
@@ -58,5 +61,14 @@ describe.skipIf(!hasDb)('perfil Professor: treinos', () => {
     expect((await listWeeks(prof)).some((w) => w.id === week)).toBe(true);
     expect(await getWeek(prof, week)).toMatchObject({ modality: 'CrossFit' });
     await expect(createWeek(prof, { modalityId: cf.id, date: '2037-05-11' }, META)).rejects.toThrow(AuthorizationError);
+  });
+
+  it('aulão gerado pela IA vira treino Personal avulso do professor escolhido', async () => {
+    const t = await prisma.teacher.create({ data: { name: `Aulão ${Date.now()}` } });
+    const blocks = toPersonalBlocks(planToBlocks(fakePlan()));
+    const id = await savePersonalWorkout(admin.principal, null, { teacherId: t.id, slotId: null, date: '2037-06-06', title: 'Aulão CrossFit · teste', student: 'Aulão de sábado', goal: 'Estímulo', blocks }, META);
+    const w = await prisma.personalWorkout.findUniqueOrThrow({ where: { id } });
+    expect(w).toMatchObject({ teacherId: t.id, slotId: null, startMin: null, student: 'Aulão de sábado' });
+    expect((w.blocks as unknown[]).length).toBe(blocks.length);
   });
 });

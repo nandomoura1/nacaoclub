@@ -188,6 +188,54 @@ export async function deleteWeek(principal: Principal | null, id: string, meta: 
   });
 }
 
+/**
+ * Troca a modalidade de um plano já criado. Se a modalidade de destino já tem
+ * plano nessa semana, os dias com treino vão para ele (o plano de origem some);
+ * dia com treino nos dois lados bloqueia a troca. Devolve o id do plano final.
+ */
+export async function changeWeekModality(principal: Principal | null, id: string, modalityId: string, meta: RequestMeta): Promise<string> {
+  invalidateDna(); // o treino passa a contar no DNA da outra modalidade
+  assertCan(principal, 'workout.edit');
+  return prisma.$transaction(async (tx) => {
+    const w = await loadWeek(tx, id);
+    assertAreaAccess(principal, w.modality.areaId);
+    const to = await modalityInScope(tx, principal, modalityId);
+    if (to.id === w.modalityId) return w.id;
+    const start = fromUtc(w.weekStart);
+    const target = await tx.workoutWeek.findUnique({ where: { modalityId_weekStart: { modalityId: to.id, weekStart: w.weekStart } }, include: weekInclude });
+    let finalId = w.id;
+    if (!target) {
+      await tx.workoutWeek.update({ where: { id }, data: { modalityId: to.id, updatedById: principal.id } });
+    } else {
+      const filled = (d: { blocks: unknown[] }) => d.blocks.length > 0;
+      const taken = new Set(target.days.filter(filled).map((d) => fromUtc(d.date)));
+      const moving = w.days.filter(filled);
+      const clash = moving.map((d) => fromUtc(d.date)).filter((d) => taken.has(d));
+      if (clash.length) {
+        throw new AppError(`${to.name} já tem treino em ${clash.map(formatDateBR).join(', ')} nesta semana. Abra o plano de ${to.name} e apague esse(s) dia(s) antes de trocar.`);
+      }
+      const dates = moving.map((d) => d.date);
+      await tx.workoutDay.deleteMany({ where: { weekId: target.id, date: { in: dates } } });
+      await tx.workoutDay.updateMany({ where: { id: { in: moving.map((d) => d.id) } }, data: { weekId: target.id } });
+      await tx.workoutWeek.update({
+        where: { id: target.id },
+        data: {
+          updatedById: principal.id,
+          footerTitle: target.footerTitle ?? w.footerTitle, footerText: target.footerText ?? w.footerText, footerChips: target.footerChips ?? w.footerChips,
+        },
+      });
+      await tx.workoutWeek.delete({ where: { id } });
+      finalId = target.id;
+    }
+    await audit(tx, { actorId: principal.id, ...meta }, {
+      action: 'workout.modality_changed', entityType: 'workout_week', entityId: finalId,
+      before: { modalidade: w.modality.name }, after: { modalidade: to.name, juntou: !!target },
+      summary: `${principal.name} trocou os treinos da semana de ${formatDateBR(start)} de ${w.modality.name} para ${to.name}${target ? ` (juntou ao plano que já existia)` : ''}`,
+    });
+    return finalId;
+  });
+}
+
 /** Modalidades que a pessoa pode usar no módulo de treinos. */
 export async function workoutModalities(principal: Principal | null) {
   assertCan(principal, 'workout.edit');

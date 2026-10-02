@@ -10,6 +10,7 @@ import { can } from '@/server/auth/authz';
 import { requirePrincipal } from '@/server/auth/session';
 import { aiEnabled } from '@/server/ai/workout-generator';
 import { listPrograms } from '@/server/ai/program-generator';
+import { prisma } from '@/server/db';
 import { AiGenerator } from './AiGenerator';
 import { ProgramForm } from './ProgramForm';
 
@@ -20,7 +21,11 @@ export async function AiPage({ slug, mode }: { slug: string; mode?: string }) {
   const planilha = mode === 'planilha';
   const today = todayIso();
   const nextMonday = addDays(today, ((8 - weekdayOf(today)) % 7) || 7);
-  const programs = planilha ? await listPrograms(principal, slug) : [];
+  const [programs, teachers] = await Promise.all([
+    planilha ? listPrograms(principal, slug) : [],
+    // "Salvar no Personal" (aulões): quem gera escolhe o professor que vai dar a aula.
+    planilha || !can(principal, 'workout.personal') ? [] : prisma.teacher.findMany({ where: { active: true }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+  ]);
   const tab = (on: boolean) => cn('rounded-full border px-4 py-2 text-sm font-bold', on ? 'border-navy bg-navy text-white' : 'border-borda text-tinta hover:bg-fundo');
   return (
     <>
@@ -55,7 +60,7 @@ export async function AiPage({ slug, mode }: { slug: string; mode?: string }) {
           )}
         </>
       ) : (
-        <AiGenerator slug={slug} modality={m.name} defaultDate={addDays(today, 1)} enabled={aiEnabled()} />
+        <AiGenerator slug={slug} modality={m.name} defaultDate={addDays(today, 1)} enabled={aiEnabled()} teachers={teachers} myTeacherId={principal.teacherIds[0] ?? null} />
       )}
     </>
   );

@@ -1,0 +1,13 @@
+# Funcional 2026-10 — planilha "Hyrox" (aba "Funcional"), importada em 02/10/2026
+# a aba traz duas "Quarta-Feira": a segunda foi considerada quinta 01/10
+
+## 2026-10-01
+WU 10 | 2 rounds | 100m Run; 10 Air Squat; 12 Hollow Rock; 10 Pike Push-up; 12 Glute Bridge; 30 Single Unders; 8 Sprawl
+SKILL 8 |  | Dumbbell Floor Press; V-Up; Single Unders; Double-Unders; TRX Chin Up; Abs Remado; Lateral Med Ball Wall Slams; Russian Twist
+WOD 10 | Em dupla — máximo de calorias num ergômetro #partner | Enquanto um atleta fica no ergômetro, o outro faz: 20 Ground to Overhead com Plate; 15 Snap Jump; 10 Sit-Up com Plate; troca de posição só após a sequência completa
+WOD 14 | AMRAP 14' | 15 Dumbbell Floor Press; 10 V-Up; 40 Double-Unders; 15 TRX Chin Up; 15 Abs Remado; 100 Run; 10 Lateral Med Ball Wall Slams; 20 Russian Twist; 30 Escaladores
+## 2026-10-02
+WU 8 | 2 rounds — fluxo contínuo | 30" Bike — progressivo; 10 Squat To Stand; 10 Alternating Good Morning — 5/5; 8 Inchworm + Push-up; 10 Lateral Squat Shift — 5/5; 20m A-Skip; 8 Sprawl Step-Back; 10 Pogo Jumps; 20m High-Knee Run
+ACC 8 | Core — 3 rounds for quality | 10/10 Dumbbell Pallof Press; 12 Dead Bug With Dumbbell; 20" Side Plank — lado direito; 20" Side Plank — lado esquerdo
+SKILL 7 | Carga moderada: técnica, controle e transição | 12 Sandbag Clean + Sprawl; Sprawl Tuck; Plate Overhead Walk — 20m; Sandbag Sprawl; Kettlebell Squat Clean
+WOD 20 | AMRAP 20' | 100m Walk Plate Overhead; 20 Shuttle Run lateral; Sprawl Tuck; 12 Sandbag Clean + Sprawl; 20 Jump Over Sandbag; 10/12 Cal; 15 Kettlebell Squat Clean; 16 Box Jump; 8/10 Push-up; 100 Run

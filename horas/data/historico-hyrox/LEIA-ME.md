@@ -22,3 +22,8 @@ data que não batia com o dia da semana) foram conferidos pela Nação em 02/10/
 todas as datas usadas estão corretas.
 
 Depois de editar os arquivos, rode `node scripts/embed-history.mjs`.
+
+Planilha "Hyrox" (Google Sheets, importada em 02/10/2026, à mão): Hyrox 21–26/09 e
+28/09–03/10 (abas 1º e 2º Semana) e Funcional 28/09–02/10 (aba "Funcional", sem datas
+na planilha — semana de 28/09; a segunda "Quarta-Feira" virou quinta 01/10). A
+"Quarta 24/9" da aba 1 virou 23/09 (24/09 é quinta).

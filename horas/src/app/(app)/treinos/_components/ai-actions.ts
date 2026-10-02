@@ -8,6 +8,8 @@ import { AiPlanSchema, planToBlocks } from '@/domain/programming/ai-plan';
 import { modalitySlug } from '@/domain/programming/modalities';
 import { generateWorkout, type GenerateResult } from '@/server/ai/workout-generator';
 import { setDayFromAi, workoutModalities } from '@/server/services/workout-service';
+import { savePersonalWorkout } from '@/server/services/personal-workout-service';
+import { toPersonalBlocks } from '@/domain/personal';
 import { createProgram, deleteProgram, generateProgramDay, insertProgramDays, type ProgramDayResult } from '@/server/ai/program-generator';
 
 export async function generateWorkoutAction(slug: string, values: Record<string, unknown>): Promise<ActionResult<GenerateResult>> {
@@ -26,6 +28,23 @@ export async function insertAiDayAction(slug: string, date: string, plan: unknow
     revalidatePath('/treinos');
     return r.weekId;
   }, 'Treino lançado no Cadastro de Treino.');
+}
+
+/** Salva o plano gerado como treino Personal (aulões da Nação), além ou no lugar do Cadastro de Treino. */
+export async function saveAiPersonalAction(
+  slug: string, date: string, plan: unknown, values: { teacherId: string; title: string; student: string },
+): Promise<ActionResult<string>> {
+  return runAction(async () => {
+    const parsed = AiPlanSchema.safeParse(plan);
+    if (!parsed.success) throw new AppError('Plano inválido.');
+    const p = parsed.data;
+    const id = await savePersonalWorkout(await getPrincipal(), null, {
+      teacherId: values.teacherId || null, slotId: null, date, student: values.student, title: values.title,
+      goal: p.estimulo.slice(0, 600), blocks: toPersonalBlocks(planToBlocks(p, slug)),
+    }, await requestMeta());
+    revalidatePath('/treinos/personal');
+    return id;
+  }, 'Treino salvo em Treinos Personal.');
 }
 
 export async function createProgramAction(slug: string, values: Record<string, unknown>): Promise<ActionResult<string>> {

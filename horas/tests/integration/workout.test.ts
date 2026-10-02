@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '@/server/db';
 import { bootstrapStructure } from '@/server/services/bootstrap';
-import { createWeek, getWeek, listWeeks, saveWeek } from '@/server/services/workout-service';
+import { changeWeekModality, createWeek, getWeek, listWeeks, saveWeek } from '@/server/services/workout-service';
 import { AppError, AuthorizationError } from '@/server/errors';
 import { META, hasDb, makeUser } from './helpers';
 import { crossfitWeek } from '../fixtures/workout-crossfit';
@@ -61,6 +61,33 @@ describe.skipIf(!hasDb)('Treinos da semana', () => {
     const prof = await makeUser('PROFESSOR'); // professor vê os treinos de todas as modalidades, mas não lança
     expect((await listWeeks(prof.principal)).map((w) => w.id)).toEqual(expect.arrayContaining([cf, fut]));
     await expect(createWeek(prof.principal, { modalityId: futevolei.id, date: '2040-11-12' }, META)).rejects.toThrow(AuthorizationError);
+  });
+
+  it('troca a modalidade depois de criado: move, junta ao plano existente e bloqueia dia em conflito', async () => {
+    const wod = [{ kind: 'WOD', title: 'Teste', durationMin: 12 }];
+    const a = await createWeek(admin.principal, { modalityId: crossfit.id, date: '2041-03-04' }, META); // semana de 04/03/2041
+    await saveWeek(admin.principal, a, { days: [{ date: '2041-03-04', blocks: wod }, { date: '2041-03-05', blocks: [] }] }, META);
+    // Sem plano no destino: o mesmo plano muda de modalidade.
+    expect(await changeWeekModality(admin.principal, a, futevolei.id, META)).toBe(a);
+    expect((await getWeek(admin.principal, a)).modality).toBe('Futevôlei');
+
+    // Destino já tem plano: os dias com treino vão para ele e o de origem some.
+    const b = await createWeek(admin.principal, { modalityId: crossfit.id, date: '2041-03-04' }, META);
+    await saveWeek(admin.principal, b, { days: [{ date: '2041-03-06', blocks: wod }, { date: '2041-03-04', blocks: [] }] }, META);
+    expect(await changeWeekModality(admin.principal, b, futevolei.id, META)).toBe(a);
+    expect(await prisma.workoutWeek.findUnique({ where: { id: b } })).toBeNull();
+    const merged = await getWeek(admin.principal, a);
+    expect(merged.days.filter((d) => d.blocks.length).map((d) => d.date)).toEqual(['2041-03-04', '2041-03-06']);
+
+    // Mesmo dia com treino nos dois lados: não troca.
+    const c = await createWeek(admin.principal, { modalityId: crossfit.id, date: '2041-03-04' }, META);
+    await saveWeek(admin.principal, c, { days: [{ date: '2041-03-04', blocks: wod }] }, META);
+    await expect(changeWeekModality(admin.principal, c, futevolei.id, META)).rejects.toThrow(/já tem treino em 04\/03\/2041/);
+    expect((await getWeek(admin.principal, c)).modality).toBe('CrossFit');
+
+    // Coordenador de outra área não move para lá.
+    const coordFut = await makeUser('COORDENADOR', { areaIds: [futevolei.areaId] });
+    await expect(changeWeekModality(coordFut.principal, a, crossfit.id, META)).rejects.toThrow(AuthorizationError);
   });
 
   it('o banco só aceita semana começando na segunda', async () => {
