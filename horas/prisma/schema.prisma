@@ -28,8 +28,10 @@ model AppSettings {
   id             Int      @id @default(1)
   periodStartDay Int      @default(26) @map("period_start_day")
   timezone       String   @default("America/Sao_Paulo")
-  /// Não usado: as orientações agora são por área (coordination_areas.teacher_guidelines).
+  /// Mensagem geral aos professores das Aulas Coletivas (CrossFit, Futevôlei, Funcional…), no texto da grade.
   teacherGuidelines String? @map("teacher_guidelines")
+  /// Mensagem geral aos professores da Musculação (Nação Fit).
+  gymGuidelines     String? @map("gym_guidelines")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   @@map("app_settings")
@@ -137,7 +139,7 @@ model CoordinationArea {
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
-  /// Orientações (conduta, tarefas, rotina) para os professores desta área, no texto da grade.
+  /// Não usado: as mensagens gerais são por gênero (app_settings: Musculação × Aulas Coletivas).
   teacherGuidelines String? @map("teacher_guidelines")
 
   userScopes UserAreaScope[]

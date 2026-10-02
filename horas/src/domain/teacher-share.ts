@@ -11,12 +11,26 @@ export interface ShareDuty { date: IsoDate; startMin: number; endMin: number; se
 
 const ROLE: Record<string, string> = { AUXILIAR: 'auxiliar', ESTAGIARIO: 'estagiário' };
 
-/** Orientações de uma área de coordenação (Musculação, Aulas Coletivas…). */
-export interface ShareArea { id: string; name: string; modalities: string[]; guidelines: string }
+/**
+ * Dois gêneros de professor, cada um com a sua mensagem geral: Musculação
+ * (Nação Fit) e Aulas Coletivas (CrossFit, Futevôlei, Funcional, HYROX, lutas…).
+ */
+export type GuidelineGroup = 'musculacao' | 'coletivas';
+export const GROUP_LABEL: Record<GuidelineGroup, string> = { musculacao: 'Musculação (Nação Fit)', coletivas: 'Aulas Coletivas' };
+export const isMusculacao = (modality: string) => /muscula/i.test(modality);
 
-/** Sugestão para o primeiro uso de cada área: o coordenador edita e salva. */
-export function guidelinesTemplate(area: Pick<ShareArea, 'modalities'>): string {
-  return area.modalities.some((m) => /muscula/i.test(m)) ? MUSCULACAO_TEMPLATE : GUIDELINES_TEMPLATE;
+/** Gêneros de um professor pelas modalidades que ele dá (grade + habilitadas). Musculação primeiro só se for a principal. */
+export function groupsOf(modalities: string[], primary?: string | null): GuidelineGroup[] {
+  const set = new Set(modalities.map((m): GuidelineGroup => (isMusculacao(m) ? 'musculacao' : 'coletivas')));
+  const order: GuidelineGroup[] = primary && isMusculacao(primary) ? ['musculacao', 'coletivas'] : ['coletivas', 'musculacao'];
+  return order.filter((g) => set.has(g));
+}
+
+export interface ShareGroup { id: GuidelineGroup; name: string; guidelines: string }
+
+/** Sugestão para o primeiro uso: o coordenador edita e salva. */
+export function guidelinesTemplate(group: GuidelineGroup): string {
+  return group === 'musculacao' ? MUSCULACAO_TEMPLATE : GUIDELINES_TEMPLATE;
 }
 
 const MUSCULACAO_TEMPLATE = `Conduta
@@ -49,7 +63,7 @@ Rotina
 - Trocas de horário só com aprovação da coordenação.`;
 
 export function teacherGradeText(input: {
-  name: string; date: IsoDate; slots: ShareSlot[]; duties: ShareDuty[]; areas: Pick<ShareArea, 'name' | 'guidelines'>[]; specific: string;
+  name: string; date: IsoDate; slots: ShareSlot[]; duties: ShareDuty[]; groups: Pick<ShareGroup, 'name' | 'guidelines'>[]; specific: string;
 }): string {
   const { name, date, slots, duties } = input;
   const out = [`*Sua grade na Nação — ${name}*`, `Valendo a partir de ${formatDateBR(date)}`];
@@ -75,10 +89,13 @@ export function teacherGradeText(input: {
       out.push(`• ${WEEKDAYS[weekdayOf(d.date) - 1]!.short.toLowerCase()} ${formatDateBR(d.date).slice(0, 5)} ${formatClock(d.startMin)}–${formatClock(d.endMin)} ${d.sector}`);
     }
   }
-  // Uma seção por área do professor (ex.: quem dá Musculação e Coletivas recebe as duas).
-  const areas = input.areas.filter((a) => a.guidelines.trim());
+  // Uma mensagem por gênero do professor (quem dá Musculação e Coletivas recebe as duas).
+  // Texto já formatado para o WhatsApp (com *negrito*) vai como está; texto simples ganha título.
   const specific = input.specific.trim();
-  for (const a of areas) out.push('', `*Atribuições e orientações — ${a.name}*`, boldTitles(a.guidelines.trim()));
+  for (const g of input.groups.filter((x) => x.guidelines.trim())) {
+    const t = g.guidelines.trim();
+    out.push('', ...(t.includes('*') ? [t] : [`*Atribuições e orientações — ${g.name}*`, boldTitles(t)]));
+  }
   if (specific) out.push('', `*Para você, ${name.split(' ')[0]}*`, specific);
   return out.join('\n');
 }

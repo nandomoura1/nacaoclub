@@ -37,7 +37,7 @@ export async function cancelLeaveAction(leaveId: string) {
   });
 }
 
-export async function saveGuidelinesAction(teacherId: string, values: { areas: Record<string, string>; specific: string }): Promise<ActionResult> {
+export async function saveGuidelinesAction(teacherId: string, values: { groups: Record<string, string>; specific: string }): Promise<ActionResult> {
   return runAction(async () => {
     await saveGuidelines(await getPrincipal(), teacherId, values, await requestMeta());
     revalidatePath('/professores', 'layout');

@@ -15,23 +15,23 @@ const AREA = 'w-full rounded-lg border border-borda bg-white px-3 py-2 text-sm o
 /** Compartilhar a grade do professor no WhatsApp, com as orientações (conduta, tarefas, rotina). */
 export function ShareGrade({ teacherId, data, autoOpen = false }: { teacherId: string; data: TeacherShareData; autoOpen?: boolean }) {
   const [open, setOpen] = useState(autoOpen);
-  // Orientações por área (Musculação, Aulas Coletivas…): áreas ainda sem texto começam com uma sugestão.
+  // Mensagem geral por gênero (Musculação × Aulas Coletivas): sem texto ainda, começa com uma sugestão.
   const [areaText, setAreaText] = useState<Record<string, string>>(() =>
-    Object.fromEntries(data.areas.map((a) => [a.id, a.guidelines || (a.canEdit ? guidelinesTemplate(a) : '')])));
+    Object.fromEntries(data.groups.map((a) => [a.id, a.guidelines || (a.canEdit ? guidelinesTemplate(a.id) : '')])));
   const [specific, setSpecific] = useState(data.specific);
   const [msg, setMsg] = useState<{ error?: string; ok?: string }>({});
   const [pending, start] = useTransition();
-  const areas = data.areas.map((a) => ({ ...a, guidelines: areaText[a.id] ?? '' }));
-  const text = teacherGradeText({ ...data, areas, specific });
-  const [saved, setSaved] = useState(() => ({ areas: Object.fromEntries(data.areas.map((a) => [a.id, a.guidelines.trim()])) as Record<string, string>, specific: data.specific.trim() }));
-  const editable = data.areas.filter((a) => a.canEdit);
+  const groups = data.groups.map((a) => ({ ...a, guidelines: areaText[a.id] ?? '' }));
+  const text = teacherGradeText({ ...data, groups, specific });
+  const [saved, setSaved] = useState(() => ({ areas: Object.fromEntries(data.groups.map((a) => [a.id, a.guidelines.trim()])) as Record<string, string>, specific: data.specific.trim() }));
+  const editable = data.groups.filter((a) => a.canEdit);
   const dirty = editable.some((a) => (areaText[a.id] ?? '').trim() !== saved.areas[a.id]) || specific.trim() !== saved.specific;
   const first = data.name.split(' ')[0];
 
   const save = () => start(async () => {
     setMsg({});
     const payload = Object.fromEntries(editable.map((a) => [a.id, areaText[a.id] ?? '']));
-    const r = await saveGuidelinesAction(teacherId, { areas: payload, specific });
+    const r = await saveGuidelinesAction(teacherId, { groups: payload, specific });
     if (!r.ok) return setMsg({ error: r.error });
     setSaved({ areas: { ...saved.areas, ...Object.fromEntries(editable.map((a) => [a.id, (areaText[a.id] ?? '').trim()])) }, specific: specific.trim() });
     setMsg({ ok: 'Orientações salvas: valem para os próximos compartilhamentos.' });
@@ -51,16 +51,16 @@ export function ShareGrade({ teacherId, data, autoOpen = false }: { teacherId: s
           </>}>
           <div className="space-y-4">
             {!data.phone && <p className="rounded-lg bg-atencao/10 p-2 text-xs text-tinta">Sem telefone no cadastro: o WhatsApp abre para você escolher o contato.</p>}
-            {data.areas.length === 0 && <p className="text-xs text-tinta-suave">Sem modalidade nem aula na grade: não há orientações de área para este professor.</p>}
-            {data.areas.map((a) => (
+            {data.groups.length === 0 && <p className="text-xs text-tinta-suave">Sem modalidade nem aula na grade: não há mensagem geral para este professor.</p>}
+            {data.groups.map((a) => (
               <div key={a.id}>
-                <Label htmlFor={`sh-area-${a.id}`}>Orientações · {a.name} <span className="font-normal text-tinta-fraca">(todos os professores da área)</span></Label>
+                <Label htmlFor={`sh-area-${a.id}`}>Mensagem geral · {a.name} <span className="font-normal text-tinta-fraca">(todos os professores de {a.id === 'musculacao' ? 'Musculação' : 'Aulas Coletivas'})</span></Label>
                 <textarea id={`sh-area-${a.id}`} rows={7} maxLength={4000} disabled={!a.canEdit} className={AREA} value={areaText[a.id] ?? ''}
                   onChange={(e) => setAreaText((x) => ({ ...x, [a.id]: e.target.value }))}
                   placeholder={`Conduta, tarefas e rotina dos professores de ${a.name}.`} />
-                <p className="mt-1 text-xs text-tinta-fraca">
-                  {a.modalities.join(', ')}{!saved.areas[a.id] && a.canEdit ? ' · sugestão inicial: ajuste e salve.' : ''}{!a.canEdit && data.canEdit ? ' · só a coordenação desta área edita.' : ''}
-                </p>
+                {(!saved.areas[a.id] && a.canEdit) || (!a.canEdit && data.canEdit) ? (
+                  <p className="mt-1 text-xs text-tinta-fraca">{!a.canEdit ? 'Só a coordenação deste gênero edita.' : 'Sugestão inicial: ajuste e salve.'}</p>
+                ) : null}
               </div>
             ))}
             <div>

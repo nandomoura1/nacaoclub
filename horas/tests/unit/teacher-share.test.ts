@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GUIDELINES_TEMPLATE, guidelinesTemplate, teacherGradeText, whatsappLink } from '@/domain/teacher-share';
+import { GUIDELINES_TEMPLATE, groupsOf, guidelinesTemplate, teacherGradeText, whatsappLink } from '@/domain/teacher-share';
 
 describe('grade do professor no WhatsApp', () => {
   const slots = [
@@ -12,7 +12,7 @@ describe('grade do professor no WhatsApp', () => {
     const text = teacherGradeText({
       name: 'Rafael Souza', date: '2026-10-05', slots,
       duties: [{ date: '2026-10-10', startMin: 420, endMin: 720, sector: 'Academia' }],
-      areas: [{ name: 'Aulas Coletivas', guidelines: 'Conduta\n- Chegar 10 min antes.' }, { name: 'Nação Fit', guidelines: ' ' }], specific: 'Abrir o box às 5h.',
+      groups: [{ name: 'Aulas Coletivas', guidelines: 'Conduta\n- Chegar 10 min antes.' }, { name: 'Musculação (Nação Fit)', guidelines: ' ' }], specific: 'Abrir o box às 5h.',
     });
     expect(text).toContain('*Sua grade na Nação — Rafael Souza*');
     expect(text.indexOf('*Segunda*')).toBeLessThan(text.indexOf('*Quarta*'));
@@ -21,17 +21,32 @@ describe('grade do professor no WhatsApp', () => {
     expect(text).toContain('Total: 3 aula(s) · 2h por semana');
     expect(text).toContain('• sáb 10/10 07:00–12:00 Academia');
     expect(text).toContain('*Atribuições e orientações — Aulas Coletivas*\n*Conduta*\n- Chegar 10 min antes.');
-    expect(text).not.toContain('Nação Fit'); // área sem texto não aparece
+    expect(text).not.toContain('Nação Fit'); // gênero sem texto não aparece
     expect(text).toContain('*Para você, Rafael*\nAbrir o box às 5h.');
   });
 
   it('sem orientações não cria a seção; modelo inicial tem conduta, tarefas e rotina', () => {
-    const text = teacherGradeText({ name: 'Ju', date: '2026-10-05', slots: [], duties: [], areas: [], specific: '' });
+    const text = teacherGradeText({ name: 'Ju', date: '2026-10-05', slots: [], duties: [], groups: [], specific: '' });
     expect(text).toContain('Sem aulas fixas na grade.');
     expect(text).not.toContain('Atribuições');
     for (const t of ['Conduta', 'Tarefas', 'Rotina']) expect(GUIDELINES_TEMPLATE).toContain(t);
-    expect(guidelinesTemplate({ modalities: ['Musculação'] })).toContain('fichas de treino');
-    expect(guidelinesTemplate({ modalities: ['Funcional', 'GAP'] })).toBe(GUIDELINES_TEMPLATE);
+    expect(guidelinesTemplate('musculacao')).toContain('fichas de treino');
+    expect(guidelinesTemplate('coletivas')).toBe(GUIDELINES_TEMPLATE);
+  });
+
+  it('dois gêneros: Musculação × Aulas Coletivas (CrossFit, Futevôlei, Funcional…)', () => {
+    expect(groupsOf(['Musculação'])).toEqual(['musculacao']);
+    expect(groupsOf(['CrossFit', 'Futevôlei', 'Funcional', 'Jiu-Jitsu'])).toEqual(['coletivas']);
+    expect(groupsOf(['Musculação', 'Funcional'], 'Musculação')).toEqual(['musculacao', 'coletivas']);
+    expect(groupsOf(['Musculação', 'Funcional'], 'Funcional')).toEqual(['coletivas', 'musculacao']);
+    expect(groupsOf([])).toEqual([]);
+  });
+
+  it('mensagem já formatada para o WhatsApp vai como está, sem título extra', () => {
+    const msg = '📋 *LEMBRETE OPERACIONAL – AULAS COLETIVAS*\n\n✅ *ABORDAGEM ATIVA*\n- Chegar antes.';
+    const text = teacherGradeText({ name: 'Ju', date: '2026-10-05', slots: [], duties: [], groups: [{ name: 'Aulas Coletivas', guidelines: msg }], specific: '' });
+    expect(text.endsWith(msg)).toBe(true);
+    expect(text).not.toContain('Atribuições e orientações');
   });
 
   it('link do WhatsApp vai direto para o número (DDD) ou abre a escolha de contato', () => {
