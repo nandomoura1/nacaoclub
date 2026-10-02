@@ -26,7 +26,8 @@ export interface NavSection {
 }
 
 export const NAV_HORAS: NavItem[] = [
-  { href: '/hoje', label: 'Hoje', icon: 'hoje', mobile: true },
+  { href: '/hoje', label: 'Hoje', icon: 'hoje', permission: 'schedule.view', mobile: true },
+  { href: '/meu-extrato', label: 'Meu extrato', short: 'Extrato', icon: 'relatorios', permission: 'hours.own', mobile: true },
   { href: '/calendario', label: 'Calendário', icon: 'calendario', permission: 'schedule.view', mobile: true },
   { href: '/pendencias', label: 'Pendências', icon: 'pendencias', permission: 'occurrence.exception', soon: 'E5', mobile: true },
   { href: '/grade', label: 'Grade semanal', icon: 'grade', permission: 'schedule.view' },
@@ -41,7 +42,8 @@ const AI_READY = new Set(['crossfit', 'funcional', 'hyrox', 'futevolei']);
 
 /** Cadastro de Treino + um grupo por modalidade: o DNA (e a IA que nasce dele) é de cada modalidade. */
 export const NAV_TREINOS: NavItem[] = [
-  { href: '/treinos', label: 'Cadastro de Treino', short: 'Treinos', icon: 'treinos', permission: 'workout.edit', mobile: true },
+  { href: '/treinos', label: 'Cadastro de Treino', short: 'Treinos', icon: 'treinos', permission: 'workout.view', mobile: true },
+  { href: '/treinos/personal', label: 'Treinos Personal', short: 'Personal', icon: 'treinos', permission: 'workout.personal' },
   ...PROGRAM_MODALITIES.flatMap((m): NavItem[] => [
     ...(m.benchmarks ? [{ href: `/treinos/${m.slug}/benchmarks`, label: 'Benchmarks', icon: 'benchmarks', permission: 'workout.edit', group: m.name } satisfies NavItem] : []),
     { href: `/treinos/${m.slug}/dna`, label: 'DNA da Programação', icon: 'dna', permission: 'workout.edit', group: m.name },

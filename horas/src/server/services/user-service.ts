@@ -20,6 +20,8 @@ export const userInputSchema = z.object({
   email: z.string().trim().toLowerCase().email('Informe um e-mail válido.'),
   roleKeys: z.array(z.string().min(1)).min(1, 'Escolha ao menos um papel.'),
   areaIds: z.array(uuid).default([]),
+  /** Professor que este usuário é (perfil Professor vê o próprio extrato). */
+  teacherId: uuid.nullable().optional().or(z.literal('').transform(() => null)),
 });
 export type UserInput = z.input<typeof userInputSchema>;
 
@@ -45,6 +47,15 @@ async function resolveRoles(tx: Tx, roleKeys: string[]) {
   return roles;
 }
 
+/** Professor vinculado: existe e não está ligado a outro usuário. */
+async function resolveTeacher(tx: Tx, teacherId: string | null | undefined, userId: string | null) {
+  if (!teacherId) return null;
+  const t = await tx.teacher.findUnique({ where: { id: teacherId }, select: { id: true, name: true, user: { select: { id: true, name: true } } } });
+  if (!t) throw new AppError('Professor não encontrado.');
+  if (t.user && t.user.id !== userId) throw new AppError(`${t.name} já está vinculado ao usuário ${t.user.name}.`);
+  return t.id;
+}
+
 async function resolveAreas(tx: Tx, areaIds: string[]) {
   const areas = await tx.coordinationArea.findMany({
     where: { id: { in: areaIds }, deletedAt: null },
@@ -60,6 +71,7 @@ async function snapshot(tx: Tx, userId: string) {
     include: {
       roles: { include: { role: true } },
       areaScopes: { include: { area: true } },
+      teacher: { select: { name: true } },
     },
   });
   if (!u) return null;
@@ -69,6 +81,7 @@ async function snapshot(tx: Tx, userId: string) {
     active: u.active,
     roles: u.roles.map((r) => r.role.key).sort(),
     areas: u.areaScopes.map((s) => s.area.name).sort(),
+    professor: u.teacher?.name ?? null,
   };
 }
 
@@ -79,6 +92,7 @@ export async function listUsers(principal: Principal | null) {
     include: {
       roles: { include: { role: true } },
       areaScopes: { include: { area: true } },
+      teacher: { select: { id: true, name: true } },
     },
   });
 }
@@ -112,11 +126,13 @@ export async function createUser(
     }
     const roles = await resolveRoles(tx, data.roleKeys);
     const areas = await resolveAreas(tx, data.areaIds);
+    const teacherId = await resolveTeacher(tx, data.teacherId, null);
 
     const user = await tx.user.create({
       data: {
         name: data.name,
         email: data.email,
+        teacherId,
         passwordHash,
         mustChangePassword: true,
         createdById: principal.id,
@@ -164,10 +180,11 @@ export async function updateUser(
 
     const roles = await resolveRoles(tx, data.roleKeys);
     const areas = await resolveAreas(tx, data.areaIds);
+    const teacherId = await resolveTeacher(tx, data.teacherId, userId);
 
     await tx.user.update({
       where: { id: userId },
-      data: { name: data.name, email: data.email, active: data.active },
+      data: { name: data.name, email: data.email, active: data.active, teacherId },
     });
     await tx.userRole.deleteMany({ where: { userId } });
     await tx.userRole.createMany({ data: roles.map((r) => ({ userId, roleId: r.id })) });
@@ -208,6 +225,7 @@ export function describeUserChange(actor: string, before: UserSnapshot, after: U
   if (before.areas.join() !== after.areas.join()) {
     changes.push(`áreas ${before.areas.join(', ') || '—'} → ${after.areas.join(', ') || '—'}`);
   }
+  if ((before.professor ?? null) !== (after.professor ?? null)) changes.push(`professor vinculado ${before.professor ?? '—'} → ${after.professor ?? '—'}`);
   return `${actor} alterou o usuário ${after.name}: ${changes.join('; ') || 'sem mudanças'}`;
 }
 

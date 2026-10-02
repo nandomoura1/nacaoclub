@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { prisma } from '@/server/db';
-import { assertCan } from '@/server/auth/authz';
+import { assertCan, can } from '@/server/auth/authz';
 import type { Principal } from '@/server/auth/principal';
 import { AppError } from '@/server/errors';
 import { addDays, formatClock, formatDateBR, fromUtc, isIsoDate, toUtc, type IsoDate } from '@/domain/dates';
@@ -8,6 +8,7 @@ import { computeLedger, type LedgerOccurrence } from '@/domain/ledger';
 import { periodBounds, periodLabel, periodOf, parsePeriodKey, shiftPeriod, type PeriodRef } from '@/domain/period';
 import { buildHoursReport } from '@/domain/report';
 import { todayIso } from '@/lib/today';
+import { doubleDayRule } from './double-hours';
 import { periodStartDay } from './period-service';
 
 /**
@@ -77,10 +78,15 @@ async function missingPeriods(start: IsoDate, end: IsoDate, startDay: number) {
   return refs.filter((r) => !ok.has(`${r.year}-${r.month}`)).map(periodLabel);
 }
 
-export async function hoursReport(principal: Principal | null, f: ReportFilter) {
-  assertCan(principal, 'payroll.view_hours');
+export async function hoursReport(principal: Principal | null, filter: ReportFilter) {
+  // Perfil Professor: só o próprio extrato (todas as áreas, só as aulas em que ele aparece).
+  const own = !!principal && !can(principal, 'payroll.view_hours') && can(principal, 'hours.own');
+  if (!own) assertCan(principal, 'payroll.view_hours');
+  if (own && !principal!.teacherId) throw new AppError('Seu usuário ainda não está vinculado a um professor. Peça à coordenação para fazer o vínculo em Usuários.');
+  const f: ReportFilter = own ? { ...filter, teacherId: principal!.teacherId, areaId: null } : filter;
+  principal = principal!;
   const startDay = await periodStartDay();
-  const areaScope = principal.areaIds === null ? {} : { areaId: { in: [...principal.areaIds] } };
+  const areaScope = own || principal.areaIds === null ? {} : { areaId: { in: [...principal.areaIds] } };
   if (f.areaId && principal.areaIds !== null && !principal.areaIds.includes(f.areaId)) throw new AppError('Você não tem acesso a essa área.', 403);
 
   const occ = await prisma.classOccurrence.findMany({
@@ -88,6 +94,7 @@ export async function hoursReport(principal: Principal | null, f: ReportFilter) 
       date: { gte: toUtc(f.start), lte: toUtc(f.end) },
       modality: { ...areaScope, ...(f.areaId ? { areaId: f.areaId } : {}) },
       ...(f.modalityId ? { modalityId: f.modalityId } : {}),
+      ...(own ? { assignments: { some: { OR: [{ plannedTeacherId: f.teacherId }, { executingTeacherId: f.teacherId }] } } } : {}),
     },
     include: {
       activityType: { select: { countsHours: true, name: true } },
@@ -100,9 +107,11 @@ export async function hoursReport(principal: Principal | null, f: ReportFilter) 
     orderBy: [{ date: 'asc' }, { startMin: 'asc' }],
   });
 
+  const doubled = await doubleDayRule(prisma, f.start, f.end);
   const ledgerInput: LedgerOccurrence[] = occ.map((o) => ({
     id: o.id,
     date: fromUtc(o.date),
+    doubled: doubled(fromUtc(o.date)),
     modalityId: o.modalityId,
     status: o.status,
     plannedDurationMin: o.plannedDurationMin,
@@ -136,6 +145,7 @@ export async function hoursReport(principal: Principal | null, f: ReportFilter) 
     countsHours: o.activityType.countsHours,
     space: o.space?.name ?? null,
     status: o.status,
+    doubled: doubled(fromUtc(o.date)),
     note: o.cancellationReason?.name ?? o.holiday?.name ?? null,
     people: o.assignments.map((a) => ({
       role: a.role,
@@ -155,7 +165,7 @@ export async function hoursReport(principal: Principal | null, f: ReportFilter) 
     area: f.areaId ? (await prisma.coordinationArea.findUnique({ where: { id: f.areaId }, select: { name: true } }))?.name ?? null : null,
     modality: f.modalityId ? (await prisma.modality.findUnique({ where: { id: f.modalityId }, select: { name: true } }))?.name ?? null : null,
     teacher: f.teacherId ? (await prisma.teacher.findUnique({ where: { id: f.teacherId }, select: { name: true } }))?.name ?? null : null,
-    scope: principal.areaIds === null ? null : 'Somente as áreas que você coordena',
+    scope: own ? 'Seu extrato' : principal.areaIds === null ? null : 'Somente as áreas que você coordena',
   };
 
   return {

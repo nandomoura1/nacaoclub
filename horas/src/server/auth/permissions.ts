@@ -31,6 +31,9 @@ export const PERMISSIONS = {
   'import.run': 'Importar planilhas',
   'workout.edit': 'Lançar treinos da semana e gerar a arte de divulgação',
   'duty.edit': 'Lançar escalas de fim de semana e feriados',
+  'hours.own': 'Ver o próprio extrato de horas (usuário vinculado a um professor)',
+  'workout.view': 'Ver os treinos lançados no Cadastro de Treino',
+  'workout.personal': 'Criar treinos de Personal para as próprias aulas',
 } as const;
 
 export type PermissionKey = keyof typeof PERMISSIONS;
@@ -48,7 +51,8 @@ export const SYSTEM_ROLES: Record<
   ADMIN: {
     name: 'Administrador',
     description: 'Acesso total. Fecha e reabre competências.',
-    permissions: PERMISSION_KEYS,
+    // "Meu extrato" é do perfil Professor; o admin vê o extrato de todos na ficha e nos relatórios.
+    permissions: PERMISSION_KEYS.filter((k) => k !== 'hours.own'),
   },
   COORDENADOR: {
     name: 'Coordenador',
@@ -64,6 +68,8 @@ export const SYSTEM_ROLES: Record<
       'payroll.approve_area',
       'payroll.adjust',
       'workout.edit',
+      'workout.view',
+      'workout.personal',
       'duty.edit',
     ],
   },
@@ -74,8 +80,8 @@ export const SYSTEM_ROLES: Record<
   },
   PROFESSOR: {
     name: 'Professor',
-    description: 'Portal do professor (Fase 2): vê o próprio extrato.',
-    permissions: [],
+    description: 'Vê o próprio extrato de horas e os treinos; cria treinos de Personal para as próprias aulas.',
+    permissions: ['hours.own', 'workout.view', 'workout.personal'],
   },
 };
 

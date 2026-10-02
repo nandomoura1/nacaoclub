@@ -32,6 +32,8 @@ model AppSettings {
   teacherGuidelines String? @map("teacher_guidelines")
   /// Mensagem geral aos professores da Musculação (Nação Fit).
   gymGuidelines     String? @map("gym_guidelines")
+  /// Domingo e feriado valem o dobro a partir desta data (antes dela, nada muda). Vazio = sempre.
+  doubleHoursFrom   DateTime? @map("double_hours_from") @db.Date
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   @@map("app_settings")
@@ -52,7 +54,10 @@ model User {
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")
   createdById        String?   @map("created_by") @db.Uuid
+  /// Professor que este usuário é (perfil Professor: extrato próprio e treinos Personal).
+  teacherId          String?   @unique @map("teacher_id") @db.Uuid
 
+  teacher    Teacher?  @relation(fields: [teacherId], references: [id], onDelete: SetNull)
   sessions   Session[]
   roles      UserRole[]
   areaScopes UserAreaScope[]
@@ -383,6 +388,8 @@ model Teacher {
   covering        Leave[]              @relation("LeaveSubstitute")
   manualEntries   ManualEntry[]
   duties          DutyAssignment[]
+  user            User?
+  personalWorkouts PersonalWorkout[]
 
   @@index([active, name])
   @@map("teachers")
@@ -428,6 +435,7 @@ model ScheduleSlot {
 
   versions ScheduleSlotVersion[]
   leaves   Leave[]
+  personalWorkouts PersonalWorkout[]
 
   @@map("schedule_slots")
 }
@@ -928,4 +936,29 @@ model TrainingProgram {
 
   @@index([modality, createdAt])
   @@map("training_programs")
+}
+
+/// Treino de Personal: o professor monta o treino de UMA aula de Personal dele
+/// (aula da grade + data), para o aluno. Não entra no Cadastro de Treino semanal.
+model PersonalWorkout {
+  id          String   @id @default(uuid()) @db.Uuid
+  teacherId   String   @map("teacher_id") @db.Uuid
+  /// Aula de Personal da grade (vazio = aula avulsa, fora da grade).
+  slotId      String?  @map("slot_id") @db.Uuid
+  date        DateTime @db.Date
+  startMin    Int?     @map("start_min")
+  student     String?
+  title       String
+  goal        String?
+  /// Blocos no mesmo formato do Cadastro de Treino: [{ kind, title, durationMin, format, content, notes }].
+  blocks      Json
+  createdById String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  teacher Teacher       @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+  slot    ScheduleSlot? @relation(fields: [slotId], references: [id], onDelete: SetNull)
+
+  @@index([teacherId, date])
+  @@map("personal_workouts")
 }

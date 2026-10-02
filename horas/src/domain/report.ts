@@ -20,12 +20,12 @@ export interface HoursReport {
 }
 
 const pick = (b: Bucket): ReportRow => ({
-  plannedMin: b.plannedMin, ownMin: b.ownMin, substitutionMin: b.substitutionMin, extraMin: b.extraMin,
+  plannedMin: b.plannedMin, ownMin: b.ownMin, substitutionMin: b.substitutionMin, extraMin: b.extraMin, bonusMin: b.bonusMin,
   absenceMin: b.absenceMin, cancelledMin: b.cancelledMin, pendingMin: b.pendingMin, totalMin: b.totalMin, absences: { ...b.absences },
 });
 
 function addInto(target: ReportRow, b: Bucket) {
-  for (const k of ['plannedMin', 'ownMin', 'substitutionMin', 'extraMin', 'absenceMin', 'cancelledMin', 'pendingMin', 'totalMin'] as const) target[k] += b[k];
+  for (const k of ['plannedMin', 'ownMin', 'substitutionMin', 'extraMin', 'absenceMin', 'cancelledMin', 'pendingMin', 'bonusMin', 'totalMin'] as const) target[k] += b[k];
   for (const [r, m] of Object.entries(b.absences)) target.absences[r as keyof Bucket['absences']] = (target.absences[r as keyof Bucket['absences']] ?? 0) + (m ?? 0);
 }
 

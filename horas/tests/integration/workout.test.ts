@@ -58,8 +58,9 @@ describe.skipIf(!hasDb)('Treinos da semana', () => {
     const fut = await createWeek(coordFut.principal, { modalityId: futevolei.id, date: '2040-11-05' }, META);
     expect((await listWeeks(coordFut.principal)).map((w) => w.id)).toContain(fut);
     expect((await listWeeks(coordFut.principal)).map((w) => w.id)).not.toContain(cf);
-    const prof = await makeUser('PROFESSOR');
-    await expect(listWeeks(prof.principal)).rejects.toThrow(AuthorizationError);
+    const prof = await makeUser('PROFESSOR'); // professor vê os treinos de todas as modalidades, mas não lança
+    expect((await listWeeks(prof.principal)).map((w) => w.id)).toEqual(expect.arrayContaining([cf, fut]));
+    await expect(createWeek(prof.principal, { modalityId: futevolei.id, date: '2040-11-12' }, META)).rejects.toThrow(AuthorizationError);
   });
 
   it('o banco só aceita semana começando na segunda', async () => {

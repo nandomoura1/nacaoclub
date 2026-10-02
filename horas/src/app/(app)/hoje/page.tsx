@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { CalendarClock, CalendarPlus, ShieldCheck, Repeat2 } from 'lucide-react';
 import { Card, PageHeader } from '@/components/ui/card';
@@ -29,6 +30,11 @@ const NEXT = [
 
 export default async function HojePage({ searchParams }: { searchParams: Promise<{ dia?: string }> }) {
   const principal = await requirePrincipal();
+  // Perfil Professor: a casa dele é o próprio extrato (e os treinos).
+  if (!can(principal, 'schedule.view')) {
+    if (can(principal, 'hours.own')) redirect('/meu-extrato');
+    if (can(principal, 'workout.view')) redirect('/treinos');
+  }
   const sp = await searchParams;
   const today = todayIso();
   const tomorrow = sp.dia === 'amanha';

@@ -58,7 +58,8 @@ describe.skipIf(!hasDb)('Escalas de fim de semana e feriados', () => {
     // Reescreve: só a Ana no domingo. As horas antigas saem.
     await saveDuty(admin.principal, { sectorId: academia.id, start: '2034-10-07', end: '2034-10-08', shifts: [{ date: '2034-10-08', startMin: 480, endMin: 840, people: [ana.id] }] }, META);
     report = await rep();
-    expect(report.byTeacher.find((t) => t.teacherId === ana.id)).toMatchObject({ extraMin: 360 });
+    // Domingo vale o dobro: 8h–14h = 6h trabalhadas + 6h de adicional = 12h.
+    expect(report.byTeacher.find((t) => t.teacherId === ana.id)).toMatchObject({ extraMin: 360, bonusMin: 360, totalMin: 720 });
     expect(report.byTeacher.find((t) => t.teacherId === bia.id)).toBeUndefined();
     expect(await prisma.classOccurrence.count({ where: { date: { gte: toUtc('2034-10-07'), lte: toUtc('2034-10-08') }, dutyShiftId: { not: null } } })).toBe(1);
   });

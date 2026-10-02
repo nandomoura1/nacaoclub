@@ -3,6 +3,7 @@ import { prisma } from '@/server/db';
 import { bootstrapStructure } from '@/server/services/bootstrap';
 import { listExtraHours, removeExtraHours, saveExtraHours } from '@/server/services/extra-hours-service';
 import { periodOverview } from '@/server/services/period-service';
+import { hoursReport, parseReportFilter } from '@/server/services/report-service';
 import { AuthorizationError } from '@/server/errors';
 import { META, hasDb, makeUser } from './helpers';
 
@@ -39,4 +40,22 @@ describe.skipIf(!hasDb)('horas extras lançadas na ficha do professor', () => {
     await expect(removeExtraHours(admin.principal, r2.id, META)).rejects.toThrow(/fechada/);
     await expect(saveExtraHours(admin.principal, t.id, { ...base, date: '2036-05-03', start: '08:00', end: '09:00' }, META)).rejects.toThrow(/fechada/);
   });
+
+  it('perfil Professor: vê só o próprio extrato (com o dobro de domingo), nunca o de outro', async () => {
+    const eu = await prisma.teacher.create({ data: { name: `Eu Prof ${Date.now()}` } });
+    const outro = await prisma.teacher.create({ data: { name: `Outro Prof ${Date.now()}` } });
+    const base = { modalityId: musc.id, activityTypeId: aula.id, description: 'Plantão' };
+    await saveExtraHours(admin.principal, eu.id, { ...base, date: '2036-04-06', start: '08:00', end: '14:00' }, META); // domingo
+    await saveExtraHours(admin.principal, outro.id, { ...base, date: '2036-04-07', start: '08:00', end: '10:00' }, META);
+    const prof = await makeUser('PROFESSOR', { name: 'Prof' });
+    const filter = await parseReportFilter({ competencia: '2036-04', professor: outro.id }); // tenta ver o outro
+    await expect(hoursReport(prof.principal, filter)).rejects.toThrow(/não está vinculado/);
+    const linked = { ...prof.principal, teacherId: eu.id };
+    const r = await hoursReport(linked, filter);
+    expect(r.byTeacher.map((t) => t.teacherId)).toEqual([eu.id]);
+    expect(r.byTeacher[0]).toMatchObject({ extraMin: 360, bonusMin: 360, totalMin: 720 }); // 8h–14h no domingo = 12h
+    expect(r.detail.every((o) => o.people.some((p) => p.executingId === eu.id || p.plannedId === eu.id))).toBe(true);
+    expect(r.detail[0]).toMatchObject({ doubled: true });
+  });
 });
+

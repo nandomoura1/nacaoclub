@@ -21,11 +21,14 @@ describe('redação da auditoria', () => {
 });
 
 describe('frase humana da alteração de usuário', () => {
-  const base = { name: 'Maria', email: 'maria@n.dev', active: true, roles: ['COORDENADOR'], areas: ['Nação Fit'] };
+  const base = { name: 'Maria', email: 'maria@n.dev', active: true, roles: ['COORDENADOR'], areas: ['Nação Fit'], professor: null as string | null };
 
   it('lista só o que mudou', () => {
     const txt = describeUserChange('Admin', base, { ...base, active: false, areas: ['CrossFit', 'Nação Fit'] });
     expect(txt).toBe('Admin alterou o usuário Maria: desativado; áreas Nação Fit → CrossFit, Nação Fit');
+  });
+  it('vínculo de professor entra na frase', () => {
+    expect(describeUserChange('Admin', base, { ...base, professor: 'Rafael' })).toBe('Admin alterou o usuário Maria: professor vinculado — → Rafael');
   });
   it('diz quando nada mudou', () => {
     expect(describeUserChange('Admin', base, base)).toMatch(/sem mudanças$/);

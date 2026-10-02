@@ -20,15 +20,18 @@ export interface UserRow {
   lastLoginAt: string | null;
   roleKeys: string[];
   areaIds: string[];
+  teacherId: string | null;
+  teacherName: string | null;
   isSelf: boolean;
 }
 
 interface RoleOption { key: string; name: string; description: string }
 interface AreaOption { id: string; name: string; color: string }
+interface TeacherOption { id: string; name: string; email: string | null }
 
 type Editing = { mode: 'create' } | { mode: 'edit'; user: UserRow } | null;
 
-export function UsersClient({ users, roles, areas }: { users: UserRow[]; roles: RoleOption[]; areas: AreaOption[] }) {
+export function UsersClient({ users, roles, areas, teachers }: { users: UserRow[]; roles: RoleOption[]; areas: AreaOption[]; teachers: TeacherOption[] }) {
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<Editing>(null);
   const [secret, setSecret] = useState<{ name: string; password: string } | null>(null);
@@ -82,6 +85,8 @@ export function UsersClient({ users, roles, areas }: { users: UserRow[]; roles: 
                   </Badge>
                 ) : null;
               })}
+              {u.teacherName && <Badge tone="cyan" title="Professor vinculado: vê o próprio extrato">professor: {u.teacherName}</Badge>}
+              {!u.teacherName && u.roleKeys.includes('PROFESSOR') && <Badge tone="amber" title="Sem professor vinculado: não vê extrato">sem vínculo</Badge>}
             </div>
             <div className="flex items-center gap-1 text-xs text-tinta-fraca sm:w-40 sm:justify-end">
               {u.lastLoginAt ? `último acesso ${formatDateTime(new Date(u.lastLoginAt))}` : 'nunca entrou'}
@@ -100,6 +105,8 @@ export function UsersClient({ users, roles, areas }: { users: UserRow[]; roles: 
           editing={editing}
           roles={roles}
           areas={areas}
+          teachers={teachers}
+          linked={new Map(users.filter((x) => x.teacherId && (editing.mode !== 'edit' || x.id !== editing.user.id)).map((x) => [x.teacherId!, x.name]))}
           onClose={() => setEditing(null)}
           onSecret={(s) => setSecret(s)}
         />
@@ -142,12 +149,16 @@ function UserSheet({
   editing,
   roles,
   areas,
+  teachers,
+  linked,
   onClose,
   onSecret,
 }: {
   editing: NonNullable<Editing>;
   roles: RoleOption[];
   areas: AreaOption[];
+  teachers: TeacherOption[];
+  linked: Map<string, string>;
   onClose: () => void;
   onSecret: (s: { name: string; password: string }) => void;
 }) {
@@ -158,7 +169,10 @@ function UserSheet({
     roleKeys: initial?.roleKeys ?? ['COORDENADOR'],
     areaIds: initial?.areaIds ?? [],
     active: initial?.active ?? true,
+    teacherId: initial?.teacherId ?? null,
   });
+  // Sugestão: professor com o mesmo e-mail do usuário.
+  const byEmail = teachers.find((t) => t.email && form.email && t.email.toLowerCase() === form.email.trim().toLowerCase() && !linked.has(t.id));
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -263,6 +277,22 @@ function UserSheet({
               <p className="mt-2 text-xs text-atencao">Coordenador sem área não enxerga nenhuma aula.</p>
             )}
           </fieldset>
+
+          <div>
+            <Label htmlFor="u-teacher">Professor vinculado {form.roleKeys.includes('PROFESSOR') ? '' : '(opcional)'}</Label>
+            <select id="u-teacher" className="w-full rounded-lg border border-borda bg-white px-3 py-2 text-sm" value={form.teacherId ?? ''}
+              onChange={(e) => setForm({ ...form, teacherId: e.target.value || null })}>
+              <option value="">— nenhum —</option>
+              {teachers.map((t) => <option key={t.id} value={t.id} disabled={linked.has(t.id)}>{t.name}{linked.has(t.id) ? ` (já é ${linked.get(t.id)})` : ''}</option>)}
+            </select>
+            <p className="mt-1 text-xs text-tinta-suave">Com o vínculo, o perfil Professor vê o próprio extrato de horas e cria treinos de Personal para as aulas dele.</p>
+            {!form.teacherId && byEmail && (
+              <button type="button" className="mt-1 text-xs font-semibold text-nacao hover:underline" onClick={() => setForm({ ...form, teacherId: byEmail.id })}>
+                Vincular a {byEmail.name} (mesmo e-mail)
+              </button>
+            )}
+            {form.roleKeys.includes('PROFESSOR') && !form.teacherId && <p className="mt-1 text-xs text-atencao">Sem vínculo, o professor entra mas não vê extrato.</p>}
+          </div>
 
           {editing.mode === 'edit' && (
             <label className="flex items-center gap-3 text-sm font-semibold">

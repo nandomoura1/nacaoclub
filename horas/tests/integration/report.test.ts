@@ -74,8 +74,10 @@ describe.skipIf(!hasDb)('E7 · relatórios de horas', () => {
     expect(new Set(r.byModality.map((m) => m.modality))).toEqual(new Set(['Futevôlei']));
     expect(r.labels.scope).toMatch(/áreas que você coordena/);
     await expect(hoursReport(coord.principal, await parseReportFilter({ competencia: '2033-06', area: crossfit.areaId }))).rejects.toThrow(AppError);
-    const prof = await makeUser('PROFESSOR');
-    await expect(hoursReport(prof.principal, await parseReportFilter({}))).rejects.toThrow(AuthorizationError);
+    const prof = await makeUser('PROFESSOR'); // sem vínculo com professor: não vê nada
+    await expect(hoursReport(prof.principal, await parseReportFilter({}))).rejects.toThrow(/não está vinculado/);
+    const consulta = await makeUser('COORDENADOR', { areaIds: [] });
+    expect((await hoursReport(consulta.principal, await parseReportFilter({ competencia: '2033-06' }))).byTeacher).toEqual([]);
   });
 
   it('Excel: quatro abas e total em horas decimais', async () => {
@@ -87,6 +89,7 @@ describe.skipIf(!hasDb)('E7 · relatórios de horas', () => {
     const header = 5; // título + 2 linhas de informação + linha em branco
     expect(ws.getCell(header, 1).value).toBe('Professor');
     expect(ws.getCell(header + 1, 1).value).toBe('Ana Relatório');
-    expect(ws.getCell(header + 1, 10).value).toBeCloseTo(r.byTeacher[0]!.totalMin / 60, 2);
+    expect(ws.getCell(header, 11).value).toBe('TOTAL (h)'); // depois do adicional de domingo/feriado
+    expect(ws.getCell(header + 1, 11).value).toBeCloseTo(r.byTeacher[0]!.totalMin / 60, 2);
   });
 });

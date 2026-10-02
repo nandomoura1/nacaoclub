@@ -10,7 +10,7 @@ import type { PermissionKey } from '@/server/auth/permissions';
 function principal(permissions: PermissionKey[], areaIds: string[] | null = []): Principal {
   return {
     id: 'u1', name: 'Teste', email: 't@t.dev', roleKeys: [],
-    permissions: new Set(permissions), areaIds, mustChangePassword: false,
+    permissions: new Set(permissions), areaIds, mustChangePassword: false, teacherId: null,
   };
 }
 
@@ -43,8 +43,11 @@ describe('token de sessão', () => {
 });
 
 describe('matriz de papéis', () => {
-  it('ADMIN tem todas as permissões', () => {
-    expect(new Set(SYSTEM_ROLES.ADMIN.permissions)).toEqual(new Set(PERMISSION_KEYS));
+  it('ADMIN tem todas as permissões, menos o "Meu extrato" (que é do perfil Professor)', () => {
+    expect(new Set(SYSTEM_ROLES.ADMIN.permissions)).toEqual(new Set(PERMISSION_KEYS.filter((k) => k !== 'hours.own')));
+  });
+  it('PROFESSOR: só o próprio extrato e os treinos (ver + Personal)', () => {
+    expect(new Set(SYSTEM_ROLES.PROFESSOR.permissions)).toEqual(new Set(['hours.own', 'workout.view', 'workout.personal']));
   });
   it('COORDENADOR opera a escala, mas não administra, não fecha e não vê dinheiro', () => {
     const p = SYSTEM_ROLES.COORDENADOR.permissions;

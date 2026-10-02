@@ -10,6 +10,7 @@ const HOURS: { key: keyof ReportRow; label: string }[] = [
   { key: 'ownMin', label: 'Dadas (h)' },
   { key: 'substitutionMin', label: 'Substituições (h)' },
   { key: 'extraMin', label: 'Extras (h)' },
+  { key: 'bonusMin', label: 'Adicional dom./feriado (h)' },
   { key: 'absenceMin', label: 'Ausências (h)' },
   { key: 'cancelledMin', label: 'Canceladas (h)' },
   { key: 'pendingMin', label: 'Aguardando (h)' },

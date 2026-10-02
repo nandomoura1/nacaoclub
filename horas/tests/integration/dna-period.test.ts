@@ -6,7 +6,7 @@ import { getDnaReport } from '@/server/programming/dna-report';
 import { systemPrompt } from '@/server/ai/workout-generator';
 import { META, hasDb, makeUser } from './helpers';
 
-/** Datas de 2037 (fora do histórico importado), próprias deste arquivo. */
+/** Datas de 2037/2099 (fora do histórico importado), próprias deste arquivo. */
 describe.skipIf(!hasDb)('DNA por período, aprendendo com o Cadastro de Treino', () => {
   let admin: Awaited<ReturnType<typeof makeUser>>;
   beforeAll(async () => {
@@ -19,10 +19,10 @@ describe.skipIf(!hasDb)('DNA por período, aprendendo com o Cadastro de Treino',
   it('CrossFit: aula lançada entra no DNA do período, na base completa e nos exemplos da IA', async () => {
     const cf = await prisma.modality.findUniqueOrThrow({ where: { name: 'CrossFit' } });
     await setDayFromAi(admin.principal, {
-      modalityId: cf.id, date: '2037-03-04', title: 'Teste período', replace: true,
-      blocks: [b('AQUECIMENTO', 12, null, null, '400m run'), b('WOD', 15, 'Fila 2037', 'AMRAP 15', '10 thruster 29/43kg\n15 pull-up\n200m run')],
+      modalityId: cf.id, date: '2099-03-04', title: 'Teste período', replace: true,
+      blocks: [b('AQUECIMENTO', 12, null, null, '400m run'), b('WOD', 15, 'Fila 2099', 'AMRAP 15', '10 thruster 29/43kg\n15 pull-up\n200m run')],
     }, META);
-    const r = await getDnaReport('crossfit', { from: '2037-03-01', to: '2037-03-31' });
+    const r = await getDnaReport('crossfit', { from: '2099-03-01', to: '2099-03-31' });
     expect(r).toMatchObject({ empty: false, counts: { history: 0, launched: 1 } });
     if (r.empty || r.technical) throw new Error('esperado DNA de WOD');
     expect(r.dna.period.sessions).toBe(1);
@@ -31,9 +31,9 @@ describe.skipIf(!hasDb)('DNA por período, aprendendo com o Cadastro de Treino',
     const all = await getDnaReport('crossfit');
     expect(all.counts.history).toBeGreaterThan(300); // o histórico continua
     expect(all.counts.launched).toBeGreaterThanOrEqual(1);
-    expect(await systemPrompt('crossfit')).toContain('Fila 2037'); // a IA vê a aula lançada como exemplo recente
+    expect(await systemPrompt('crossfit')).toContain('Fila 2099'); // a IA vê a aula lançada como exemplo recente (a mais nova da base)
 
-    expect(await getDnaReport('crossfit', { from: '2037-06-01', to: '2037-06-30' })).toMatchObject({ empty: true, counts: { history: 0, launched: 0 } });
+    expect(await getDnaReport('crossfit', { from: '2099-06-01', to: '2099-06-30' })).toMatchObject({ empty: true, counts: { history: 0, launched: 0 } });
   });
 
   it('Futevôlei: no período, só as aulas lançadas (os planos da metodologia não têm data)', async () => {

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { prisma, type Tx } from '@/server/db';
 import { audit } from '@/server/audit';
-import { assertAreaAccess, assertCan } from '@/server/auth/authz';
+import { assertAreaAccess, assertCan, can } from '@/server/auth/authz';
 import type { Principal } from '@/server/auth/principal';
 import type { RequestMeta } from '@/server/auth/session';
 import { AppError, NotFoundError } from '@/server/errors';
@@ -80,17 +80,22 @@ async function loadWeek(db: Tx, id: string) {
 
 export type WorkoutWeekView = ReturnType<typeof toData>;
 
+/** Quem só visualiza (perfil Professor) vê os treinos de todas as modalidades, sem editar. */
+const viewOnly = (principal: Principal | null) => !!principal && !can(principal, 'workout.edit') && can(principal, 'workout.view');
+
 export async function getWeek(principal: Principal | null, id: string): Promise<WorkoutWeekView> {
-  assertCan(principal, 'workout.edit');
+  if (!viewOnly(principal)) assertCan(principal, 'workout.edit');
   const w = await loadWeek(prisma, id);
-  assertAreaAccess(principal, w.modality.areaId);
+  if (!viewOnly(principal)) assertAreaAccess(principal!, w.modality.areaId);
   return toData(w);
 }
 
 export async function listWeeks(principal: Principal | null) {
-  assertCan(principal, 'workout.edit');
+  const readOnly = viewOnly(principal);
+  if (!readOnly) assertCan(principal, 'workout.edit');
+  principal = principal!;
   const rows = await prisma.workoutWeek.findMany({
-    where: principal.areaIds === null ? {} : { modality: { areaId: { in: [...principal.areaIds] } } },
+    where: readOnly || principal.areaIds === null ? {} : { modality: { areaId: { in: [...principal.areaIds] } } },
     include: { modality: { select: { name: true, color: true } }, days: { select: { _count: { select: { blocks: true } } } } },
     orderBy: [{ weekStart: 'desc' }, { modality: { name: 'asc' } }],
     take: 200,

@@ -4,6 +4,11 @@
  *
  * Invariante (testado): para cada professor,
  *   previstas = próprias + ausências + canceladas + aguardando
+ *
+ * Domingo e feriado valem o dobro para quem trabalhou (professor ou
+ * estagiário): o tempo trabalhado entra de novo como "adicional" (bonusMin),
+ * e o total a pagar soma os dois. Aula cancelada que paga mesmo assim não tem
+ * adicional — a bonificação é de quem trabalhou.
  */
 export type AssignmentStatus = 'PREVISTA' | 'REALIZADA' | 'SUBSTITUIDA' | 'CANCELADA' | 'AUSENTE_PENDENTE';
 export type OccurrenceStatus = 'PREVISTA' | 'REALIZADA' | 'CANCELADA' | 'AGUARDANDO_DECISAO_FERIADO';
@@ -19,6 +24,8 @@ export interface LedgerOccurrence {
   countsHours: boolean;
   /** O motivo do cancelamento paga o professor mesmo assim? */
   cancellationCountsHours: boolean;
+  /** Domingo ou feriado (com a regra em vigor): o tempo trabalhado vale o dobro. */
+  doubled?: boolean;
   assignments: {
     plannedTeacherId: string | null;
     executingTeacherId: string | null;
@@ -36,6 +43,8 @@ export interface Bucket {
   absenceMin: number;
   cancelledMin: number;
   pendingMin: number;
+  /** Adicional de domingo/feriado: o tempo trabalhado nesses dias, de novo (vale o dobro). */
+  bonusMin: number;
   totalMin: number;
   absences: Partial<Record<AbsenceReason, number>>;
 }
@@ -47,10 +56,10 @@ export interface TeacherHours extends Bucket {
 
 const emptyBucket = (): Bucket => ({
   plannedMin: 0, ownMin: 0, substitutionMin: 0, extraMin: 0,
-  absenceMin: 0, cancelledMin: 0, pendingMin: 0, totalMin: 0, absences: {},
+  absenceMin: 0, cancelledMin: 0, pendingMin: 0, bonusMin: 0, totalMin: 0, absences: {},
 });
 
-type Field = 'plannedMin' | 'ownMin' | 'substitutionMin' | 'extraMin' | 'absenceMin' | 'cancelledMin' | 'pendingMin';
+type Field = 'plannedMin' | 'ownMin' | 'substitutionMin' | 'extraMin' | 'absenceMin' | 'cancelledMin' | 'pendingMin' | 'bonusMin';
 
 export function computeLedger(occurrences: LedgerOccurrence[]): TeacherHours[] {
   const map = new Map<string, TeacherHours>();
@@ -60,7 +69,7 @@ export function computeLedger(occurrences: LedgerOccurrence[]): TeacherHours[] {
     const m = (t.byModality[modalityId] ??= emptyBucket());
     for (const b of [t, m] as Bucket[]) {
       b[field] += min;
-      if (field === 'ownMin' || field === 'substitutionMin' || field === 'extraMin') b.totalMin += min;
+      if (field === 'ownMin' || field === 'substitutionMin' || field === 'extraMin' || field === 'bonusMin') b.totalMin += min;
       if (reason) b.absences[reason] = (b.absences[reason] ?? 0) + min;
     }
     map.set(teacherId, t);
@@ -68,6 +77,11 @@ export function computeLedger(occurrences: LedgerOccurrence[]): TeacherHours[] {
 
   for (const o of occurrences) {
     if (!o.countsHours) continue;
+    /** Tempo efetivamente trabalhado: conta, e no domingo/feriado conta de novo como adicional. */
+    const worked = (teacherId: string | null, field: 'ownMin' | 'substitutionMin' | 'extraMin', min: number) => {
+      add(teacherId, o.modalityId, field, min);
+      if (o.doubled) add(teacherId, o.modalityId, 'bonusMin', min);
+    };
     for (const a of o.assignments) {
       const planned = a.plannedTeacherId;
       if (planned) add(planned, o.modalityId, 'plannedMin', o.plannedDurationMin);
@@ -75,7 +89,7 @@ export function computeLedger(occurrences: LedgerOccurrence[]): TeacherHours[] {
       if (!planned) {
         // Aula avulsa: não havia previsão — tudo é extra de quem deu.
         if (a.executingTeacherId && (a.status === 'PREVISTA' || a.status === 'REALIZADA') && o.status !== 'CANCELADA') {
-          add(a.executingTeacherId, o.modalityId, 'extraMin', a.minutes);
+          worked(a.executingTeacherId, 'extraMin', a.minutes);
         }
         continue;
       }
@@ -93,11 +107,11 @@ export function computeLedger(occurrences: LedgerOccurrence[]): TeacherHours[] {
         case 'PREVISTA':
         case 'REALIZADA':
           // Gestão por exceção: sem exceção registrada, a aula conta como dada.
-          add(planned, o.modalityId, 'ownMin', a.minutes);
+          worked(planned, 'ownMin', a.minutes);
           break;
         case 'SUBSTITUIDA':
           add(planned, o.modalityId, 'absenceMin', o.plannedDurationMin, a.absenceReason ?? 'OUTRO');
-          add(a.executingTeacherId, o.modalityId, 'substitutionMin', a.minutes);
+          worked(a.executingTeacherId, 'substitutionMin', a.minutes);
           break;
         case 'AUSENTE_PENDENTE':
           add(planned, o.modalityId, 'absenceMin', o.plannedDurationMin, a.absenceReason ?? 'OUTRO');
@@ -111,7 +125,16 @@ export function computeLedger(occurrences: LedgerOccurrence[]): TeacherHours[] {
 export function sumBuckets(rows: Bucket[]): Bucket {
   const t = emptyBucket();
   for (const r of rows) {
-    for (const k of ['plannedMin', 'ownMin', 'substitutionMin', 'extraMin', 'absenceMin', 'cancelledMin', 'pendingMin', 'totalMin'] as const) t[k] += r[k];
+    for (const k of ['plannedMin', 'ownMin', 'substitutionMin', 'extraMin', 'absenceMin', 'cancelledMin', 'pendingMin', 'bonusMin', 'totalMin'] as const) t[k] += r[k];
   }
   return t;
+}
+
+/**
+ * Dia que vale o dobro: domingo ou feriado cadastrado, a partir da data em
+ * que a regra passou a valer (`from`; competências anteriores não mudam).
+ */
+export function isDoubleDay(date: string, holidays: ReadonlySet<string>, from: string | null): boolean {
+  if (from && date < from) return false;
+  return new Date(`${date}T12:00:00Z`).getUTCDay() === 0 || holidays.has(date);
 }

@@ -9,6 +9,7 @@ import { formatDateBR, fromUtc, isIsoDate, toUtc, type IsoDate } from '@/domain/
 import { expandGrade, type GradeVersion, type HolidayPolicy } from '@/domain/calendar';
 import { computeLedger, type LedgerOccurrence } from '@/domain/ledger';
 import { periodBounds, periodLabel, periodOf, type PeriodRef } from '@/domain/period';
+import { doubleDayRule } from './double-hours';
 import { applyLeavesToPeriod } from './leave-service';
 
 /**
@@ -318,9 +319,11 @@ export async function periodOverview(principal: Principal | null, ref: PeriodRef
       })
     : [];
 
+  const doubled = await doubleDayRule(prisma, bounds.start, bounds.end);
   const ledgerInput: LedgerOccurrence[] = occ.map((o) => ({
     id: o.id,
     date: fromUtc(o.date),
+    doubled: doubled(fromUtc(o.date)),
     modalityId: o.modalityId,
     status: o.status,
     plannedDurationMin: o.plannedDurationMin,

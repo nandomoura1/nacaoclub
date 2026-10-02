@@ -15,8 +15,9 @@ export const metadata: Metadata = { title: 'Cadastro de Treino' };
 
 export default async function TreinosPage() {
   const principal = await requirePrincipal();
-  if (!can(principal, 'workout.edit')) redirect('/hoje');
-  const [weeks, modalities] = await Promise.all([listWeeks(principal), workoutModalities(principal)]);
+  const canEdit = can(principal, 'workout.edit');
+  if (!canEdit && !can(principal, 'workout.view')) redirect('/hoje');
+  const [weeks, modalities] = await Promise.all([listWeeks(principal), canEdit ? workoutModalities(principal) : Promise.resolve([])]);
   const today = todayIso();
   const nextMonday = mondayOf(today) === today ? today : (() => { const d = new Date(`${mondayOf(today)}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + 7); return d.toISOString().slice(0, 10); })();
 
@@ -24,9 +25,16 @@ export default async function TreinosPage() {
     <>
       <PageHeader
         title="Cadastro de Treino"
-        description="Lance os treinos da semana e gere o plano de aula (PDF professores), o resumo dos alunos (PDF), a arte em JPG no padrão Nação e o texto para os grupos de WhatsApp. Módulo à parte: não mexe na grade nem nas horas."
+        description={canEdit
+          ? 'Lance os treinos da semana e gere o plano de aula (PDF professores), o resumo dos alunos (PDF), a arte em JPG no padrão Nação e o texto para os grupos de WhatsApp. Módulo à parte: não mexe na grade nem nas horas.'
+          : 'Os treinos da semana de cada modalidade, para você preparar a aula: abra a semana para ver os treinos, o PDF do professor e a arte.'}
       />
-      <NewWeekForm modalities={modalities} defaultDate={nextMonday} />
+      {canEdit && <NewWeekForm modalities={modalities} defaultDate={nextMonday} />}
+      {can(principal, 'workout.personal') && (
+        <Link href="/treinos/personal" className="mt-4 flex items-center gap-2 rounded-xl border border-nacao/30 bg-nacao/5 p-4 text-sm font-semibold text-nacao hover:border-nacao">
+          Treinos Personal: monte o treino de uma aula de Personal sua →
+        </Link>
+      )}
       <Card className="mt-4 divide-y divide-borda">
         {weeks.length === 0 && <p className="p-6 text-sm text-tinta-suave">Nenhum treino lançado ainda. Comece criando a semana acima.</p>}
         {weeks.map((w) => (
