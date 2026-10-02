@@ -17,4 +17,8 @@ Regras da segmentação:
   semana. Datas com erro de digitação (ex.: "Sábado 17/10" entre 12/08 e 19/08) viram a
   próxima data com aquele dia da semana.
 
+Conferência das datas: os 48 dias com data deduzida (41 sem data no documento e 7 com
+data que não batia com o dia da semana) foram conferidos pela Nação em 02/10/2026 —
+todas as datas usadas estão corretas.
+
 Depois de editar os arquivos, rode `node scripts/embed-history.mjs`.
