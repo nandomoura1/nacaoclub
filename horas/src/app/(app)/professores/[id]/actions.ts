@@ -6,6 +6,7 @@ import { runAction, type ActionResult } from '@/server/action-result';
 import { removeTeacherFromSlot } from '@/server/services/schedule-service';
 import { cancelLeave, previewLeave, saveLeave } from '@/server/services/leave-service';
 import { saveGuidelines } from '@/server/services/teacher-share-service';
+import { removeExtraHours, saveExtraHours } from '@/server/services/extra-hours-service';
 
 const refresh = () => { revalidatePath('/professores', 'layout'); revalidatePath('/grade'); revalidatePath('/calendario'); };
 
@@ -43,4 +44,20 @@ export async function saveGuidelinesAction(teacherId: string, values: { groups: 
     revalidatePath('/professores', 'layout');
     return undefined;
   }, 'Orientações salvas.');
+}
+
+export async function saveExtraHoursAction(teacherId: string, values: Record<string, unknown>): Promise<ActionResult<{ id: string; minutes: number }>> {
+  return runAction(async () => {
+    const r = await saveExtraHours(await getPrincipal(), teacherId, values, await requestMeta());
+    refresh(); revalidatePath('/relatorios');
+    return r;
+  });
+}
+
+export async function removeExtraHoursAction(id: string): Promise<ActionResult> {
+  return runAction(async () => {
+    await removeExtraHours(await getPrincipal(), id, await requestMeta());
+    refresh(); revalidatePath('/relatorios');
+    return undefined;
+  }, 'Hora extra removida.');
 }

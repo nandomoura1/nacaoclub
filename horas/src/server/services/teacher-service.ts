@@ -5,7 +5,8 @@ import { assertCan, can } from '@/server/auth/authz';
 import type { Principal } from '@/server/auth/principal';
 import type { RequestMeta } from '@/server/auth/session';
 import { AppError, NotFoundError } from '@/server/errors';
-import { fromUtc, isIsoDate, toUtc } from '@/domain/dates';
+import { addDays, fromUtc, isIsoDate, toUtc, type IsoDate } from '@/domain/dates';
+import { removeTeacherFromGrade } from './schedule-service';
 import { normalizeName } from '@/domain/names';
 
 const optionalText = (max: number) =>
@@ -156,4 +157,17 @@ export async function saveTeacher(principal: Principal | null, id: string | null
     });
     return t.id;
   });
+}
+
+/**
+ * Salvar pelo cadastro: se o professor foi desativado, ele sai da grade a
+ * partir do dia seguinte ao desligamento (ou de hoje, sem data de desligamento).
+ */
+export async function saveTeacherFromForm(principal: Principal | null, id: string | null, input: unknown, meta: RequestMeta, today: IsoDate) {
+  const wasActive = id ? (await prisma.teacher.findUnique({ where: { id }, select: { active: true } }))?.active ?? false : false;
+  const savedId = await saveTeacher(principal, id, input, meta);
+  const t = await prisma.teacher.findUniqueOrThrow({ where: { id: savedId }, select: { active: true, terminationDate: true } });
+  if (!wasActive || t.active) return { id: savedId, grade: null };
+  const from = t.terminationDate ? addDays(fromUtc(t.terminationDate), 1) : today;
+  return { id: savedId, grade: { from, ...(await removeTeacherFromGrade(principal, savedId, from, meta, today)) } };
 }

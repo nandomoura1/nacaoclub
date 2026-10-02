@@ -16,7 +16,8 @@ import { formatMinutes } from '@/lib/format';
 import type { GradeItem } from '@/server/services/schedule-service';
 import type { LeaveItem } from '@/server/services/leave-service';
 import { RemoveSlotSheet, SlotCard, SlotSheet, type Editing, type SheetProps } from '../../grade/GradeClient';
-import { cancelLeaveAction, previewLeaveAction, saveLeaveAction } from './actions';
+import { cancelLeaveAction, previewLeaveAction, removeExtraHoursAction, saveExtraHoursAction, saveLeaveAction } from './actions';
+import type { ExtraHoursItem } from '@/server/services/extra-hours-service';
 
 /* ───────────────────────── Aulas fixas ───────────────────────── */
 
@@ -319,3 +320,85 @@ export function AusenciasTab({ teacherId, leaves, substitutes, canManage, today 
   );
 }
 
+
+/* ───────────────────────── Horas extras ───────────────────────── */
+
+/** Horas extras do professor na competência: lançar e remover (competência aberta). */
+export function ExtraHoursCard({ teacherId, items, canEdit, defaultDate, modalities, activityTypes }: {
+  teacherId: string; items: ExtraHoursItem[]; canEdit: boolean; defaultDate: string;
+  modalities: { id: string; name: string }[]; activityTypes: { id: string; name: string; kind: string }[];
+}) {
+  const router = useRouter();
+  const aula = activityTypes.find((t) => t.kind === 'AULA') ?? activityTypes[0];
+  const [v, setV] = useState({ date: defaultDate, start: '', end: '', modalityId: modalities[0]?.id ?? '', activityTypeId: aula?.id ?? '', description: '' });
+  const [open, setOpen] = useState(false);
+  const [msg, setMsg] = useState<{ error?: string; ok?: string }>({});
+  const [pending, start] = useTransition();
+  const total = items.reduce((s, i) => s + i.minutes, 0);
+  const set = <K extends keyof typeof v>(k: K, val: (typeof v)[K]) => setV((p) => ({ ...p, [k]: val }));
+
+  return (
+    <Card className="mb-4 p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="font-extrabold text-navy">Horas extras</h3>
+        <span className="text-sm text-tinta-suave">{items.length ? `${items.length} lançamento(s) · ${formatMinutes(total)} nesta competência` : 'nenhuma nesta competência'}</span>
+        <span className="flex-1" />
+        {canEdit && !open && <Button size="sm" onClick={() => { setMsg({}); setOpen(true); }}><Plus /> Lançar hora extra</Button>}
+      </div>
+      {open && (
+        <form className="mt-3 grid gap-3 rounded-lg bg-fundo p-3 sm:grid-cols-2 lg:grid-cols-6" onSubmit={(e) => {
+          e.preventDefault();
+          setMsg({});
+          start(async () => {
+            const r = await saveExtraHoursAction(teacherId, v);
+            if (!r.ok) return setMsg({ error: r.error });
+            setMsg({ ok: `Hora extra lançada: ${formatMinutes(r.data.minutes)}. Já entra no quadro de horas.` });
+            setV((p) => ({ ...p, start: '', end: '', description: '' }));
+            setOpen(false);
+            router.refresh();
+          });
+        }}>
+          <div><Label htmlFor="ex-date">Data</Label><Input id="ex-date" type="date" required value={v.date} onChange={(e) => set('date', e.target.value)} /></div>
+          <div className="grid grid-cols-2 gap-2">
+            <div><Label htmlFor="ex-start">Início</Label><Input id="ex-start" type="time" required value={v.start} onChange={(e) => set('start', e.target.value)} /></div>
+            <div><Label htmlFor="ex-end">Fim</Label><Input id="ex-end" type="time" required value={v.end} onChange={(e) => set('end', e.target.value)} /></div>
+          </div>
+          <div><Label htmlFor="ex-mod">Modalidade</Label>
+            <Select id="ex-mod" value={v.modalityId} onChange={(e) => set('modalityId', e.target.value)}>{modalities.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</Select>
+          </div>
+          <div><Label htmlFor="ex-type">Tipo</Label>
+            <Select id="ex-type" value={v.activityTypeId} onChange={(e) => set('activityTypeId', e.target.value)}>{activityTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</Select>
+          </div>
+          <div className="sm:col-span-2"><Label htmlFor="ex-desc">Descrição</Label><Input id="ex-desc" required maxLength={120} placeholder="Ex.: aulão de sábado, cobriu turno extra, evento" value={v.description} onChange={(e) => set('description', e.target.value)} /></div>
+          <div className="flex gap-2 sm:col-span-2 lg:col-span-6">
+            <Button type="submit" disabled={pending}>{pending ? 'Lançando…' : 'Lançar'}</Button>
+            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>
+          </div>
+        </form>
+      )}
+      <FormMessage error={msg.error} success={msg.ok} />
+      {items.length > 0 && (
+        <ul className="mt-3 divide-y divide-borda text-sm">
+          {items.map((i) => (
+            <li key={i.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
+              <span className="tabular w-24 font-semibold text-navy">{formatDateBR(i.date)}</span>
+              <span className="tabular text-tinta">{i.start}–{i.end} · {formatMinutes(i.minutes)}</span>
+              <span className="min-w-0 flex-1 text-tinta-suave">{i.modality} · {i.type} · {i.description}</span>
+              {canEdit && !i.closed && (
+                <Button variant="ghost" size="sm" disabled={pending} onClick={() => {
+                  if (!confirm(`Remover a hora extra de ${formatDateBR(i.date)} ${i.start}–${i.end}?`)) return;
+                  start(async () => {
+                    const r = await removeExtraHoursAction(i.id);
+                    setMsg(r.ok ? { ok: 'Hora extra removida.' } : { error: r.error });
+                    router.refresh();
+                  });
+                }}><Trash2 /> Remover</Button>
+              )}
+              {i.closed && <Badge tone="neutral">competência fechada</Badge>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}

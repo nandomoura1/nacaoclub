@@ -148,12 +148,16 @@ function TeacherSheet({ row, modalities, areas, positions, contractTypes, onClos
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    const deactivating = row?.active && !v.active;
+    if (deactivating && !confirm(`Desativar ${row!.name}?\n\nEle sai de todas as aulas da grade a partir de ${v.terminationDate ? 'o dia seguinte ao desligamento' : 'hoje'}. Aula que era só dele fica sem professor, para você escalar outro. O histórico de horas não muda.`)) return;
     start(async () => {
       const r = await saveTeacherAction(row?.id ?? null, {
         ...v,
         aliases: v.aliases.split(',').map((a) => a.trim()).filter(Boolean),
       });
       if (!r.ok) return setError(r.error);
+      const g = r.data.grade;
+      if (g) alert(`${row!.name} desativado: saiu de ${g.removed} aula(s) da grade a partir de ${g.from.split('-').reverse().join('/')}.${g.kept.length ? `\n\nNão alteradas:\n- ${g.kept.join('\n- ')}` : ''}`);
       onClose();
     });
   };
@@ -269,6 +273,9 @@ function TeacherSheet({ row, modalities, areas, positions, contractTypes, onClos
         <input type="checkbox" className="accent-[#0169E9]" checked={v.active} onChange={(e) => set('active', e.target.checked)} />
         Ativo
       </label>
+      {row?.active && !v.active && (
+        <p className="rounded-lg bg-atencao/10 p-2 text-xs text-tinta">Ao salvar, o professor sai de todas as aulas da grade a partir {v.terminationDate ? 'do dia seguinte ao desligamento' : 'de hoje'}. Aula que era só dele fica sem professor.</p>
+      )}
       <FormMessage error={error} />
     </Sheet>
   );

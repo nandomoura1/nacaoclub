@@ -104,7 +104,7 @@ export async function createProgram(principal: Principal | null, slug: string, i
   if (!dates.length) throw new AppError('Nenhum dia de aula no período escolhido.');
   const recent = await programmedDays(slug, addDays(req.startDate, -req.window), addDays(req.startDate, -1));
   const plan = normalizePlan(
-    isFake() ? fakeProgram(dates) : await askModel(ProgramPlanSchema, systemPrompt(slug), describeProgram(req, dates, recent, isTechnicalSlug(slug)), 32000),
+    isFake() ? fakeProgram(dates) : await askModel(ProgramPlanSchema, await systemPrompt(slug), describeProgram(req, dates, recent, isTechnicalSlug(slug)), 32000),
     dates,
   );
   const title = (req.title || plan.titulo).slice(0, 80);

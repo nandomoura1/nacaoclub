@@ -331,3 +331,37 @@ export async function removeTeacherFromSlot(principal: Principal | null, slotId:
     people: v.teachers.filter((t) => t.teacherId !== teacherId).map((t) => ({ teacherId: t.teacherId, role: t.role })),
   }, meta);
 }
+
+/**
+ * Professor desligado/desativado: sai de todas as aulas da grade a partir de
+ * `from` — inclusive das mudanças já agendadas para depois. Aula que era só
+ * dele continua na grade, sem professor, para a coordenação escalar outro.
+ * Competência fechada não muda (a aula fica listada em `kept`).
+ */
+export async function removeTeacherFromGrade(principal: Principal | null, teacherId: string, from: IsoDate, meta: RequestMeta, fallback?: IsoDate) {
+  assertCan(principal, 'schedule.edit');
+  const versions = await prisma.scheduleSlotVersion.findMany({
+    where: { teachers: { some: { teacherId } }, OR: [{ validTo: null }, { validTo: { gte: toUtc(from) } }] },
+    include: { modality: { select: { name: true, areaId: true } } },
+    orderBy: { validFrom: 'asc' },
+  });
+  const removed = new Set<string>();
+  const kept: string[] = [];
+  for (const v of versions) {
+    if (principal!.areaIds !== null && !principal!.areaIds.includes(v.modality.areaId)) { kept.push(describeVersion(v)); continue; }
+    const at = fromUtc(v.validFrom) > from ? fromUtc(v.validFrom) : from;
+    // Desligamento em competência já fechada: tenta a partir de `fallback` (hoje).
+    const tries = fallback && fallback > at ? [at, fallback] : [at];
+    for (const [i, date] of tries.entries()) {
+      try {
+        await removeTeacherFromSlot(principal, v.slotId, teacherId, date, meta);
+        removed.add(v.slotId);
+        break;
+      } catch (e) {
+        if (!(e instanceof AppError)) throw e;
+        if (i === tries.length - 1) kept.push(`${describeVersion(v)}: ${e.message}`);
+      }
+    }
+  }
+  return { removed: removed.size, kept };
+}

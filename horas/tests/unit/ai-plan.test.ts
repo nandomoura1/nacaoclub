@@ -43,38 +43,38 @@ describe('plano da IA', () => {
     expect(c.alerts.some((a) => a.title === 'Pull acima do P90')).toBe(true);
   });
 
-  it('prompt: DNA estável no sistema, pedido e semana na mensagem', () => {
-    const sys = systemPrompt('crossfit');
+  it('prompt: DNA estável no sistema, pedido e semana na mensagem', async () => {
+    const sys = await systemPrompt('crossfit');
     expect(sys).toContain('Aula de 55 minutos');
     expect(sys).toContain('# Lacunas');
     expect(sys).not.toMatch(/\d{4}-\d{2}-\d{2}T/); // sem timestamps que quebram o cache
     const req = requestSchema.parse({ date: '2026-10-07', focus: 'HSPU', strength: 'sim' });
-    const msg = describeRequest(req, [], zero, 'crossfit');
+    const msg = await describeRequest(req, [], zero, 'crossfit');
     expect(msg).toContain('Quarta, 07/10/2026');
     expect(msg).toContain('Foco pedido pelo coach: HSPU');
   });
 
-  it('prompt do Funcional: aula de 50\', vocabulário e regras próprias; Hyrox também; técnicas ainda sem IA', () => {
-    const sys = systemPrompt('funcional');
+  it('prompt do Funcional: aula de 50\', vocabulário e regras próprias; Hyrox também; técnicas ainda sem IA', async () => {
+    const sys = await systemPrompt('funcional');
     expect(sys).toContain('Aula de 50 minutos');
     expect(sys).toContain('É FUNCIONAL, não CrossFit');
     expect(sys).not.toContain('Fran, Cindy');
-    expect(systemPrompt('crossfit')).not.toContain('É FUNCIONAL');
-    const hy = systemPrompt('hyrox');
+    expect(await systemPrompt('crossfit')).not.toContain('É FUNCIONAL');
+    const hy = await systemPrompt('hyrox');
     expect(hy).toContain('Aula de 50 minutos');
     expect(hy).toContain('É HYROX');
     expect(hy).toContain('# Lacunas');
-    expect(() => systemPrompt('base-forte')).toThrow();
+    await expect(systemPrompt('base-forte')).rejects.toThrow();
   });
 
-  it('Futevôlei: prompt da metodologia (fundamento → jogo), níveis próprios e blocos técnicos', () => {
-    const sys = systemPrompt('futevolei');
+  it('Futevôlei: prompt da metodologia (fundamento → jogo), níveis próprios e blocos técnicos', async () => {
+    const sys = await systemPrompt('futevolei');
     expect(sys).toContain('somam exatamente 55.');
     expect(sys).toContain('Metodologia Nação Futevôlei');
     expect(sys).toContain('FUNDAMENTO');
     expect(sys).not.toContain('Fran, Cindy');
     const req = requestSchema.parse({ date: '2026-10-07', focus: 'recepção' });
-    const msg = describeRequest(req, [], zero, 'futevolei');
+    const msg = await describeRequest(req, [], zero, 'futevolei');
     expect(msg).toContain('Tema/fundamento pedido pelo coach: recepção');
     expect(msg).not.toContain('Força');
     const blocks = planToBlocks(fakeTechnicalPlan(), 'futevolei');

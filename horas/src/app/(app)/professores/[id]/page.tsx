@@ -21,7 +21,8 @@ import { hoursReport, parseReportFilter } from '@/server/services/report-service
 import { listGrade } from '@/server/services/schedule-service';
 import { teacherShareData } from '@/server/services/teacher-share-service';
 import { ShareGrade } from './ShareClient';
-import { AulasTab, AusenciasTab } from './FichaClient';
+import { listExtraHours } from '@/server/services/extra-hours-service';
+import { AulasTab, AusenciasTab, ExtraHoursCard } from './FichaClient';
 
 export const metadata: Metadata = { title: 'Ficha do professor' };
 
@@ -151,7 +152,15 @@ async function AusenciasSection({ principal, teacherId, today }: { principal: P;
 
 async function HorasSection({ principal, teacherId, competencia, base }: { principal: P; teacherId: string; competencia?: string; base: string }) {
   const filter = await parseReportFilter({ competencia, professor: teacherId });
-  const r = await hoursReport(principal, filter);
+  const canExtra = can(principal, 'occurrence.exception');
+  const [r, extras, mods, types, teacher] = await Promise.all([
+    hoursReport(principal, filter),
+    listExtraHours(principal, teacherId, filter.start, filter.end),
+    prisma.modality.findMany({ where: { active: true, ...(principal.areaIds === null ? {} : { areaId: { in: [...principal.areaIds] } }) }, orderBy: { sortOrder: 'asc' }, select: { id: true, name: true } }),
+    prisma.activityType.findMany({ where: { active: true }, orderBy: { sortOrder: 'asc' }, select: { id: true, name: true, kind: true } }),
+    prisma.teacher.findUnique({ where: { id: teacherId }, select: { primaryModalityId: true, modalities: { select: { modalityId: true } } } }),
+  ]);
+  const mine = new Set([teacher?.primaryModalityId, ...(teacher?.modalities.map((m) => m.modalityId) ?? [])]);
   const me = r.byTeacher[0];
   const startDay = await periodStartDay();
   const current = periodOf(todayIso(), startDay);
@@ -173,6 +182,10 @@ async function HorasSection({ principal, teacherId, competencia, base }: { princ
         <Link href={`/relatorios?competencia=${periodKey(filter.period)}&professor=${teacherId}&visao=aulas`} className={buttonVariants({ variant: 'ghost' })}><BarChart3 /> Abrir no relatório</Link>
       </form>
       <p className="mb-3 text-sm text-tinta-suave">{r.labels.period}{r.missing.length ? ` · sem aulas geradas para ${r.missing.join(', ')}` : ''}</p>
+      <ExtraHoursCard teacherId={teacherId} items={extras} canEdit={canExtra}
+        defaultDate={todayIso() >= filter.start && todayIso() <= filter.end ? todayIso() : filter.start}
+        modalities={[...mods.filter((m) => mine.has(m.id)), ...mods.filter((m) => !mine.has(m.id))]}
+        activityTypes={types.filter((t) => t.kind !== 'PERSONAL')} />
       {!me ? (
         <Card className="p-8 text-center text-sm text-tinta-suave">Nenhuma aula nesta competência.</Card>
       ) : (

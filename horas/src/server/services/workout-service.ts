@@ -6,6 +6,7 @@ import type { Principal } from '@/server/auth/principal';
 import type { RequestMeta } from '@/server/auth/session';
 import { AppError, NotFoundError } from '@/server/errors';
 import { addDays, formatDateBR, fromUtc, isIsoDate, toUtc, weekdayOf, type IsoDate } from '@/domain/dates';
+import { invalidateDna } from '@/server/programming/dna-report';
 import { mondayOf, type BlockKind, type WorkoutWeekData } from '@/domain/workout';
 
 /**
@@ -102,6 +103,7 @@ export async function listWeeks(principal: Principal | null) {
 
 /** Nova semana: vazia (seg a sáb) ou copiando a semana anterior da mesma modalidade. */
 export async function createWeek(principal: Principal | null, input: { modalityId: string; date: string; copyPrevious?: boolean }, meta: RequestMeta) {
+  invalidateDna(); // a base do DNA/IA aprende com o treino lançado
   assertCan(principal, 'workout.edit');
   if (!isIsoDate(input.date)) throw new AppError('Data inválida.');
   const weekStart = mondayOf(input.date);
@@ -132,6 +134,7 @@ export async function createWeek(principal: Principal | null, input: { modalityI
 
 /** Salva a semana inteira (substitui dias e blocos). */
 export async function saveWeek(principal: Principal | null, id: string, input: unknown, meta: RequestMeta) {
+  invalidateDna(); // a base do DNA/IA aprende com o treino lançado
   assertCan(principal, 'workout.edit');
   const parsed = saveSchema.safeParse(input);
   if (!parsed.success) throw new AppError(parsed.error.issues[0]?.message ?? 'Dados inválidos.');
@@ -167,6 +170,7 @@ export async function saveWeek(principal: Principal | null, id: string, input: u
 }
 
 export async function deleteWeek(principal: Principal | null, id: string, meta: RequestMeta) {
+  invalidateDna(); // a base do DNA/IA aprende com o treino lançado
   assertCan(principal, 'workout.edit');
   await prisma.$transaction(async (tx) => {
     const w = await loadWeek(tx, id);
@@ -200,6 +204,7 @@ export async function setDayFromAi(
   input: { modalityId: string; date: string; title: string | null; blocks: unknown[]; replace?: boolean },
   meta: RequestMeta,
 ): Promise<{ weekId: string; replaced: boolean }> {
+  invalidateDna(); // a base do DNA/IA aprende com o treino lançado
   assertCan(principal, 'workout.edit');
   if (!isIsoDate(input.date)) throw new AppError('Data inválida.');
   const blocks = z.array(blockSchema).min(1).max(12).safeParse(input.blocks);

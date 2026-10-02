@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '@/server/db';
 import { bootstrapStructure } from '@/server/services/bootstrap';
 import { changeSlot, createSlots, endSlot, listGrade, removeTeacherFromSlot } from '@/server/services/schedule-service';
+import { saveTeacherFromForm } from '@/server/services/teacher-service';
 import { decideHoliday, generatePeriod, listOccurrences, periodOverview } from '@/server/services/period-service';
 import { saveHoliday } from '@/server/services/holiday-service';
 import { toUtc } from '@/domain/dates';
@@ -158,6 +159,32 @@ describe.skipIf(!hasDb)('E4 · competência, geração e horas', () => {
     await expect(removeTeacherFromSlot(admin.principal, fixa, dupla.id, '2031-05-01', META)).rejects.toThrow(/competência fechada/);
     await removeTeacherFromSlot(admin.principal, fixa, dupla.id, '2031-05-26', META);
     expect((await listGrade(admin.principal, '2031-06-04')).find((g) => g.slotId === fixa)!.people.map((p) => p.name)).toEqual(['Exclui Engano']);
+  });
+
+  it('desativar professor: sai de todas as aulas da grade (inclusive mudança já agendada); aula só dele fica sem professor', async () => {
+    const sai = await teacher('Sai Desligado');
+    const fica = await teacher('Fica Ativo');
+    const so = await slot(2, sai.id, { validFrom: '2031-06-01' }); // só dele
+    const [dupla] = await createSlots(admin.principal, {
+      weekdays: [4], startMin: 420, durationMin: 60, modalityId: hyrox.id, activityTypeId: aula.id, spaceId: '', label: 'dupla-desl',
+      people: [{ teacherId: sai.id, role: 'TITULAR' }, { teacherId: fica.id, role: 'AUXILIAR' }], validFrom: '2031-06-01',
+    }, META);
+    // Mudança agendada para depois (outro horário) ainda com ele.
+    await changeSlot(admin.principal, so, { weekday: 2, startMin: 360, durationMin: 60, modalityId: hyrox.id, activityTypeId: aula.id, spaceId: '', label: 'so-depois', people: [{ teacherId: sai.id, role: 'TITULAR' }], from: '2031-08-01' }, META);
+
+    const r = await saveTeacherFromForm(admin.principal, sai.id, { name: 'Sai Desligado', active: false, terminationDate: '2031-06-30' }, META, '2031-06-15');
+    expect(r.grade).toMatchObject({ from: '2031-07-01', removed: 2, kept: [] });
+    const at = async (date: string) => (await listGrade(admin.principal, date)).filter((g) => g.slotId === so || g.slotId === dupla);
+    expect((await at('2031-06-20')).flatMap((g) => g.people.map((p) => p.teacherId))).toContain(sai.id); // antes do desligamento, nada muda
+    for (const d of ['2031-07-10', '2031-09-10']) {
+      const g = await at(d);
+      expect(g).toHaveLength(2);
+      expect(g.flatMap((x) => x.people.map((p) => p.teacherId))).toEqual([fica.id]);
+    }
+    expect((await at('2031-09-10')).find((g) => g.slotId === so)!.startMin).toBe(360); // a mudança agendada continua
+
+    const again = await saveTeacherFromForm(admin.principal, sai.id, { name: 'Sai Desligado', active: false }, META, '2031-06-15');
+    expect(again.grade).toBeNull(); // já estava inativo: não mexe de novo
   });
 
   it('competência fechada não é regerada; competências não se sobrepõem', async () => {

@@ -2,12 +2,12 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { can } from '@/server/auth/authz';
 import { requirePrincipal } from '@/server/auth/session';
-import { DnaReport } from '../../_components/DnaReport';
+import { DnaReport, dnaRange } from '../../_components/DnaReport';
 
 export const metadata: Metadata = { title: 'DNA da Programação · CrossFit' };
 
-export default async function Page() {
+export default async function Page({ searchParams }: { searchParams: Promise<{ de?: string; ate?: string }> }) {
   const principal = await requirePrincipal();
   if (!can(principal, 'workout.edit')) redirect('/hoje');
-  return <DnaReport slug="crossfit" />;
+  return <DnaReport slug="crossfit" range={dnaRange(await searchParams)} />;
 }

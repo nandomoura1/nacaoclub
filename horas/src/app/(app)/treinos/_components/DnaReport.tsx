@@ -5,7 +5,9 @@ import type { Modality } from '@/domain/programming/movements';
 import { LEVELS, LEVEL_LOAD_SAMPLES, LEVEL_RATIO } from '@/domain/programming/taxonomy';
 import { INTENSITY_CLASSES, WEEK_METRICS } from '@/domain/programming/volume';
 import { cn } from '@/lib/cn';
-import { getDnaReport } from '@/server/programming/dna-report';
+import { getDnaReport, type DnaRange, type DnaReportData } from '@/server/programming/dna-report';
+import { addDays, isIsoDate } from '@/domain/dates';
+import { todayIso } from '@/lib/today';
 import { TechnicalReport } from './TechnicalReport';
 
 /** Barra horizontal de série única: rótulo, trilho e valor em texto (a cor não carrega identidade). */
@@ -46,10 +48,60 @@ const pctText = (n: number) => `${String(n).replace('.', ',')}%`;
 const numText = (n: number | null) => (n === null ? '–' : String(n).replace('.', ','));
 const H2 = ({ children }: { children: React.ReactNode }) => <h2 className="mb-2 mt-6 text-xl font-extrabold text-navy">{children}</h2>;
 
-export function DnaReport({ slug }: { slug: string }) {
-  const r = getDnaReport(slug);
+/** Período pedido na URL (?de=&ate=). Sem datas = toda a base. */
+export function dnaRange(sp: { de?: string; ate?: string }): DnaRange {
+  const from = sp.de && isIsoDate(sp.de) ? sp.de : null;
+  const to = sp.ate && isIsoDate(sp.ate) ? sp.ate : null;
+  return from && to && to < from ? { from: to, to: from } : { from, to };
+}
+
+/** Filtro de período do DNA: atalhos e datas livres (formulário GET, funciona sem JS). */
+function PeriodFilter({ slug, range, r }: { slug: string; range: DnaRange; r: DnaReportData }) {
+  const today = todayIso();
+  const presets = [
+    ['Toda a base', null, null], ['Últimos 30 dias', addDays(today, -29), today], ['Últimos 90 dias', addDays(today, -89), today],
+    ['Últimos 6 meses', addDays(today, -182), today], ['Este ano', `${today.slice(0, 4)}-01-01`, today],
+  ] as const;
+  const href = (from: string | null, to: string | null) => `/treinos/${slug}/dna${from ? `?de=${from}&ate=${to}` : ''}`;
+  const active = (from: string | null, to: string | null) => (range.from ?? null) === from && (range.to ?? null) === to;
+  const total = r.counts.history + r.counts.launched;
+  return (
+    <Card className="mb-4 p-4 print:hidden">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm font-bold text-navy">Período analisado</span>
+        {presets.map(([label, from, to]) => (
+          <a key={label} href={href(from, to)} className={cn('rounded-full border px-3 py-1 text-xs font-semibold', active(from, to) ? 'border-navy bg-navy text-white' : 'border-borda text-tinta hover:border-nacao')}>{label}</a>
+        ))}
+        <form className="flex flex-wrap items-center gap-2" action={`/treinos/${slug}/dna`}>
+          <input aria-label="De" type="date" name="de" defaultValue={range.from ?? ''} required className="rounded-lg border border-borda px-2 py-1 text-sm" />
+          <span className="text-xs text-tinta-suave">a</span>
+          <input aria-label="Até" type="date" name="ate" defaultValue={range.to ?? ''} required className="rounded-lg border border-borda px-2 py-1 text-sm" />
+          <button className="rounded-lg bg-nacao px-3 py-1 text-xs font-bold text-white">Analisar</button>
+        </form>
+      </div>
+      <p className="mt-2 text-xs text-tinta-suave">
+        {range.from ? <>De <b>{formatDateBR(range.from)}</b> a <b>{formatDateBR(range.to ?? today)}</b> · </> : <>Toda a base · </>}
+        {total} aula(s): {r.counts.history} do histórico{r.technical ? ' (planos da metodologia)' : ''} + {r.counts.launched} lançada(s) no Cadastro de Treino.
+        {' '}A base aprende sozinha: cada treino lançado entra no DNA e na Geração de Treino IA.
+        {!r.empty && total < 12 ? ' Período curto: use os números como indicação.' : ''}
+      </p>
+    </Card>
+  );
+}
+
+export async function DnaReport({ slug, range = {} }: { slug: string; range?: DnaRange }) {
+  const r = await getDnaReport(slug, range);
   const name = r.modality.name;
   if (r.empty) {
+    if (range.from || range.to) {
+      return (
+        <>
+          <PageHeader title={`DNA da Programação · ${name}`} description={`A assinatura de programação de ${name} no período escolhido.`} />
+          <PeriodFilter slug={slug} range={range} r={r} />
+          <Card className="p-6 text-sm text-tinta-suave">Nenhuma aula de {name} neste período. {r.technical ? 'Os planos da metodologia não têm data: no período, entram só as aulas lançadas no Cadastro de Treino.' : 'Escolha outro período ou lance os treinos no Cadastro de Treino.'}</Card>
+        </>
+      );
+    }
     return (
       <>
         <PageHeader title={`DNA da Programação · ${name}`} description={`A assinatura de programação de ${name}, aprendida do histórico de treinos da modalidade.`} />
@@ -62,7 +114,7 @@ export function DnaReport({ slug }: { slug: string }) {
       </>
     );
   }
-  if (r.technical) return <TechnicalReport name={name} dna={r.dna} insights={r.insights} dataset={r.dataset} source={r.source} />;
+  if (r.technical) return <><PeriodFilter slug={slug} range={range} r={r} /><TechnicalReport name={name} dna={r.dna} insights={r.insights} dataset={r.dataset} source={r.source} /></>;
   const { dna: d, base, model, coverage, byDay, insights, hyrox } = r;
   const crossfit = slug === 'crossfit';
   const byMod = (['G', 'W', 'M', 'O'] as Modality[])
@@ -84,6 +136,7 @@ export function DnaReport({ slug }: { slug: string }) {
         title={`DNA da Programação · ${name}`}
         description={`A assinatura de programação de ${name}, calculada de ${d.period.sessions} aulas (${formatDateBR(d.period.from)} a ${formatDateBR(d.period.to)}, ${d.period.weeks} semanas). É a base da periodização e da geração de treino: o que manter e o que corrigir.`}
       />
+      <PeriodFilter slug={slug} range={range} r={r} />
 
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
         <Stat label="Aulas analisadas" value={String(d.period.sessions)} sub={`${d.period.weeks} semanas`} />

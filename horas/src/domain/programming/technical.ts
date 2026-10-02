@@ -8,6 +8,8 @@
 type Block = string | { nome: string; duracao?: number; conteudo?: string[] };
 export interface TechnicalSession {
   id: string;
+  /** Data (só nas aulas lançadas no Cadastro de Treino; os planos da metodologia não têm data). */
+  date?: string;
   tema: string;
   objetivo: string;
   fase?: string;

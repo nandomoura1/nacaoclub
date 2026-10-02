@@ -113,8 +113,8 @@ const planText = (s: TechnicalSession) => [
 ].filter(Boolean).join('\n');
 
 /** Prompt das modalidades técnicas: metodologia, fases, fundamentos, progressão e jogo condicionado. */
-function technicalPrompt(slug: string): string {
-  const r = getDnaReport(slug);
+async function technicalPrompt(slug: string): Promise<string> {
+  const r = await getDnaReport(slug);
   if (r.empty || !r.technical || !TECHNICAL_AI.has(slug)) throw new AppError('Esta modalidade ainda não tem geração de treino.');
   const d = r.dna;
   const m = d.methodology;
@@ -152,20 +152,21 @@ ${r.insights.filter((i) => i.tone === 'lacuna').map((i) => `- ${i.title}: ${i.te
 - Em "decisoes", explique cada escolha citando a metodologia, as lacunas e os dias anteriores.
 
 # Planos de aula reais da Nação
-${r.dataset.sessoes.slice(0, 14).map(planText).join('\n\n')}`;
+${[...r.dataset.sessoes.slice(0, 8), ...r.dataset.sessoes.slice(8).slice(-6)].map(planText).join('\n\n')}`;
 }
 
 /** Parte estável do prompt (cacheável): quem é o copiloto e o DNA da modalidade. */
-export function systemPrompt(slug: string): string {
+export async function systemPrompt(slug: string): Promise<string> {
   if (isTechnicalSlug(slug)) return technicalPrompt(slug);
-  const r = getDnaReport(slug);
+  const r = await getDnaReport(slug);
   if (r.empty || r.technical) throw new AppError('Esta modalidade ainda não tem geração de treino.');
   const flavor = FLAVOR[slug];
   if (!flavor) throw new AppError('Esta modalidade ainda não tem geração de treino.');
   const d = r.dna;
   const lesson = lessonMinutes(r.modality.name) ?? 55;
   const topMoves = (mod: string) => d.movements.filter((m) => m.modality === mod).slice(0, 10).map((m) => `${m.name} ${String(m.perWeek).replace('.', ',')}/sem`).join('; ');
-  const examples = parseHistory(HISTORY[slug] ?? '').filter((s) => !s.special).slice(-12).map(sessionText).join('\n');
+  // Aulas mais recentes da base (inclui as lançadas no Cadastro de Treino): a IA aprende com o que o coach programa.
+  const examples = r.recent.map(sessionText).join('\n');
   return `Você é o copiloto de programação do Head Coach do ${r.modality.name} da Nação Club (Brasília). Você propõe o plano de aula de um dia; o coach revisa e decide. Escreva em português do Brasil, ${flavor.language}.
 
 # Como a Nação programa (DNA medido em ${d.period.sessions} aulas, ${d.period.weeks} semanas)
@@ -196,7 +197,7 @@ ${flavor.rules}
 ${examples}`;
 }
 
-export function describeRequest(req: z.output<typeof requestSchema>, recent: Session[], week: Record<WeekMetric, number>, slug: string, extraContext = ''): string {
+export async function describeRequest(req: z.output<typeof requestSchema>, recent: Session[], week: Record<WeekMetric, number>, slug: string, extraContext = ''): Promise<string> {
   if (isTechnicalSlug(slug)) {
     return `Programe a aula de ${WEEKDAYS[weekdayOf(req.date) - 1]!.long}, ${formatDateBR(req.date)}.
 - Tema/fundamento pedido pelo coach: ${req.focus || 'nenhum — siga a metodologia, a fase da semana e equilibre os fundamentos'}
@@ -205,7 +206,7 @@ export function describeRequest(req: z.output<typeof requestSchema>, recent: Ses
 ${extraContext ? `${extraContext}\n\n` : ''}Aulas dos últimos ${req.window} dias e dos próximos já lançadas:
 ${recent.length ? recent.map(sessionText).join('\n') : '(nenhuma aula registrada no período)'}`;
   }
-  const r = getDnaReport(slug);
+  const r = await getDnaReport(slug);
   const base = !r.empty && !r.technical ? r.base.metrics : null;
   const wd = WEEKDAYS[weekdayOf(req.date) - 1]!.long;
   const wod = { auto: 'livre (varie em relação aos dias anteriores)', curto: 'curto, até 10 min', medio: 'médio, 11–20 min', longo: 'longo, 21 min ou mais' }[req.wodMinutes];
@@ -319,9 +320,9 @@ export async function generateWorkout(
   const technical = isTechnicalSlug(slug);
   const plan: AiPlan = isFake()
     ? (technical ? fakeTechnicalPlan() : fakePlan())
-    : await askModel(AiPlanSchema, systemPrompt(slug), describeRequest(req, recent.filter((s) => s.date !== req.date), week, slug, opts.extraContext));
+    : await askModel(AiPlanSchema, await systemPrompt(slug), await describeRequest(req, recent.filter((s) => s.date !== req.date), week, slug, opts.extraContext));
 
-  const r = getDnaReport(slug);
+  const r = await getDnaReport(slug);
   const check = checkPlan({
     plan, date: req.date, targetMin: lessonMinutes(modality.name), recent: recent.filter((s) => s.date !== req.date),
     weekSoFar: technical ? {} : week, baseline: !r.empty && !r.technical ? r.base.metrics : null,
