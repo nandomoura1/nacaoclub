@@ -16,7 +16,7 @@ export default async function PersonalPage() {
   const principal = await requirePrincipal();
   if (!can(principal, 'workout.personal')) redirect('/hoje');
   const all = can(principal, 'workout.edit');
-  if (!all && !principal.teacherId) {
+  if (!all && !principal.teacherIds.length) {
     return (
       <>
         <PageHeader title="Treinos Personal" description="Monte o treino de cada aula de Personal sua." />

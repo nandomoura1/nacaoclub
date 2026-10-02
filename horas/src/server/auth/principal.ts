@@ -14,8 +14,8 @@ export interface Principal {
   /** `null` = sem restrição (permissão area.all). Lista vazia = nenhuma área. */
   areaIds: readonly string[] | null;
   mustChangePassword: boolean;
-  /** Professor que este usuário é (perfil Professor). */
-  teacherId: string | null;
+  /** Cadastros de professor desta pessoa (perfil Professor); pode ter mais de um. */
+  teacherIds: string[];
 }
 
 export async function loadPrincipal(db: Tx, userId: string): Promise<Principal | null> {
@@ -24,6 +24,7 @@ export async function loadPrincipal(db: Tx, userId: string): Promise<Principal |
     include: {
       roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } },
       areaScopes: { select: { areaId: true } },
+      teachers: { select: { teacherId: true } },
     },
   });
   if (!user || !user.active) return null;
@@ -45,6 +46,6 @@ export async function loadPrincipal(db: Tx, userId: string): Promise<Principal |
     permissions,
     areaIds: permissions.has('area.all') ? null : user.areaScopes.map((s) => s.areaId),
     mustChangePassword: user.mustChangePassword,
-    teacherId: user.teacherId,
+    teacherIds: user.teachers.map((t) => t.teacherId),
   };
 }

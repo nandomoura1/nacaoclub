@@ -28,7 +28,7 @@ describe('frase humana da alteração de usuário', () => {
     expect(txt).toBe('Admin alterou o usuário Maria: desativado; áreas Nação Fit → CrossFit, Nação Fit');
   });
   it('vínculo de professor entra na frase', () => {
-    expect(describeUserChange('Admin', base, { ...base, professor: 'Rafael' })).toBe('Admin alterou o usuário Maria: professor vinculado — → Rafael');
+    expect(describeUserChange('Admin', base, { ...base, professor: 'Rafael' })).toBe('Admin alterou o usuário Maria: cadastros de professor — → Rafael');
   });
   it('diz quando nada mudou', () => {
     expect(describeUserChange('Admin', base, base)).toMatch(/sem mudanças$/);

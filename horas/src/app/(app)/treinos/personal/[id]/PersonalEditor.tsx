@@ -51,11 +51,11 @@ export function PersonalEditor({ workout, slots, today, teachers, myTeacherId, a
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
       <div className="min-w-0 space-y-4">
         <Card className="grid gap-3 p-4 sm:grid-cols-2">
-          {all && (
+          {(all || teachers.length > 1) && (
             <div className="sm:col-span-2">
-              <Label htmlFor="pw-teacher">Professor</Label>
+              <Label htmlFor="pw-teacher">{all ? 'Professor' : 'Cadastro'}</Label>
               <Select id="pw-teacher" value={v.teacherId} onChange={(e) => setV({ ...v, teacherId: e.target.value, slotId: '' })}>
-                <option value="">Escolha o professor</option>
+                {all && <option value="">Escolha o professor</option>}
                 {teachers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
               </Select>
             </div>

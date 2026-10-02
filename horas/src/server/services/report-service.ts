@@ -82,8 +82,10 @@ export async function hoursReport(principal: Principal | null, filter: ReportFil
   // Perfil Professor: só o próprio extrato (todas as áreas, só as aulas em que ele aparece).
   const own = !!principal && !can(principal, 'payroll.view_hours') && can(principal, 'hours.own');
   if (!own) assertCan(principal, 'payroll.view_hours');
-  if (own && !principal!.teacherId) throw new AppError('Seu usuário ainda não está vinculado a um professor. Peça à coordenação para fazer o vínculo em Usuários.');
-  const f: ReportFilter = own ? { ...filter, teacherId: principal!.teacherId, areaId: null } : filter;
+  if (own && !principal!.teacherIds.length) throw new AppError('Seu usuário ainda não está vinculado a um professor. Peça à coordenação para fazer o vínculo em Usuários.');
+  // Com mais de um cadastro, o extrato é de um deles por vez (o pedido, se for dele; senão o primeiro).
+  const ownTeacher = own ? (filter.teacherId && principal!.teacherIds.includes(filter.teacherId) ? filter.teacherId : principal!.teacherIds[0]!) : null;
+  const f: ReportFilter = own ? { ...filter, teacherId: ownTeacher, areaId: null } : filter;
   principal = principal!;
   const startDay = await periodStartDay();
   const areaScope = own || principal.areaIds === null ? {} : { areaId: { in: [...principal.areaIds] } };

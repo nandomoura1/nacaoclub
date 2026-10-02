@@ -5,6 +5,7 @@ import type { Modality } from '@/domain/programming/movements';
 import { LEVELS, LEVEL_LOAD_SAMPLES, LEVEL_RATIO } from '@/domain/programming/taxonomy';
 import { INTENSITY_CLASSES, WEEK_METRICS } from '@/domain/programming/volume';
 import { cn } from '@/lib/cn';
+import { ChevronDown } from 'lucide-react';
 import { getDnaReport, type DnaRange, type DnaReportData } from '@/server/programming/dna-report';
 import { addDays, isIsoDate } from '@/domain/dates';
 import { todayIso } from '@/lib/today';
@@ -77,10 +78,21 @@ function PeriodFilter({ slug, range, r }: { slug: string; range: DnaRange; r: Dn
   const years = [...new Set(av.months.map((m) => m.month.slice(0, 4)))];
   const total = r.counts.history + r.counts.launched;
   const chip = (on: boolean) => cn('rounded-full border px-3 py-1 text-xs font-semibold', on ? 'border-navy bg-navy text-white' : 'border-borda text-tinta hover:border-nacao');
+  const current = presets.find(([, from, to]) => active(from, to))?.[0]
+    ?? (range.from || range.to ? `${range.from ? formatDateBR(range.from) : 'início'} a ${range.to ? formatDateBR(range.to) : 'hoje'}` : 'Toda a base');
+  // Caixa suspensa: fechada mostra só o período atual; aberta, os atalhos, a régua de meses e as datas livres.
   return (
-    <Card className="mb-4 p-4 print:hidden">
+    <details open={r.empty || undefined} className="group mb-4 rounded-xl border border-borda bg-white shadow-[0_1px_2px_rgba(2,43,87,0.05)] print:hidden">
+      <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 p-3 text-sm [&::-webkit-details-marker]:hidden">
+        <span className="font-bold text-navy">Período:</span>
+        <span className="rounded-full bg-navy px-3 py-0.5 text-xs font-semibold text-white">{current}</span>
+        <span className="text-xs text-tinta-suave">{total} aula(s){r.counts.launched ? ` · ${r.counts.launched} lançada(s) no Cadastro de Treino` : ''}</span>
+        <span className="flex-1" />
+        <span className="text-xs font-semibold text-nacao">trocar período</span>
+        <ChevronDown className="size-4 text-nacao transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="border-t border-borda p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-bold text-navy">Período analisado</span>
         {presets.map(([label, from, to]) => <a key={label} href={href(from, to)} className={chip(active(from, to))}>{label}</a>)}
       </div>
 
@@ -128,7 +140,8 @@ function PeriodFilter({ slug, range, r }: { slug: string; range: DnaRange; r: Dn
         {' '}A base aprende sozinha: cada treino lançado entra no DNA e na Geração de Treino IA.
         {!r.empty && total < 12 ? ' Período curto: use os números como indicação.' : ''}
       </p>
-    </Card>
+      </div>
+    </details>
   );
 }
 

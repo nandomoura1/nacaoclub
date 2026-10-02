@@ -10,7 +10,7 @@ import type { PermissionKey } from '@/server/auth/permissions';
 function principal(permissions: PermissionKey[], areaIds: string[] | null = []): Principal {
   return {
     id: 'u1', name: 'Teste', email: 't@t.dev', roleKeys: [],
-    permissions: new Set(permissions), areaIds, mustChangePassword: false, teacherId: null,
+    permissions: new Set(permissions), areaIds, mustChangePassword: false, teacherIds: [],
   };
 }
 

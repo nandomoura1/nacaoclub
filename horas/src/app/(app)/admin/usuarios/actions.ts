@@ -11,7 +11,7 @@ export interface UserFormPayload {
   roleKeys: string[];
   areaIds: string[];
   active: boolean;
-  teacherId: string | null;
+  teacherIds: string[];
 }
 
 export async function createUserAction(

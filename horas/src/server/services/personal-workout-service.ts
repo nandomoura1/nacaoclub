@@ -38,19 +38,19 @@ export type PersonalBlock = z.output<typeof blockSchema>;
 function scopeOf(principal: Principal | null) {
   assertCan(principal, 'workout.personal');
   const all = can(principal!, 'workout.edit');
-  if (!all && !principal!.teacherId) throw new AppError('Seu usuário ainda não está vinculado a um professor. Peça à coordenação para fazer o vínculo em Usuários.');
-  return { all, teacherId: principal!.teacherId };
+  if (!all && !principal!.teacherIds.length) throw new AppError('Seu usuário ainda não está vinculado a um professor. Peça à coordenação para fazer o vínculo em Usuários.');
+  return { all, teacherIds: principal!.teacherIds };
 }
 
 /** Aulas de Personal da grade (valendo hoje ou depois) — de um professor ou de todos. */
 export async function personalSlots(principal: Principal | null, today: IsoDate, teacherId?: string | null) {
   const scope = scopeOf(principal);
-  const who = scope.all ? teacherId ?? undefined : scope.teacherId!;
+  const who = scope.all ? (teacherId ? [teacherId] : null) : scope.teacherIds;
   const versions = await prisma.scheduleSlotVersion.findMany({
     where: {
       activityType: { kind: 'PERSONAL' },
       OR: [{ validTo: null }, { validTo: { gte: toUtc(today) } }],
-      ...(who ? { teachers: { some: { teacherId: who } } } : {}),
+      ...(who ? { teachers: { some: { teacherId: { in: who } } } } : {}),
     },
     include: { modality: { select: { name: true } }, teachers: { include: { teacher: { select: { id: true, name: true, displayName: true } } } } },
     orderBy: [{ weekday: 'asc' }, { startMin: 'asc' }],
@@ -76,7 +76,7 @@ export async function listPersonalWorkouts(principal: Principal | null, opts: { 
   const scope = scopeOf(principal);
   const rows = await prisma.personalWorkout.findMany({
     where: {
-      ...(scope.all ? {} : { teacherId: scope.teacherId! }),
+      ...(scope.all ? {} : { teacherId: { in: scope.teacherIds } }),
       ...(opts.from || opts.to ? { date: { ...(opts.from ? { gte: toUtc(opts.from) } : {}), ...(opts.to ? { lte: toUtc(opts.to) } : {}) } } : {}),
     },
     include, orderBy: [{ date: 'desc' }, { startMin: 'asc' }], take: 300,
@@ -88,7 +88,7 @@ export async function getPersonalWorkout(principal: Principal | null, id: string
   const scope = scopeOf(principal);
   const w = await prisma.personalWorkout.findUnique({ where: { id }, include });
   if (!w) throw new NotFoundError('Treino não encontrado.');
-  if (!scope.all && w.teacherId !== scope.teacherId) throw new AuthorizationError('Este treino é de outro professor.');
+  if (!scope.all && !scope.teacherIds.includes(w.teacherId)) throw new AuthorizationError('Este treino é de outro professor.');
   return toView(w);
 }
 
@@ -98,14 +98,15 @@ export async function savePersonalWorkout(principal: Principal | null, id: strin
   if (!parsed.success) throw new AppError(parsed.error.issues[0]?.message ?? 'Dados inválidos.');
   const d = { ...parsed.data, blocks: parsed.data.blocks.filter(hasContent) };
   if (!d.blocks.length) throw new AppError('Escreva ao menos um bloco do treino.');
-  const teacherId = scope.all ? d.teacherId ?? scope.teacherId : scope.teacherId;
+  // Professor: um dos próprios cadastros (o escolhido, se for dele; senão o primeiro). Coordenação: qualquer um.
+  const teacherId = scope.all ? d.teacherId ?? scope.teacherIds[0] : d.teacherId && scope.teacherIds.includes(d.teacherId) ? d.teacherId : scope.teacherIds[0];
   if (!teacherId) throw new AppError('Escolha o professor.');
 
   return prisma.$transaction(async (tx) => {
     if (id) {
       const cur = await tx.personalWorkout.findUnique({ where: { id }, select: { teacherId: true } });
       if (!cur) throw new NotFoundError('Treino não encontrado.');
-      if (!scope.all && cur.teacherId !== scope.teacherId) throw new AuthorizationError('Este treino é de outro professor.');
+      if (!scope.all && !scope.teacherIds.includes(cur.teacherId)) throw new AuthorizationError('Este treino é de outro professor.');
     }
     let startMin: number | null = null;
     let aula = 'aula avulsa';
@@ -140,7 +141,7 @@ export async function deletePersonalWorkout(principal: Principal | null, id: str
   await prisma.$transaction(async (tx) => {
     const w = await tx.personalWorkout.findUnique({ where: { id } });
     if (!w) throw new NotFoundError('Treino não encontrado.');
-    if (!scope.all && w.teacherId !== scope.teacherId) throw new AuthorizationError('Este treino é de outro professor.');
+    if (!scope.all && !scope.teacherIds.includes(w.teacherId)) throw new AuthorizationError('Este treino é de outro professor.');
     await tx.personalWorkout.delete({ where: { id } });
     await audit(tx, { actorId: principal!.id, ...meta }, {
       action: 'personal.deleted', entityType: 'personal_workout', entityId: id,

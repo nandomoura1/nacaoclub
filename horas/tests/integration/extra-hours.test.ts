@@ -50,12 +50,37 @@ describe.skipIf(!hasDb)('horas extras lançadas na ficha do professor', () => {
     const prof = await makeUser('PROFESSOR', { name: 'Prof' });
     const filter = await parseReportFilter({ competencia: '2036-04', professor: outro.id }); // tenta ver o outro
     await expect(hoursReport(prof.principal, filter)).rejects.toThrow(/não está vinculado/);
-    const linked = { ...prof.principal, teacherId: eu.id };
+    const linked = { ...prof.principal, teacherIds: [eu.id] };
     const r = await hoursReport(linked, filter);
     expect(r.byTeacher.map((t) => t.teacherId)).toEqual([eu.id]);
     expect(r.byTeacher[0]).toMatchObject({ extraMin: 360, bonusMin: 360, totalMin: 720 }); // 8h–14h no domingo = 12h
     expect(r.detail.every((o) => o.people.some((p) => p.executingId === eu.id || p.plannedId === eu.id))).toBe(true);
     expect(r.detail[0]).toMatchObject({ doubled: true });
+  });
+
+  it('uma pessoa com dois cadastros (ex.: CrossFit e Nação Fit): extrato de cada um, nunca de terceiros', async () => {
+    const n = Date.now();
+    const cross = await prisma.teacher.create({ data: { name: `Maria_cross ${n}` } });
+    const fit = await prisma.teacher.create({ data: { name: `Maria_fit ${n}` } });
+    const terceiro = await prisma.teacher.create({ data: { name: `Terceiro ${n}` } });
+    const base = { modalityId: musc.id, activityTypeId: aula.id, description: 'Turno' };
+    await saveExtraHours(admin.principal, cross.id, { ...base, date: '2036-04-08', start: '08:00', end: '09:00' }, META);
+    await saveExtraHours(admin.principal, fit.id, { ...base, date: '2036-04-09', start: '08:00', end: '10:00' }, META);
+    await saveExtraHours(admin.principal, terceiro.id, { ...base, date: '2036-04-09', start: '10:00', end: '11:00' }, META);
+
+    const { createUser } = await import('@/server/services/user-service');
+    const { loadPrincipal } = await import('@/server/auth/principal');
+    const { userId } = await createUser(admin.principal, { name: `Maria ${n}`, email: `maria.${n}@teste.dev`, roleKeys: ['PROFESSOR'], teacherIds: [cross.id, fit.id] }, META);
+    await expect(createUser(admin.principal, { name: 'Outra', email: `outra.${n}@teste.dev`, roleKeys: ['PROFESSOR'], teacherIds: [fit.id] }, META)).rejects.toThrow(/já está vinculado/);
+    await prisma.user.update({ where: { id: userId }, data: { mustChangePassword: false } });
+    const maria = (await loadPrincipal(prisma, userId))!;
+    expect(new Set(maria.teacherIds)).toEqual(new Set([cross.id, fit.id]));
+
+    const f = await parseReportFilter({ competencia: '2036-04' });
+    expect((await hoursReport(maria, { ...f, teacherId: cross.id })).byTeacher.map((t) => [t.teacherId, t.extraMin])).toEqual([[cross.id, 60]]);
+    expect((await hoursReport(maria, { ...f, teacherId: fit.id })).byTeacher.map((t) => [t.teacherId, t.extraMin])).toEqual([[fit.id, 120]]);
+    const tentativa = await hoursReport(maria, { ...f, teacherId: terceiro.id }); // não é dela: cai no próprio
+    expect(tentativa.byTeacher.map((t) => t.teacherId)).not.toContain(terceiro.id);
   });
 });
 

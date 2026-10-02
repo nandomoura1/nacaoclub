@@ -32,7 +32,7 @@ describe.skipIf(!hasDb)('perfil Professor: treinos', () => {
 
     const semVinculo = await makeUser('PROFESSOR', { name: 'Prof sem vínculo' });
     await expect(listPersonalWorkouts(semVinculo.principal)).rejects.toThrow(/não está vinculado/);
-    const prof = { ...(await makeUser('PROFESSOR', { name: 'Prof' })).principal, teacherId: eu.id };
+    const prof = { ...(await makeUser('PROFESSOR', { name: 'Prof' })).principal, teacherIds: [eu.id] };
 
     expect((await personalSlots(prof, '2037-01-01')).map((s) => s.slotId)).toEqual([minha]);
     const treino = { slotId: minha, date: '2037-03-02', student: 'Joana', title: 'Pernas + core', blocks: [{ kind: 'FORCA', title: 'Agachamento', format: '4 x 10', content: 'Goblet 12kg' }] };

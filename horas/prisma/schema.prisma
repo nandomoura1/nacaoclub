@@ -54,16 +54,28 @@ model User {
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")
   createdById        String?   @map("created_by") @db.Uuid
-  /// Professor que este usuário é (perfil Professor: extrato próprio e treinos Personal).
-  teacherId          String?   @unique @map("teacher_id") @db.Uuid
 
-  teacher    Teacher?  @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  /// Cadastros de professor desta pessoa (perfil Professor: extrato próprio e treinos Personal).
+  /// Uma pessoa pode ter mais de um (ex.: um cadastro no CrossFit e outro na Nação Fit).
+  teachers   UserTeacher[]
   sessions   Session[]
   roles      UserRole[]
   areaScopes UserAreaScope[]
   auditLogs  AuditLog[]
 
   @@map("users")
+}
+
+/// Vínculo usuário ↔ cadastro de professor. Um cadastro pertence a no máximo um usuário.
+model UserTeacher {
+  userId    String @map("user_id") @db.Uuid
+  teacherId String @unique @map("teacher_id") @db.Uuid
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teacher Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@id([userId, teacherId])
+  @@map("user_teachers")
 }
 
 /// Sessão opaca: o cookie leva um token aleatório; o banco guarda só o HMAC.
@@ -388,7 +400,7 @@ model Teacher {
   covering        Leave[]              @relation("LeaveSubstitute")
   manualEntries   ManualEntry[]
   duties          DutyAssignment[]
-  user            User?
+  userLink        UserTeacher?
   personalWorkouts PersonalWorkout[]
 
   @@index([active, name])

@@ -27,8 +27,8 @@ export default async function UsuariosPage() {
     lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
     roleKeys: u.roles.map((r) => r.role.key),
     areaIds: u.areaScopes.map((s) => s.areaId),
-    teacherId: u.teacher?.id ?? null,
-    teacherName: u.teacher?.name ?? null,
+    teacherIds: u.teachers.map((t) => t.teacher.id),
+    teacherNames: u.teachers.map((t) => t.teacher.name),
     isSelf: u.id === principal.id,
   }));
 

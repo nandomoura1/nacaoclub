@@ -20,18 +20,19 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   const isNew = id === 'novo';
   if (!isNew && !/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const all = can(principal, 'workout.edit');
-  if (!all && !principal.teacherId) redirect('/treinos/personal');
+  if (!all && !principal.teacherIds.length) redirect('/treinos/personal');
   const today = todayIso();
   const [workout, slots, teachers] = await Promise.all([
     isNew ? null : getPersonalWorkout(principal, id).catch((e) => { if (e instanceof NotFoundError || e instanceof AuthorizationError) notFound(); throw e; }),
     personalSlots(principal, today),
-    all ? prisma.teacher.findMany({ where: { active: true }, orderBy: { name: 'asc' }, select: { id: true, name: true } }) : Promise.resolve([]),
+    // Coordenação escolhe qualquer professor; o professor escolhe entre os próprios cadastros (se tiver mais de um).
+    prisma.teacher.findMany({ where: all ? { active: true } : { id: { in: principal.teacherIds } }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
   ]);
   return (
     <>
       <Link href="/treinos/personal" className="mb-3 inline-flex items-center gap-1 text-sm text-tinta-suave hover:text-nacao"><ArrowLeft className="size-4" /> Treinos Personal</Link>
       <PageHeader title={isNew ? 'Novo treino Personal' : workout!.title} description="Escolha a aula de Personal, a data e monte os blocos do treino. Depois é só mandar para o aluno." />
-      <PersonalEditor workout={workout} slots={slots} today={today} teachers={teachers} myTeacherId={principal.teacherId} all={all} />
+      <PersonalEditor workout={workout} slots={slots} today={today} teachers={teachers} myTeacherId={principal.teacherIds[0] ?? null} all={all} />
     </>
   );
 }

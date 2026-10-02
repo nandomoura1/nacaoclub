@@ -20,8 +20,8 @@ export interface UserRow {
   lastLoginAt: string | null;
   roleKeys: string[];
   areaIds: string[];
-  teacherId: string | null;
-  teacherName: string | null;
+  teacherIds: string[];
+  teacherNames: string[];
   isSelf: boolean;
 }
 
@@ -85,8 +85,8 @@ export function UsersClient({ users, roles, areas, teachers }: { users: UserRow[
                   </Badge>
                 ) : null;
               })}
-              {u.teacherName && <Badge tone="cyan" title="Professor vinculado: vê o próprio extrato">professor: {u.teacherName}</Badge>}
-              {!u.teacherName && u.roleKeys.includes('PROFESSOR') && <Badge tone="amber" title="Sem professor vinculado: não vê extrato">sem vínculo</Badge>}
+              {u.teacherNames.map((n) => <Badge key={n} tone="cyan" title="Cadastro de professor vinculado: vê o próprio extrato">professor: {n}</Badge>)}
+              {!u.teacherNames.length && u.roleKeys.includes('PROFESSOR') && <Badge tone="amber" title="Sem professor vinculado: não vê extrato">sem vínculo</Badge>}
             </div>
             <div className="flex items-center gap-1 text-xs text-tinta-fraca sm:w-40 sm:justify-end">
               {u.lastLoginAt ? `último acesso ${formatDateTime(new Date(u.lastLoginAt))}` : 'nunca entrou'}
@@ -106,7 +106,7 @@ export function UsersClient({ users, roles, areas, teachers }: { users: UserRow[
           roles={roles}
           areas={areas}
           teachers={teachers}
-          linked={new Map(users.filter((x) => x.teacherId && (editing.mode !== 'edit' || x.id !== editing.user.id)).map((x) => [x.teacherId!, x.name]))}
+          linked={new Map(users.filter((x) => editing.mode !== 'edit' || x.id !== editing.user.id).flatMap((x) => x.teacherIds.map((t) => [t, x.name] as const)))}
           onClose={() => setEditing(null)}
           onSecret={(s) => setSecret(s)}
         />
@@ -169,10 +169,11 @@ function UserSheet({
     roleKeys: initial?.roleKeys ?? ['COORDENADOR'],
     areaIds: initial?.areaIds ?? [],
     active: initial?.active ?? true,
-    teacherId: initial?.teacherId ?? null,
+    teacherIds: initial?.teacherIds ?? [],
   });
   // Sugestão: professor com o mesmo e-mail do usuário.
-  const byEmail = teachers.find((t) => t.email && form.email && t.email.toLowerCase() === form.email.trim().toLowerCase() && !linked.has(t.id));
+  const byEmail = teachers.find((t) => t.email && form.email && t.email.toLowerCase() === form.email.trim().toLowerCase() && !linked.has(t.id) && !form.teacherIds.includes(t.id));
+  const tName = new Map(teachers.map((t) => [t.id, t.name]));
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -279,19 +280,29 @@ function UserSheet({
           </fieldset>
 
           <div>
-            <Label htmlFor="u-teacher">Professor vinculado {form.roleKeys.includes('PROFESSOR') ? '' : '(opcional)'}</Label>
-            <select id="u-teacher" className="w-full rounded-lg border border-borda bg-white px-3 py-2 text-sm" value={form.teacherId ?? ''}
-              onChange={(e) => setForm({ ...form, teacherId: e.target.value || null })}>
-              <option value="">— nenhum —</option>
-              {teachers.map((t) => <option key={t.id} value={t.id} disabled={linked.has(t.id)}>{t.name}{linked.has(t.id) ? ` (já é ${linked.get(t.id)})` : ''}</option>)}
+            <Label htmlFor="u-teacher">Cadastros de professor vinculados {form.roleKeys.includes('PROFESSOR') ? '' : '(opcional)'}</Label>
+            {form.teacherIds.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-1.5">
+                {form.teacherIds.map((id) => (
+                  <span key={id} className="inline-flex items-center gap-1 rounded-full border border-nacao bg-nacao/5 px-3 py-1 text-sm font-semibold text-navy">
+                    {tName.get(id) ?? 'professor'}
+                    <button type="button" aria-label={`Desvincular ${tName.get(id) ?? ''}`} className="text-tinta-fraca hover:text-critico" onClick={() => setForm({ ...form, teacherIds: form.teacherIds.filter((x) => x !== id) })}><X className="size-3.5" /></button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <select id="u-teacher" className="w-full rounded-lg border border-borda bg-white px-3 py-2 text-sm" value=""
+              onChange={(e) => e.target.value && setForm({ ...form, teacherIds: [...form.teacherIds, e.target.value] })}>
+              <option value="">{form.teacherIds.length ? '+ vincular outro cadastro…' : '— escolha o cadastro de professor —'}</option>
+              {teachers.filter((t) => !form.teacherIds.includes(t.id)).map((t) => <option key={t.id} value={t.id} disabled={linked.has(t.id)}>{t.name}{linked.has(t.id) ? ` (já é ${linked.get(t.id)})` : ''}</option>)}
             </select>
-            <p className="mt-1 text-xs text-tinta-suave">Com o vínculo, o perfil Professor vê o próprio extrato de horas e cria treinos de Personal para as aulas dele.</p>
-            {!form.teacherId && byEmail && (
-              <button type="button" className="mt-1 text-xs font-semibold text-nacao hover:underline" onClick={() => setForm({ ...form, teacherId: byEmail.id })}>
-                Vincular a {byEmail.name} (mesmo e-mail)
+            <p className="mt-1 text-xs text-tinta-suave">Quem tem mais de um cadastro (ex.: um no CrossFit e outro na Nação Fit) vincula todos: o extrato e os treinos Personal mostram cada um.</p>
+            {byEmail && (
+              <button type="button" className="mt-1 text-xs font-semibold text-nacao hover:underline" onClick={() => setForm({ ...form, teacherIds: [...form.teacherIds, byEmail.id] })}>
+                Vincular {byEmail.name} (mesmo e-mail)
               </button>
             )}
-            {form.roleKeys.includes('PROFESSOR') && !form.teacherId && <p className="mt-1 text-xs text-atencao">Sem vínculo, o professor entra mas não vê extrato.</p>}
+            {form.roleKeys.includes('PROFESSOR') && !form.teacherIds.length && <p className="mt-1 text-xs text-atencao">Sem vínculo, o professor entra mas não vê extrato.</p>}
           </div>
 
           {editing.mode === 'edit' && (
