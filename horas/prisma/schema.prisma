@@ -815,6 +815,8 @@ model WorkoutWeek {
   modalityId  String   @map("modality_id") @db.Uuid
   /// Segunda-feira da semana.
   weekStart   DateTime @map("week_start") @db.Date
+  /// Intenção / ideia central da semana ("Levantada"): vai no texto do WhatsApp e no plano do professor.
+  theme       String?
   /// Rodapé de anúncio (novidade da Nação). Vazio = rodapé padrão.
   footerTitle String?  @map("footer_title")
   footerText  String?  @map("footer_text")

@@ -135,6 +135,7 @@ export async function workoutPdf(week: WorkoutWeekData, mode: WorkoutPdfMode, on
   days.forEach((d, i) => {
     if (teacher || i === 0) newPage(i === 0 || teacher);
     else y -= 8;
+    if (week.theme && (teacher || i === 0)) { text(`INTENÇÃO: ${week.theme.toUpperCase()}`, M, y, 12, cond, C.blue); y -= 22; }
     dayBar(d);
     if (teacher) for (const { block: b, from, to } of lessonTimeline(d)) block(b, from, to);
     else for (const b of d.blocks) block(b, 0, null);

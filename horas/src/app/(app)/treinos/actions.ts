@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { getPrincipal, requestMeta } from '@/server/auth/session';
 import { runAction, type ActionResult } from '@/server/action-result';
+import { organizeWeekText, type OrganizedWeek } from '@/server/ai/week-organizer';
 import { changeWeekModality, createWeek, deleteWeek, saveWeek } from '@/server/services/workout-service';
 
 export async function createWeekAction(input: { modalityId: string; date: string; copyPrevious: boolean }): Promise<ActionResult<string>> {
@@ -38,4 +39,9 @@ export async function changeWeekModalityAction(id: string, modalityId: string): 
     revalidatePath(`/treinos/${to}`);
     return to;
   });
+}
+
+/** Texto livre / ideia central → dias e blocos (não salva: o coach revisa no editor). */
+export async function organizeWeekAction(id: string, text: string, weekdays: number[]): Promise<ActionResult<OrganizedWeek>> {
+  return runAction(async () => organizeWeekText(await getPrincipal(), id, { text, weekdays }));
 }

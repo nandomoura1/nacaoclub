@@ -5,6 +5,9 @@ import { changeWeekModality, createWeek, getWeek, listWeeks, saveWeek } from '@/
 import { AppError, AuthorizationError } from '@/server/errors';
 import { META, hasDb, makeUser } from './helpers';
 import { crossfitWeek } from '../fixtures/workout-crossfit';
+import { futevoleiSemanaTexto } from '../fixtures/futevolei-semana-texto';
+import { organizeWeekText } from '@/server/ai/week-organizer';
+import { whatsappText } from '@/domain/workout';
 
 describe.skipIf(!hasDb)('Treinos da semana', () => {
   let admin: Awaited<ReturnType<typeof makeUser>>;
@@ -88,6 +91,44 @@ describe.skipIf(!hasDb)('Treinos da semana', () => {
     // Coordenador de outra área não move para lá.
     const coordFut = await makeUser('COORDENADOR', { areaIds: [futevolei.areaId] });
     await expect(changeWeekModality(coordFut.principal, a, crossfit.id, META)).rejects.toThrow(AuthorizationError);
+  });
+
+  it('monta a semana pelo texto: dias escritos sem IA, só a ideia com IA; a intenção fica salva', async () => {
+    const id = await createWeek(admin.principal, { modalityId: futevolei.id, date: '2041-06-03' }, META); // semana de 03/06/2041
+    // Texto com os dias: organiza do jeito que está (datas de out/2026 viram os dias desta semana, com aviso).
+    const t = await organizeWeekText(admin.principal, id, { text: futevoleiSemanaTexto, weekdays: [] });
+    expect(t.mode).toBe('texto');
+    expect(t.theme).toBe('LEVANTADA');
+    expect(t.days.map((d) => d.date)).toEqual(['2041-06-03', '2041-06-04', '2041-06-05', '2041-06-06']);
+    expect(t.warnings).toHaveLength(4);
+    // O coach salva o que foi organizado: o editor manda tema + dias.
+    await saveWeek(admin.principal, id, { theme: t.theme, days: t.days }, META);
+    const saved = await getWeek(admin.principal, id);
+    expect(saved.theme).toBe('LEVANTADA');
+    expect(saved.days[0]!.blocks.map((b) => b.kind)).toEqual(['MOBILIDADE', 'AQUECIMENTO', 'FUNDAMENTO', 'JOGO']);
+    expect(whatsappText(saved)).toContain('🎯 *Intenção: LEVANTADA*');
+
+    // Só a ideia central: a IA monta os dias marcados (exemplo local, sem chamar o modelo).
+    const prev = process.env.AI_FAKE;
+    process.env.AI_FAKE = '1';
+    try {
+      const ia = await organizeWeekText(admin.principal, id, { text: 'Intenção do mês: levantada — chapa, ombro, coxa e cabeça', weekdays: [1, 2, 4] });
+      expect(ia.mode).toBe('ia');
+      expect(ia.days.map((d) => d.date)).toEqual(['2041-06-03', '2041-06-04', '2041-06-06']);
+      expect(ia.days[0]!.blocks.map((b) => b.kind)).toEqual(['AQUECIMENTO', 'FUNDAMENTO', 'JOGO']);
+      await expect(organizeWeekText(admin.principal, id, { text: 'levantada', weekdays: [] })).rejects.toThrow(/Escolha os dias/);
+    } finally {
+      if (prev === undefined) delete process.env.AI_FAKE; else process.env.AI_FAKE = prev;
+    }
+
+    // Modalidade sem IA: só com os dias escritos.
+    const musc = await prisma.modality.findFirstOrThrow({ where: { name: 'Musculação' } });
+    const mw = await createWeek(admin.principal, { modalityId: musc.id, date: '2041-06-03' }, META);
+    await expect(organizeWeekText(admin.principal, mw, { text: 'foco em posterior', weekdays: [1] })).rejects.toThrow(/escreva os dias/);
+    // Coordenador de outra área não organiza.
+    const coordFut = await makeUser('COORDENADOR', { areaIds: [futevolei.areaId] });
+    const cf = await createWeek(admin.principal, { modalityId: crossfit.id, date: '2041-06-03' }, META);
+    await expect(organizeWeekText(coordFut.principal, cf, { text: futevoleiSemanaTexto, weekdays: [] })).rejects.toThrow(AuthorizationError);
   });
 
   it('o banco só aceita semana começando na segunda', async () => {

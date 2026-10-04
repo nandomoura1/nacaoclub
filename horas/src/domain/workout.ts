@@ -42,6 +42,8 @@ export interface WorkoutWeekData {
   modality: string;
   weekStart: IsoDate;
   days: WorkoutDayData[];
+  /** Intenção / ideia central da semana. */
+  theme?: string | null;
   footerTitle: string | null;
   footerText: string | null;
   footerChips: string | null;
@@ -72,6 +74,7 @@ export function whatsappText(week: WorkoutWeekData, onlyDate?: IsoDate): string 
   out.push(onlyDate
     ? `*🔵 TREINO DO DIA · ${week.modality.toUpperCase()}*\n_${dayName(onlyDate)}, ${ddmm(onlyDate)}_`
     : `*🔵 PLANO SEMANAL DE TREINOS · ${week.modality.toUpperCase()}*\n_${weekRange({ ...week, days })}_`);
+  if (week.theme) out.push(`🎯 *Intenção: ${week.theme}*`);
   for (const d of days) {
     out.push('');
     if (!onlyDate) out.push(`*${dayName(d.date).toUpperCase()} · ${ddmm(d.date)}*${d.title ? ` — ${d.title}` : ''}`);

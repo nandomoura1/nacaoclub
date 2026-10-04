@@ -29,6 +29,7 @@ const blockSchema = z.object({
   coachNotes: optText(1000),
 });
 const saveSchema = z.object({
+  theme: optText(120),
   footerTitle: optText(60),
   footerText: optText(240),
   footerChips: optText(300),
@@ -57,6 +58,7 @@ function toData(w: Awaited<ReturnType<typeof loadWeek>>): WorkoutWeekData & { id
     modalityId: w.modalityId,
     modality: w.modality.name,
     weekStart: fromUtc(w.weekStart),
+    theme: w.theme,
     footerTitle: w.footerTitle,
     footerText: w.footerText,
     footerChips: w.footerChips,
@@ -123,7 +125,7 @@ export async function createWeek(principal: Principal | null, input: { modalityI
     const w = await tx.workoutWeek.create({
       data: {
         modalityId: m.id, weekStart: toUtc(weekStart), createdById: principal.id, updatedById: principal.id,
-        footerTitle: prev?.footerTitle ?? null, footerText: prev?.footerText ?? null, footerChips: prev?.footerChips ?? null,
+        theme: prev?.theme ?? null, footerTitle: prev?.footerTitle ?? null, footerText: prev?.footerText ?? null, footerChips: prev?.footerChips ?? null,
         days: prev
           ? { create: prev.days.map((d) => ({ date: toUtc(addDays(fromUtc(d.date), shift)), title: d.title, blocks: { create: d.blocks.map(({ id: _id, dayId: _d, ...b }) => b) } })) }
           : { create: [0, 1, 2, 3, 4, 5].map((i) => ({ date: toUtc(addDays(weekStart, i)) })) },
@@ -163,7 +165,7 @@ export async function saveWeek(principal: Principal | null, id: string, input: u
     }
     await tx.workoutWeek.update({
       where: { id },
-      data: { footerTitle: data.footerTitle, footerText: data.footerText, footerChips: data.footerChips, updatedById: principal.id },
+      data: { theme: data.theme, footerTitle: data.footerTitle, footerText: data.footerText, footerChips: data.footerChips, updatedById: principal.id },
     });
     const blocks = data.days.reduce((s, d) => s + d.blocks.length, 0);
     await audit(tx, { actorId: principal.id, ...meta }, {
@@ -220,7 +222,7 @@ export async function changeWeekModality(principal: Principal | null, id: string
       await tx.workoutWeek.update({
         where: { id: target.id },
         data: {
-          updatedById: principal.id,
+          updatedById: principal.id, theme: target.theme ?? w.theme,
           footerTitle: target.footerTitle ?? w.footerTitle, footerText: target.footerText ?? w.footerText, footerChips: target.footerChips ?? w.footerChips,
         },
       });

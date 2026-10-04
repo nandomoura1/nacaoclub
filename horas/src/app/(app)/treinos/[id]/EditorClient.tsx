@@ -2,13 +2,13 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowDown, ArrowUp, Copy, Download, FileText, Image as ImageIcon, MessageCircle, Plus, Save, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Copy, Download, FileText, Image as ImageIcon, MessageCircle, Plus, Save, Sparkles, Trash2, X } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { FormMessage } from '@/components/ui/alert';
 import { Input, Label, Select } from '@/components/ui/input';
-import { addDays, formatDateBR } from '@/domain/dates';
+import { WEEKDAYS, addDays, formatDateBR, weekdayOf } from '@/domain/dates';
 import {
   BLOCK_KINDS, KIND, dayMinutes, dayName, dayTemplate, lessonMinutes, whatsappText,
   type BlockKind, type WorkoutBlockData, type WorkoutDayData,
@@ -17,7 +17,7 @@ import { cn } from '@/lib/cn';
 import type { WorkoutWeekView } from '@/server/services/workout-service';
 import type { BenchmarkView } from '@/server/services/benchmark-service';
 import { benchmarkBlock, matchBenchmark } from '@/domain/benchmarks';
-import { changeWeekModalityAction, deleteWeekAction, saveWeekAction } from '../actions';
+import { changeWeekModalityAction, deleteWeekAction, organizeWeekAction, saveWeekAction } from '../actions';
 
 const empty = (kind: BlockKind): WorkoutBlockData => ({ kind, title: null, durationMin: null, format: null, timeCapMin: null, content: null, notes: null, coachNotes: null });
 const QUICK: BlockKind[] = ['MOBILIDADE', 'AQUECIMENTO', 'SKILL', 'ESPECIFICO', 'CORE', 'FORCA', 'WOD', 'FUNDAMENTO', 'JOGO'];
@@ -25,6 +25,9 @@ const QUICK: BlockKind[] = ['MOBILIDADE', 'AQUECIMENTO', 'SKILL', 'ESPECIFICO', 
 export function EditorClient({ week, benchmarks, modalities }: { week: WorkoutWeekView; benchmarks: BenchmarkView[]; modalities: { id: string; name: string }[] }) {
   const router = useRouter();
   const [days, setDays] = useState<WorkoutDayData[]>(week.days);
+  const [theme, setTheme] = useState(week.theme ?? '');
+  const [org, setOrg] = useState({ text: '', weekdays: week.days.map((d) => weekdayOf(d.date)) });
+  const [organizing, startOrg] = useTransition();
   const [footer, setFooter] = useState({ footerTitle: week.footerTitle ?? '', footerText: week.footerText ?? '', footerChips: week.footerChips ?? '' });
   const [dirty, setDirty] = useState(false);
   const [msg, setMsg] = useState<{ error?: string; ok?: string }>({});
@@ -39,10 +42,28 @@ export function EditorClient({ week, benchmarks, modalities }: { week: WorkoutWe
   const setDay = (date: string, fn: (d: WorkoutDayData) => WorkoutDayData) => { setDays((all) => all.map((d) => (d.date === date ? fn(d) : d))); touch(); };
   const setBlock = (date: string, i: number, patch: Partial<WorkoutBlockData>) =>
     setDay(date, (d) => ({ ...d, blocks: d.blocks.map((b, j) => (j === i ? { ...b, ...patch } : b)) }));
-  const current = { ...week, days, footerTitle: footer.footerTitle || null, footerText: footer.footerText || null, footerChips: footer.footerChips || null };
+  const current = { ...week, days, theme: theme || null, footerTitle: footer.footerTitle || null, footerText: footer.footerText || null, footerChips: footer.footerChips || null };
+
+  const organize = () => startOrg(async () => {
+    setMsg({});
+    const r = await organizeWeekAction(week.id, org.text, org.weekdays);
+    if (!r.ok) return setMsg({ error: r.error });
+    const o = r.data;
+    if (!o.days.length) return setMsg({ error: 'Não encontrei nenhum dia no texto. Comece cada dia com o nome dele (SEGUNDA, TERÇA…) e as seções com dois-pontos (Fundamento:).' });
+    const taken = o.days.filter((d) => days.some((x) => x.date === d.date && x.blocks.length));
+    if (taken.length && !confirm(`${taken.map((d) => `${dayName(d.date)} ${formatDateBR(d.date).slice(0, 5)}`).join(', ')} já ${taken.length > 1 ? 'têm' : 'tem'} treino. Substituir pelo que foi organizado?`)) return;
+    setDays((all) => {
+      const byDate = new Map(all.map((d) => [d.date, d]));
+      for (const d of o.days) byDate.set(d.date, d);
+      return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+    });
+    if (o.theme) setTheme(o.theme);
+    touch();
+    setMsg({ ok: `${o.mode === 'ia' ? 'A IA montou' : 'Organizei'} ${o.days.length} dia(s)${o.theme ? ` · intenção "${o.theme}"` : ''}. Revise os blocos e clique em Salvar.${o.warnings.length ? ` Atenção: ${o.warnings.join(' ')}` : ''}` });
+  });
 
   const save = () => start(async () => {
-    const r = await saveWeekAction(week.id, { ...footer, days });
+    const r = await saveWeekAction(week.id, { ...footer, theme, days });
     if (!r.ok) return setMsg({ error: r.error });
     setDirty(false);
     setMsg({ ok: 'Treinos salvos. A arte e o texto já usam esta versão.' });
@@ -100,6 +121,50 @@ export function EditorClient({ week, benchmarks, modalities }: { week: WorkoutWe
           <Save /> {pending ? 'Salvando…' : 'Salvar'}
         </Button>
       )}
+
+      <Card className="mt-3 p-4">
+        <div className="grid gap-3 md:grid-cols-[minmax(0,22rem)_1fr] md:items-end">
+          <div>
+            <Label htmlFor="w-theme">Intenção da semana / do mês (opcional)</Label>
+            <Input id="w-theme" maxLength={120} placeholder="Ex.: Levantada" value={theme} onChange={(e) => { setTheme(e.target.value); touch(); }} />
+          </div>
+          <p className="text-xs text-tinta-suave">Vai no topo do texto de WhatsApp e ajuda a IA a dar sequência nas próximas semanas.</p>
+        </div>
+        <details className="group mt-3 rounded-lg border border-borda" open={!days.some((d) => d.blocks.length) || undefined}>
+          <summary className="flex cursor-pointer list-none items-center gap-2 p-3 text-sm font-bold text-navy [&::-webkit-details-marker]:hidden">
+            <Sparkles className="size-4 text-nacao" /> Montar a semana pelo texto
+            <span className="font-normal text-tinta-suave">— cole a semana escrita ou só a ideia central</span>
+            <span className="ml-auto text-xs font-semibold text-nacao group-open:hidden">abrir ▾</span>
+          </summary>
+          <div className="space-y-3 border-t border-borda p-3">
+            <p className="text-xs text-tinta-suave">
+              <b>Com os dias escritos</b> (SEGUNDA (tema) – 05/10, e as seções <i>Mobilidade:</i>, <i>Aquecimento / Dinâmica…:</i>, <i>Fundamento:</i>, <i>Dinâmica de jogo com regras:</i>), o sistema organiza o seu texto do jeito que está, sem IA.
+              {' '}<b>Só com a ideia central</b> (ex.: “Intenção do mês: levantada — chapa, ombro, coxa e cabeça”), a IA monta os dias marcados abaixo. Nada é salvo antes de você revisar e clicar em Salvar.
+            </p>
+            <textarea aria-label="Texto da semana" rows={8} maxLength={8000} className="w-full rounded-lg border border-borda p-2 text-sm"
+              placeholder={'INTENÇÃO DO MÊS - LEVANTADA\n\nSEGUNDA (Levantada de chapa) - 05/10\nMobilidade: 4 exercícios\nAquecimento / Dinâmica de jogo com enquadramento:\n- Quadrinha / enquadrar a primeira bola de chapa\nFundamento:\n- Executar a chapa em todos os sentidos\nDinâmica de jogo com regras:\n- Joguinho só vale levantada de chapa'}
+              value={org.text} onChange={(e) => setOrg({ ...org, text: e.target.value })} />
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="text-xs font-semibold text-tinta-suave">Dias (quando a IA monta):</span>
+              {WEEKDAYS.slice(0, 7).map((w, i) => {
+                const n = i + 1;
+                const on = org.weekdays.includes(n);
+                return (
+                  <button key={n} type="button" aria-pressed={on}
+                    onClick={() => setOrg({ ...org, weekdays: on ? org.weekdays.filter((x) => x !== n) : [...org.weekdays, n] })}
+                    className={cn('rounded-full px-2.5 py-1 text-xs font-bold ring-1', on ? 'bg-navy text-white ring-navy' : 'text-tinta-suave ring-borda hover:text-nacao')}>
+                    {w.short}
+                  </button>
+                );
+              })}
+              <div className="flex-1" />
+              <Button type="button" onClick={organize} disabled={organizing || org.text.trim().length < 3}>
+                <Sparkles /> {organizing ? 'Organizando… (com IA, até 1–2 min)' : 'Organizar semana'}
+              </Button>
+            </div>
+          </div>
+        </details>
+      </Card>
 
       <div className="mt-3 grid gap-4 xl:grid-cols-2">
         {days.map((d) => (
