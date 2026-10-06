@@ -3,7 +3,7 @@ import { PROGRAM_MODALITIES } from '@/domain/programming/modalities';
 
 export type NavIcon =
   | 'hoje' | 'calendario' | 'pendencias' | 'grade' | 'professores'
-  | 'fechamento' | 'relatorios' | 'escalas' | 'treinos' | 'benchmarks' | 'dna' | 'treinos-ia' | 'usuarios' | 'historico' | 'cadastros';
+  | 'fechamento' | 'relatorios' | 'escalas' | 'treinos' | 'benchmarks' | 'dna' | 'treinos-ia' | 'usuarios' | 'historico' | 'cadastros' | 'condominio' | 'cobrancas';
 
 export interface NavItem {
   href: string;
@@ -51,6 +51,13 @@ export const NAV_TREINOS: NavItem[] = [
   ]),
 ];
 
+/** Condomínio Nação: rateio mensal dos gastos comuns e cobrança dos parceiros. */
+export const NAV_CONDOMINIO: NavItem[] = [
+  { href: '/condominio', label: 'Painel', icon: 'condominio', permission: 'condo.view' },
+  { href: '/condominio/competencias', label: 'Competências e cobranças', short: 'Cobranças', icon: 'cobrancas', permission: 'condo.view' },
+  { href: '/condominio/cadastros', label: 'Cadastros do condomínio', icon: 'cadastros', permission: 'condo.edit' },
+];
+
 export const NAV_ADMIN: NavItem[] = [
   { href: '/admin/cadastros', label: 'Cadastros', icon: 'cadastros', permission: 'admin.catalog' },
   { href: '/admin/usuarios', label: 'Usuários', icon: 'usuarios', permission: 'admin.users' },
@@ -61,5 +68,6 @@ export const NAV_ADMIN: NavItem[] = [
 export const NAV_SECTIONS: NavSection[] = [
   { title: 'Gestão de Horas', items: NAV_HORAS },
   { title: 'Treinos', items: NAV_TREINOS },
+  { title: 'Condomínio Nação', items: NAV_CONDOMINIO },
   { title: 'Administração', items: NAV_ADMIN },
 ];

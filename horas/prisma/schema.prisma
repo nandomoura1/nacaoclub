@@ -976,3 +976,265 @@ model PersonalWorkout {
   @@index([teacherId, date])
   @@map("personal_workouts")
 }
+
+// ─────────────────────────────────────────────────────────────
+// Condomínio Nação: rateio mensal dos gastos comuns do espaço e
+// cobrança dos parceiros (energia, condomínio, IPTU, itens)
+// ─────────────────────────────────────────────────────────────
+
+enum CondoCenterKind {
+  INTERNAL
+  PARTNER
+}
+
+enum CondoBilling {
+  FULL
+  PRORATA
+  NONE
+}
+
+enum CondoPeriodStatus {
+  DRAFT
+  CLOSED
+}
+
+enum CondoExpenseKind {
+  FIXED
+  VARIABLE
+}
+
+enum CondoChargeStatus {
+  PENDING
+  SENT
+  PAID
+}
+
+/// Dados de recebimento e padrões do Condomínio (linha única, id = 1).
+model CondoSettings {
+  id            Int      @id @default(1)
+  payeeName     String   @default("Nação Club Recreações Esportivas Ltda") @map("payee_name")
+  payeeDocument String   @default("17.179.101/0001-74") @map("payee_document")
+  /// Chave PIX do recebedor: com ela o PDF leva o QR Code "copia e cola".
+  pixKey        String?  @map("pix_key")
+  /// Cidade do recebedor no payload PIX (sem acento, até 15 letras).
+  pixCity       String   @default("BRASILIA") @map("pix_city")
+  bankInfo      String?  @map("bank_info")
+  /// Ex.: "Envie o comprovante para financeiro@…".
+  instructions  String?
+  dueDay        Int      @default(20) @map("due_day")
+  /// Fator de cada bandeira tarifária: { "VERDE": 1.15, … }.
+  flagFactors   Json     @map("flag_factors")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("condo_settings")
+}
+
+/// Centro de custo que ocupa o espaço: operação interna (só entra no rateio)
+/// ou parceiro (recebe a cobrança mensal).
+model CondoCenter {
+  id           String          @id @default(uuid()) @db.Uuid
+  name         String          @unique
+  /// Nome no documento de cobrança ("Futebol Society"). Vazio = name.
+  displayName  String?         @map("display_name")
+  kind         CondoCenterKind
+  /// Lanchonete: assume o percentual fixo do total (30%).
+  isSnackBar   Boolean         @default(false) @map("is_snack_bar")
+  /// Participa do rateio do condomínio.
+  chargesCondo Boolean         @default(true) @map("charges_condo")
+  areaM2       Decimal         @default(0) @map("area_m2") @db.Decimal(10, 2)
+  /// Quanto da cota de IPTU o parceiro paga (Society: 50).
+  iptuSharePct Decimal         @default(100) @map("iptu_share_pct") @db.Decimal(5, 2)
+  legalName    String?         @map("legal_name")
+  document     String?
+  contactName  String?         @map("contact_name")
+  contactPhone String?         @map("contact_phone")
+  contactEmail String?         @map("contact_email")
+  activeFrom   DateTime        @map("active_from") @db.Date
+  activeTo     DateTime?       @map("active_to") @db.Date
+  sortOrder    Int             @default(0) @map("sort_order")
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+
+  meters  CondoMeter[]
+  items   CondoRecurringItem[]
+  periods CondoPeriodCenter[]
+  charges CondoCharge[]
+
+  @@map("condo_centers")
+}
+
+/// Submedidor de energia de um centro de custo.
+model CondoMeter {
+  id             String    @id @default(uuid()) @db.Uuid
+  centerId       String    @map("center_id") @db.Uuid
+  name           String
+  /// Leitura no dia da instalação: o 1º mês cobra só o que passar dela.
+  installReading Decimal   @default(0) @map("install_reading") @db.Decimal(12, 1)
+  activeFrom     DateTime  @map("active_from") @db.Date
+  activeTo       DateTime? @map("active_to") @db.Date
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  center   CondoCenter         @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  readings CondoMeterReading[]
+
+  @@map("condo_meters")
+}
+
+/// Leitura acumulada do relógio na competência ("AAAA-MM").
+model CondoMeterReading {
+  id        String   @id @default(uuid()) @db.Uuid
+  meterId   String   @map("meter_id") @db.Uuid
+  month     String   @db.Char(7)
+  reading   Decimal  @db.Decimal(12, 1)
+  estimated Boolean  @default(false)
+  /// Troca/zeramento do relógio: última leitura do antigo e a inicial do novo.
+  isReset   Boolean  @default(false) @map("is_reset")
+  oldFinal  Decimal? @map("old_final") @db.Decimal(12, 1)
+  baseline  Decimal? @db.Decimal(12, 1)
+  note      String?
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  meter CondoMeter @relation(fields: [meterId], references: [id], onDelete: Cascade)
+
+  @@unique([meterId, month])
+  @@map("condo_meter_readings")
+}
+
+/// IPTU do ano: valor total, área total e janela de parcelas (2026: 6x, maio a outubro).
+model CondoIptuYear {
+  year        Int     @id
+  totalCents  Int     @map("total_cents")
+  totalAreaM2 Decimal @map("total_area_m2") @db.Decimal(10, 2)
+  firstMonth  Int     @map("first_month")
+  parcels     Int
+
+  @@map("condo_iptu_years")
+}
+
+/// Item fixo da cobrança de um parceiro (Aluguel da Sala, Check In Funcional 28 × R$ 25…).
+model CondoRecurringItem {
+  id          String    @id @default(uuid()) @db.Uuid
+  centerId    String    @map("center_id") @db.Uuid
+  description String
+  /// Valor fixo (quando não é quantidade × unitário).
+  amountCents Int       @default(0) @map("amount_cents")
+  /// Quantidade × unitário: o unitário fica aqui; a quantidade vem do mês anterior.
+  unitCents   Int?      @map("unit_cents")
+  defaultQty  Decimal?  @map("default_qty") @db.Decimal(10, 2)
+  activeFrom  DateTime  @map("active_from") @db.Date
+  activeTo    DateTime? @map("active_to") @db.Date
+  sortOrder   Int       @default(0) @map("sort_order")
+
+  center CondoCenter @relation(fields: [centerId], references: [id], onDelete: Cascade)
+
+  @@map("condo_recurring_items")
+}
+
+/// Competência do Condomínio (o mês vencido que está sendo cobrado).
+model CondoPeriod {
+  id          String            @id @default(uuid()) @db.Uuid
+  month       String            @unique @db.Char(7)
+  dueDate     DateTime          @map("due_date") @db.Date
+  status      CondoPeriodStatus @default(DRAFT)
+  tariff      Decimal           @db.Decimal(12, 7)
+  flag        String            @default("VERDE")
+  flagFactor  Decimal           @map("flag_factor") @db.Decimal(6, 4)
+  snackBarPct Decimal           @default(30) @map("snack_bar_pct") @db.Decimal(5, 2)
+  notes       String?
+  /// Resultado congelado no fechamento (rateio, energia, cobranças): o PDF enviado nunca muda.
+  snapshot    Json?
+  /// Importada da planilha (cobranças como foram cobradas na época).
+  imported    Boolean           @default(false)
+  closedAt    DateTime?         @map("closed_at")
+  closedById  String?           @map("closed_by") @db.Uuid
+  createdById String?           @map("created_by") @db.Uuid
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  expenses CondoExpense[]
+  centers  CondoPeriodCenter[]
+  items    CondoPeriodItem[]
+  charges  CondoCharge[]
+
+  @@map("condo_periods")
+}
+
+/// Despesa comum do mês (Tabela 1).
+model CondoExpense {
+  id          String           @id @default(uuid()) @db.Uuid
+  periodId    String           @map("period_id") @db.Uuid
+  group       String
+  description String
+  amountCents Int              @map("amount_cents")
+  kind        CondoExpenseKind @default(VARIABLE)
+  /// Variável copiada do mês anterior: precisa ser confirmada antes do fechamento.
+  confirmed   Boolean          @default(true)
+  /// Memória de cálculo: "1.730 + 1.000 + 1.986 + 993,47".
+  memo        String?
+  sortOrder   Int              @default(0) @map("sort_order")
+
+  period CondoPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@index([periodId, sortOrder])
+  @@map("condo_expenses")
+}
+
+/// Centro de custo na competência: nº de alunos/colaboradores e como cobrar (entrada/saída no meio do mês).
+model CondoPeriodCenter {
+  periodId  String       @map("period_id") @db.Uuid
+  centerId  String       @map("center_id") @db.Uuid
+  headcount Int          @default(0)
+  billing   CondoBilling @default(FULL)
+
+  period CondoPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  center CondoCenter @relation(fields: [centerId], references: [id], onDelete: Restrict)
+
+  @@id([periodId, centerId])
+  @@map("condo_period_centers")
+}
+
+/// Item da cobrança de um parceiro no mês: fixo (copiado do cadastro) ou avulso.
+model CondoPeriodItem {
+  id              String   @id @default(uuid()) @db.Uuid
+  periodId        String   @map("period_id") @db.Uuid
+  centerId        String   @map("center_id") @db.Uuid
+  recurringItemId String?  @map("recurring_item_id") @db.Uuid
+  description     String
+  qty             Decimal? @db.Decimal(10, 2)
+  unitCents       Int?     @map("unit_cents")
+  amountCents     Int      @default(0) @map("amount_cents")
+  adhoc           Boolean  @default(false)
+  sortOrder       Int      @default(0) @map("sort_order")
+
+  period CondoPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@index([periodId, centerId])
+  @@map("condo_period_items")
+}
+
+/// Cobrança de um parceiro na competência fechada (snapshot das linhas).
+model CondoCharge {
+  id          String            @id @default(uuid()) @db.Uuid
+  periodId    String            @map("period_id") @db.Uuid
+  centerId    String            @map("center_id") @db.Uuid
+  /// Nº do documento (sequencial, mantido ao refechar).
+  number      Int               @default(autoincrement())
+  centerName  String            @map("center_name")
+  totalCents  Int               @map("total_cents")
+  /// [{ kind, description, cents, detail }]
+  lines       Json
+  dueDate     DateTime          @map("due_date") @db.Date
+  status      CondoChargeStatus @default(PENDING)
+  sentAt      DateTime?         @map("sent_at")
+  paidAt      DateTime?         @map("paid_at") @db.Date
+  paidCents   Int?              @map("paid_cents")
+  paymentNote String?           @map("payment_note")
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  period CondoPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  center CondoCenter @relation(fields: [centerId], references: [id], onDelete: Restrict)
+
+  @@unique([periodId, centerId])
+  @@map("condo_charges")
+}

@@ -34,6 +34,10 @@ export const PERMISSIONS = {
   'hours.own': 'Ver o próprio extrato de horas (usuário vinculado a um professor)',
   'workout.view': 'Ver os treinos lançados no Cadastro de Treino',
   'workout.personal': 'Criar treinos de Personal para as próprias aulas',
+  'condo.view': 'Condomínio: ver painel, competências e cobranças',
+  'condo.edit': 'Condomínio: lançar a competência e os cadastros',
+  'condo.close': 'Condomínio: fechar e reabrir competências',
+  'condo.payments': 'Condomínio: marcar cobranças como enviadas e pagas',
 } as const;
 
 export type PermissionKey = keyof typeof PERMISSIONS;
