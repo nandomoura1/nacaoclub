@@ -214,7 +214,7 @@ export function parsePackage(sheets: Sheets): PackageResult {
     const meta: Record<string, unknown> = {};
     if (pos) meta.dataPosicao = pos;
     if (status) meta.status = status;
-    const tot = obs?.match(/total(?:\s+informado)?\s*R\$\s*([\d.,]+)/i);
+    const tot = obs?.match(/total(?:\s+informado)?\s*R\$\s*([\d.,]*\d)/i);
     if (tot && num(tot[1]!) !== null) meta.totalInformado = cents(num(tot[1]!)!);
     pm.lines.push({ dataset: 'CAIXA', key: 'disponivel', label: conta, unit: str(r.get('subconta')), amountCents: cents(v), quantity: null, classification: null,
       meta: Object.keys(meta).length ? meta : null, sourceRef: `Planilha · ${where}`, sourceValue: `${v}${status ? ` · ${status}` : ''}${pos ? ` · posição ${pos}` : ''}`,

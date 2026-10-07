@@ -1,10 +1,36 @@
 import ExcelJS from 'exceljs';
+import JSZip from 'jszip';
 import type { Cell, Sheets } from '@/domain/financeiro/package';
+
+/**
+ * O exceljs quebra ao carregar planilhas com "Formatar como Tabela" (ListObjects).
+ * Os valores estão nas células; a tabela é só formatação/metadado — removemos
+ * essa camada (arquivos xl/tables, <tableParts> e as relações) antes de ler.
+ */
+async function withoutTables(buffer: ArrayBuffer): Promise<ArrayBuffer> {
+  const zip = await JSZip.loadAsync(buffer);
+  const tables = Object.keys(zip.files).filter((f) => /^xl\/tables\//.test(f));
+  if (!tables.length) return buffer;
+  for (const f of tables) zip.remove(f);
+  for (const f of Object.keys(zip.files)) {
+    if (/^xl\/worksheets\/sheet[^/]*\.xml$/.test(f)) {
+      const xml = await zip.file(f)!.async('string');
+      zip.file(f, xml.replace(/<tableParts\b[^>]*\/>/g, '').replace(/<tableParts\b[\s\S]*?<\/tableParts>/g, ''));
+    } else if (/^xl\/worksheets\/_rels\/.*\.rels$/.test(f)) {
+      const xml = await zip.file(f)!.async('string');
+      zip.file(f, xml.replace(/<Relationship\b[^>]*Type="[^"]*\/table"[^>]*\/>/g, ''));
+    } else if (f === '[Content_Types].xml') {
+      const xml = await zip.file(f)!.async('string');
+      zip.file(f, xml.replace(/<Override\b[^>]*PartName="\/xl\/tables\/[^"]*"[^>]*\/>/g, ''));
+    }
+  }
+  return zip.generateAsync({ type: 'arraybuffer' });
+}
 
 /** .xlsx → abas como matriz de valores (resultado das fórmulas), para o leitor puro do pacote histórico. */
 export async function readPackageWorkbook(buffer: ArrayBuffer): Promise<Sheets> {
   const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(buffer);
+  await wb.xlsx.load(await withoutTables(buffer));
   const out: Sheets = {};
   const plain = (x: unknown): Cell => {
     if (x === null || x === undefined) return null;
