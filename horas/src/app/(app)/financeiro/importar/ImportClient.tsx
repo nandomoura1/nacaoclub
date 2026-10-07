@@ -12,8 +12,9 @@ import { Input, Label } from '@/components/ui/input';
 import { isMonth, monthLabel, monthTitle } from '@/domain/condominio/months';
 import { compareMetrics, type Metrics } from '@/domain/financeiro/metrics';
 import { DATASETS } from '@/domain/financeiro/taxonomy';
-import type { HistoricAnalysis } from '@/server/services/fin-service';
+import type { FinPackageAnalysis, HistoricAnalysis } from '@/server/services/fin-service';
 import { fmtValue, FIN_STATUS } from '../_components/fmt';
+import { PackageView } from './PackageView';
 import { LineForm, keyLabel, lineValue, type CategoryOption, type LineDraft } from '../_components/lines';
 import { analyzeHistoricAction, commitHistoricAction, discardHistoricAction, previewHistoricAction } from '../actions';
 
@@ -27,6 +28,7 @@ export function ImportClient({ periods, approved, categories, canApprove }: {
   const router = useRouter();
   const ref = useRef<HTMLInputElement>(null);
   const [a, setA] = useState<HistoricAnalysis | null>(null);
+  const [pkg, setPkg] = useState<FinPackageAnalysis | null>(null);
   const [month, setMonth] = useState('');
   const [notes, setNotes] = useState('');
   const [lines, setLines] = useState<Draft[]>([]);
@@ -44,10 +46,12 @@ export function ImportClient({ periods, approved, categories, canApprove }: {
     fd.set('file', file);
     const r = await analyzeHistoricAction(fd);
     if (!r.ok) return setMsg({ error: r.error });
-    setA(r.data);
-    setMonth(r.data.month ?? '');
-    setNotes(r.data.notes ?? '');
-    setLines(r.data.lines.map((l) => ({ ...l, uid: ++uid })));
+    if (r.data.kind === 'pacote') return setPkg(r.data.data);
+    const d = r.data.data;
+    setA(d);
+    setMonth(d.month ?? '');
+    setNotes(d.notes ?? '');
+    setLines(d.lines.map((l) => ({ ...l, uid: ++uid })));
     setCompare(null);
   });
   const payload = () => lines.map(({ uid: _u, ...l }) => l);
@@ -68,13 +72,15 @@ export function ImportClient({ periods, approved, categories, canApprove }: {
   });
   const cancel = () => start(async () => { if (a) await discardHistoricAction(a.documentId); reset(); setMsg({ ok: 'Importação cancelada. Nada foi gravado.' }); });
 
+  if (pkg) return <PackageView pkg={pkg} onDone={(text) => { setPkg(null); setMsg({ ok: text }); router.refresh(); }} />;
   if (!a) {
     return (
       <Card className="p-6 text-center">
         <input ref={ref} type="file" accept={ACCEPT} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) upload(f); }} />
         <FileUp className="mx-auto size-8 text-nacao" />
         <p className="mt-2 font-bold text-navy">Envie um relatório financeiro antigo</p>
-        <p className="text-sm text-tinta-suave">Um mês por arquivo, até 6 MB. A leitura leva de 30 segundos a 2 minutos.</p>
+        <p className="text-sm text-tinta-suave">Um relatório por arquivo, até 6 MB (a leitura pela IA leva de 30 segundos a 2 minutos).</p>
+        <p className="mt-1 text-sm text-tinta-suave">Tem a <b>planilha de pacote histórico</b> (aba MANIFESTO <code className="text-xs">nacao_financeiro_historico</code>)? Envie aqui: ela é lida na hora, sem IA, e traz vários meses de uma vez.</p>
         <Button className="mt-3" disabled={pending} onClick={() => ref.current?.click()}><FileUp /> {pending ? 'Lendo o relatório…' : 'Escolher arquivo'}</Button>
         <div className="mt-2 text-left"><FormMessage error={msg.error} success={msg.ok} /></div>
       </Card>

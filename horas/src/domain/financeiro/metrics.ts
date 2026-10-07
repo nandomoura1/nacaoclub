@@ -34,8 +34,14 @@ export interface Targets {
   cmvVarAlertPp: number;
   /** Repasse contratual da parceria do Tênis (%). */
   tennisSharePct: number;
+  /**
+   * O que sai dos pagamentos na "geração de caixa antes do payout":
+   * só a distribuição de lucros (metodologia do relatório de agosto/2026) ou
+   * todo o payout (distribuição + antecipação + retiradas).
+   */
+  payoutInFlow: 'distribuicao' | 'total';
 }
-export const DEFAULT_TARGETS: Targets = { cmvMaxPct: 40, personnelMaxPct: 28, cashMinCents: null, payrollVarAlertPct: 15, cmvVarAlertPp: 5, tennisSharePct: 40 };
+export const DEFAULT_TARGETS: Targets = { cmvMaxPct: 40, personnelMaxPct: 28, cashMinCents: null, payrollVarAlertPct: 15, cmvVarAlertPp: 5, tennisSharePct: 40, payoutInFlow: 'distribuicao' };
 
 export type IndStatus = 'informado' | 'nao_informado' | 'estimativa' | 'importado';
 export interface Ind { value: number | null; unit: 'BRL' | 'PCT' | 'QTD'; formula: string; status: IndStatus }
@@ -104,12 +110,31 @@ export function computeMetrics(lines: FinLineData[], categories: CategoryDef[], 
   };
   /** Valor das linhas de detalhe; sem detalhe, o indicador do relatório importado; sem nenhum, "não informado". */
   const pick = (detail: number | null, key: string, unit: Ind['unit'], formula: string): Ind => (detail !== null ? ind(detail, unit, formula) : fromIndicator(key, unit, formula) ?? NA(unit, formula));
+  /**
+   * Totais (recebimentos, pagamentos, pessoal, caixa): o total informado no
+   * relatório vale mesmo que o detalhe seja parcial — o detalhe é só a parte
+   * conhecida. Detalhe maior que o total é divergência (só aponta).
+   */
+  const totalChecks: Check[] = [];
+  const total = (detail: number | null, key: string, label: string, formula: string): Ind => {
+    const declared = fromIndicator(key, 'BRL', formula);
+    if (!declared) return ind(detail, 'BRL', formula);
+    if (detail !== null && declared.value !== null && detail - declared.value > 100) {
+      totalChecks.push({ level: 'divergencia', key: `total_${key}`, message: `${label}: o detalhe soma ${BRL(detail)}, acima do total informado (${BRL(declared.value)}).` });
+    }
+    return declared;
+  };
+  /** Parte do total sem detalhe por categoria (relatórios antigos trazem só os principais itens). */
+  const undetailed = (rows: Row[], t: Ind): Row[] => {
+    const known = sum(rows.map((r) => r.cents));
+    return t.value !== null && rows.length && t.value - known > 100 ? [...rows, { key: 'nao_detalhado', label: 'Não detalhado no documento', cents: t.value - known, ratio: t.value ? (t.value - known) / t.value : null }] : rows;
+  };
 
   // ── Recebimentos ───────────────────────────────────────────
   const rec = of('RECEITA');
   const recBy = (pred: (c: CategoryDef | undefined, l: FinLineData) => boolean) => rec.filter((l) => pred(cat.get(l.key ?? ''), l));
   const recTotal = rec.length ? sum(rec.map((l) => l.amountCents)) : null;
-  const recebimentos = pick(recTotal, 'recebimentos', 'BRL', 'Σ recebimentos do mês (todas as categorias, estornos negativos)');
+  const recebimentos = total(recTotal, 'recebimentos', 'Recebimentos', 'Σ recebimentos do mês (todas as categorias, estornos negativos)');
   const operating = rec.length ? sum(recBy((c) => c?.operatingRevenue !== false).map((l) => l.amountCents)) : null;
   const receitaOperacional = ind(operating, 'BRL', 'Recebimentos − aportes/empréstimos (entradas financeiras não são receita operacional)');
   const entradasFinanceiras = ind(rec.length ? sum(recBy((c) => c?.operatingRevenue === false).map((l) => l.amountCents)) : null, 'BRL', 'Σ aportes + empréstimos + financiamentos recebidos');
@@ -123,13 +148,13 @@ export function computeMetrics(lines: FinLineData[], categories: CategoryDef[], 
     return [...m.entries()].map(([key, cents]) => ({ key, label: cat.get(key)?.label ?? (key === 'sem_categoria' ? 'Sem categoria' : key), cents, ratio: total ? cents / total : null }))
       .sort((a, b) => b.cents - a.cents);
   };
-  const revenueByCategory = group(rec, recTotal);
+  const revenueByCategory = undetailed(group(rec, recebimentos.value), recebimentos);
 
   // ── Pagamentos ─────────────────────────────────────────────
   const desp = of('DESPESA');
   const despTotal = desp.length ? sum(desp.map((l) => l.amountCents)) : null;
-  const pagamentos = pick(despTotal, 'pagamentos', 'BRL', 'Σ pagamentos do mês (todas as categorias)');
-  const expenseByCategory = group(desp, despTotal).map((r) => ({ ...r, classification: cat.get(r.key)?.classification ?? 'OPEX' }));
+  const pagamentos = total(despTotal, 'pagamentos', 'Pagamentos', 'Σ pagamentos do mês (todas as categorias)');
+  const expenseByCategory = undetailed(group(desp, pagamentos.value), pagamentos).map((r) => ({ ...r, classification: r.key === 'nao_detalhado' ? '—' : cat.get(r.key)?.classification ?? 'OPEX' }));
   const byKey = (k: string) => (desp.some((l) => l.key === k) ? sum(desp.filter((l) => l.key === k).map((l) => l.amountCents)) : null);
   const capexD = desp.length ? sum(desp.filter((l) => cat.get(l.key ?? '')?.classification === 'CAPEX' || l.classification === 'CAPEX').map((l) => l.amountCents)) : null;
 
@@ -137,7 +162,7 @@ export function computeMetrics(lines: FinLineData[], categories: CategoryDef[], 
   // Entra só o que a categoria marca como pessoal: IRRF retido, adiantamento,
   // payout e a parceria do Tênis ficam de fora por definição.
   const pessoalLines = desp.filter((l) => cat.get(l.key ?? '')?.personnel === true);
-  const pessoal = pick(desp.length ? sum(pessoalLines.map((l) => l.amountCents)) : null, 'pessoal', 'BRL', 'Σ salários, FUNAP, estagiários, VT, FGTS, férias, gratificações, rescisões, 13º, encargos (sem IRRF retido, adiantamento, payout e parceria do Tênis)');
+  const pessoal = total(pessoalLines.length ? sum(pessoalLines.map((l) => l.amountCents)) : null, 'pessoal', 'Custo de pessoal', 'Σ salários, FUNAP, estagiários, VT, FGTS, férias, gratificações, rescisões, 13º, encargos (sem IRRF retido, adiantamento, payout e parceria do Tênis)');
   const pessoalComponents = group(pessoalLines, pessoal.value);
   const pessoalExcluded = group(desp.filter((l) => ['pessoal.irrf', 'pessoal.adiantamento', TENNIS_PARTNERSHIP_KEY].includes(l.key ?? '')), null);
 
@@ -245,7 +270,8 @@ export function computeMetrics(lines: FinLineData[], categories: CategoryDef[], 
   const dist = pick(byKey(PAYOUT_KEYS.distribuicao), 'distribuicao', 'BRL', 'Σ distribuição de lucros');
   const ant = ind(byKey(PAYOUT_KEYS.antecipacao), 'BRL', 'Σ antecipação de lucros');
   const ret = ind(byKey(PAYOUT_KEYS.retiradas), 'BRL', 'Σ outras retiradas dos sócios');
-  const payoutTotalD = desp.length ? sum([dist.status === 'informado' ? dist.value : null, ant.value, ret.value]) : null;
+  const payoutParts = [dist.status === 'informado' ? dist.value : null, ant.value, ret.value];
+  const payoutTotalD = payoutParts.some((v) => v !== null) ? sum(payoutParts) : null;
   const payoutTotal = pick(payoutTotalD, 'payout', 'BRL', 'Distribuição + antecipação + retiradas (nunca é OPEX)');
   const payout = {
     distribuicao: dist, antecipacao: ant, retiradas: ret, total: payoutTotal,
@@ -255,14 +281,17 @@ export function computeMetrics(lines: FinLineData[], categories: CategoryDef[], 
 
   // ── Fluxo (não é lucro) ────────────────────────────────────
   const diferenca = minus(recebimentos, pagamentos, 'Recebimentos − pagamentos (diferença de caixa, não é lucro)');
-  const pagamentosAntesPayout = minus(pagamentos, { ...payoutTotal, value: payoutTotal.value ?? 0 }, 'Pagamentos − payout (distribuição + antecipação + retiradas)');
+  const inFlow = targets.payoutInFlow === 'total'
+    ? { ind: payoutTotal, label: 'payout total (distribuição + antecipação + retiradas)' }
+    : { ind: dist, label: 'distribuição de lucros (antecipações e retiradas continuam nos pagamentos)' };
+  const pagamentosAntesPayout = minus(pagamentos, { ...inFlow.ind, value: inFlow.ind.value ?? 0 }, `Pagamentos − ${inFlow.label}`);
   const geracaoAntesPayout = minus(recebimentos, pagamentosAntesPayout, 'Recebimentos − pagamentos antes do payout (geração/consumo de caixa, não é lucro)');
 
   // ── Caixa: disponível ≠ a receber ──────────────────────────
   const cashLines = of('CAIXA');
   const avail = cashLines.filter((l) => (l.key ?? 'disponivel') === 'disponivel');
   const recv = cashLines.filter((l) => l.key === 'a_receber');
-  const disponivel = pick(avail.length ? sum(avail.map((l) => l.amountCents)) : null, 'caixa', 'BRL', 'Σ saldos das contas (só o disponível; recebíveis ficam fora)');
+  const disponivel = total(avail.length ? sum(avail.map((l) => l.amountCents)) : null, 'caixa', 'Caixa disponível', 'Σ saldos das contas (só o disponível; recebíveis ficam fora)');
   const caixa = {
     disponivel,
     aReceber: ind(recv.length ? sum(recv.map((l) => l.amountCents)) : null, 'BRL', 'Σ previsto a receber (não entra no caixa disponível)'),
@@ -292,7 +321,7 @@ export function computeMetrics(lines: FinLineData[], categories: CategoryDef[], 
     checks: [],
     source: lines.length === 0 ? 'vazio' : of('INDICADOR').length === 0 ? 'detalhado' : of('INDICADOR').length === lines.length ? 'importado' : 'misto',
   };
-  m.checks = checks(m, targets, previous ?? null, cashLines);
+  m.checks = [...totalChecks, ...checks(m, targets, previous ?? null, cashLines)];
   return m;
 }
 

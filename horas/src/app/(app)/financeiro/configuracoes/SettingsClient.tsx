@@ -24,6 +24,7 @@ export function SettingsClient({ targets, categories }: { targets: Targets; cate
     cashMin: targets.cashMinCents === null ? '' : (targets.cashMinCents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
     payrollVarAlertPct: str(targets.payrollVarAlertPct), cmvVarAlertPp: str(targets.cmvVarAlertPp), tennisSharePct: str(targets.tennisSharePct),
   });
+  const [payoutInFlow, setPayoutInFlow] = useState(targets.payoutInFlow);
   const [editing, setEditing] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ error?: string | null; ok?: string | null }>({});
   const [pending, start] = useTransition();
@@ -40,7 +41,7 @@ export function SettingsClient({ targets, categories }: { targets: Targets; cate
   );
   const saveTargets = () => run(() => saveTargetsAction({
     cmvMaxPct: num(t.cmvMaxPct), personnelMaxPct: num(t.personnelMaxPct), cashMinCents: t.cashMin.trim() ? parseBRL(t.cashMin) : null,
-    payrollVarAlertPct: num(t.payrollVarAlertPct), cmvVarAlertPp: num(t.cmvVarAlertPp), tennisSharePct: num(t.tennisSharePct),
+    payrollVarAlertPct: num(t.payrollVarAlertPct), cmvVarAlertPp: num(t.cmvVarAlertPp), tennisSharePct: num(t.tennisSharePct), payoutInFlow,
   }));
   const blank: Cat = { key: '', label: '', kind: 'DESPESA', classification: 'OPEX', personnel: false, operatingRevenue: false, sortOrder: 0, active: true };
 
@@ -56,6 +57,14 @@ export function SettingsClient({ targets, categories }: { targets: Targets; cate
           {field('payrollVarAlertPct', 'Variação da folha que gera alerta (%)', 'Comparado ao último mês aprovado.')}
           {field('cmvVarAlertPp', 'Variação do CMV que gera alerta (p.p.)', 'Comparado ao último mês aprovado.')}
           {field('tennisSharePct', 'Repasse do Tênis pelo contrato (%)', 'Usado para conferir o repasse ao parceiro.')}
+          <div className="sm:col-span-2">
+            <Label>Geração de caixa antes do payout desconta…</Label>
+            <Select value={payoutInFlow} onChange={(e) => setPayoutInFlow(e.target.value as Targets['payoutInFlow'])}>
+              <option value="distribuicao">Só a distribuição de lucros (metodologia do relatório de agosto/2026)</option>
+              <option value="total">Todo o payout (distribuição + antecipação + retiradas)</option>
+            </Select>
+            <p className="mt-0.5 text-[11px] text-tinta-fraca">Vale para os relatórios e o painel. Versões já aprovadas guardam o cálculo da época.</p>
+          </div>
         </div>
         <Button className="mt-3" size="sm" disabled={pending} onClick={saveTargets}><Save /> Salvar metas</Button>
       </Card>

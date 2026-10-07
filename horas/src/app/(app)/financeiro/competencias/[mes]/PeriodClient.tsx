@@ -188,7 +188,6 @@ function ReviewTab({ p, categories, perms, pending, run }: { p: FinPeriodView; c
   const [adding, setAdding] = useState(false);
   const [origin, setOrigin] = useState<string | null>(null);
   const [onlyPending, setOnlyPending] = useState(false);
-  const docName = useMemo(() => new Map(p.documents.map((d) => [d.id, d.filename])), [p.documents]);
   const pendingCount = p.lines.filter((l) => l.status === 'EXTRACTED').length;
   const approved = p.version > 0;
   const shown = onlyPending ? p.lines.filter((l) => l.status === 'EXTRACTED') : p.lines;
@@ -223,7 +222,7 @@ function ReviewTab({ p, categories, perms, pending, run }: { p: FinPeriodView; c
                     <LineForm initial={l} categories={categories} needReason={approved} pending={pending}
                       onCancel={() => setEditing(null)} onSave={(v, reason) => run(() => updateLineAction(p.month, l.id, { ...v, reason: reason ?? undefined }), () => setEditing(null))} />
                   ) : (
-                    <LineRow l={l} categories={categories} doc={l.documentId ? docName.get(l.documentId) ?? null : null} canEdit={perms.canEdit} pending={pending}
+                    <LineRow l={l} categories={categories} doc={l.documentName} canEdit={perms.canEdit} pending={pending}
                       showOrigin={origin === l.id} onOrigin={() => setOrigin(origin === l.id ? null : l.id)}
                       onConfirm={() => run(() => confirmLinesAction(p.month, [l.id]))} onEdit={() => setEditing(l.id)}
                       onDelete={() => {

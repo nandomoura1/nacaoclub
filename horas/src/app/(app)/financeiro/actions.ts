@@ -9,7 +9,7 @@ import type { Analysis } from '@/server/financeiro/analysis';
 import {
   addFinLine, analyzeHistoricReport, approveFinPeriod, commitHistoricReport, confirmFinLines, createFinPeriod, deleteFinDocument, deleteFinLine,
   discardHistoricReport, previewMetrics, processFinDocument, runFinAnalysis, saveCategory, saveFinNotes, saveFinTargets, saveReconciliation,
-  updateFinLine, uploadFinDocument, type HistoricAnalysis,
+  updateFinLine, uploadFinDocument, analyzeFinPackage, commitFinPackage, isFinPackageFile, type FinPackageAnalysis, type HistoricAnalysis,
 } from '@/server/services/fin-service';
 
 const refresh = (month?: string) => {
@@ -76,8 +76,17 @@ export async function analysisAction(month: string): Promise<ActionResult<Analys
   return runAction(async () => { const a = await runFinAnalysis(await getPrincipal(), month, await requestMeta()); refresh(month); return a; });
 }
 
-export async function analyzeHistoricAction(form: FormData): Promise<ActionResult<HistoricAnalysis>> {
-  return runAction(async () => analyzeHistoricReport(await getPrincipal(), fileOf(form), await requestMeta()));
+/** Pacote histórico (planilha estruturada) é lido sem IA; qualquer outro relatório vai para a leitura por IA. */
+export async function analyzeHistoricAction(form: FormData): Promise<ActionResult<{ kind: 'pacote'; data: FinPackageAnalysis } | { kind: 'relatorio'; data: HistoricAnalysis }>> {
+  return runAction(async () => {
+    const file = fileOf(form);
+    const principal = await getPrincipal();
+    if (await isFinPackageFile(file)) return { kind: 'pacote' as const, data: await analyzeFinPackage(principal, file, await requestMeta()) };
+    return { kind: 'relatorio' as const, data: await analyzeHistoricReport(principal, file, await requestMeta()) };
+  });
+}
+export async function commitPackageAction(documentId: string, months: string[]): Promise<ActionResult<{ months: string[]; lines: number }>> {
+  return runAction(async () => { const r = await commitFinPackage(await getPrincipal(), { documentId, months }, await requestMeta()); refresh(); for (const m of r.months) revalidatePath(`/financeiro/competencias/${m}`); return r; });
 }
 export async function previewHistoricAction(lines: unknown): Promise<ActionResult<Metrics>> {
   return runAction(async () => previewMetrics(await getPrincipal(), lines));

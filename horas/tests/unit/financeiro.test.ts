@@ -94,9 +94,13 @@ describe('Relatório Financeiro — motor de regras', () => {
     const pag = 100 + 8 + 5 + 30 + 16 + 60 + 10 + 70 + 50 + 20;
     expect(m.pagamentos.value).toBe(pag * 1_000_00);
     expect(m.fluxo.diferenca.value).toBe((840 - pag) * 1_000_00);
-    expect(m.fluxo.pagamentosAntesPayout.value).toBe((pag - 70) * 1_000_00);
-    expect(m.fluxo.geracaoAntesPayout.value).toBe((840 - pag + 70) * 1_000_00);
+    // Padrão (metodologia de agosto/2026): só a distribuição sai dos pagamentos.
+    expect(m.fluxo.pagamentosAntesPayout.value).toBe((pag - 60) * 1_000_00);
+    expect(m.fluxo.geracaoAntesPayout.value).toBe((840 - pag + 60) * 1_000_00);
     expect(m.fluxo.geracaoAntesPayout.formula).toMatch(/não é lucro/);
+    // Configurável: todo o payout (distribuição + antecipação).
+    const all = computeMetrics(base(), DEFAULT_CATEGORIES, { ...DEFAULT_TARGETS, payoutInFlow: 'total' });
+    expect(all.fluxo.geracaoAntesPayout.value).toBe((840 - pag + 70) * 1_000_00);
     expect(m.investimentos.total.value).toBe(50_000_00); // obras = CAPEX
   });
 
@@ -149,5 +153,21 @@ describe('Relatório Financeiro — motor de regras', () => {
     expect(ytd.recebimentos).toEqual({ value: 1_540_000_00, months: 2 });
     expect(ytd.alunosAtual).toBe(1000);
     expect(ytd.lanchonete).toEqual({ value: 175_000_00, months: 1 });
+  });
+
+  it('total informado vale com detalhe parcial; o resto aparece como "não detalhado"; detalhe acima do total é divergência', () => {
+    const IND = (key: string, cents: number) => L('INDICADOR', key, cents);
+    const x = computeMetrics([
+      IND('recebimentos', 1000_000_00), IND('pagamentos', 900_000_00), IND('pessoal', 250_000_00),
+      L('RECEITA', 'rec.servicos', 700_000_00), L('DESPESA', 'payout.distribuicao', 50_000_00), L('DESPESA', 'parceria.tenis', 30_000_00),
+    ], DEFAULT_CATEGORIES);
+    expect(x.recebimentos).toMatchObject({ value: 1000_000_00, status: 'importado' });
+    expect(x.revenueByCategory.at(-1)).toMatchObject({ key: 'nao_detalhado', cents: 300_000_00, ratio: 0.3 });
+    expect(x.pessoal.value).toBe(250_000_00); // total informado, mesmo sem linhas de folha
+    expect(x.pessoalPctServicos.value).toBeCloseTo(250 / 700);
+    expect(x.fluxo.geracaoAntesPayout.value).toBe((1000 - 900 + 50) * 1_000_00);
+    expect(x.checks.some((c) => c.level === 'divergencia')).toBe(false);
+    const over = computeMetrics([IND('recebimentos', 100_00), L('RECEITA', 'rec.servicos', 500_00)], DEFAULT_CATEGORIES);
+    expect(over.checks.find((c) => c.key === 'total_recebimentos')?.level).toBe('divergencia');
   });
 });

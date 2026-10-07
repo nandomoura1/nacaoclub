@@ -8,10 +8,12 @@ import type { Principal } from '@/server/auth/principal';
 import type { RequestMeta } from '@/server/auth/session';
 import { AppError, NotFoundError } from '@/server/errors';
 import { isMonth, monthLabel, type Month } from '@/domain/condominio/months';
-import { computeMetrics, DEFAULT_TARGETS, type FinLineData, type Metrics, type Targets } from '@/domain/financeiro/metrics';
+import { computeMetrics, DEFAULT_TARGETS, KEY_INDICATORS, type FinLineData, type Metrics, type Targets } from '@/domain/financeiro/metrics';
 import { DATASETS, DEFAULT_CATEGORIES, DOC_KINDS, type CategoryDef, type Dataset, type DocKind } from '@/domain/financeiro/taxonomy';
 import { ACCEPTED, MAX_FILE_BYTES, extractDocument, fileToBlocks, toLineInput, type Extraction } from '@/server/financeiro/extract';
 import { analysisInput, generateAnalysis, type Analysis } from '@/server/financeiro/analysis';
+import { readPackageWorkbook } from '@/server/import/fin-package-xlsx';
+import { compareFileKpis, isPackage, parsePackage } from '@/domain/financeiro/package';
 
 /**
  * Relatório Financeiro: competência → documentos → extração (IA) →
@@ -40,6 +42,7 @@ const targetsSchema = z.object({
   payrollVarAlertPct: z.coerce.number().min(0).max(100),
   cmvVarAlertPp: z.coerce.number().min(0).max(100),
   tennisSharePct: z.coerce.number().min(0).max(100),
+  payoutInFlow: z.enum(['distribuicao', 'total']).default('distribuicao'),
 });
 
 export async function saveFinTargets(principal: Principal | null, input: unknown, meta: RequestMeta) {
@@ -143,6 +146,12 @@ export async function getFinPeriod(principal: Principal | null, month: string) {
   const { metrics, prev, lines } = await liveMetrics(prisma, p.id, month);
   const userIds = [...new Set([...p.documents.map((d) => d.uploadedById), ...p.versions.map((v) => v.createdById), ...lines.map((l) => l.confirmedById)].filter((x): x is string => !!x))];
   const users = new Map((await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } })).map((u) => [u.id, u.name]));
+  // Linhas vindas de um pacote histórico apontam para um arquivo que não pertence a um mês só.
+  const outside = [...new Set(lines.map((l) => l.documentId).filter((id): id is string => !!id && !p.documents.some((d) => d.id === id)))];
+  const docNames = new Map([
+    ...p.documents.map((d) => [d.id, d.filename] as const),
+    ...(outside.length ? await prisma.finDocument.findMany({ where: { id: { in: outside } }, select: { id: true, filename: true } }) : []).map((d) => [d.id, d.filename] as const),
+  ]);
   return {
     id: p.id, month, status: p.status, version: p.version, managerNotes: p.managerNotes, partnerDecisions: p.partnerDecisions,
     analysis: (p.analysis as unknown as Analysis | null) ?? null, approvedAt: p.approvedAt?.toISOString() ?? null,
@@ -153,7 +162,7 @@ export async function getFinPeriod(principal: Principal | null, month: string) {
     })),
     lines: lines.sort((a, b) => a.dataset.localeCompare(b.dataset) || (b.amountCents ?? 0) - (a.amountCents ?? 0)).map((l) => ({
       id: l.id, dataset: l.dataset as Dataset, key: l.key, label: l.label, unit: l.unit, amountCents: l.amountCents, quantity: num(l.quantity), classification: l.classification,
-      meta: (l.meta as Record<string, unknown> | null) ?? null, documentId: l.documentId, sourceRef: l.sourceRef, sourceValue: l.sourceValue, rule: l.rule, status: l.status,
+      meta: (l.meta as Record<string, unknown> | null) ?? null, documentId: l.documentId, documentName: l.documentId ? docNames.get(l.documentId) ?? null : null, sourceRef: l.sourceRef, sourceValue: l.sourceValue, rule: l.rule, status: l.status,
       confirmedBy: l.confirmedById ? users.get(l.confirmedById) ?? null : null,
     })),
     metrics,
@@ -512,7 +521,7 @@ export async function commitHistoricReport(principal: Principal | null, input: u
   return prisma.$transaction(async (tx) => {
     const doc = await tx.finDocument.findUnique({ where: { id: d.documentId } });
     if (!doc || doc.origin !== 'HISTORICO') throw new NotFoundError('Relatório não encontrado.');
-    if (doc.periodId) throw new AppError('Este relatório já foi importado.');
+    if (doc.periodId || doc.status === 'APPROVED' || isPackageDoc(doc.extraction)) throw new AppError('Este relatório já foi importado.');
     let period = await tx.finPeriod.findUnique({ where: { month: d.month } });
     if (d.mode === 'novo' && period) throw new AppError(`Já existe um relatório para ${monthLabel(month)}. Escolha comparar, criar nova versão ou atualizar.`);
     if (d.mode !== 'novo' && !period) throw new AppError(`Não existe relatório de ${monthLabel(month)} para atualizar.`);
@@ -539,8 +548,105 @@ export async function discardHistoricReport(principal: Principal | null, documen
   assertCan(principal, 'fin.import');
   await prisma.$transaction(async (tx) => {
     const doc = await tx.finDocument.findUnique({ where: { id: documentId } });
-    if (!doc || doc.origin !== 'HISTORICO' || doc.periodId) return;
+    // Só cancela o que ainda não foi gravado (pacote já importado fica sem competência, mas é APPROVED).
+    if (!doc || doc.origin !== 'HISTORICO' || doc.periodId || doc.status === 'APPROVED') return;
     await tx.finDocument.delete({ where: { id: documentId } });
     await audit(tx, { actorId: principal.id, ...meta }, { action: 'fin.history_discarded', entityType: 'fin_document', entityId: documentId, summary: `${principal.name} cancelou a importação de "${doc.filename}"` });
   });
+}
+
+// ── Pacote histórico (planilha estruturada, sem IA) ────────
+
+type PackageExtraction = { pacote: true; schemaVersion: string | null; months: string[] };
+const isPackageDoc = (x: unknown): x is PackageExtraction => !!x && typeof x === 'object' && (x as { pacote?: unknown }).pacote === true;
+
+async function readPackage(bytes: ArrayBuffer) {
+  const sheets = await readPackageWorkbook(bytes).catch(() => { throw new AppError('Não consegui abrir a planilha. Salve como .xlsx e tente de novo.'); });
+  return isPackage(sheets) ? parsePackage(sheets) : null;
+}
+
+/** A planilha é um pacote histórico? (MANIFESTO com schema_name = nacao_financeiro_historico) */
+export async function isFinPackageFile(file: File) {
+  return /\.xlsx$/i.test(file.name) && file.size <= MAX_FILE_BYTES && (await readPackage(await file.arrayBuffer()).catch(() => null)) !== null;
+}
+
+/**
+ * Lê o pacote e mostra, mês a mês, o que vai entrar — com os indicadores do
+ * motor comparados aos da planilha. Nada é gravado além do arquivo original.
+ */
+export async function analyzeFinPackage(principal: Principal | null, file: File, meta: RequestMeta) {
+  assertCan(principal, 'fin.import');
+  const bytes = await file.arrayBuffer();
+  const pkg = await readPackage(bytes);
+  if (!pkg) throw new AppError('Esta planilha não é um pacote histórico do Nação ADM (falta a aba MANIFESTO com schema_name = nacao_financeiro_historico).');
+  if (!pkg.months.length) throw new AppError('Nenhuma competência encontrada na planilha.');
+  const sha256 = createHash('sha256').update(Buffer.from(bytes)).digest('hex');
+  const dup = await prisma.finDocument.findFirst({ where: { sha256, origin: 'HISTORICO', status: 'APPROVED' } });
+  if (dup) throw new AppError(`Esta planilha já foi importada em ${dup.createdAt.toLocaleDateString('pt-BR')} ("${dup.filename}").`);
+  const doc = await prisma.$transaction(async (tx) => {
+    const d = await storeDocument(tx, principal, file, { periodId: null, kind: 'RELATORIO_ANTERIOR', origin: 'HISTORICO' });
+    const extraction: PackageExtraction = { pacote: true, schemaVersion: pkg.schemaVersion, months: pkg.months.map((m) => m.month) };
+    await tx.finDocument.update({ where: { id: d.id }, data: { status: 'PENDING_REVIEW', extraction: extraction as unknown as Prisma.InputJsonValue } });
+    await audit(tx, { actorId: principal.id, ...meta }, { action: 'fin.package_read', entityType: 'fin_document', entityId: d.id, after: { meses: extraction.months }, summary: `${principal.name} leu o pacote histórico "${d.filename}" (${pkg.months.length} meses)` });
+    return d;
+  });
+  const [cats, targets, existing] = await Promise.all([listCategories(), getFinTargets(), prisma.finPeriod.findMany({ where: { month: { in: pkg.months.map((m) => m.month) } }, include: { _count: { select: { lines: true } } } })]);
+  return {
+    documentId: doc.id, filename: doc.filename, schemaVersion: pkg.schemaVersion, warnings: pkg.warnings,
+    rules: pkg.rules,
+    months: pkg.months.map((pm) => {
+      const m = computeMetrics(pm.lines.map((l) => ({ ...l })), cats, targets);
+      const ex = existing.find((e) => e.month === pm.month);
+      return {
+        month: pm.month, importStatus: pm.importStatus, reference: pm.reference, approvedInFile: pm.approvedInFile,
+        warnings: pm.warnings, managerNotes: pm.managerNotes, partnerDecisions: pm.partnerDecisions,
+        lines: pm.lines, kpis: compareFileKpis(m, pm.fileKpis),
+        indicators: KEY_INDICATORS.map((k) => ({ key: k.key, label: k.label, ind: k.get(m) })),
+        existing: ex ? { status: ex.status, version: ex.version, lines: ex._count.lines } : null,
+      };
+    }),
+  };
+}
+export type FinPackageAnalysis = Awaited<ReturnType<typeof analyzeFinPackage>>;
+
+/**
+ * Grava os meses escolhidos como "para conferir" (nada é aprovado aqui). Relê o
+ * arquivo guardado — não confia no que veio do navegador. Tudo numa transação.
+ */
+export async function commitFinPackage(principal: Principal | null, input: { documentId: string; months: string[] }, meta: RequestMeta) {
+  assertCan(principal, 'fin.import');
+  const doc = await prisma.finDocument.findUnique({ where: { id: input.documentId }, include: { file: true } });
+  if (!doc || !doc.file || doc.origin !== 'HISTORICO' || !isPackageDoc(doc.extraction)) throw new NotFoundError('Pacote não encontrado.');
+  if (doc.status !== 'PENDING_REVIEW') throw new AppError('Este pacote já foi importado.');
+  const wanted = new Set(input.months);
+  if (!wanted.size) throw new AppError('Escolha ao menos um mês.');
+  const buf = Buffer.from(doc.file.data);
+  const pkg = await readPackage(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer);
+  if (!pkg) throw new AppError('Pacote inválido.');
+  const chosen = pkg.months.filter((m) => wanted.has(m.month));
+  if (chosen.length !== wanted.size) throw new AppError('Mês não encontrado no pacote.');
+  return prisma.$transaction(async (tx) => {
+    let total = 0;
+    for (const pm of chosen) {
+      let p = await tx.finPeriod.findUnique({ where: { month: pm.month } });
+      if (!p) p = await tx.finPeriod.create({ data: { month: pm.month, status: 'REVIEW', createdById: principal.id } });
+      const join = (prev: string | null, add: string[]) => (add.length ? [prev, `Da planilha histórica:\n${add.join('\n')}`].filter(Boolean).join('\n\n').slice(0, 8000) : prev);
+      await tx.finPeriod.update({
+        where: { id: p.id },
+        data: { status: 'REVIEW', managerNotes: join(p.managerNotes, pm.managerNotes), partnerDecisions: join(p.partnerDecisions, pm.partnerDecisions) },
+      });
+      if (pm.lines.length) {
+        await tx.finLine.createMany({
+          data: pm.lines.map((l) => ({ ...l, meta: (l.meta ?? undefined) as Prisma.InputJsonValue | undefined, periodId: p!.id, documentId: doc.id, status: 'EXTRACTED' as const, createdById: principal.id })),
+        });
+      }
+      total += pm.lines.length;
+      await audit(tx, { actorId: principal.id, ...meta }, {
+        action: 'fin.package_imported', entityType: 'fin_period', entityId: p.id, after: { arquivo: doc.filename, linhas: pm.lines.length },
+        summary: `${principal.name} importou ${pm.lines.length} dado(s) de ${monthLabel(pm.month)} da planilha "${doc.filename}" (para conferência)`,
+      });
+    }
+    await tx.finDocument.update({ where: { id: doc.id }, data: { status: 'APPROVED' } });
+    return { months: chosen.map((m) => m.month), lines: total };
+  }, { timeout: 60_000 });
 }
