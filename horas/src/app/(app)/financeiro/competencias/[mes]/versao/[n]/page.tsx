@@ -3,7 +3,6 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { buttonVariants } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { isMonth, monthLabel, type Month } from '@/domain/condominio/months';
 import { can } from '@/server/auth/authz';
 import { requirePrincipal } from '@/server/auth/session';
@@ -34,9 +33,9 @@ export default async function Page({ params, searchParams }: { params: Promise<{
         <Link href={`?visao=${mode === 'socios' ? 'completo' : 'socios'}`} className={buttonVariants({ variant: 'secondary', size: 'sm' })}>{mode === 'socios' ? 'Relatório completo' : 'Visão dos sócios'}</Link>
         <PrintButton />
       </div>
-      <Card className="p-4 sm:p-6 print:border-0 print:p-0 print:shadow-none">
+      <div>
         <ReportView month={mes} m={s.metrics} analysis={s.analysis} previous={null} managerNotes={s.managerNotes} partnerDecisions={s.partnerDecisions} mode={mode} version={v.number} />
-      </Card>
+      </div>
     </div>
   );
 }

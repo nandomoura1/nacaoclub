@@ -71,7 +71,7 @@ export function ShareBars({ rows }: { rows: { label: string; cents: number; rati
             <span className="font-semibold tabular-nums text-navy">{fmtValue(r.cents, 'BRL')}</span>
             {r.ratio !== undefined && <span className="w-14 text-right text-xs tabular-nums text-tinta-suave">{r.ratio === null ? '—' : fmtValue(r.ratio, 'PCT')}</span>}
           </div>
-          <div className="mt-1 h-2 rounded-full bg-fundo print:border print:border-borda"><div className="h-2 rounded-full bg-nacao" style={{ width: `${Math.max(1, (Math.abs(r.cents) / max) * 100)}%` }} /></div>
+          <div className="mt-1 h-2 rounded-full bg-fundo print:border print:border-borda"><div className="h-2 rounded-full bg-linear-to-r from-nacao to-ciano" style={{ width: `${Math.max(1, (Math.abs(r.cents) / max) * 100)}%` }} /></div>
         </li>
       ))}
     </ul>

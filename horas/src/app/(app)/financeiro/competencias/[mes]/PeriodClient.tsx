@@ -361,9 +361,9 @@ function ReportTab({ p, perms, pending, run }: { p: FinPeriodView; perms: Perms;
         <Button size="sm" variant="secondary" onClick={() => window.print()}><Printer /> Imprimir / PDF</Button>
       </div>
       {p.lines.some((l) => l.status === 'EXTRACTED') && <p className="rounded-lg border border-atencao/40 bg-atencao/5 p-2 text-sm print:hidden">Há dados ainda não conferidos — este relatório é uma prévia.</p>}
-      <Card className="p-4 sm:p-6 print:border-0 print:p-0 print:shadow-none">
+      <div>
         <ReportView month={p.month} m={p.metrics} analysis={p.analysis} previous={p.previous} managerNotes={p.managerNotes} partnerDecisions={p.partnerDecisions} mode={mode} version={p.status === 'APPROVED' ? p.version : null} />
-      </Card>
+      </div>
     </div>
   );
 }
