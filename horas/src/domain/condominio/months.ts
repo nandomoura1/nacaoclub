@@ -37,3 +37,5 @@ export const monthShort = (month: Month): string => {
   const n = NAMES[Number(month.slice(5)) - 1]!;
   return `${n[0]!.toUpperCase()}${n.slice(1, 3)}/${month.slice(2, 4)}`;
 };
+/** "Agosto de 2026" (só a primeira letra maiúscula). */
+export const monthTitle = (month: Month): string => { const s = monthLong(month); return s[0]!.toUpperCase() + s.slice(1); };

@@ -1238,3 +1238,206 @@ model CondoCharge {
   @@unique([periodId, centerId])
   @@map("condo_charges")
 }
+
+// ─────────────────────────────────────────────────────────────
+// Financeiro · Relatório Financeiro: base histórica mensal
+// (documentos → extração → conferência → versão aprovada → indicadores)
+// ─────────────────────────────────────────────────────────────
+
+enum FinPeriodStatus {
+  DRAFT
+  REVIEW
+  APPROVED
+}
+
+enum FinDocStatus {
+  PROCESSING
+  EXTRACTED
+  PENDING_REVIEW
+  APPROVED
+  DIVERGENT
+  ERROR
+}
+
+enum FinDocOrigin {
+  UPLOAD
+  HISTORICO
+}
+
+enum FinLineStatus {
+  EXTRACTED
+  CONFIRMED
+  EDITED
+  MANUAL
+}
+
+enum FinDataset {
+  RECEITA
+  DESPESA
+  MODALIDADE
+  ALUNOS
+  PDV_RESUMO
+  PDV_PAGAMENTO
+  PDV_PRODUTO
+  CAIXA
+  INVESTIMENTO
+  FINANCIAMENTO
+  INDICADOR
+}
+
+/// Competência do Relatório Financeiro (AAAA-MM).
+model FinPeriod {
+  id               String          @id @default(uuid()) @db.Uuid
+  month            String          @unique @db.Char(7)
+  status           FinPeriodStatus @default(DRAFT)
+  /// Nº da última versão aprovada (0 = nunca aprovada).
+  version          Int             @default(0)
+  /// Observações do gestor (contexto, não é dado financeiro).
+  managerNotes     String?         @map("manager_notes")
+  /// Decisões dos sócios (não são lançamentos).
+  partnerDecisions String?         @map("partner_decisions")
+  /// Análise escrita pela IA a partir dos indicadores calculados.
+  analysis         Json?
+  analysisAt       DateTime?       @map("analysis_at")
+  approvedAt       DateTime?       @map("approved_at")
+  approvedById     String?         @map("approved_by") @db.Uuid
+  createdById      String?         @map("created_by") @db.Uuid
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+
+  documents       FinDocument[]
+  lines           FinLine[]
+  versions        FinVersion[]
+  reconciliations FinReconciliation[]
+
+  @@map("fin_periods")
+}
+
+/// Documento enviado (metadados; os bytes ficam em fin_document_files).
+model FinDocument {
+  id           String       @id @default(uuid()) @db.Uuid
+  periodId     String?      @map("period_id") @db.Uuid
+  kind         String
+  filename     String
+  mimeType     String       @map("mime_type")
+  sizeBytes    Int          @map("size_bytes")
+  sha256       String       @db.Char(64)
+  status       FinDocStatus @default(PROCESSING)
+  origin       FinDocOrigin @default(UPLOAD)
+  /// N-ésimo documento deste tipo na competência.
+  version      Int          @default(1)
+  notes        String?
+  error        String?
+  /// Saída bruta da extração (auditoria do que a IA leu).
+  extraction   Json?
+  detectedMonth String?     @map("detected_month") @db.Char(7)
+  uploadedById String?      @map("uploaded_by") @db.Uuid
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  period FinPeriod?       @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  file   FinDocumentFile?
+  lines  FinLine[]
+
+  @@index([periodId, kind])
+  @@map("fin_documents")
+}
+
+model FinDocumentFile {
+  documentId String @id @map("document_id") @db.Uuid
+  data       Bytes
+
+  document FinDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@map("fin_document_files")
+}
+
+/// Taxonomia (configurável): receitas e despesas com a classificação e as regras.
+model FinCategory {
+  key              String  @id
+  label            String
+  kind             String
+  classification   String
+  /// Entra no custo econômico de pessoal.
+  personnel        Boolean @default(false)
+  /// Receita operacional (aporte/empréstimo não é).
+  operatingRevenue Boolean @default(true) @map("operating_revenue")
+  sortOrder        Int     @default(0) @map("sort_order")
+  active           Boolean @default(true)
+
+  @@map("fin_categories")
+}
+
+/// Um dado financeiro da competência, com origem e conferência.
+model FinLine {
+  id             String        @id @default(uuid()) @db.Uuid
+  periodId       String        @map("period_id") @db.Uuid
+  dataset        FinDataset
+  /// Categoria (receita/despesa), chave do PDV, forma de pagamento, grupo, indicador…
+  key            String?
+  label          String
+  /// Modalidade, conta bancária ou grupo de produto.
+  unit           String?
+  amountCents    Int?          @map("amount_cents")
+  quantity       Decimal?      @db.Decimal(14, 2)
+  classification String?
+  meta           Json?
+  documentId     String?       @map("document_id") @db.Uuid
+  /// Página/linha/célula onde o dado está.
+  sourceRef      String?       @map("source_ref")
+  /// Texto/valor como estava no documento.
+  sourceValue    String?       @map("source_value")
+  /// Regra usada na classificação.
+  rule           String?
+  status         FinLineStatus @default(EXTRACTED)
+  confirmedById  String?       @map("confirmed_by") @db.Uuid
+  confirmedAt    DateTime?     @map("confirmed_at")
+  createdById    String?       @map("created_by") @db.Uuid
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  period   FinPeriod    @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  document FinDocument? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@index([periodId, dataset])
+  @@map("fin_lines")
+}
+
+/// Versão aprovada: o retrato congelado (linhas, indicadores, documentos, notas).
+model FinVersion {
+  id          String   @id @default(uuid()) @db.Uuid
+  periodId    String   @map("period_id") @db.Uuid
+  number      Int
+  reason      String?
+  snapshot    Json
+  createdById String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  period FinPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@unique([periodId, number])
+  @@map("fin_versions")
+}
+
+/// Justificativa de uma conciliação (ex.: PDV × receita de vendas).
+model FinReconciliation {
+  periodId      String   @map("period_id") @db.Uuid
+  key           String
+  justification String
+  updatedById   String?  @map("updated_by") @db.Uuid
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  period FinPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
+
+  @@id([periodId, key])
+  @@map("fin_reconciliations")
+}
+
+/// Metas e limites do Relatório Financeiro (linha única, id = 1).
+model FinSettings {
+  id        Int      @id @default(1)
+  targets   Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("fin_settings")
+}

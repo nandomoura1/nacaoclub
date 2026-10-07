@@ -3,7 +3,7 @@ import { PROGRAM_MODALITIES } from '@/domain/programming/modalities';
 
 export type NavIcon =
   | 'hoje' | 'calendario' | 'pendencias' | 'grade' | 'professores'
-  | 'fechamento' | 'relatorios' | 'escalas' | 'treinos' | 'benchmarks' | 'dna' | 'treinos-ia' | 'usuarios' | 'historico' | 'cadastros' | 'condominio' | 'cobrancas';
+  | 'fechamento' | 'relatorios' | 'escalas' | 'treinos' | 'benchmarks' | 'dna' | 'treinos-ia' | 'usuarios' | 'historico' | 'cadastros' | 'condominio' | 'cobrancas' | 'financeiro' | 'fin-historico' | 'fin-importar';
 
 export interface NavItem {
   href: string;
@@ -58,6 +58,15 @@ export const NAV_CONDOMINIO: NavItem[] = [
   { href: '/condominio/cadastros', label: 'Cadastros do condomínio', icon: 'cadastros', permission: 'condo.edit' },
 ];
 
+/** Financeiro: relatório mensal a partir dos documentos, com conferência e histórico. */
+export const NAV_FINANCEIRO: NavItem[] = [
+  { href: '/financeiro', label: 'Painel financeiro', icon: 'financeiro', permission: 'fin.view' },
+  { href: '/financeiro/competencias', label: 'Relatório Financeiro', short: 'Financeiro', icon: 'relatorios', permission: 'fin.view' },
+  { href: '/financeiro/historico', label: 'Histórico e comparação', icon: 'fin-historico', permission: 'fin.view' },
+  { href: '/financeiro/importar', label: 'Importar relatórios antigos', icon: 'fin-importar', permission: 'fin.import' },
+  { href: '/financeiro/configuracoes', label: 'Metas e categorias', icon: 'cadastros', permission: 'fin.admin' },
+];
+
 export const NAV_ADMIN: NavItem[] = [
   { href: '/admin/cadastros', label: 'Cadastros', icon: 'cadastros', permission: 'admin.catalog' },
   { href: '/admin/usuarios', label: 'Usuários', icon: 'usuarios', permission: 'admin.users' },
@@ -69,5 +78,6 @@ export const NAV_SECTIONS: NavSection[] = [
   { title: 'Gestão de Horas', items: NAV_HORAS },
   { title: 'Treinos', items: NAV_TREINOS },
   { title: 'Condomínio Nação', items: NAV_CONDOMINIO },
+  { title: 'Financeiro', items: NAV_FINANCEIRO },
   { title: 'Administração', items: NAV_ADMIN },
 ];

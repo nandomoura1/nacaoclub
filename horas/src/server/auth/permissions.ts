@@ -38,6 +38,12 @@ export const PERMISSIONS = {
   'condo.edit': 'Condomínio: lançar a competência e os cadastros',
   'condo.close': 'Condomínio: fechar e reabrir competências',
   'condo.payments': 'Condomínio: marcar cobranças como enviadas e pagas',
+  'fin.view': 'Financeiro: ver relatórios, histórico e painel',
+  'fin.import': 'Financeiro: enviar documentos e importar relatórios antigos',
+  'fin.edit': 'Financeiro: conferir e corrigir os dados extraídos',
+  'fin.approve': 'Financeiro: aprovar a competência (gera uma versão)',
+  'fin.export': 'Financeiro: imprimir/exportar relatórios',
+  'fin.admin': 'Financeiro: metas, limites e categorias',
 } as const;
 
 export type PermissionKey = keyof typeof PERMISSIONS;

@@ -5,7 +5,7 @@ import { Fragment, useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import {
   BarChart3, CalendarDays, ClipboardCheck, History, LayoutGrid,
-  LogOut, Settings2, Sun, TriangleAlert, Users, UserRoundCog, Dumbbell, CalendarClock, Sparkles, Menu, X, Trophy, Dna, ChevronRight, Building2, Receipt } from 'lucide-react';
+  LogOut, Settings2, Sun, TriangleAlert, Users, UserRoundCog, Dumbbell, CalendarClock, Sparkles, Menu, X, Trophy, Dna, ChevronRight, Building2, Receipt, Landmark, LineChart, FileUp } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { cn } from '@/lib/cn';
 import { initials } from '@/lib/format';
@@ -30,6 +30,9 @@ const ICONS: Record<NavIcon, React.ComponentType<{ className?: string }>> = {
   cadastros: Settings2,
   condominio: Building2,
   cobrancas: Receipt,
+  financeiro: Landmark,
+  'fin-historico': LineChart,
+  'fin-importar': FileUp,
 };
 
 function isActive(pathname: string, href: string) {

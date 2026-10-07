@@ -263,7 +263,7 @@ export interface GenerateResult { plan: AiPlan; check: PlanCheck; model: string 
 export const isFake = () => process.env.AI_FAKE === '1';
 
 /** Chamada ao modelo com saída estruturada (schema zod v4) e erros traduzidos para o coach. */
-export async function askModel<S extends z4.ZodType>(schema: S, system: string, user: string, maxTokens = 16000): Promise<z4.infer<S>> {
+export async function askModel<S extends z4.ZodType>(schema: S, system: string, user: Anthropic.Beta.BetaMessageParam['content'], maxTokens = 16000): Promise<z4.infer<S>> {
   if (!process.env.ANTHROPIC_API_KEY) throw new AppError('A geração por IA ainda não está configurada (falta a chave ANTHROPIC_API_KEY no servidor).');
   // Abaixo do limite da função na Vercel (300 s); com timeout explícito o SDK aceita max_tokens alto sem streaming.
   const client = new Anthropic({ timeout: 280_000, maxRetries: 1 });
