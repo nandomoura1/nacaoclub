@@ -24,6 +24,9 @@ import { ShareGrade } from './ShareClient';
 import { listExtraHours } from '@/server/services/extra-hours-service';
 import { AulasTab, AusenciasTab, ExtraHoursCard } from './FichaClient';
 import { HoursStatement } from '@/components/hours/HoursStatement';
+import { InternBadge } from '@/components/staff-docs/InternCounter';
+import { teacherDocs } from '@/server/services/staff-doc-service';
+import { DocsTab } from './DocsClient';
 
 export const metadata: Metadata = { title: 'Ficha do professor' };
 
@@ -31,6 +34,7 @@ const TABS = [
   { key: 'aulas', label: 'Aulas fixas' },
   { key: 'ausencias', label: 'Ausências e exceções' },
   { key: 'horas', label: 'Horas' },
+  { key: 'documentos', label: 'Documentos' },
 ] as const;
 type Tab = (typeof TABS)[number]['key'];
 
@@ -52,12 +56,14 @@ export default async function FichaPage({ params, searchParams }: {
   if (!teacher) notFound();
 
   const canHours = can(principal, 'payroll.view_hours');
-  const tabs = TABS.filter((t) => t.key !== 'horas' || canHours);
+  const canDocs = can(principal, 'teacher.docs');
+  const tabs = TABS.filter((t) => (t.key !== 'horas' || canHours) && (t.key !== 'documentos' || canDocs));
   const tab: Tab = tabs.some((t) => t.key === sp.aba) ? (sp.aba as Tab) : 'aulas';
   const today = todayIso();
   const date = sp.data && isIsoDate(sp.data) ? sp.data : today;
   const base = `/professores/${id}`;
   const share = can(principal, 'schedule.view') ? await teacherShareData(principal, id, date) : null;
+  const docs = canDocs ? await teacherDocs(principal, id, today) : null;
 
   return (
     <>
@@ -65,7 +71,7 @@ export default async function FichaPage({ params, searchParams }: {
       <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center">
         <span className="grid size-14 shrink-0 place-items-center rounded-full bg-navy text-lg font-bold text-white">{initials(teacher.displayName || teacher.name)}</span>
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-extrabold text-navy">{teacher.name}{!teacher.active && <Badge tone="red" className="ml-2 align-middle">inativo</Badge>}</h1>
+          <h1 className="text-2xl font-extrabold text-navy">{teacher.name}{!teacher.active && <Badge tone="red" className="ml-2 align-middle">inativo</Badge>}{docs?.internship && docs.internship.state !== 'vigente' && <Link href={`${base}?aba=documentos`}><InternBadge s={docs.internship} className="ml-2 align-middle" /></Link>}</h1>
           <p className="text-sm text-tinta-suave">
             {[teacher.displayName && `“${teacher.displayName}” na grade`, teacher.position?.name, teacher.contractType?.name, teacher.admissionDate && `desde ${formatDateBR(teacher.admissionDate.toISOString().slice(0, 10))}`].filter(Boolean).join(' · ') || 'Cadastro básico'}
           </p>
@@ -92,6 +98,7 @@ export default async function FichaPage({ params, searchParams }: {
 
       {tab === 'aulas' && <AulasSection principal={principal} teacherId={id} teacherName={teacher.displayName || teacher.name} date={date} today={today} />}
       {tab === 'ausencias' && <AusenciasSection principal={principal} teacherId={id} today={today} />}
+      {tab === 'documentos' && docs && <DocsTab v={docs} />}
       {tab === 'horas' && <HorasSection principal={principal} teacherId={id} competencia={sp.competencia} base={base} />}
     </>
   );

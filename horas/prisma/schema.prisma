@@ -402,6 +402,7 @@ model Teacher {
   duties          DutyAssignment[]
   userLink        UserTeacher?
   personalWorkouts PersonalWorkout[]
+  documents       TeacherDocument[]
 
   @@index([active, name])
   @@map("teachers")
@@ -1440,4 +1441,50 @@ model FinSettings {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("fin_settings")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Documentos da equipe (identidade, CREF, contratos) e contador do estágio
+// ─────────────────────────────────────────────────────────────
+
+enum StaffDocKind {
+  IDENTIDADE
+  CREF
+  CONTRATO_TRABALHO
+  CONTRATO_ESTAGIO
+  OUTRO
+}
+
+model TeacherDocument {
+  id           String       @id @default(uuid()) @db.Uuid
+  teacherId    String       @map("teacher_id") @db.Uuid
+  kind         StaffDocKind
+  filename     String
+  mimeType     String       @map("mime_type")
+  sizeBytes    Int          @map("size_bytes")
+  sha256       String       @db.Char(64)
+  /// Contrato: início; CREF: emissão (opcional).
+  validFrom    DateTime?    @map("valid_from") @db.Date
+  /// Contrato: fim (obrigatório no estágio); CREF: validade.
+  validUntil   DateTime?    @map("valid_until") @db.Date
+  /// Nº do RG/CNH ou do registro no CREF.
+  number       String?
+  notes        String?
+  uploadedById String?      @map("uploaded_by") @db.Uuid
+  createdAt    DateTime     @default(now()) @map("created_at")
+
+  teacher Teacher              @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  file    TeacherDocumentFile?
+
+  @@index([teacherId, kind])
+  @@map("teacher_documents")
+}
+
+model TeacherDocumentFile {
+  documentId String @id @map("document_id") @db.Uuid
+  data       Bytes
+
+  document TeacherDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@map("teacher_document_files")
 }

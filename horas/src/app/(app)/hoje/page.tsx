@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { CalendarClock, CalendarPlus, ShieldCheck, Repeat2 } from 'lucide-react';
+import { CalendarClock, CalendarPlus, CalendarX2, ShieldCheck, Repeat2 } from 'lucide-react';
 import { Card, PageHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
@@ -15,6 +15,8 @@ import { can } from '@/server/auth/authz';
 import { requirePrincipal } from '@/server/auth/session';
 import { prisma } from '@/server/db';
 import { listOccurrences, periodStartDay } from '@/server/services/period-service';
+import { internAlerts } from '@/server/services/staff-doc-service';
+import { InternBadge } from '@/components/staff-docs/InternCounter';
 
 export const metadata: Metadata = { title: 'Hoje' };
 
@@ -53,6 +55,9 @@ export default async function HojePage({ searchParams }: { searchParams: Promise
   const minutes = active.filter((l) => l.activityType.countsHours).reduce((s, l) => s + l.durationMin * Math.max(1, l.people.length), 0);
   const pending = lessons.filter((l) => l.status === 'AGUARDANDO_DECISAO_FERIADO' || (l.status !== 'CANCELADA' && l.people.length === 0));
   const hours = [...new Set(lessons.map((l) => l.startMin))].sort((a, b) => a - b);
+  const interns = await internAlerts(principal, today);
+  const blocked = interns.filter((i) => i.status.state === 'vencido' || i.status.state === 'sem_contrato');
+  const canDocs = can(principal, 'teacher.docs');
 
   return (
     <>
@@ -73,6 +78,28 @@ export default async function HojePage({ searchParams }: { searchParams: Promise
           </p>
         )}
       </div>
+
+      {interns.length > 0 && (
+        <Card className={cn('mb-4 p-4', blocked.length ? 'border-critico/40 bg-critico/5' : 'border-atencao/40 bg-atencao/5')}>
+          <div className="flex items-start gap-3">
+            <CalendarX2 className={cn('mt-0.5 size-5 shrink-0', blocked.length ? 'text-critico' : 'text-atencao')} />
+            <div className="min-w-0 flex-1">
+              <p className={cn('text-sm font-bold', blocked.length ? 'text-critico' : 'text-atencao')}>
+                {blocked.length ? 'Estagiário sem contrato vigente não pode trabalhar' : 'Contrato de estágio vencendo'}
+              </p>
+              <ul className="mt-1.5 flex flex-wrap gap-2">
+                {interns.map((i) => (
+                  <li key={i.teacherId} className="flex items-center gap-1.5 text-sm">
+                    {canDocs ? <Link href={`/professores/${i.teacherId}?aba=documentos`} className="font-semibold text-navy hover:underline">{i.name}</Link> : <span className="font-semibold text-navy">{i.name}</span>}
+                    <InternBadge s={i.status} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+            {canDocs && <Link href="/professores/documentos?filtro=estagiarios" className={buttonVariants({ size: 'sm', variant: 'secondary' })}>Documentos</Link>}
+          </div>
+        </Card>
+      )}
 
       {pending.length > 0 && (
         <Card className="mb-4 flex items-center gap-3 border-critico/30 bg-critico/5 p-4">

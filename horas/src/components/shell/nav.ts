@@ -3,7 +3,7 @@ import { PROGRAM_MODALITIES } from '@/domain/programming/modalities';
 
 export type NavIcon =
   | 'hoje' | 'calendario' | 'pendencias' | 'grade' | 'professores'
-  | 'fechamento' | 'relatorios' | 'escalas' | 'treinos' | 'benchmarks' | 'dna' | 'treinos-ia' | 'usuarios' | 'historico' | 'cadastros' | 'condominio' | 'cobrancas' | 'financeiro' | 'fin-historico' | 'fin-importar';
+  | 'fechamento' | 'relatorios' | 'escalas' | 'treinos' | 'benchmarks' | 'dna' | 'treinos-ia' | 'usuarios' | 'historico' | 'cadastros' | 'condominio' | 'cobrancas' | 'financeiro' | 'fin-historico' | 'fin-importar' | 'documentos';
 
 export interface NavItem {
   href: string;
@@ -33,6 +33,7 @@ export const NAV_HORAS: NavItem[] = [
   { href: '/grade', label: 'Grade semanal', icon: 'grade', permission: 'schedule.view' },
   { href: '/escalas', label: 'Escalas', icon: 'escalas', permission: 'duty.edit', mobile: true },
   { href: '/professores', label: 'Professores', icon: 'professores', permission: 'teacher.view' },
+  { href: '/professores/documentos', label: 'Documentos da equipe', short: 'Documentos', icon: 'documentos', permission: 'teacher.docs' },
   { href: '/fechamento', label: 'Fechamento', icon: 'fechamento', permission: 'payroll.view_hours', soon: 'E6', mobile: true },
   { href: '/relatorios', label: 'Relatórios', icon: 'relatorios', permission: 'payroll.view_hours' },
 ];

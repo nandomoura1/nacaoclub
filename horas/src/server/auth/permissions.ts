@@ -16,6 +16,7 @@ export const PERMISSIONS = {
   'teacher.view': 'Ver professores',
   'teacher.edit': 'Cadastrar e editar professores',
   'teacher.view_personal': 'Ver dados pessoais (CPF, telefone, e-mail)',
+  'teacher.docs': 'Documentos da equipe: ver e enviar identidade, CREF e contratos',
   'payroll.view_hours': 'Ver fechamento de horas e extratos',
   'payroll.approve_area': 'Aprovar as horas da própria área',
   'payroll.adjust': 'Lançar ajuste de competência anterior',
