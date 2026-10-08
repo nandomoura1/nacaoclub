@@ -16,6 +16,7 @@ import { requirePrincipal } from '@/server/auth/session';
 import { prisma } from '@/server/db';
 import { listOccurrences, periodStartDay } from '@/server/services/period-service';
 import { internAlerts } from '@/server/services/staff-doc-service';
+import { companyAlerts } from '@/server/services/company-service';
 import { InternBadge } from '@/components/staff-docs/InternCounter';
 
 export const metadata: Metadata = { title: 'Hoje' };
@@ -58,6 +59,7 @@ export default async function HojePage({ searchParams }: { searchParams: Promise
   const interns = await internAlerts(principal, today);
   const blocked = interns.filter((i) => i.status.state === 'vencido' || i.status.state === 'sem_contrato');
   const canDocs = can(principal, 'teacher.docs');
+  const companyDocs = await companyAlerts(principal, today);
 
   return (
     <>
@@ -98,6 +100,18 @@ export default async function HojePage({ searchParams }: { searchParams: Promise
             </div>
             {canDocs && <Link href="/professores/documentos?filtro=estagiarios" className={buttonVariants({ size: 'sm', variant: 'secondary' })}>Documentos</Link>}
           </div>
+        </Card>
+      )}
+
+      {companyDocs.length > 0 && (
+        <Card className={cn('mb-4 flex items-center gap-3 p-4', companyDocs.some((d) => d.state === 'vencido') ? 'border-critico/40 bg-critico/5' : 'border-atencao/40 bg-atencao/5')}>
+          <CalendarX2 className={cn('size-5 shrink-0', companyDocs.some((d) => d.state === 'vencido') ? 'text-critico' : 'text-atencao')} />
+          <p className="min-w-0 flex-1 text-sm">
+            <b className="text-navy">Documentos das empresas: </b>
+            {companyDocs.slice(0, 3).map((d) => `${d.label} (${d.company}) ${d.state === 'vencido' ? 'vencido' : `vence em ${d.daysLeft} dia(s)`}`).join(' · ')}
+            {companyDocs.length > 3 ? ` · e mais ${companyDocs.length - 3}` : ''}
+          </p>
+          <Link href="/admin/empresas" className={buttonVariants({ size: 'sm', variant: 'secondary' })}>Ver</Link>
         </Card>
       )}
 

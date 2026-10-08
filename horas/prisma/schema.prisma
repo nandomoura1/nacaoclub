@@ -1488,3 +1488,98 @@ model TeacherDocumentFile {
 
   @@map("teacher_document_files")
 }
+
+// ─────────────────────────────────────────────────────────────
+// Administração: empresas do grupo, contas bancárias e documentos essenciais
+// ─────────────────────────────────────────────────────────────
+
+model Company {
+  id                    String    @id @default(uuid()) @db.Uuid
+  legalName             String    @map("legal_name")
+  tradeName             String?   @map("trade_name")
+  cnpj                  String?   @unique @db.Char(14)
+  stateRegistration     String?   @map("state_registration")
+  municipalRegistration String?   @map("municipal_registration")
+  openingDate           DateTime? @map("opening_date") @db.Date
+  taxRegime             String?   @map("tax_regime")
+  mainActivity          String?   @map("main_activity")
+  address               String?
+  email                 String?
+  phone                 String?
+  legalRepresentative   String?   @map("legal_representative")
+  accountant            String?
+  notes                 String?
+  active                Boolean   @default(true)
+  sortOrder             Int       @default(0) @map("sort_order")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  bankAccounts CompanyBankAccount[]
+  documents    CompanyDocument[]
+
+  @@map("companies")
+}
+
+model CompanyBankAccount {
+  id          String  @id @default(uuid()) @db.Uuid
+  companyId   String  @map("company_id") @db.Uuid
+  bank        String
+  agency      String?
+  account     String?
+  accountType String? @map("account_type")
+  pixKey      String? @map("pix_key")
+  notes       String?
+  sortOrder   Int     @default(0) @map("sort_order")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@map("company_bank_accounts")
+}
+
+enum CompanyDocKind {
+  CONTRATO_SOCIAL
+  ALTERACAO_CONTRATUAL
+  CARTAO_CNPJ
+  LICENCA_FUNCIONAMENTO
+  ALVARA_BOMBEIROS
+  PROCURACAO
+  CERTIDAO
+  INFORMACOES_BANCARIAS
+  CONTRATO
+  OUTRO
+}
+
+model CompanyDocument {
+  id           String         @id @default(uuid()) @db.Uuid
+  companyId    String         @map("company_id") @db.Uuid
+  kind         CompanyDocKind
+  /// Ex.: "Procuração — escritório contábil", "CND federal".
+  title        String?
+  filename     String
+  mimeType     String         @map("mime_type")
+  sizeBytes    Int            @map("size_bytes")
+  sha256       String         @db.Char(64)
+  validFrom    DateTime?      @map("valid_from") @db.Date
+  validUntil   DateTime?      @map("valid_until") @db.Date
+  notes        String?
+  /// Substituído por um mais novo: fica no histórico, fora dos alertas.
+  archived     Boolean        @default(false)
+  uploadedById String?        @map("uploaded_by") @db.Uuid
+  createdAt    DateTime       @default(now()) @map("created_at")
+
+  company Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  file    CompanyDocumentFile?
+
+  @@index([companyId, kind])
+  @@map("company_documents")
+}
+
+model CompanyDocumentFile {
+  documentId String @id @map("document_id") @db.Uuid
+  data       Bytes
+
+  document CompanyDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@map("company_document_files")
+}

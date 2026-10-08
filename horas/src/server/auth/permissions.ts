@@ -28,6 +28,8 @@ export const PERMISSIONS = {
   'finance.edit_rates': 'Editar tabelas de valor (Fase 2)',
   'admin.catalog': 'Cadastros: modalidades, áreas, espaços, feriados, motivos',
   'admin.users': 'Gerenciar usuários e permissões',
+  'company.view': 'Empresas: ver dados gerais, contas bancárias e documentos',
+  'company.edit': 'Empresas: cadastrar dados e enviar/arquivar documentos',
   'audit.view': 'Ver o histórico de alterações',
   'import.run': 'Importar planilhas',
   'workout.edit': 'Lançar treinos da semana e gerar a arte de divulgação',
