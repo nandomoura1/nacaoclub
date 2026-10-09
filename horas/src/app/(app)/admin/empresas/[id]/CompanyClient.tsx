@@ -174,7 +174,7 @@ export function CompanyDocs({ v, canEdit }: { v: CompanyView; canEdit: boolean }
           {v.checklist.map((c) => (
             <li key={c.kind} className={cn('rounded-xl border p-2.5 text-sm', c.state === 'faltando' || c.state === 'vencido' ? 'border-critico/30 bg-critico/5' : c.state === 'vence_em_breve' ? 'border-atencao/30 bg-atencao/5' : 'border-sucesso/25 bg-sucesso/5')}>
               <p className="font-semibold text-tinta">{c.label}</p>
-              <p className="mt-0.5 text-xs">{c.state === 'faltando' ? <span className="font-semibold text-critico">faltando</span> : c.state === 'sem_validade' ? <span className="text-sucesso">na pasta</span> : <ValidityBadge state={c.state} daysLeft={c.daysLeft} />}</p>
+              <p className="mt-0.5 text-xs">{c.state === 'faltando' ? <span className="font-semibold text-critico">{c.note ? `faltando — ${c.note}` : 'faltando'}</span> : c.state === 'sem_validade' ? <span className="text-sucesso">{c.note ?? 'na pasta'}</span> : <ValidityBadge state={c.state} daysLeft={c.daysLeft} />}</p>
             </li>
           ))}
         </ul>

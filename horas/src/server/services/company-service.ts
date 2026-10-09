@@ -41,7 +41,7 @@ const companySchema = z.object({
 export type CompanyInput = z.input<typeof companySchema>;
 
 function rowOf(c: { id: string; legalName: string; tradeName: string | null; cnpj: string | null; active: boolean; documents: { kind: string; validUntil: Date | null; archived: boolean }[]; _count: { bankAccounts: number } }, today: string) {
-  const checklist = companyChecklist(c.documents.map((d) => ({ kind: d.kind, validUntil: iso(d.validUntil), archived: d.archived })), today);
+  const checklist = companyChecklist(c.documents.map((d) => ({ kind: d.kind, validUntil: iso(d.validUntil), archived: d.archived })), today, c._count.bankAccounts);
   return {
     id: c.id, legalName: c.legalName, tradeName: c.tradeName, cnpj: c.cnpj, active: c.active, bankAccounts: c._count.bankAccounts,
     files: c.documents.length, checklist,

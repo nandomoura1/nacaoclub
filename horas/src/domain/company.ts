@@ -38,7 +38,7 @@ export const COMPANY_DOC_KINDS: { id: CompanyDocKind; label: string; hint: strin
   { id: 'ALVARA_BOMBEIROS', label: 'Bombeiros (licença/vistoria)', hint: 'Licença ou vistoria do Corpo de Bombeiros', expires: true, essential: false },
   { id: 'PROCURACAO', label: 'Procuração', hint: 'Procurações vigentes (contador, banco, representantes)', expires: true, essential: false },
   { id: 'CERTIDAO', label: 'Certidão', hint: 'CND federal, estadual, municipal, FGTS, trabalhista…', expires: true, essential: false },
-  { id: 'INFORMACOES_BANCARIAS', label: 'Informações bancárias', hint: 'Comprovante de conta, cartão de assinaturas', expires: false, essential: true },
+  { id: 'INFORMACOES_BANCARIAS', label: 'Informações bancárias', hint: 'Opcional: os dados ficam em Dados gerais → Contas bancárias; anexe aqui só comprovante ou cartão de assinaturas', expires: false, essential: true },
   { id: 'CONTRATO', label: 'Contrato com terceiros', hint: 'Aluguel, parcerias, fornecedores', expires: true, essential: false },
   { id: 'OUTRO', label: 'Outros', hint: 'Qualquer outro documento da empresa', expires: false, essential: false },
 ];
@@ -59,12 +59,18 @@ export function validity(validUntil: string | null, today: string): { state: Val
  * validade do documento mais recente daquele tipo. Vários do mesmo tipo
  * (ex.: procurações) valem cada um — o pior estado manda no resumo.
  */
-export function companyChecklist(all: { kind: string; validUntil: string | null; archived?: boolean }[], today: string) {
+export function companyChecklist(all: { kind: string; validUntil: string | null; archived?: boolean }[], today: string, bankAccounts = 0) {
   // Arquivado (substituído por um mais novo) não conta para alerta nem para "na pasta".
   const docs = all.filter((d) => !d.archived);
-  return COMPANY_DOC_KINDS.filter((k) => k.essential || docs.some((d) => d.kind === k.id)).map((k) => {
+  return COMPANY_DOC_KINDS.filter((k) => k.essential || docs.some((d) => d.kind === k.id)).map((k): { kind: CompanyDocKind; label: string; state: ValidityState | 'faltando'; daysLeft: number | null; note?: string } => {
     const mine = docs.filter((d) => d.kind === k.id);
-    if (!mine.length) return { kind: k.id, label: k.label, state: 'faltando' as const, daysLeft: null };
+    // Informações bancárias são digitadas em Dados gerais; o anexo (comprovante) é opcional.
+    if (k.id === 'INFORMACOES_BANCARIAS' && !mine.length) {
+      return bankAccounts > 0
+        ? { kind: k.id, label: k.label, state: 'sem_validade', daysLeft: null, note: `${bankAccounts} conta${bankAccounts > 1 ? 's' : ''} cadastrada${bankAccounts > 1 ? 's' : ''}` }
+        : { kind: k.id, label: k.label, state: 'faltando', daysLeft: null, note: 'cadastre em Dados gerais' };
+    }
+    if (!mine.length) return { kind: k.id, label: k.label, state: 'faltando', daysLeft: null };
     const states = mine.map((d) => validity(d.validUntil, today));
     const order: ValidityState[] = ['vencido', 'vence_em_breve', 'vigente', 'sem_validade'];
     const worst = states.sort((a, b) => order.indexOf(a.state) - order.indexOf(b.state))[0]!;

@@ -43,7 +43,7 @@ describe.skipIf(!hasDb)('Empresas', () => {
     expect((await companyAlerts(admin.principal, T)).some((a) => a.companyId === id)).toBe(false);
     const row = (await listCompanies(admin.principal, T)).find((r) => r.id === id)!;
     expect(row.checklist.find((c) => c.kind === 'LICENCA_FUNCIONAMENTO')!.state).toBe('vigente');
-    expect(row.missing).toBe(2); // cartão CNPJ e informações bancárias
+    expect(row.missing).toBe(2); // cartão CNPJ e informações bancárias (contas removidas no teste anterior)
     const f = pdf('dup.pdf');
     await uploadCompanyDoc(admin.principal, id, doc('OUTRO'), f, META);
     await expect(uploadCompanyDoc(admin.principal, id, doc('OUTRO'), f, META)).rejects.toThrow(/já está na pasta/);

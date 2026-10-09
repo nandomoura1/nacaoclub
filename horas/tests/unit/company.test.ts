@@ -33,4 +33,10 @@ describe('Empresas — regras puras', () => {
     expect(c).toMatchObject({ CONTRATO_SOCIAL: 'sem_validade', LICENCA_FUNCIONAMENTO: 'vence_em_breve', PROCURACAO: 'vencido' });
     expect(c.CERTIDAO).toBeUndefined();
   });
+
+  it('informações bancárias: contas digitadas bastam, sem anexo', () => {
+    const bank = (n: number) => companyChecklist([], '2026-10-09', n).find((x) => x.kind === 'INFORMACOES_BANCARIAS')!;
+    expect(bank(0)).toMatchObject({ state: 'faltando', note: 'cadastre em Dados gerais' });
+    expect(bank(2)).toMatchObject({ state: 'sem_validade', note: '2 contas cadastradas' });
+  });
 });
