@@ -102,6 +102,9 @@ const categories = DEFAULT_CATEGORIES.map((c) => `- ${c.key}: ${c.label} (${c.ki
 
 export const EXTRACTION_SYSTEM = `Você extrai dados de documentos financeiros e operacionais da Nação Club (complexo esportivo em Brasília) para a base histórica do sistema Nação ADM. Você só LÊ e CLASSIFICA: nunca calcula indicadores, nunca estima, nunca completa lacunas e nunca usa dados de outros meses. Se um valor não estiver no documento, não crie a linha. Todo valor precisa da origem (página/linha/célula) e do texto original.
 
+# Prints de tela
+O documento pode ser um ou vários prints de tela (cada print = uma página/imagem, na ordem enviada). Prints seguidos costumam se sobrepor (rolagem): a mesma linha pode aparecer no fim de um print e no começo do próximo — conte cada linha UMA vez (mesmo rótulo e mesmo valor em prints vizinhos = repetição). Linha de total/subtotal não é item. Valor cortado, borrado ou ilegível: não adivinhe — não crie a linha e registre em avisos qual print e qual linha. Na origem, indique "print N" e a posição (ex.: "print 2, linha 'Salários'").
+
 # Datasets
 - RECEITA: recebimentos por categoria (DRE de recebimentos). chave = categoria de receita.
 - DESPESA: pagamentos por categoria (DRE de pagamentos). chave = categoria de despesa.

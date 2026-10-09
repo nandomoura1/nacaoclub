@@ -4,7 +4,7 @@ import { useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowLeft, CheckCheck, CheckCircle2, Download, Eye, FileUp, History, Pencil, Plus, Printer, RefreshCw, Save, Sparkles, Trash2, TriangleAlert,
+  ArrowLeft, CheckCheck, ClipboardPaste, X, CheckCircle2, Download, Eye, FileUp, History, Pencil, Plus, Printer, RefreshCw, Save, Sparkles, Trash2, TriangleAlert,
 } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +19,7 @@ import type { FinPeriodView } from '@/server/services/fin-service';
 import { DOC_STATUS, FIN_STATUS, Kpi } from '../../_components/fmt';
 import { LineForm, datasetLabel, keyLabel, lineValue, type CategoryOption, type LineDraft } from '../../_components/lines';
 import { ReportView, type ReportMode } from '../../_components/ReportView';
+import { compressImage, imagesFrom, isImage, MAX_PRINTS } from '../../_components/screenshots';
 import {
   addLineAction, analysisAction, approveAction, confirmLinesAction, deleteDocumentAction, deleteLineAction, processDocumentAction,
   saveNotesAction, saveReconciliationAction, updateLineAction, uploadDocumentAction,
@@ -102,22 +103,23 @@ type RunFn = (fn: () => Promise<{ ok: boolean; error?: string; message?: string 
 function DocumentsTab({ p, perms, pending, run, setMsg }: { p: FinPeriodView; perms: Perms; pending: boolean; run: RunFn; setMsg: (m: Msg) => void }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
-  const upload = async (kind: DocKind, file: File, notes: string) => {
+  const upload = async (kind: DocKind, files: File[], notes: string) => {
     setBusy(kind);
     setMsg({});
     const fd = new FormData();
     fd.set('kind', kind);
-    fd.set('file', file);
+    for (const f of files) fd.append('file', f);
     if (notes) fd.set('notes', notes);
     const r = await uploadDocumentAction(p.month, fd);
     setBusy(null);
+    const what = files.length > 1 ? `${files.length} prints` : files[0]!.name;
     if (!r.ok) setMsg({ error: r.error });
-    else setMsg({ ok: `${file.name}: ${r.data.lines} dado(s) lido(s)${r.data.warnings.length ? ` e ${r.data.warnings.length} aviso(s)` : ''}. Confira na aba Conferência.` });
+    else setMsg({ ok: `${what}: ${r.data.lines} dado(s) lido(s)${r.data.warnings.length ? ` e ${r.data.warnings.length} aviso(s)` : ''}. Confira na aba Conferência.` });
     router.refresh();
   };
   return (
     <div className="space-y-3">
-      <p className="text-sm text-tinta-suave">Envie cada documento no seu card. O sistema lê o arquivo (IA), guarda o original e separa os números para você conferir — nada entra no relatório sem conferência. PDF, XLSX, CSV, imagem, DOCX, TXT ou HTML, até 6 MB.</p>
+      <p className="text-sm text-tinta-suave">Envie cada documento no seu card. O sistema lê o arquivo (IA), guarda o original e separa os números para você conferir — nada entra no relatório sem conferência. PDF, XLSX, CSV, DOCX, TXT, HTML ou <b>prints de tela</b> — cole com Ctrl+V, arraste ou escolha vários de uma vez (viram um documento só).</p>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 [&>*]:min-w-0">
         {DOC_KINDS.map((k) => (
           <DocCard key={k.id} kind={k} docs={p.documents.filter((d) => d.kind === k.id)} canImport={perms.canImport}
@@ -133,10 +135,44 @@ function DocumentsTab({ p, perms, pending, run, setMsg }: { p: FinPeriodView; pe
 
 function DocCard({ kind, docs, canImport, busy, anyBusy, onUpload, onProcess, onDelete }: {
   kind: (typeof DOC_KINDS)[number]; docs: FinPeriodView['documents']; canImport: boolean; busy: boolean; anyBusy: boolean;
-  onUpload: (kind: DocKind, file: File, notes: string) => void; onProcess: (id: string) => void; onDelete: (id: string) => void;
+  onUpload: (kind: DocKind, files: File[], notes: string) => void; onProcess: (id: string) => void; onDelete: (id: string) => void;
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const [notes, setNotes] = useState('');
+  const [prints, setPrints] = useState<{ file: File; url: string }[]>([]);
+  const [drag, setDrag] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [preparing, setPreparing] = useState(false);
+  // Imagens entram na fila (comprimidas); documento (PDF, planilha…) vai direto.
+  const add = async (files: File[]) => {
+    setErr(null);
+    const docs = files.filter((f) => !isImage(f));
+    const imgs = files.filter(isImage);
+    if (docs.length) {
+      if (docs.length > 1 || imgs.length || prints.length) return setErr('PDF e planilha vão um por vez; prints podem ir vários juntos.');
+      onUpload(kind.id, docs, notes);
+      setNotes('');
+      return;
+    }
+    if (prints.length + imgs.length > MAX_PRINTS) return setErr(`No máximo ${MAX_PRINTS} prints por documento.`);
+    setPreparing(true);
+    try {
+      const out = await Promise.all(imgs.map((f, i) => compressImage(f, prints.length + i + 1)));
+      setPrints((cur) => [...cur, ...out.map((file) => ({ file, url: URL.createObjectURL(file) }))]);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Não consegui ler a imagem.');
+    } finally {
+      setPreparing(false);
+    }
+  };
+  const removePrint = (i: number) => setPrints((cur) => { URL.revokeObjectURL(cur[i]!.url); return cur.filter((_, j) => j !== i); });
+  const sendPrints = () => {
+    const files = prints.map((x) => x.file);
+    prints.forEach((x) => URL.revokeObjectURL(x.url));
+    setPrints([]);
+    onUpload(kind.id, files, notes);
+    setNotes('');
+  };
   return (
     <Card className="flex flex-col gap-2 p-3">
       <div className="flex items-start gap-2">
@@ -167,12 +203,49 @@ function DocCard({ kind, docs, canImport, busy, anyBusy, onUpload, onProcess, on
         );
       })}
       {canImport && (
-        <div className="mt-auto space-y-1">
+        <div className="mt-auto space-y-1.5">
+          <div
+            tabIndex={0}
+            role="button"
+            aria-label={`Colar ou arrastar prints para ${kind.label}`}
+            onPaste={(e) => { const imgs = imagesFrom(e.clipboardData?.items); if (imgs.length) { e.preventDefault(); void add(imgs); } }}
+            onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+            onDragLeave={() => setDrag(false)}
+            onDrop={(e) => { e.preventDefault(); setDrag(false); void add(Array.from(e.dataTransfer.files)); }}
+            className={cn('flex cursor-text flex-col items-center gap-1 rounded-xl border-2 border-dashed px-3 py-3 text-center text-xs outline-none transition-colors focus:border-nacao focus:bg-nacao/5',
+              drag ? 'border-nacao bg-nacao/10' : 'border-borda hover:border-nacao/50')}
+          >
+            <ClipboardPaste className="size-5 text-nacao" />
+            <span className="font-semibold text-tinta">{preparing ? 'Preparando prints…' : 'Clique aqui e cole o print (Ctrl+V)'}</span>
+            <span className="text-tinta-fraca">ou arraste os arquivos para cá</span>
+          </div>
+          {prints.length > 0 && (
+            <div className="rounded-xl bg-fundo p-2">
+              <div className="flex flex-wrap gap-1.5">
+                {prints.map((x, i) => (
+                  <div key={x.url} className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={x.url} alt={`Print ${i + 1}`} className="h-14 w-14 rounded-md border border-borda object-cover object-top" />
+                    <span className="absolute left-0.5 top-0.5 rounded bg-navy/80 px-1 text-[9px] font-bold text-white">{i + 1}</span>
+                    <button type="button" onClick={() => removePrint(i)} aria-label={`Tirar print ${i + 1}`} className="absolute -right-1.5 -top-1.5 grid size-4 place-items-center rounded-full bg-critico text-white"><X className="size-3" /></button>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-1 text-[11px] text-tinta-suave">{prints.length} print(s) na ordem em que vão ser lidos. Cole mais se o documento continuar.</p>
+            </div>
+          )}
+          {err && <p className="text-xs font-semibold text-critico">{err}</p>}
           <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Observação (opcional)" className="h-8 text-xs" />
-          <input ref={ref} type="file" accept={ACCEPT} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) { onUpload(kind.id, f, notes); setNotes(''); } }} />
-          <Button size="sm" variant="secondary" className="w-full" disabled={anyBusy} onClick={() => ref.current?.click()}>
-            <FileUp /> {busy ? 'Lendo…' : docs.length ? 'Enviar outro arquivo' : 'Enviar e processar'}
-          </Button>
+          <input ref={ref} type="file" accept={`${ACCEPT},image/*`} multiple className="hidden" onChange={(e) => { const fs = Array.from(e.target.files ?? []); e.target.value = ''; if (fs.length) void add(fs); }} />
+          {prints.length > 0 ? (
+            <Button size="sm" className="w-full" disabled={anyBusy || preparing} onClick={sendPrints}>
+              <FileUp /> {busy ? 'Lendo…' : `Enviar ${prints.length} print${prints.length > 1 ? 's' : ''} e processar`}
+            </Button>
+          ) : (
+            <Button size="sm" variant="secondary" className="w-full" disabled={anyBusy || preparing} onClick={() => ref.current?.click()}>
+              <FileUp /> {busy ? 'Lendo…' : docs.length ? 'Enviar outro arquivo' : 'Escolher arquivo'}
+            </Button>
+          )}
         </div>
       )}
     </Card>

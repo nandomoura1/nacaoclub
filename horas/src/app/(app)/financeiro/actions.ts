@@ -4,6 +4,8 @@ import { revalidatePath } from 'next/cache';
 import { getPrincipal, requestMeta } from '@/server/auth/session';
 import { runAction, type ActionResult } from '@/server/action-result';
 import { AppError } from '@/server/errors';
+import { imagesToPdf } from '@/server/financeiro/images-pdf';
+import { DOC_KINDS } from '@/domain/financeiro/taxonomy';
 import type { Metrics } from '@/domain/financeiro/metrics';
 import type { Analysis } from '@/server/financeiro/analysis';
 import {
@@ -34,14 +36,29 @@ export async function saveReconciliationAction(month: string, key: string, justi
   return runAction(async () => { await saveReconciliation(await getPrincipal(), month, key, justification, await requestMeta()); refresh(month); return undefined; }, 'Justificativa salva.');
 }
 
-/** Envia e já processa (extração pela IA). Se a leitura falhar, o arquivo fica guardado com o erro. */
+const MAX_PRINTS = 12;
+const isImg = (f: File) => /\.(png|jpe?g)$/i.test(f.name);
+
+/**
+ * Envia e já processa (extração pela IA). Se a leitura falhar, o arquivo fica
+ * guardado com o erro. Vários prints de tela viram um PDF só (uma página por print).
+ */
 export async function uploadDocumentAction(month: string, form: FormData): Promise<ActionResult<{ lines: number; warnings: string[] }>> {
   return runAction(async () => {
     const principal = await getPrincipal();
     const meta = await requestMeta();
     const kind = String(form.get('kind') ?? '');
     const notes = String(form.get('notes') ?? '') || null;
-    const id = await uploadFinDocument(principal, month, kind, fileOf(form), notes, meta);
+    const files = form.getAll('file').filter((f): f is File => f instanceof File && f.size > 0);
+    if (!files.length) throw new AppError('Escolha o arquivo.');
+    let file = files[0]!;
+    if (files.length > 1) {
+      if (files.length > MAX_PRINTS) throw new AppError(`No máximo ${MAX_PRINTS} prints por envio.`);
+      if (!files.every(isImg)) throw new AppError('Para juntar vários arquivos num documento, envie só prints (imagens). PDF e planilha vão um por vez.');
+      const label = DOC_KINDS.find((k) => k.id === kind)?.label ?? 'documento';
+      file = new File([new Uint8Array(await imagesToPdf(files))], `Prints ${label.replace(/[\\/:*?"<>|]/g, '-')} (${files.length}).pdf`, { type: 'application/pdf' });
+    }
+    const id = await uploadFinDocument(principal, month, kind, file, notes, meta);
     try {
       return await processFinDocument(principal, id, meta);
     } finally {
