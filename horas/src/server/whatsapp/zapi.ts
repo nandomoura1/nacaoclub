@@ -7,7 +7,10 @@ import { AppError } from '@/server/errors';
  * envios para um número (modo teste). ZAPI_FAKE=1 simula (desenvolvimento).
  */
 
-export interface ZapiConfig { configured: boolean; testPhone: string | null; fake: boolean; base: string | null; clientToken: string | null }
+export interface ZapiConfig { configured: boolean; testPhone: string | null; fake: boolean; base: string | null; clientToken: string | null; hints: { id: string | null; token: string | null; client: string | null } }
+
+/** Para conferir sem expor: 4 primeiros + 4 últimos + tamanho. */
+const hint = (v?: string) => (v ? `${v.slice(0, 4)}…${v.slice(-4)} (${v.length} caracteres)` : null);
 
 /** Limpa o valor colado: aspas, espaços e quebras de linha. */
 const clean = (v: string | undefined) => v?.replace(/["'`\s]/g, '') || undefined;
@@ -37,6 +40,7 @@ export function zapiConfig(): ZapiConfig {
     testPhone: process.env.ZAPI_TEST_PHONE?.replace(/\D/g, '') || null,
     base: id && token ? `${api}/instances/${encodeURIComponent(id)}/token/${encodeURIComponent(token)}` : null,
     clientToken: clean(process.env.ZAPI_CLIENT_TOKEN) ?? null,
+    hints: { id: hint(id), token: hint(token), client: hint(clean(process.env.ZAPI_CLIENT_TOKEN)) },
   };
 }
 

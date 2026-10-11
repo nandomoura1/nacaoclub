@@ -71,7 +71,7 @@ export async function whatsAppOverview(principal: Principal | null) {
   const users = new Map((await prisma.user.findMany({ where: { id: { in: [...new Set(rows.map((r) => r.createdById).filter((x): x is string => !!x))] } }, select: { id: true, name: true } })).map((u) => [u.id, u.name]));
   return {
     configured: cfg.configured, fake: cfg.fake, testPhone: cfg.testPhone ? maskDestination(normalizeDestination(cfg.testPhone) ?? cfg.testPhone) : null,
-    clientToken: !!cfg.clientToken, status, statusError,
+    clientToken: !!cfg.clientToken, hints: cfg.hints, status, statusError,
     messages: rows.map((r) => ({ id: r.id, kind: r.kind, to: r.toMasked, preview: r.preview, hasFile: r.hasFile, status: r.status, testMode: r.testMode, error: r.error, by: r.createdById ? users.get(r.createdById) ?? null : null, at: r.createdAt.toISOString() })),
   };
 }

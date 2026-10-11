@@ -55,6 +55,14 @@ export function WhatsAppClient({ v }: { v: WhatsAppOverview }) {
             <div className="flex gap-2"><dt className="text-tinta-suave">Modo teste:</dt><dd className="font-semibold">{v.testPhone ? `sim → ${v.testPhone}` : 'não (envia para o destino real)'}</dd></div>
             <div className="flex gap-2"><dt className="text-tinta-suave">Client-Token:</dt><dd className="font-semibold">{v.clientToken ? 'configurado' : 'não usado'}</dd></div>
           </dl>
+          {v.configured && !v.fake && (
+            <div className="mt-3 rounded-lg bg-fundo p-2 text-xs">
+              <p className="font-semibold text-tinta-suave">Conferir com o painel da Z-API (início…fim):</p>
+              <p>ID: <code className="font-mono">{v.hints.id ?? '—'}</code></p>
+              <p>Token: <code className="font-mono">{v.hints.token ?? '—'}</code></p>
+              {v.hints.client && <p>Client-Token: <code className="font-mono">{v.hints.client}</code></p>}
+            </div>
+          )}
         </Card>
 
         <Card className="p-4 lg:col-span-2">
