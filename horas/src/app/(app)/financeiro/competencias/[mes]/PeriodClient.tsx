@@ -20,10 +20,11 @@ import type { FinPeriodView } from '@/server/services/fin-service';
 import { DOC_STATUS, FIN_STATUS, Kpi } from '../../_components/fmt';
 import { LineForm, datasetLabel, keyLabel, lineValue, type CategoryOption, type LineDraft } from '../../_components/lines';
 import { ReportView, type ReportMode } from '../../_components/ReportView';
+import { ContextAdjustments } from '../../_components/context-adjustments';
 import { compressImage, imagesFrom, isImage, MAX_PRINTS } from '../../_components/screenshots';
 import {
   addLineAction, analysisAction, approveAction, confirmLinesAction, deleteDocumentAction, deleteLineAction, processDocumentAction,
-  saveNotesAction, saveReconciliationAction, saveReportContextAction, updateLineAction, uploadDocumentAction,
+  planContextAction, saveNotesAction, saveReconciliationAction, saveReportContextAction, toggleContextAdjustmentAction, updateLineAction, uploadDocumentAction,
 } from '../../actions';
 
 const TABS = [
@@ -437,7 +438,7 @@ function ReportTab({ p, perms, pending, run }: { p: FinPeriodView; perms: Perms;
       {p.lines.some((l) => l.status === 'EXTRACTED') && <p className="rounded-lg border border-atencao/40 bg-atencao/5 p-2 text-sm print:hidden">Há dados ainda não conferidos — este relatório é uma prévia.</p>}
       <div>
         <ReportView month={p.month} m={p.metrics} analysis={p.analysis} previous={p.previous} managerNotes={p.managerNotes} partnerDecisions={p.partnerDecisions} mode={mode} version={p.status === 'APPROVED' ? p.version : null}
-          adjust={{ partnerContext: p.partnerContext, exclusions: p.exclusions, accountNotes: accountNotes(p.lines) }} />
+          adjust={{ partnerContext: p.partnerContext, exclusions: p.exclusions, accountNotes: accountNotes(p.lines), plan: p.contextPlan, effects: p.contextEffects }} />
       </div>
     </div>
   );
@@ -448,9 +449,21 @@ function ContextCard({ p, canEdit, pending, run, generating, setGenerating }: { 
   const [text, setText] = useState(p.partnerContext ?? '');
   const [ex, setEx] = useState<Record<string, string>>(Object.fromEntries(p.exclusions.map((e) => [e.key, e.reason])));
   const [open, setOpen] = useState(!p.analysis || !!p.partnerContext || p.exclusions.length > 0);
+  const [step, setStep] = useState<string | null>(null);
   const values = { partnerContext: text.trim() || null, exclusions: Object.entries(ex).map(([key, reason]) => ({ key, reason })) };
   const dirty = (p.partnerContext ?? '') !== text.trim() || JSON.stringify(Object.fromEntries(p.exclusions.map((e) => [e.key, e.reason]))) !== JSON.stringify(ex);
   const missingReason = Object.values(ex).some((r) => r.trim().length < 3);
+  const needsPlan = !!values.partnerContext && (dirty || p.contextPlanStale);
+  /** Salva → aplica o contexto aos números (IA) → escreve a análise (IA). Cada passo é uma chamada. */
+  const generate = () => {
+    setGenerating(true);
+    run(async () => {
+      if (dirty) { const r = await saveReportContextAction(p.month, values); if (!r.ok) return r; }
+      if (needsPlan) { setStep('Aplicando o contexto dos sócios aos números…'); const r = await planContextAction(p.month); if (!r.ok) return r; }
+      setStep('Escrevendo a análise…');
+      return analysisAction(p.month);
+    }, () => { setGenerating(false); setStep(null); });
+  };
   const toggle = (key: string, on: boolean) => setEx((cur) => { const n = { ...cur }; if (on) n[key] = ''; else delete n[key]; return n; });
   if (!canEdit && !p.partnerContext && !p.exclusions.length) return null;
   return (
@@ -466,7 +479,7 @@ function ContextCard({ p, canEdit, pending, run, generating, setGenerating }: { 
             <Label>O que a IA precisa saber antes de analisar</Label>
             <textarea className="mt-1 min-h-40 w-full rounded-lg border border-borda p-2 text-sm" value={text} disabled={!canEdit} onChange={(e) => setText(e.target.value)}
               placeholder={'Ex.:\n• O 13º de dezembro foi pago adiantado em novembro.\n• R$ 18 mil de pagamentos são da obra do vestiário (pontual).\n• Compramos bebida em volume para o evento do dia 20; parte ficou em estoque.'} />
-            <p className="mt-1 text-xs text-tinta-suave">A IA usa para interpretar os números (não altera nenhum valor). Aparece no relatório como “Contexto dos sócios”.</p>
+            <p className="mt-1 text-xs text-tinta-suave">É o ponto de vista dos sócios: a IA aplica aos números (retira o que é pontual, reclassifica, ajusta valores) e constrói a análise a partir dele. Os dados originais ficam guardados e cada ajuste pode ser desligado.</p>
           </div>
           <div>
             <Label>Desconsiderar neste relatório (enviesado)</Label>
@@ -489,12 +502,25 @@ function ContextCard({ p, canEdit, pending, run, generating, setGenerating }: { 
           </div>
         </div>
       )}
+      {open && p.partnerContext && (
+        <div className="mt-4 border-t border-borda pt-3">
+          <p className="mb-2 font-bold text-navy">Como o contexto mudou os números</p>
+          {p.contextPlan && !dirty
+            ? <ContextAdjustments plan={p.contextPlan} effects={p.contextEffects} disabled={!canEdit || pending} onToggle={canEdit ? (id, on) => run(() => toggleContextAdjustmentAction(p.month, id, on)) : undefined} />
+            : <p className="text-sm text-tinta-suave">{dirty ? 'Salve o contexto para a IA aplicar aos números.' : 'Ainda não aplicado — acontece ao gerar a análise (ou clique em “Aplicar aos números”).'}</p>}
+        </div>
+      )}
       {canEdit && (
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {open && <Button size="sm" variant="secondary" disabled={pending || !dirty || missingReason} onClick={() => run(() => saveReportContextAction(p.month, values))}><Save /> Salvar contexto</Button>}
-          <Button size="sm" disabled={pending || missingReason || !p.lines.length}
-            onClick={() => { setGenerating(true); run(async () => { const r = dirty ? await saveReportContextAction(p.month, values) : { ok: true as const }; return r.ok ? analysisAction(p.month) : r; }, () => setGenerating(false)); }}>
-            <Sparkles /> {generating && pending ? 'Escrevendo a análise…' : `${dirty ? 'Salvar e gerar' : p.analysis ? 'Gerar de novo' : 'Gerar'} a análise (IA)`}
+          {open && values.partnerContext && (
+            <Button size="sm" variant="secondary" disabled={pending || missingReason || !p.lines.length}
+              onClick={() => run(async () => { if (dirty) { const r = await saveReportContextAction(p.month, values); if (!r.ok) return r; } return planContextAction(p.month); })}>
+              <RefreshCw /> {p.contextPlan && !dirty ? 'Reaplicar aos números' : 'Aplicar aos números'}
+            </Button>
+          )}
+          <Button size="sm" disabled={pending || missingReason || !p.lines.length} onClick={generate}>
+            <Sparkles /> {generating && pending ? (step ?? 'Salvando…') : `${dirty ? 'Salvar e gerar' : p.analysis ? 'Gerar de novo' : 'Gerar'} a análise (IA)`}
           </Button>
           {missingReason && <span className="text-xs text-critico">Informe o motivo de cada item desconsiderado.</span>}
         </div>

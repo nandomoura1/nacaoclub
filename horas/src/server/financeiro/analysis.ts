@@ -2,6 +2,7 @@ import { z } from 'zod/v4';
 import { askModel, isFake } from '@/server/ai/workout-generator';
 import { KEY_INDICATORS, compareMetrics, type FinLineData, type Ind, type Metrics } from '@/domain/financeiro/metrics';
 import { exclusionsView, type Exclusion } from '@/domain/financeiro/adjustments';
+import { ADJ_KINDS, type adjustmentEffects, type ContextPlan } from '@/domain/financeiro/context-adjust';
 import { DATASETS, DEFAULT_CATEGORIES, DOC_KINDS } from '@/domain/financeiro/taxonomy';
 
 /**
@@ -31,7 +32,7 @@ export type Analysis = z.infer<typeof AnalysisSchema> & { model: string; generat
 const SYSTEM = `Você é o analista financeiro da Nação Club (complexo esportivo em Brasília) e escreve a análise do relatório financeiro mensal para o gestor e os sócios, em português do Brasil, tom executivo, direto.
 
 Regras absolutas:
-- Use SOMENTE os números fornecidos no JSON. Não recalcule, não arredonde de outro jeito, não invente valores, causas ou comparações. Copie os valores como vêm formatados.
+- Use SOMENTE os números fornecidos no JSON (já ajustados pelo contexto dos sócios). Não recalcule, não arredonde de outro jeito, não invente valores, causas ou comparações. Copie os valores como vêm formatados.
 - "Recebimentos − pagamentos" e "geração de caixa antes do payout" são indicadores de FLUXO FINANCEIRO: nunca chame de lucro ou prejuízo.
 - Custo de pessoal é o custo econômico (sem IRRF retido, adiantamento, payout e a parceria do Tênis). A parceria do Tênis é custo direto da modalidade (repasse de 40%), não folha.
 - Ticket Funcionário é consumo interno/benefício, não receita comercial. Conta Assinada só é venda quando classificada como comercial.
@@ -40,7 +41,11 @@ Regras absolutas:
 - Indicador "não informado" → escreva "Dado não informado." Quando houver dúvida, escreva "Dado requer validação."
 - Observações do gestor e decisões dos sócios são CONTEXTO, não dado financeiro: cite como "segundo o gestor…" e não transforme em número nem em causa comprovada. Não transforme correlação em causalidade.
 - Alertas (divergências, conciliações, metas) devem aparecer em pontos de atenção.
-- CONTEXTO DOS SÓCIOS: informação dada pelos sócios para tornar a leitura mais assertiva (pagamento pontual, mês atípico, mudança de operação…). Use para QUALIFICAR a leitura dos números relacionados ("segundo os sócios, …"), para não tratar como tendência o que é pontual e para não apontar como risco o que já está explicado. Nunca altere números nem crie valores a partir do contexto.
+- CONTEXTO DOS SÓCIOS — É A LENTE DO RELATÓRIO, NÃO UM COMENTÁRIO: escreva o relatório inteiro sob o ponto de vista dos sócios. Os números que você recebe JÁ FORAM AJUSTADOS por esse contexto ("ajustesDoContexto": cada lançamento retirado, reclassificado, com valor ajustado ou incluído, com o motivo; "efeitoNosIndicadores": original → considerado). Então:
+  • Analise os números considerados como os números do mês. Não volte aos valores originais na análise, exceto para explicar um ajuste relevante uma vez (ex.: "desconsiderando a obra do vestiário (R$ X), os pagamentos ficam em R$ Y").
+  • Construa a leitura a partir das prioridades e explicações dos sócios: o que eles dizem ser pontual não é tendência nem risco; o que eles dizem ser estrutural pesa nas conclusões; o que eles pedem para observar ganha destaque no resumo, nos pontos de atenção e na conclusão.
+  • Os pontos em "contextoSomenteLeitura" não mudam números, mas mudam a interpretação: use-os na construção de cada seção afetada.
+  • Não cole o contexto como um bloco à parte nem repita o texto dos sócios: incorpore-o no raciocínio de cada seção.
 - ITENS DESCONSIDERADOS: os sócios retiraram estes itens deste relatório por estarem enviesados. Não analise, não cite valores, não compare e não use esses itens em resumo, pontos positivos, pontos de atenção, riscos, resumo dos sócios ou conclusão. Na seção correspondente escreva exatamente "Desconsiderado pelos sócios neste relatório: <motivo>."
 - INFORMAÇÕES DO GESTOR ("informacoesDoGestor"): explicações escritas pelo gestor em contas específicas, lançamentos feitos à mão, correções com motivo, justificativas de conciliação e observações dos documentos. Considere TODAS ao comentar a seção correspondente (ex.: uma explicação numa conta de pessoal entra no comentário de pessoal) e nos pontos de atenção/riscos — elas explicam o número, não o alteram. Cite como "segundo o gestor…". Uma divergência justificada não deve ser tratada como problema em aberto.
 - ESTOQUE: use a quantidade e o valor de cada produto (custo unitário, saldo, vendido no mês e cobertura em dias) para comentar capital parado em estoque, itens com cobertura alta ou sem venda e o efeito no CMV. Não some você mesmo: os totais já vêm prontos.
@@ -54,7 +59,7 @@ const fmt = (i: Ind): string => {
 };
 
 /** O que vai para a IA: só valores já formatados, com fórmula e estado. */
-export function analysisInput(month: string, m: Metrics, prev: { month: string; m: Metrics } | null, notes: string | null, decisions: string | null, ctx: { partnerContext: string | null; exclusions: Exclusion[]; manual?: ManagerInputs } = { partnerContext: null, exclusions: [] }) {
+export function analysisInput(month: string, m: Metrics, prev: { month: string; m: Metrics } | null, notes: string | null, decisions: string | null, ctx: { partnerContext: string | null; exclusions: Exclusion[]; manual?: ManagerInputs; plan?: ContextPlan | null; effects?: ReturnType<typeof adjustmentEffects> } = { partnerContext: null, exclusions: [] }) {
   const pct = (r: number | null) => (r === null ? 'não informado' : `${(r * 100).toFixed(1).replace('.', ',')}%`);
   const ex = exclusionsView(ctx.exclusions);
   const est = m.estoque;
@@ -98,6 +103,9 @@ export function analysisInput(month: string, m: Metrics, prev: { month: string; 
     observacoesDoGestor: notes || 'nenhuma',
     decisoesDosSocios: decisions || 'nenhuma',
     contextoDosSocios: ctx.partnerContext || 'nenhum',
+    ajustesDoContexto: (ctx.plan?.items ?? []).filter((a) => a.active).map((a) => `${ADJ_KINDS.find((k) => k.id === a.kind)!.label}: ${a.label}${a.unit ? ` [${a.unit}]` : ''} — ${a.kind === 'EXCLUIR' ? `${a.fromCents === null ? '' : money(a.fromCents)} fora do mês` : a.kind === 'AJUSTAR_VALOR' ? `${a.fromCents === null ? '—' : money(a.fromCents)} → ${money(a.toCents ?? 0)}` : a.kind === 'RECLASSIFICAR' ? `${a.fromKey ?? 'sem categoria'} → ${a.toKey}` : `+ ${money(a.toCents ?? 0)}`}. Motivo: ${a.reason}`),
+    efeitoNosIndicadores: (ctx.effects ?? []).map((e) => `${e.label}: ${e.unit === 'BRL' ? (e.from === null ? '—' : money(e.from)) : e.unit === 'PCT' ? pct(e.from) : e.from} → ${e.unit === 'BRL' ? (e.to === null ? '—' : money(e.to)) : e.unit === 'PCT' ? pct(e.to) : e.to}`),
+    contextoSomenteLeitura: ctx.plan?.readingOnly.filter((r) => !r.startsWith('Ajuste não aplicado')) ?? [],
     informacoesDoGestor: ctx.manual && Object.values(ctx.manual).some((v) => v.length) ? ctx.manual : 'nenhuma',
     itensDesconsiderados: ex.list.map((e) => `${e.item.label} — motivo: ${e.reason}`),
   };

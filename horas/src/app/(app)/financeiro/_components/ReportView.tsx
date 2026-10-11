@@ -11,6 +11,8 @@ import type { Analysis } from '@/server/financeiro/analysis';
 import { ShieldMark } from '@/components/Logo';
 import { cn } from '@/lib/cn';
 import { ShareBars } from './charts';
+import { ContextAdjustments, type ContextEffect } from './context-adjustments';
+import type { ContextPlan } from '@/domain/financeiro/context-adjust';
 import { brl, fmtValue, pct, StatusTag } from './fmt';
 
 /**
@@ -131,7 +133,7 @@ export function ReportView({ month, m, analysis, previous, managerNotes, partner
   month: Month; m: Metrics; analysis: Analysis | null; previous: { month: Month; m: Metrics } | null;
   managerNotes: string | null; partnerDecisions: string | null; mode: ReportMode; version: number | null;
   /** Contexto e itens desconsiderados pelos sócios. */
-  adjust?: { partnerContext: string | null; exclusions: Exclusion[]; accountNotes?: { label: string; note: string }[] };
+  adjust?: { partnerContext: string | null; exclusions: Exclusion[]; accountNotes?: { label: string; note: string }[]; plan?: ContextPlan | null; effects?: ContextEffect[]; catLabel?: (k: string | null) => string };
 }) {
   const ex = exclusionsView(adjust?.exclusions);
   const checks = m.checks.filter((c) => ex.keepCheck(c.key));
@@ -214,7 +216,7 @@ export function ReportView({ month, m, analysis, previous, managerNotes, partner
   const notes = adjust?.accountNotes ?? [];
   const context = (managerNotes || partnerDecisions || adjust?.partnerContext || ex.any || notes.length > 0) && (
     <div className="grid gap-3 sm:grid-cols-2 [&>*]:min-w-0">
-      {adjust?.partnerContext && <div className="rounded-xl border border-dashed border-nacao/30 bg-white p-3 text-sm sm:col-span-2"><p className="font-titulo text-[10px] font-bold uppercase tracking-[0.18em] text-nacao">Contexto dos sócios</p><p className="mt-1 whitespace-pre-line leading-relaxed">{adjust.partnerContext}</p><Note>Considerado na leitura da IA — não altera os números.</Note></div>}
+      {adjust?.partnerContext && <div className="rounded-xl border border-dashed border-nacao/30 bg-white p-3 text-sm sm:col-span-2"><p className="font-titulo text-[10px] font-bold uppercase tracking-[0.18em] text-nacao">Ponto de vista dos sócios — como moldou este relatório</p><p className="mt-1 whitespace-pre-line leading-relaxed">{adjust.partnerContext}</p>{adjust.plan ? <div className="mt-2"><ContextAdjustments plan={adjust.plan} effects={adjust.effects ?? []} catLabel={adjust.catLabel} /></div> : null}<Note>{adjust.plan?.items.some((x) => x.active) ? 'Os números deste relatório já consideram os ajustes acima; os dados originais continuam guardados na conferência.' : 'Orientou a construção da análise.'}</Note></div>}
       {notes.length > 0 && <div className="rounded-xl border border-dashed border-nacao/30 bg-white p-3 text-sm sm:col-span-2"><p className="font-titulo text-[10px] font-bold uppercase tracking-[0.18em] text-nacao">Explicações do gestor sobre as contas</p><ul className="mt-1 space-y-0.5">{notes.map((n, i) => <li key={i}><b>{n.label}:</b> {n.note}</li>)}</ul><Note>Contexto — considerado pela análise; não altera os números.</Note></div>}
       {ex.any && <div className="rounded-xl border border-dashed border-tinta-fraca/40 bg-fundo p-3 text-sm sm:col-span-2"><p className="flex items-center gap-1.5 font-titulo text-[10px] font-bold uppercase tracking-[0.18em] text-tinta-suave"><EyeOff className="size-3" /> Desconsiderado neste relatório</p><ul className="mt-1 space-y-0.5">{ex.list.map((e) => <li key={e.key}><b>{e.item.label}:</b> {e.reason}</li>)}</ul><Note>Os números continuam calculados e guardados; só não entram na leitura deste mês.</Note></div>}
       {managerNotes && <div className="rounded-xl border border-dashed border-nacao/30 bg-white p-3 text-sm"><p className="font-titulo text-[10px] font-bold uppercase tracking-[0.18em] text-nacao">Observações do gestor</p><p className="mt-1 whitespace-pre-line leading-relaxed">{managerNotes}</p><Note>Contexto — não é dado financeiro.</Note></div>}

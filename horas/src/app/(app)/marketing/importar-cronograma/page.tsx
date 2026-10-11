@@ -24,7 +24,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ l
   ]);
   return (
     <>
-      <PageHeader title="Importar cronograma" description="Traga o cronograma de marketing (Google Docs) para o calendário: a IA separa eventos, campanhas, temas do mês e datas; você revisa antes de gravar." />
+      <PageHeader title="Importar cronograma" description="Traga o cronograma de marketing (Google Docs) para o calendário: a IA separa eventos, campanhas, temas do mês e datas; sobe direto no calendário (ou passa pela sua revisão, se preferir)." />
       <ScheduleImport review={review} imports={imports} canAi={can(principal, 'mkt.ai')} />
     </>
   );

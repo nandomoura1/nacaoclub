@@ -14,7 +14,7 @@ import {
   createMeeting, decideMinutes, decideRecommendation, decideTaskSuggestion, generateMinutes, refreshMeetingAgenda, refreshRecommendations, saveMeetingNotes, suggestCampaignTasks,
 } from '@/server/services/mkt-ai-service';
 import { importTrello, trelloAlreadyImported, type TrelloImportResult } from '@/server/services/mkt-trello-service';
-import { analyzeSchedule, commitSchedule, repeatEventNextYear, undoImport } from '@/server/services/mkt-import-service';
+import { analyzeSchedule, autoImportSchedule, commitSchedule, repeatEventNextYear, undoImport } from '@/server/services/mkt-import-service';
 import { deleteKnowledge, draftKnowledge, saveKnowledge } from '@/server/services/mkt-memory-service';
 
 const refresh = (...paths: string[]) => {
@@ -142,6 +142,9 @@ export async function analyzeScheduleAction(fd: FormData): Promise<ActionResult<
 }
 export async function commitScheduleAction(suggestionId: string, decisions: unknown): Promise<ActionResult<{ eventos: number; campanhas: number; datas: number; duplicados: number }>> {
   return runAction(async () => { const r = await commitSchedule(await getPrincipal(), suggestionId, decisions, await requestMeta()); refresh(); return r; });
+}
+export async function autoImportScheduleAction(suggestionId: string): Promise<ActionResult<{ importId: string; eventos: number; campanhas: number; datas: number; duplicados: number }>> {
+  return runAction(async () => { const r = await autoImportSchedule(await getPrincipal(), suggestionId, todayIso(), await requestMeta()); refresh(); return r; });
 }
 export async function undoImportAction(importId: string): Promise<ActionResult<{ removidos: number; mantidos: number }>> {
   return runAction(async () => { const r = await undoImport(await getPrincipal(), importId, await requestMeta()); refresh(); return r; });

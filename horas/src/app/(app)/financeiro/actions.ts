@@ -10,7 +10,7 @@ import type { Metrics } from '@/domain/financeiro/metrics';
 import type { Analysis } from '@/server/financeiro/analysis';
 import {
   addFinLine, analyzeHistoricReport, approveFinPeriod, commitHistoricReport, confirmFinLines, createFinPeriod, deleteFinDocument, deleteFinLine,
-  discardHistoricReport, previewMetrics, processFinDocument, runFinAnalysis, saveCategory, saveFinNotes, saveFinReportContext, saveFinTargets, saveReconciliation,
+  discardHistoricReport, planFinContext, toggleFinContextAdjustment, previewMetrics, processFinDocument, runFinAnalysis, saveCategory, saveFinNotes, saveFinReportContext, saveFinTargets, saveReconciliation,
   updateFinLine, uploadFinDocument, analyzeFinPackage, commitFinPackage, isFinPackageFile, type FinPackageAnalysis, type HistoricAnalysis,
 } from '@/server/services/fin-service';
 
@@ -91,6 +91,12 @@ export async function deleteLineAction(month: string, id: string, reason: string
 
 export async function approveAction(month: string, reason: string | null): Promise<ActionResult<number>> {
   return runAction(async () => { const n = await approveFinPeriod(await getPrincipal(), month, reason, await requestMeta()); refresh(month); return n; });
+}
+export async function planContextAction(month: string): Promise<ActionResult<{ adjustments: number; readingOnly: number }>> {
+  return runAction(async () => { const r = await planFinContext(await getPrincipal(), month, await requestMeta()); refresh(month); return r; });
+}
+export async function toggleContextAdjustmentAction(month: string, id: string, active: boolean): Promise<ActionResult> {
+  return runAction(async () => { await toggleFinContextAdjustment(await getPrincipal(), month, id, active, await requestMeta()); refresh(month); return undefined; });
 }
 export async function analysisAction(month: string): Promise<ActionResult<Analysis>> {
   return runAction(async () => { const a = await runFinAnalysis(await getPrincipal(), month, await requestMeta()); refresh(month); return a; });

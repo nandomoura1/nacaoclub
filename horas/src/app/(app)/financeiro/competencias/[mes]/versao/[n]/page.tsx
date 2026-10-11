@@ -34,7 +34,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
         <PrintButton />
       </div>
       <div>
-        <ReportView month={mes} m={s.metrics} analysis={s.analysis} previous={null} managerNotes={s.managerNotes} partnerDecisions={s.partnerDecisions} mode={mode} version={v.number} adjust={{ partnerContext: s.partnerContext ?? null, exclusions: s.exclusions ?? [], accountNotes: s.lines.filter((l) => typeof l.meta?.nota === 'string').map((l) => ({ label: [l.label, l.unit].filter(Boolean).join(' · '), note: String(l.meta!.nota) })) }} />
+        <ReportView month={mes} m={s.metrics} analysis={s.analysis} previous={null} managerNotes={s.managerNotes} partnerDecisions={s.partnerDecisions} mode={mode} version={v.number} adjust={{ partnerContext: s.partnerContext ?? null, exclusions: s.exclusions ?? [], plan: s.contextPlan ?? null, effects: s.contextEffects ?? [], accountNotes: s.lines.filter((l) => typeof l.meta?.nota === 'string').map((l) => ({ label: [l.label, l.unit].filter(Boolean).join(' · '), note: String(l.meta!.nota) })) }} />
       </div>
     </div>
   );

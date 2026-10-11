@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import type { FinLine, Prisma } from '@prisma/client';
+import { Prisma, type FinLine } from '@prisma/client';
 import { prisma, type Tx } from '@/server/db';
 import { audit } from '@/server/audit';
 import { assertCan } from '@/server/auth/authz';
@@ -14,6 +14,8 @@ import { isNegativeStock, parseStockTable, stockSummary } from '@/domain/finance
 import { parseExclusions, REPORT_ITEMS, type Exclusion } from '@/domain/financeiro/adjustments';
 import { ACCEPTED, MAX_FILE_BYTES, extractDocument, fileToBlocks, tableRows, toLineInput, type Extraction } from '@/server/financeiro/extract';
 import { analysisInput, generateAnalysis, managerInputs, type Analysis } from '@/server/financeiro/analysis';
+import { planContext } from '@/server/financeiro/context-plan';
+import { adjustmentEffects, applyContext, parsePlan, type ContextPlan } from '@/domain/financeiro/context-adjust';
 import { readPackageWorkbook } from '@/server/import/fin-package-xlsx';
 import { compareFileKpis, isPackage, parsePackage } from '@/domain/financeiro/package';
 
@@ -108,6 +110,9 @@ export interface VersionSnapshot {
   /** Contexto e itens desconsiderados pelos sócios (versões antigas não têm). */
   partnerContext?: string | null;
   exclusions?: Exclusion[];
+  /** Ajustes estruturais do contexto e o efeito deles nos indicadores. */
+  contextPlan?: ContextPlan | null;
+  contextEffects?: ReturnType<typeof adjustmentEffects>;
   analysis: Analysis | null;
   targets: Targets;
 }
@@ -128,11 +133,28 @@ async function openingStock(db: Tx, month: Month): Promise<number | null> {
   return stockSummary(rows.map((r) => ({ label: r.label, quantity: num(r.quantity), amountCents: r.amountCents })))?.valueCents ?? null;
 }
 
+/** Plano de ajustes que vale agora: só o gerado a partir do contexto atual. */
+function currentPlan(p: { partnerContext: string | null; contextPlan: unknown }): ContextPlan | null {
+  const plan = parsePlan(p.contextPlan);
+  return plan && p.partnerContext && plan.context === p.partnerContext ? plan : null;
+}
+
+/**
+ * Indicadores do mês. Com contexto dos sócios aplicado, o relatório usa os
+ * dados AJUSTADOS (metrics); rawMetrics guarda o cálculo sobre os originais.
+ */
 async function liveMetrics(db: Tx, periodId: string, month: Month) {
-  const [lines, cats, targets, prev, opening] = await Promise.all([
+  const [period, lines, cats, targets, prev, opening] = await Promise.all([
+    db.finPeriod.findUniqueOrThrow({ where: { id: periodId }, select: { partnerContext: true, contextPlan: true } }),
     db.finLine.findMany({ where: { periodId } }), listCategories(db), getFinTargets(db), previousApproved(db, month), openingStock(db, month),
   ]);
-  return { metrics: computeMetrics(lines.map(toData), cats, targets, prev?.m ?? null, { openingStockCents: opening, daysInMonth: daysInMonth(month) }), prev, targets, lines };
+  const opts = { openingStockCents: opening, daysInMonth: daysInMonth(month) };
+  const raw = computeMetrics(lines.map(toData), cats, targets, prev?.m ?? null, opts);
+  const plan = currentPlan(period);
+  const adjusted = plan?.items.some((a) => a.active)
+    ? computeMetrics(applyContext(lines.map((l) => ({ ...toData(l), id: l.id })), plan), cats, targets, prev?.m ?? null, opts)
+    : raw;
+  return { metrics: adjusted, rawMetrics: raw, plan, effects: adjusted === raw ? [] : adjustmentEffects(raw, adjusted), prev, targets, lines, cats };
 }
 
 export async function listFinPeriods(principal: Principal | null) {
@@ -156,7 +178,7 @@ export async function getFinPeriod(principal: Principal | null, month: string) {
     },
   });
   if (!p) throw new NotFoundError(`A competência ${monthLabel(month)} ainda não foi criada.`);
-  const { metrics, prev, lines } = await liveMetrics(prisma, p.id, month);
+  const { metrics, prev, lines, plan, effects } = await liveMetrics(prisma, p.id, month);
   const userIds = [...new Set([...p.documents.map((d) => d.uploadedById), ...p.versions.map((v) => v.createdById), ...lines.map((l) => l.confirmedById)].filter((x): x is string => !!x))];
   const users = new Map((await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } })).map((u) => [u.id, u.name]));
   // Linhas vindas de um pacote histórico apontam para um arquivo que não pertence a um mês só.
@@ -168,6 +190,7 @@ export async function getFinPeriod(principal: Principal | null, month: string) {
   return {
     id: p.id, month, status: p.status, version: p.version, managerNotes: p.managerNotes, partnerDecisions: p.partnerDecisions,
     partnerContext: p.partnerContext, exclusions: parseExclusions(p.reportExclusions), contextAt: p.contextAt?.toISOString() ?? null,
+    contextPlan: plan, contextEffects: effects, contextPlanStale: !!p.partnerContext && !plan,
     analysis: (p.analysis as unknown as Analysis | null) ?? null, approvedAt: p.approvedAt?.toISOString() ?? null,
     documents: p.documents.map((d) => ({
       id: d.id, kind: d.kind as DocKind, filename: d.filename, sizeBytes: d.sizeBytes, status: d.status, origin: d.origin, version: d.version, notes: d.notes, error: d.error,
@@ -252,7 +275,8 @@ export async function saveFinReportContext(principal: Principal | null, month: s
   await prisma.$transaction(async (tx) => {
     const p = await tx.finPeriod.findUnique({ where: { month } });
     if (!p) throw new NotFoundError('Competência não encontrada.');
-    await tx.finPeriod.update({ where: { id: p.id }, data: { partnerContext, reportExclusions: exclusions as unknown as Prisma.InputJsonValue, contextAt: new Date() } });
+    // Sem contexto, os ajustes estruturais deixam de existir.
+    await tx.finPeriod.update({ where: { id: p.id }, data: { partnerContext, reportExclusions: exclusions as unknown as Prisma.InputJsonValue, contextAt: new Date(), ...(partnerContext ? {} : { contextPlan: Prisma.DbNull }) } });
     const labels = exclusions.map((e) => REPORT_ITEMS.find((i) => i.key === e.key)!.label);
     await audit(tx, { actorId: principal.id, ...meta }, {
       action: 'fin.report_context', entityType: 'fin_period', entityId: p.id,
@@ -486,7 +510,7 @@ async function approveIn(tx: Tx, principal: Principal, periodId: string, reason:
   const p = await tx.finPeriod.findUniqueOrThrow({ where: { id: periodId } });
   const pending = await tx.finLine.count({ where: { periodId, status: 'EXTRACTED' } });
   if (pending) throw new AppError(`Ainda há ${pending} dado(s) para conferir. Confirme ou corrija antes de aprovar.`);
-  const { metrics, lines, targets } = await liveMetrics(tx, periodId, p.month as Month);
+  const { metrics, lines, targets, plan, effects } = await liveMetrics(tx, periodId, p.month as Month);
   if (!lines.length) throw new AppError('Não há dados para aprovar.');
   const docs = await tx.finDocument.findMany({ where: { periodId }, select: { id: true, kind: true, filename: true, sha256: true } });
   const number = p.version + 1;
@@ -494,7 +518,7 @@ async function approveIn(tx: Tx, principal: Principal, periodId: string, reason:
     number,
     lines: lines.map((l) => ({ ...toData(l), status: l.status, sourceRef: l.sourceRef, documentId: l.documentId })),
     metrics, documents: docs, managerNotes: p.managerNotes, partnerDecisions: p.partnerDecisions,
-    partnerContext: p.partnerContext, exclusions: parseExclusions(p.reportExclusions),
+    partnerContext: p.partnerContext, exclusions: parseExclusions(p.reportExclusions), contextPlan: plan, contextEffects: effects,
     analysis: (p.analysis as unknown as Analysis | null) ?? null, targets,
   };
   await tx.finVersion.create({ data: { periodId, number, reason: reason?.trim().slice(0, 300) || null, snapshot: snapshot as unknown as Prisma.InputJsonValue, createdById: principal.id } });
@@ -523,19 +547,62 @@ export async function runFinAnalysis(principal: Principal | null, month: string,
   assertMonth(month);
   const p = await prisma.finPeriod.findUnique({ where: { month } });
   if (!p) throw new NotFoundError('Competência não encontrada.');
-  const { metrics, prev, lines } = await liveMetrics(prisma, p.id, month);
+  if (p.partnerContext && !currentPlan(p)) throw new AppError('O contexto dos sócios mudou: aplique o contexto aos números antes de gerar a análise.');
+  const { metrics, prev, lines, plan, effects } = await liveMetrics(prisma, p.id, month);
   if (!lines.length) throw new AppError('Envie e confira os documentos antes de gerar a análise.');
   const [recs, docs] = await Promise.all([
     prisma.finReconciliation.findMany({ where: { periodId: p.id } }),
     prisma.finDocument.findMany({ where: { periodId: p.id, notes: { not: null } }, select: { kind: true, filename: true, notes: true } }),
   ]);
   const manual = managerInputs(lines.map((l) => ({ ...toData(l), status: l.status })), metrics, recs, docs);
-  const analysis = await generateAnalysis(analysisInput(month, metrics, prev, p.managerNotes, p.partnerDecisions, { partnerContext: p.partnerContext, exclusions: parseExclusions(p.reportExclusions), manual }));
+  const analysis = await generateAnalysis(analysisInput(month, metrics, prev, p.managerNotes, p.partnerDecisions, { partnerContext: p.partnerContext, exclusions: parseExclusions(p.reportExclusions), manual, plan, effects }));
   await prisma.$transaction(async (tx) => {
     await tx.finPeriod.update({ where: { id: p.id }, data: { analysis: analysis as unknown as Prisma.InputJsonValue, analysisAt: new Date() } });
     await audit(tx, { actorId: principal.id, ...meta }, { action: 'fin.analysis', entityType: 'fin_period', entityId: p.id, summary: `${principal.name} gerou a análise do Relatório Financeiro de ${monthLabel(month)}` });
   });
   return analysis;
+}
+
+// ── Contexto dos sócios aplicado aos números ───────────────
+
+/** A IA lê o contexto e decide o que muda nos dados do relatório (originais intactos). */
+export async function planFinContext(principal: Principal | null, month: string, meta: RequestMeta) {
+  assertCan(principal, 'fin.edit');
+  assertMonth(month);
+  const p = await prisma.finPeriod.findUnique({ where: { month } });
+  if (!p) throw new NotFoundError('Competência não encontrada.');
+  if (!p.partnerContext) throw new AppError('Escreva o contexto dos sócios primeiro.');
+  const [lines, cats] = await Promise.all([prisma.finLine.findMany({ where: { periodId: p.id } }), listCategories()]);
+  if (!lines.length) throw new AppError('Envie e confira os documentos antes de aplicar o contexto.');
+  const plan = await planContext(p.partnerContext, lines.map((l) => ({ ...toData(l), id: l.id })), cats, { managerNotes: p.managerNotes, partnerDecisions: p.partnerDecisions });
+  await prisma.$transaction(async (tx) => {
+    await tx.finPeriod.update({ where: { id: p.id }, data: { contextPlan: plan as unknown as Prisma.InputJsonValue, contextAt: new Date() } });
+    await audit(tx, { actorId: principal.id, ...meta }, {
+      action: 'fin.context_plan', entityType: 'fin_period', entityId: p.id,
+      after: { ajustes: plan.items.map((a) => ({ tipo: a.kind, linha: a.label, de: a.fromCents, para: a.toCents, categoria: a.toKey, motivo: a.reason })), somenteLeitura: plan.readingOnly },
+      summary: `${principal.name} aplicou o contexto dos sócios aos números de ${monthLabel(month)} (${plan.items.length} ajuste(s))`,
+    });
+  });
+  return { adjustments: plan.items.length, readingOnly: plan.readingOnly.length };
+}
+
+/** Liga/desliga um ajuste do contexto (o gestor tem a palavra final). */
+export async function toggleFinContextAdjustment(principal: Principal | null, month: string, id: string, active: boolean, meta: RequestMeta) {
+  assertCan(principal, 'fin.edit');
+  assertMonth(month);
+  await prisma.$transaction(async (tx) => {
+    const p = await tx.finPeriod.findUnique({ where: { month } });
+    if (!p) throw new NotFoundError('Competência não encontrada.');
+    const plan = currentPlan(p);
+    const item = plan?.items.find((a) => a.id === id);
+    if (!plan || !item) throw new NotFoundError('Ajuste não encontrado. Aplique o contexto de novo.');
+    item.active = active;
+    await tx.finPeriod.update({ where: { id: p.id }, data: { contextPlan: plan as unknown as Prisma.InputJsonValue, contextAt: new Date() } });
+    await audit(tx, { actorId: principal.id, ...meta }, {
+      action: 'fin.context_adjustment', entityType: 'fin_period', entityId: p.id, after: { ajuste: item.label, tipo: item.kind, ativo: active },
+      summary: `${principal.name} ${active ? 'religou' : 'desligou'} o ajuste do contexto "${item.label}" em ${monthLabel(month)}`,
+    });
+  });
 }
 
 // ── Importação de relatórios antigos ───────────────────────

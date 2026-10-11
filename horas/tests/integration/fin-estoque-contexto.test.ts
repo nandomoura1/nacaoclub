@@ -3,7 +3,7 @@ import ExcelJS from 'exceljs';
 import { prisma } from '@/server/db';
 import { AuthorizationError } from '@/server/errors';
 import {
-  approveFinPeriod, confirmFinLines, createFinPeriod, getFinPeriod, getFinVersion, processFinDocument, runFinAnalysis, saveFinReportContext, uploadFinDocument,
+  approveFinPeriod, confirmFinLines, createFinPeriod, getFinPeriod, getFinVersion, planFinContext, processFinDocument, runFinAnalysis, toggleFinContextAdjustment, saveFinReportContext, uploadFinDocument,
 } from '@/server/services/fin-service';
 import { META, ensureCatalog, hasDb, makeUser } from './helpers';
 
@@ -81,6 +81,26 @@ describe.skipIf(!hasDb)('Financeiro — estoque e contexto dos sócios', () => {
     expect(p.contextAt).not.toBeNull();
     expect(await prisma.auditLog.count({ where: { action: 'fin.report_context', entityId: p.id } })).toBe(1);
 
+    // O contexto precisa ser aplicado aos números antes da análise.
+    await expect(runFinAnalysis(admin.principal, M2, META)).rejects.toThrow(/aplique o contexto/);
+    await expect(planFinContext(mkt.principal, M2, META)).rejects.toBeInstanceOf(AuthorizationError);
+    await planFinContext(admin.principal, M2, META);
+    p = await getFinPeriod(admin.principal, M2);
+    expect(p.contextPlanStale).toBe(false);
+    expect(p.contextPlan?.context).toMatch(/evento do dia 20/);
+
+    // Um ajuste estrutural (como a IA devolveria): tira um pagamento do relatório.
+    const target = p.lines.find((l) => l.dataset === 'DESPESA')!;
+    const before = p.metrics.pagamentos.value!;
+    await prisma.finPeriod.update({ where: { id: p.id }, data: { contextPlan: { ...p.contextPlan!, items: [{ id: 'a1', kind: 'EXCLUIR', lineId: target.id, dataset: 'DESPESA', label: target.label, unit: null, fromCents: target.amountCents, toCents: null, fromKey: target.key, toKey: null, reason: 'pontual', quote: 'evento', active: true }] } } });
+    p = await getFinPeriod(admin.principal, M2);
+    expect(p.metrics.pagamentos.value).toBe(before - target.amountCents!);
+    expect(p.contextEffects.find((e) => e.key === 'pagamentos')).toMatchObject({ from: before, to: before - target.amountCents! });
+    expect(p.lines.find((l) => l.id === target.id)?.amountCents).toBe(target.amountCents); // original intacto
+    await toggleFinContextAdjustment(admin.principal, M2, 'a1', false, META);
+    expect((await getFinPeriod(admin.principal, M2)).metrics.pagamentos.value).toBe(before);
+    await toggleFinContextAdjustment(admin.principal, M2, 'a1', true, META);
+
     await runFinAnalysis(admin.principal, M2, META);
     await confirmFinLines(admin.principal, M2, 'all', META);
     await approveFinPeriod(admin.principal, M2, null, META);
@@ -88,11 +108,14 @@ describe.skipIf(!hasDb)('Financeiro — estoque e contexto dos sócios', () => {
     expect(v.snapshot.partnerContext).toMatch(/evento/);
     expect(v.snapshot.exclusions?.map((e) => e.key)).toEqual(['cmv', 'pessoal']);
     expect(v.snapshot.metrics.cmv.metodo).toBe('ajustado_estoque'); // número continua guardado
+    expect(v.snapshot.contextPlan?.items.map((a) => a.id)).toEqual(['a1']);
+    expect(v.snapshot.metrics.pagamentos.value).toBe(before - target.amountCents!);
+    expect(v.snapshot.lines.find((l) => l.label === target.label)?.amountCents).toBe(target.amountCents);
 
     // Limpar o contexto também é registrado.
     await saveFinReportContext(admin.principal, M2, { partnerContext: '', exclusions: [] }, META);
     p = await getFinPeriod(admin.principal, M2);
-    expect([p.partnerContext, p.exclusions]).toEqual([null, []]);
+    expect([p.partnerContext, p.exclusions, p.contextPlan]).toEqual([null, [], null]);
   });
 });
 

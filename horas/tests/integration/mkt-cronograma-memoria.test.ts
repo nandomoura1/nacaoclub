@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '@/server/db';
 import { AuthorizationError } from '@/server/errors';
 import { addDays } from '@/domain/dates';
-import { analyzeSchedule, commitSchedule, getScheduleReview, repeatEventNextYear, undoImport } from '@/server/services/mkt-import-service';
+import { analyzeSchedule, autoImportSchedule, commitSchedule, getScheduleReview, repeatEventNextYear, undoImport } from '@/server/services/mkt-import-service';
 import { deleteKnowledge, draftKnowledge, listKnowledge, memoryContext, saveKnowledge } from '@/server/services/mkt-memory-service';
 import { META, ensureCatalog, hasDb, makeUser } from './helpers';
 
@@ -53,11 +53,21 @@ describe.skipIf(!hasDb)('Marketing — cronograma e memória', () => {
     expect(r2.rows.filter((r) => r.duplicate).length).toBe(4);
     await expect(commitSchedule(admin.principal, sid2, r2.rows.filter((r) => r.duplicate).map((r) => ({ index: r.index, kind: r.kind, title: r.title, startDate: r.startDate, endDate: r.endDate, status: r.status, campaignType: r.campaignType })), META)).rejects.toThrow(/já existem/);
 
+    // Subida automática: grava o que a revisão marcaria; com tudo já existente, recusa.
+    await expect(autoImportSchedule(admin.principal, sid2, today, META)).rejects.toThrow(/já estão no calendário/);
+
     // Desfazer mantém o que já está em uso (campanha com tarefa).
     await prisma.mktTask.create({ data: { title: 'Tarefa real', campaignId: camp.id } });
     expect(await undoImport(admin.principal, res.importId, META)).toEqual({ removidos: 3, mantidos: 1 });
     await expect(undoImport(admin.principal, res.importId, META)).rejects.toThrow(/já foi desfeita/);
     expect(await prisma.auditLog.count({ where: { entityId: res.importId, action: { in: ['mkt.schedule_imported', 'mkt.schedule_undone'] } } })).toBe(2);
+
+    // Depois de desfeito, a subida automática do mesmo documento grava tudo de novo, sem revisão.
+    const sid3 = await analyzeSchedule(admin.principal, { file: doc(), text: null }, today, META);
+    await expect(autoImportSchedule(mkt.principal, sid3, today, META)).rejects.toBeInstanceOf(AuthorizationError);
+    const auto = await autoImportSchedule(admin.principal, sid3, today, META);
+    expect(auto.eventos + auto.campanhas + auto.datas).toBe(3); // a campanha mantida no desfazer já existe
+    await expect(autoImportSchedule(admin.principal, sid3, today, META)).rejects.toThrow(/já foi importada/);
   });
 
   it('memória: rascunho da IA não grava; salvar/editar/excluir auditado; contexto inclui memória ativa e o mesmo período do ano anterior', async () => {

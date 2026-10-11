@@ -118,6 +118,18 @@ export async function commitSchedule(principal: Principal | null, suggestionId: 
   }, { timeout: 60_000, maxWait: 10_000 });
 }
 
+/**
+ * Subida automática: grava direto no calendário tudo o que a revisão marcaria
+ * por padrão (sem duplicados). Fica num lote que pode ser desfeito.
+ */
+export async function autoImportSchedule(principal: Principal | null, suggestionId: string, today: string, meta: RequestMeta) {
+  const review = await getScheduleReview(principal, suggestionId, today);
+  if (review.status !== 'PENDENTE') throw new AppError('Esta leitura já foi importada.');
+  const rows = review.rows.filter((r) => r.include);
+  if (!rows.length) throw new AppError('Todos os itens deste cronograma já estão no calendário.');
+  return commitSchedule(principal, suggestionId, rows.map((r) => ({ index: r.index, kind: r.kind, title: r.title, startDate: r.startDate, endDate: r.endDate, status: r.status, campaignType: r.campaignType })), meta);
+}
+
 export async function listImports(principal: Principal | null) {
   assertCan(principal, 'mkt.admin');
   const rows = await prisma.mktImport.findMany({ orderBy: { createdAt: 'desc' }, take: 20 });

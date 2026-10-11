@@ -12,7 +12,7 @@ import { CAMPAIGN_STATUSES, CAMPAIGN_TYPES, EVENT_STATUSES } from '@/domain/mark
 import { IMPORT_KINDS, importKind, type PlannedRow } from '@/domain/marketing/schedule-import';
 import { cn } from '@/lib/cn';
 import type { ScheduleReview } from '@/server/services/mkt-import-service';
-import { analyzeScheduleAction, commitScheduleAction, undoImportAction } from '../actions';
+import { analyzeScheduleAction, autoImportScheduleAction, commitScheduleAction, undoImportAction } from '../actions';
 import { useRun } from '../_components/useRun';
 
 const MONTHS = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
@@ -35,22 +35,42 @@ function UploadStep({ canAi }: { canAi: boolean }) {
   const { msg, setMsg, pending, run } = useRun();
   const [file, setFile] = useState<File | null>(null);
   const [text, setText] = useState('');
+  const [auto, setAuto] = useState(true);
+  const [step, setStep] = useState<string | null>(null);
+  const [done, setDone] = useState<{ eventos: number; campanhas: number; datas: number; duplicados: number } | null>(null);
   const ref = useRef<HTMLInputElement>(null);
+  /** Lê (IA) e, no modo automático, já sobe no calendário — duas chamadas, cada uma no seu tempo. */
   const send = () => {
     const fd = new FormData();
     if (file) fd.set('file', file); else fd.set('text', text);
-    run(() => analyzeScheduleAction(fd), (r) => { if (r.ok) router.push(`?leitura=${r.data}`); });
+    setDone(null);
+    run(async () => {
+      setStep('A IA está lendo o cronograma… (1–2 min)');
+      const read = await analyzeScheduleAction(fd);
+      if (!read.ok || !auto) return read;
+      setStep('Subindo no calendário…');
+      const r = await autoImportScheduleAction(read.data);
+      setStep(null);
+      // Se a subida falhar, a leitura fica salva: abre a revisão manual.
+      if (!r.ok) router.push(`?leitura=${read.data}`);
+      return r;
+    }, (r) => {
+      setStep(null);
+      if (r.ok && 'importId' in (r.data as object)) setDone(r.data as { eventos: number; campanhas: number; datas: number; duplicados: number });
+      else if (r.ok) router.push(`?leitura=${r.data}`);
+    });
   };
+  if (done) return <Done done={done} />;
   return (
     <div className="grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
       <Card className="p-4">
         <h2 className="font-bold text-navy">1. Exporte o documento</h2>
         <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm">
-          <li>Abra o cronograma no Google Docs.</li>
+          <li>Tem o PDF? Envie direto. Se estiver no Google Docs: abra o documento.</li>
           <li><b>Arquivo → Fazer download → Microsoft Word (.docx)</b>.</li>
           <li>Envie o arquivo aqui ao lado — ou copie todo o texto (Ctrl+A, Ctrl+C) e cole no campo.</li>
         </ol>
-        <p className="mt-3 text-xs text-tinta-suave">A IA separa cada linha datada em <b>evento</b>, <b>campanha/ação</b>, <b>tema do mês</b>, <b>datas comemorativas e de saúde</b>, <b>pautas de conteúdo</b>, <b>oportunidades comerciais</b> e <b>avisos de funcionamento</b>. Festas particulares de alunos viram “evento privado”, sem nomes. Nada é gravado antes da sua revisão.</p>
+        <p className="mt-3 text-xs text-tinta-suave">A IA separa cada linha datada em <b>evento</b>, <b>campanha/ação</b>, <b>tema do mês</b>, <b>datas comemorativas e de saúde</b>, <b>pautas de conteúdo</b>, <b>oportunidades comerciais</b> e <b>avisos de funcionamento</b>. Festas particulares de alunos viram “evento privado”, sem nomes. Com “Subir direto” ligado, entra tudo no calendário na hora; dá para desfazer o lote inteiro.</p>
       </Card>
       <Card className="space-y-2 p-4">
         <h2 className="font-bold text-navy">2. Envie ou cole</h2>
@@ -61,7 +81,11 @@ function UploadStep({ canAi }: { canAi: boolean }) {
         </button>
         <input ref={ref} type="file" accept=".docx,.pdf,.txt,.md,.html" className="hidden" onChange={(e) => { setFile(e.target.files?.[0] ?? null); setMsg({}); e.target.value = ''; }} />
         {!file && <textarea className="min-h-40 w-full rounded-lg border border-borda p-2 text-sm" placeholder="…ou cole aqui o texto do cronograma" value={text} onChange={(e) => setText(e.target.value)} />}
-        <Button disabled={pending || !canAi || (!file && text.trim().length < 40)} onClick={send}><Sparkles /> {pending ? 'A IA está lendo o cronograma… (1–2 min)' : 'Ler cronograma (IA)'}</Button>
+        <label className="flex items-start gap-2 rounded-lg border border-borda p-2 text-sm">
+          <input type="checkbox" className="mt-0.5" checked={auto} onChange={(e) => setAuto(e.target.checked)} />
+          <span><b>Subir direto no calendário</b><span className="block text-xs text-tinta-suave">Grava eventos, campanhas e datas assim que a IA terminar de ler (pula o que já existe). O lote aparece em “Importações” e pode ser desfeito. Desmarque para revisar item a item antes.</span></span>
+        </label>
+        <Button disabled={pending || !canAi || (!file && text.trim().length < 40)} onClick={send}><Sparkles /> {pending ? (step ?? 'Processando…') : auto ? 'Ler e subir no calendário (IA)' : 'Ler cronograma (IA)'}</Button>
         {!canAi && <p className="text-xs text-critico">Seu perfil não usa a IA de marketing.</p>}
         <FormMessage error={msg.error} />
       </Card>
@@ -81,20 +105,7 @@ function Review({ review }: { review: ScheduleReview }) {
   const toggleKind = (kind: string, on: boolean) => setRows((cur) => cur.map((r) => (r.kind === kind && !r.duplicate ? { ...r, include: on } : r)));
   const locked = review.status !== 'PENDENTE';
 
-  if (done) {
-    return (
-      <Card className="p-6 text-center">
-        <CheckCircle2 className="mx-auto size-10 text-sucesso" />
-        <p className="mt-2 text-lg font-bold text-navy">Cronograma importado</p>
-        <p className="text-sm text-tinta-suave">{done.eventos} evento(s) · {done.campanhas} campanha(s) · {done.datas} data(s) no calendário{done.duplicados ? ` · ${done.duplicados} já existiam` : ''}</p>
-        <div className="mt-4 flex flex-wrap justify-center gap-2">
-          <Link href="/marketing/calendario?v=ano" className={buttonVariants({})}>Ver no calendário</Link>
-          <Link href="/marketing/eventos" className={buttonVariants({ variant: 'secondary' })}>Eventos</Link>
-          <Link href="/marketing/memoria" className={buttonVariants({ variant: 'secondary' })}>Ensinar a IA (Memória)</Link>
-        </div>
-      </Card>
-    );
-  }
+  if (done) return <Done done={done} />;
 
   return (
     <div className="space-y-3">
@@ -193,6 +204,21 @@ function History({ imports }: { imports: Imports }) {
           </li>
         ))}
       </ul>
+    </Card>
+  );
+}
+
+function Done({ done }: { done: { eventos: number; campanhas: number; datas: number; duplicados: number } }) {
+  return (
+    <Card className="p-6 text-center">
+      <CheckCircle2 className="mx-auto size-10 text-sucesso" />
+      <p className="mt-2 text-lg font-bold text-navy">Cronograma importado</p>
+      <p className="text-sm text-tinta-suave">{done.eventos} evento(s) · {done.campanhas} campanha(s) · {done.datas} data(s) no calendário{done.duplicados ? ` · ${done.duplicados} já existiam` : ''}</p>
+      <div className="mt-4 flex flex-wrap justify-center gap-2">
+        <Link href="/marketing/calendario?v=ano" className={buttonVariants({})}>Ver no calendário</Link>
+        <Link href="/marketing/eventos" className={buttonVariants({ variant: 'secondary' })}>Eventos</Link>
+        <Link href="/marketing/memoria" className={buttonVariants({ variant: 'secondary' })}>Ensinar a IA (Memória)</Link>
+      </div>
     </Card>
   );
 }
