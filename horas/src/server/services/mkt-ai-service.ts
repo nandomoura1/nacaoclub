@@ -116,8 +116,8 @@ export async function refreshMeetingAgenda(principal: Principal | null, id: stri
   assertCan(principal, 'mkt.edit');
   const m = await prisma.mktMeeting.findUnique({ where: { id } });
   if (!m) throw new NotFoundError('Reunião não encontrada.');
-  const f = await marketingFacts();
-  const agenda = weeklyAgenda({ today: iso(m.date)!, campaigns: f.campaigns, tasks: f.tasks, events: f.events, items: f.items, areaNames: {} });
+  const [f, areas] = await Promise.all([marketingFacts(), listAreas()]);
+  const agenda = weeklyAgenda({ today: iso(m.date)!, campaigns: f.campaigns, tasks: f.tasks, events: f.events, items: f.items, areaNames: Object.fromEntries(areas.map((a) => [a.key, a.name])) });
   await prisma.mktMeeting.update({ where: { id }, data: { agenda: agenda as unknown as Prisma.InputJsonValue } });
 }
 

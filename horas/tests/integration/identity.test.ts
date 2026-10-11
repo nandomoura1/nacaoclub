@@ -41,7 +41,7 @@ describe.skipIf(!hasDb)('E1 · identidade, permissões e auditoria (Postgres rea
       const count = await prisma.permission.count();
       await prisma.$transaction((tx) => syncPermissionCatalog(tx), { timeout: 30_000 });
       expect(await prisma.permission.count()).toBe(count);
-      expect(await prisma.role.count({ where: { isSystem: true } })).toBe(4);
+      expect(await prisma.role.count({ where: { isSystem: true } })).toBe(5);
     });
   });
 

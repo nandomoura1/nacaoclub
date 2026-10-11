@@ -17,6 +17,7 @@ export interface AttentionItem {
   level: 'critico' | 'atencao';
   text: string;
   campaignId?: string;
+  campaignName?: string;
   taskId?: string;
   suggestion?: MilestoneAlert['suggestion'] & { campaignId: string };
 }
@@ -28,11 +29,11 @@ export function attention(campaigns: AgendaCampaign[], tasks: AgendaTask[], toda
     if (c.status === 'IDEIA') continue;
     const mine = tasks.filter((t) => t.campaignId === c.id);
     const m = milestoneAlerts(c, mine, today);
-    for (const a of m.alerts) out.push({ level: a.severity, text: `${c.name} (${a.milestone}): ${a.message}`, campaignId: c.id, suggestion: a.suggestion && { ...a.suggestion, campaignId: c.id } });
+    for (const a of m.alerts) out.push({ level: a.severity, text: `${c.name} (${a.milestone}): ${a.message}`, campaignId: c.id, campaignName: c.name, suggestion: a.suggestion && { ...a.suggestion, campaignId: c.id } });
     const daysTo = Math.round((Date.parse(c.startDate) - Date.parse(today)) / 86_400_000);
     if (daysTo >= 0 && daysTo <= 14) {
       const r = readiness(c, mine, today);
-      if (r.score < 70) out.push({ level: daysTo <= 7 ? 'critico' : 'atencao', text: `${c.name} começa em ${daysTo} dia(s) com readiness ${r.score}/100 (falta: ${r.missing.slice(0, 3).map((x) => x.label.toLowerCase()).join(', ')}).`, campaignId: c.id });
+      if (r.score < 70) out.push({ level: daysTo <= 7 ? 'critico' : 'atencao', text: `${c.name} começa em ${daysTo} dia(s) com readiness ${r.score}/100 (falta: ${r.missing.slice(0, 3).map((x) => x.label.toLowerCase()).join(', ')}).`, campaignId: c.id, campaignName: c.name });
     }
   }
   const late = tasks.filter((t) => t.dueDate && t.dueDate < today && !isDone(t.column));

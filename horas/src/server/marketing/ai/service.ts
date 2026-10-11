@@ -63,9 +63,9 @@ export async function recommendActions(ctx: RecoContext, attention: AttentionIte
   if (isFake() || (!ctx.alertas.length && !ctx.campanhas.length)) {
     const out: RecoOut = {
       recomendacoes: attention.slice(0, 5).map((a) => ({
-        titulo: a.suggestion?.title ?? a.text.split(':').slice(-1)[0]!.trim(),
+        titulo: a.suggestion?.title ?? (a.campaignName && a.text.startsWith(a.campaignName) ? `${a.campaignName}: ${a.text.includes('): ') ? a.text.split('): ').slice(1).join('): ') : 'revisar readiness'}` : a.text).slice(0, 140),
         porque: a.text,
-        campanha: null,
+        campanha: a.campaignName ?? null,
         tarefa: a.suggestion ? { titulo: a.suggestion.title, area: a.suggestion.area as AreaKey, prazoDias: 2 } : null,
       })),
     };

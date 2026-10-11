@@ -3,7 +3,8 @@ import { PROGRAM_MODALITIES } from '@/domain/programming/modalities';
 
 export type NavIcon =
   | 'hoje' | 'calendario' | 'pendencias' | 'grade' | 'professores'
-  | 'fechamento' | 'relatorios' | 'escalas' | 'treinos' | 'benchmarks' | 'dna' | 'treinos-ia' | 'usuarios' | 'historico' | 'cadastros' | 'condominio' | 'cobrancas' | 'financeiro' | 'fin-historico' | 'fin-importar' | 'documentos' | 'empresas';
+  | 'fechamento' | 'relatorios' | 'escalas' | 'treinos' | 'benchmarks' | 'dna' | 'treinos-ia' | 'usuarios' | 'historico' | 'cadastros' | 'condominio' | 'cobrancas' | 'financeiro' | 'fin-historico' | 'fin-importar' | 'documentos' | 'empresas'
+  | 'mkt' | 'mkt-campanhas' | 'mkt-kanban' | 'mkt-eventos' | 'mkt-reuniao' | 'mkt-conteudo' | 'mkt-interna' | 'mkt-canais' | 'mkt-leads' | 'mkt-biblioteca' | 'mkt-trafego' | 'mkt-performance';
 
 export interface NavItem {
   href: string;
@@ -68,6 +69,25 @@ export const NAV_FINANCEIRO: NavItem[] = [
   { href: '/financeiro/configuracoes', label: 'Metas e categorias', icon: 'cadastros', permission: 'fin.admin' },
 ];
 
+/** Marketing Nação: planejamento → execução → conversão. Itens "breve" mostram o roadmap (Fases 2–4). */
+export const NAV_MARKETING: NavItem[] = [
+  { href: '/marketing', label: 'Command Center', icon: 'mkt', permission: 'mkt.view' },
+  { href: '/marketing/calendario', label: 'Calendário', icon: 'calendario', permission: 'mkt.view' },
+  { href: '/marketing/campanhas', label: 'Campanhas', icon: 'mkt-campanhas', permission: 'mkt.view' },
+  { href: '/marketing/kanban', label: 'Kanban', icon: 'mkt-kanban', permission: 'mkt.view' },
+  { href: '/marketing/eventos', label: 'Eventos', icon: 'mkt-eventos', permission: 'mkt.view' },
+  { href: '/marketing/reuniao', label: 'Reunião semanal', icon: 'mkt-reuniao', permission: 'mkt.view' },
+  { href: '/marketing/conteudo', label: 'Conteúdo & Social', icon: 'mkt-conteudo', permission: 'mkt.view', soon: 'breve' },
+  { href: '/marketing/interna', label: 'Comunicação Interna', icon: 'mkt-interna', permission: 'mkt.view', soon: 'breve' },
+  { href: '/marketing/canais', label: 'Canais & Links', icon: 'mkt-canais', permission: 'mkt.view', soon: 'breve' },
+  { href: '/marketing/leads', label: 'Leads & Conversão', icon: 'mkt-leads', permission: 'mkt.view', soon: 'breve' },
+  { href: '/marketing/biblioteca', label: 'Biblioteca', icon: 'mkt-biblioteca', permission: 'mkt.view', soon: 'breve' },
+  { href: '/marketing/trafego', label: 'Tráfego Pago', icon: 'mkt-trafego', permission: 'mkt.view', soon: 'breve' },
+  { href: '/marketing/performance', label: 'Performance', icon: 'mkt-performance', permission: 'mkt.view', soon: 'breve' },
+  { href: '/marketing/ia', label: 'IA Marketing', icon: 'treinos-ia', permission: 'mkt.view', soon: 'breve' },
+  { href: '/marketing/configuracoes', label: 'Configurações', icon: 'cadastros', permission: 'mkt.admin' },
+];
+
 export const NAV_ADMIN: NavItem[] = [
   { href: '/admin/empresas', label: 'Empresas', icon: 'empresas', permission: 'company.view' },
   { href: '/admin/cadastros', label: 'Cadastros', icon: 'cadastros', permission: 'admin.catalog' },
@@ -81,5 +101,6 @@ export const NAV_SECTIONS: NavSection[] = [
   { title: 'Treinos', items: NAV_TREINOS },
   { title: 'Condomínio Nação', items: NAV_CONDOMINIO },
   { title: 'Financeiro', items: NAV_FINANCEIRO },
+  { title: 'Marketing', items: NAV_MARKETING },
   { title: 'Administração', items: NAV_ADMIN },
 ];

@@ -5,7 +5,8 @@ import { Fragment, useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import {
   BarChart3, CalendarDays, ClipboardCheck, History, LayoutGrid,
-  LogOut, Settings2, Sun, TriangleAlert, Users, UserRoundCog, Dumbbell, CalendarClock, Sparkles, Menu, X, Trophy, Dna, ChevronRight, Building2, Receipt, Landmark, LineChart, FileUp, FolderOpen, Briefcase } from 'lucide-react';
+  LogOut, Settings2, Sun, TriangleAlert, Users, UserRoundCog, Dumbbell, CalendarClock, Sparkles, Menu, X, Trophy, Dna, ChevronRight, Building2, Receipt, Landmark, LineChart, FileUp, FolderOpen, Briefcase,
+  Megaphone, Flag, Columns3, PartyPopper, MessagesSquare, Clapperboard, Bell, Link2, Target, Library, MousePointerClick, Gauge } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { cn } from '@/lib/cn';
 import { initials } from '@/lib/format';
@@ -35,6 +36,18 @@ const ICONS: Record<NavIcon, React.ComponentType<{ className?: string }>> = {
   'fin-importar': FileUp,
   documentos: FolderOpen,
   empresas: Briefcase,
+  mkt: Megaphone,
+  'mkt-campanhas': Flag,
+  'mkt-kanban': Columns3,
+  'mkt-eventos': PartyPopper,
+  'mkt-reuniao': MessagesSquare,
+  'mkt-conteudo': Clapperboard,
+  'mkt-interna': Bell,
+  'mkt-canais': Link2,
+  'mkt-leads': Target,
+  'mkt-biblioteca': Library,
+  'mkt-trafego': MousePointerClick,
+  'mkt-performance': Gauge,
 };
 
 function isActive(pathname: string, href: string) {
