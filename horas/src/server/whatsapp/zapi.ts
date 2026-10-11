@@ -9,9 +9,26 @@ import { AppError } from '@/server/errors';
 
 export interface ZapiConfig { configured: boolean; testPhone: string | null; fake: boolean; base: string | null; clientToken: string | null }
 
+/** Limpa o valor colado: aspas, espaços e quebras de linha. */
+const clean = (v: string | undefined) => v?.replace(/["'`\s]/g, '') || undefined;
+
+/**
+ * Aceita o ID puro ou o link inteiro da Z-API colado por engano
+ * (…/instances/<ID>/token/<TOKEN>/send-text): extrai ID e token dele.
+ */
+export function parseInstance(rawId: string | undefined, rawToken: string | undefined): { id?: string; token?: string } {
+  const id = clean(rawId);
+  const token = clean(rawToken);
+  const fromUrl = (v?: string) => v?.match(/instances\/([^/]+)(?:\/token\/([^/]+))?/i);
+  const m = fromUrl(id) ?? fromUrl(token);
+  return {
+    id: m?.[1] ?? id,
+    token: (token && !/instances\//i.test(token) ? token : undefined) ?? m?.[2],
+  };
+}
+
 export function zapiConfig(): ZapiConfig {
-  const id = process.env.ZAPI_INSTANCE_ID?.trim();
-  const token = process.env.ZAPI_INSTANCE_TOKEN?.trim();
+  const { id, token } = parseInstance(process.env.ZAPI_INSTANCE_ID, process.env.ZAPI_INSTANCE_TOKEN);
   const fake = process.env.ZAPI_FAKE === '1';
   const api = (process.env.ZAPI_BASE_URL?.trim() || 'https://api.z-api.io').replace(/\/$/, '');
   return {
@@ -19,7 +36,7 @@ export function zapiConfig(): ZapiConfig {
     fake,
     testPhone: process.env.ZAPI_TEST_PHONE?.replace(/\D/g, '') || null,
     base: id && token ? `${api}/instances/${encodeURIComponent(id)}/token/${encodeURIComponent(token)}` : null,
-    clientToken: process.env.ZAPI_CLIENT_TOKEN?.trim() || null,
+    clientToken: clean(process.env.ZAPI_CLIENT_TOKEN) ?? null,
   };
 }
 
@@ -44,6 +61,8 @@ async function call<T>(method: 'GET' | 'POST', path: string, body?: unknown): Pr
   if (!res.ok) {
     const msg = (json as { error?: string; message?: string } | null)?.error ?? (json as { message?: string } | null)?.message ?? text.slice(0, 200);
     if (res.status === 401 || res.status === 403 || /client-token/i.test(String(msg))) throw new AppError(`Z-API recusou as credenciais (${res.status}). Confira o token da instância e o Client-Token de segurança.`);
+    if (res.status === 404 && /instance/i.test(String(msg))) throw new AppError('Z-API não encontrou a instância (404): confira ZAPI_INSTANCE_ID (só o ID, sem aspas nem espaços) e se ele não está trocado com o ZAPI_INSTANCE_TOKEN.');
+    if (/token/i.test(String(msg)) && res.status === 400) throw new AppError(`Z-API recusou o token da instância (${res.status}): confira ZAPI_INSTANCE_TOKEN.`);
     throw new AppError(`Z-API respondeu ${res.status}: ${String(msg) || 'erro sem detalhe'}`);
   }
   return json as T;

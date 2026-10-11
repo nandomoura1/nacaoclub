@@ -25,3 +25,12 @@ describe('WhatsApp (puro)', () => {
     expect(t).toContain('https://adm.nacao.club/login');
   });
 });
+
+import { parseInstance } from '@/server/whatsapp/zapi';
+describe('credenciais coladas', () => {
+  it('limpa aspas/espaços e aceita o link inteiro', () => {
+    expect(parseInstance(' "ABC123" \n', "'TOK9'")).toEqual({ id: 'ABC123', token: 'TOK9' });
+    expect(parseInstance('https://api.z-api.io/instances/ABC123/token/TOK9/send-text', undefined)).toEqual({ id: 'ABC123', token: 'TOK9' });
+    expect(parseInstance('ABC123', 'https://api.z-api.io/instances/ABC123/token/TOK9/send-text')).toEqual({ id: 'ABC123', token: 'TOK9' });
+  });
+});
