@@ -8,7 +8,7 @@ import { can } from '@/server/auth/authz';
 import { requirePrincipal } from '@/server/auth/session';
 import { NotFoundError } from '@/server/errors';
 import { getFinVersion } from '@/server/services/fin-service';
-import { ReportView } from '../../../../_components/ReportView';
+import { REPORT_MODES, ReportView, type ReportMode } from '../../../../_components/ReportView';
 import { PrintButton } from './PrintButton';
 
 export const metadata: Metadata = { title: 'Versão do Relatório Financeiro' };
@@ -23,14 +23,14 @@ export default async function Page({ params, searchParams }: { params: Promise<{
   const v = await getFinVersion(principal, mes, Number(n)).catch((e) => { if (e instanceof NotFoundError) return null; throw e; });
   if (!v) notFound();
   const s = v.snapshot;
-  const mode = visao === 'socios' ? 'socios' : 'completo';
+  const mode: ReportMode = REPORT_MODES.find((x) => x.id === visao)?.id ?? 'completo';
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2 print:hidden">
         <Link href={`/financeiro/competencias/${mes}`} className={buttonVariants({ variant: 'ghost', size: 'sm' })}><ArrowLeft /> {monthLabel(mes as Month)}</Link>
         <span className="text-sm text-tinta-suave">Versão {v.number} · {new Date(v.createdAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}{v.reason ? ` · “${v.reason}”` : ''}</span>
         <span className="flex-1" />
-        <Link href={`?visao=${mode === 'socios' ? 'completo' : 'socios'}`} className={buttonVariants({ variant: 'secondary', size: 'sm' })}>{mode === 'socios' ? 'Relatório completo' : 'Visão dos sócios'}</Link>
+        {REPORT_MODES.filter((x) => x.id !== mode).map((x) => <Link key={x.id} href={`?visao=${x.id}`} className={buttonVariants({ variant: 'secondary', size: 'sm' })}>{x.label}</Link>)}
         <PrintButton />
       </div>
       <div>

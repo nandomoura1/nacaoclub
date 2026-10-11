@@ -4,7 +4,7 @@ import { useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowLeft, CheckCheck, ClipboardPaste, X, CheckCircle2, EyeOff, MessageSquareQuote, Download, Eye, FileUp, History, Pencil, Plus, Printer, RefreshCw, Save, Sparkles, Trash2, TriangleAlert,
+  ArrowLeft, CheckCheck, ChevronDown, ClipboardPaste, X, CheckCircle2, EyeOff, MessageSquareQuote, Download, Eye, FileUp, History, Pencil, Plus, Printer, RefreshCw, Save, Sparkles, Trash2, TriangleAlert,
 } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -19,7 +19,7 @@ import { cn } from '@/lib/cn';
 import type { FinPeriodView } from '@/server/services/fin-service';
 import { DOC_STATUS, FIN_STATUS, Kpi } from '../../_components/fmt';
 import { LineForm, datasetLabel, keyLabel, lineValue, type CategoryOption, type LineDraft } from '../../_components/lines';
-import { ReportView, type ReportMode } from '../../_components/ReportView';
+import { REPORT_MODES, ReportView, type ReportMode } from '../../_components/ReportView';
 import { ContextAdjustments } from '../../_components/context-adjustments';
 import { compressImage, imagesFrom, isImage, MAX_PRINTS } from '../../_components/screenshots';
 import {
@@ -135,6 +135,36 @@ function DocumentsTab({ p, perms, pending, run, setMsg }: { p: FinPeriodView; pe
   );
 }
 
+/** Documento enviado: uma linha (nome + status); o resto só ao pedir "detalhes". */
+function DocItem({ d, canImport, anyBusy, onProcess, onDelete }: {
+  d: FinPeriodView['documents'][number]; canImport: boolean; anyBusy: boolean; onProcess: (id: string) => void; onDelete: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const s = DOC_STATUS[d.status];
+  return (
+    <div className="rounded-lg border border-borda text-xs">
+      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="flex w-full items-center gap-2 p-2 text-left">
+        <span className="min-w-0 flex-1 truncate font-semibold text-tinta" title={d.filename}>{d.filename}</span>
+        {d.error ? <Badge tone="red">erro</Badge> : <Badge tone={s?.tone}>{s?.label ?? d.status}</Badge>}
+        <ChevronDown className={cn('size-3.5 shrink-0 text-tinta-fraca transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <div className="border-t border-borda px-2 pb-2 pt-1.5">
+          <p className="text-tinta-fraca">v{d.version} · {(d.sizeBytes / 1024).toFixed(0)} KB · {new Date(d.createdAt).toLocaleDateString('pt-BR')}{d.uploadedBy ? ` · ${d.uploadedBy}` : ''}{d.identified ? ` · lido como: ${d.identified}` : ''}</p>
+          {d.notes && <p className="mt-0.5 italic text-tinta-suave">{d.notes}</p>}
+          {d.error && <p className="mt-1 font-semibold text-critico">{d.error}</p>}
+          {d.warnings.length > 0 && <ul className="mt-1 list-disc pl-4 text-atencao">{d.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>}
+          <div className="mt-1 flex flex-wrap gap-1">
+            <a href={`/financeiro/documentos/${d.id}`} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'ghost', size: 'sm' })}><Download /> Original</a>
+            {canImport && <Button variant="ghost" size="sm" disabled={anyBusy} onClick={() => onProcess(d.id)}><RefreshCw /> Ler de novo</Button>}
+            {canImport && <Button variant="ghost" size="sm" disabled={anyBusy} onClick={() => onDelete(d.id)}><Trash2 /> Remover</Button>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DocCard({ kind, docs, canImport, busy, anyBusy, onUpload, onProcess, onDelete }: {
   kind: (typeof DOC_KINDS)[number]; docs: FinPeriodView['documents']; canImport: boolean; busy: boolean; anyBusy: boolean;
   onUpload: (kind: DocKind, files: File[], notes: string) => void; onProcess: (id: string) => void; onDelete: (id: string) => void;
@@ -145,6 +175,8 @@ function DocCard({ kind, docs, canImport, busy, anyBusy, onUpload, onProcess, on
   const [drag, setDrag] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [preparing, setPreparing] = useState(false);
+  /** Card que já tem arquivo: a área de envio fica recolhida até pedir. */
+  const [more, setMore] = useState(false);
   // Imagens entram na fila (comprimidas); documento (PDF, planilha…) vai direto.
   const add = async (files: File[]) => {
     setErr(null);
@@ -154,6 +186,7 @@ function DocCard({ kind, docs, canImport, busy, anyBusy, onUpload, onProcess, on
       if (docs.length > 1 || imgs.length || prints.length) return setErr('PDF e planilha vão um por vez; prints podem ir vários juntos.');
       onUpload(kind.id, docs, notes);
       setNotes('');
+      setMore(false);
       return;
     }
     if (prints.length + imgs.length > MAX_PRINTS) return setErr(`No máximo ${MAX_PRINTS} prints por documento.`);
@@ -174,6 +207,7 @@ function DocCard({ kind, docs, canImport, busy, anyBusy, onUpload, onProcess, on
     setPrints([]);
     onUpload(kind.id, files, notes);
     setNotes('');
+    setMore(false);
   };
   return (
     <Card className="flex flex-col gap-2 p-3">
@@ -184,27 +218,11 @@ function DocCard({ kind, docs, canImport, busy, anyBusy, onUpload, onProcess, on
         </div>
         {docs.length > 0 ? <Badge tone="green">{docs.length} arquivo{docs.length > 1 ? 's' : ''}</Badge> : <Badge>pendente</Badge>}
       </div>
-      {docs.map((d) => {
-        const s = DOC_STATUS[d.status];
-        return (
-          <div key={d.id} className="rounded-lg border border-borda p-2 text-xs">
-            <div className="flex items-center gap-2">
-              <span className="min-w-0 flex-1 truncate font-semibold text-tinta" title={d.filename}>{d.filename}</span>
-              <Badge tone={s?.tone}>{s?.label ?? d.status}</Badge>
-            </div>
-            <p className="mt-0.5 text-tinta-fraca">v{d.version} · {(d.sizeBytes / 1024).toFixed(0)} KB · {new Date(d.createdAt).toLocaleDateString('pt-BR')}{d.uploadedBy ? ` · ${d.uploadedBy}` : ''}{d.identified ? ` · lido como: ${d.identified}` : ''}</p>
-            {d.notes && <p className="mt-0.5 italic text-tinta-suave">{d.notes}</p>}
-            {d.error && <p className="mt-1 font-semibold text-critico">{d.error}</p>}
-            {d.warnings.length > 0 && <ul className="mt-1 list-disc pl-4 text-atencao">{d.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>}
-            <div className="mt-1 flex flex-wrap gap-1">
-              <a href={`/financeiro/documentos/${d.id}`} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'ghost', size: 'sm' })}><Download /> Original</a>
-              {canImport && <Button variant="ghost" size="sm" disabled={anyBusy} onClick={() => onProcess(d.id)}><RefreshCw /> Ler de novo</Button>}
-              {canImport && <Button variant="ghost" size="sm" disabled={anyBusy} onClick={() => onDelete(d.id)}><Trash2 /> Remover</Button>}
-            </div>
-          </div>
-        );
-      })}
-      {canImport && (
+      {docs.map((d) => <DocItem key={d.id} d={d} canImport={canImport} anyBusy={anyBusy} onProcess={onProcess} onDelete={onDelete} />)}
+      {canImport && docs.length > 0 && !more && !busy && (
+        <Button size="sm" variant="ghost" className="mt-auto w-full" disabled={anyBusy} onClick={() => setMore(true)}><Plus /> Enviar outro arquivo</Button>
+      )}
+      {canImport && (docs.length === 0 || more || busy) && (
         <div className="mt-auto space-y-1.5">
           <div
             tabIndex={0}
@@ -428,8 +446,8 @@ function ReportTab({ p, perms, pending, run }: { p: FinPeriodView; perms: Perms;
       {stale && <p className="rounded-lg border border-atencao/40 bg-atencao/5 p-2 text-sm print:hidden">O contexto dos sócios mudou depois da última análise. Gere a análise de novo para a IA considerar.</p>}
       <div className="flex flex-wrap items-center gap-2 print:hidden">
         <div className="inline-flex rounded-lg border border-borda p-0.5">
-          {(['completo', 'socios'] as const).map((m) => (
-            <button key={m} onClick={() => setMode(m)} className={cn('rounded-md px-3 py-1 text-sm font-semibold', mode === m ? 'bg-nacao text-white' : 'text-tinta-suave')}>{m === 'completo' ? 'Relatório completo' : 'Visão dos sócios'}</button>
+          {REPORT_MODES.map((m) => (
+            <button key={m.id} onClick={() => setMode(m.id)} className={cn('rounded-md px-3 py-1 text-sm font-semibold', mode === m.id ? 'bg-nacao text-white' : 'text-tinta-suave')}>{m.label}</button>
           ))}
         </div>
         <span className="flex-1" />

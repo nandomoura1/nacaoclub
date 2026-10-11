@@ -21,7 +21,10 @@ import { brl, fmtValue, pct, StatusTag } from './fmt';
  * da análise em ciano. Números e tabelas vêm do motor; textos, da análise da IA.
  * "Visão dos sócios" é o resumo. Imprime em cores (print-color-adjust).
  */
-export type ReportMode = 'completo' | 'socios';
+export type ReportMode = 'completo' | 'simplificado' | 'socios';
+export const REPORT_MODES: { id: ReportMode; label: string }[] = [
+  { id: 'completo', label: 'Relatório completo' }, { id: 'simplificado', label: 'Simplificado' }, { id: 'socios', label: 'Visão dos sócios' },
+];
 
 const CHECK_STYLE = {
   divergencia: { box: 'border-critico/30 bg-critico/5', tag: 'bg-critico text-white', label: 'Divergência' },
@@ -174,7 +177,7 @@ export function ReportView({ month, m, analysis, previous, managerNotes, partner
         </div>
 
         <div className="mt-6">
-          {mode === 'socios' && <p className="font-titulo text-xs font-bold uppercase tracking-[0.25em] text-ciano">Visão dos sócios</p>}
+          {mode !== 'completo' && <p className="font-titulo text-xs font-bold uppercase tracking-[0.25em] text-ciano">{mode === 'socios' ? 'Visão dos sócios' : 'Relatório simplificado'}</p>}
           <h1 className="font-titulo text-4xl font-extrabold leading-none tracking-tight sm:text-5xl">{title} <span className="text-ciano">{year}</span></h1>
           <p className="mt-2 text-sm text-white/70">
             Período {formatDateBR(firstDay(month))} a {formatDateBR(lastDay(month))}
@@ -247,6 +250,38 @@ export function ReportView({ month, m, analysis, previous, managerNotes, partner
   const wrap = (children: ReactNode) => (
     <article className="space-y-4 [print-color-adjust:exact] [-webkit-print-color-adjust:exact]">{children}</article>
   );
+
+  if (mode === 'simplificado') {
+    // Uma página: números-chave com a comparação, o resumo, até 3 alertas e a conclusão.
+    const prevRow = new Map((compare ?? []).map((r) => [r.key, r]));
+    const keyRows: [string, Ind, string][] = ([
+      ['Recebimentos', m.recebimentos, 'recebimentos'], ['Pagamentos', m.pagamentos, 'pagamentos'], ['Geração antes do payout', m.fluxo.geracaoAntesPayout, 'geracao'],
+      ['Custo de pessoal', m.pessoal, 'pessoal'], ['Pessoal ÷ recebimentos', m.pessoalPctRecebimentos, 'pessoal_pct'], ['Lanchonete (PDV)', m.lanchonete.faturamento, 'lanchonete'],
+      ['CMV', m.cmv.pct, 'cmv_pct'], ['Payout total', m.payout.total, 'payout'], ['Caixa disponível', m.caixa.disponivel, 'caixa'],
+    ] as [string, Ind, string][]).filter(([, , k]) => !ex.indicator(k));
+    const top = [...checks.map((c) => c.message), ...extraAttention].slice(0, 3);
+    const adjusted = adjust?.plan?.items.filter((x) => x.active).length ?? 0;
+    return wrap(
+      <>
+        {cover}
+        <Spotlight label="O mês em poucas linhas" text={a?.resumoExecutivo ?? noText} icon={Trophy} />
+        <Table
+          head={['Indicador', monthTitle(month), ...(compare ? ['Variação'] : [])]}
+          align={['l', 'r', 'r']}
+          rows={keyRows.map(([label, ind, key]) => {
+            const r = prevRow.get(key);
+            const v: ReactNode[] = [label, <span key="v" className="font-semibold tabular-nums">{indText(ind)}</span>];
+            if (compare) v.push(r?.delta == null ? '—' : <span key="d" className={cn('tabular-nums', r.delta > 0 ? 'text-sucesso' : r.delta < 0 ? 'text-critico' : '')}>{r.unit === 'PCT' ? `${r.delta > 0 ? '+' : ''}${(r.delta * 100).toFixed(1).replace('.', ',')} p.p.` : r.deltaPct !== null ? `${r.deltaPct > 0 ? '+' : ''}${(r.deltaPct * 100).toFixed(1).replace('.', ',')}%` : '—'}</span>);
+            return v;
+          })}
+        />
+        {top.length > 0 && <Points items={top} empty="" tone="atencao" />}
+        {(adjusted > 0 || ex.any) && <p className="text-xs text-tinta-suave">{adjusted > 0 ? `Números ajustados pelo contexto dos sócios (${adjusted} ajuste${adjusted > 1 ? 's' : ''}). ` : ''}{ex.any ? `Desconsiderado: ${ex.list.map((e) => e.item.label).join(', ')}.` : ''} Detalhes no relatório completo.</p>}
+        <Spotlight label="Conclusão" text={a?.conclusao ?? noText} icon={Flag} />
+        {footer}
+      </>,
+    );
+  }
 
   if (mode === 'socios') {
     return wrap(
