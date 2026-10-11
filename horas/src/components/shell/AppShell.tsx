@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   BarChart3, CalendarDays, ClipboardCheck, History, LayoutGrid,
   LogOut, Settings2, Sun, TriangleAlert, Users, UserRoundCog, Dumbbell, CalendarClock, Sparkles, Menu, X, Trophy, Dna, ChevronRight, Building2, Receipt, Landmark, LineChart, FileUp, FolderOpen, Briefcase,
-  Megaphone, Flag, Columns3, PartyPopper, MessagesSquare, Clapperboard, Bell, Link2, Target, Library, MousePointerClick, Gauge } from 'lucide-react';
+  Megaphone, Flag, Columns3, PartyPopper, MessagesSquare, Clapperboard, Bell, Link2, Target, Library, MousePointerClick, Gauge, Brain } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { cn } from '@/lib/cn';
 import { initials } from '@/lib/format';
@@ -48,6 +48,7 @@ const ICONS: Record<NavIcon, React.ComponentType<{ className?: string }>> = {
   'mkt-biblioteca': Library,
   'mkt-trafego': MousePointerClick,
   'mkt-performance': Gauge,
+  'mkt-memoria': Brain,
 };
 
 function isActive(pathname: string, href: string) {
@@ -179,21 +180,58 @@ export function AppShell({
   );
 }
 
+const NAV_KEY = 'nacao.nav.abertas';
+
+/**
+ * Menu com as seções sempre visíveis e os itens recolhíveis: abre a seção da
+ * página atual e lembra (neste navegador) quais o usuário deixou abertas.
+ */
 function SectionsNav({ sections, activeHref }: { sections: NavSection[]; activeHref: string | undefined }) {
+  const activeSection = sections.find((s) => s.items.some((i) => i.href === activeHref))?.title;
+  const single = sections.length === 1;
+  const [open, setOpen] = useState<Set<string>>(() => new Set(activeSection ? [activeSection] : []));
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(NAV_KEY) ?? '[]') as unknown;
+      if (Array.isArray(saved)) setOpen((cur) => new Set([...cur, ...saved.filter((x): x is string => typeof x === 'string')]));
+    } catch { /* sem armazenamento: só a seção atual */ }
+  }, []);
+  useEffect(() => { if (activeSection) setOpen((cur) => (cur.has(activeSection) ? cur : new Set([...cur, activeSection]))); }, [activeSection]);
+  const toggle = (title: string) => setOpen((cur) => {
+    const next = new Set(cur);
+    if (next.has(title)) next.delete(title); else next.add(title);
+    try { localStorage.setItem(NAV_KEY, JSON.stringify([...next])); } catch { /* ignora */ }
+    return next;
+  });
   return (
     <nav className="flex-1 space-y-1 overflow-y-auto">
-      {sections.map((section, i) => (
-        <div key={section.title} className="space-y-1">
-          <p className={cn('px-3 pb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-white/40', i > 0 ? 'pt-6' : 'pt-0')}>
-            {section.title}
-          </p>
-          {groupItems(section.items).map((g) =>
-            g.group
-              ? <NavGroup key={g.group} title={g.group} items={g.items} activeHref={activeHref} />
-              : <Fragment key={g.items[0]!.href}>{g.items.map((item) => <SideLink key={item.href} item={item} active={item.href === activeHref} />)}</Fragment>,
-          )}
-        </div>
-      ))}
+      {sections.map((section) => {
+        const isOpen = single || open.has(section.title);
+        const here = section.title === activeSection;
+        return (
+          <div key={section.title} className="space-y-0.5">
+            {single ? (
+              <p className="px-3 pb-1 text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">{section.title}</p>
+            ) : (
+              <button type="button" onClick={() => toggle(section.title)} aria-expanded={isOpen}
+                className={cn('flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[11px] font-bold uppercase tracking-[0.16em] transition-colors hover:bg-white/8', here ? 'text-white' : 'text-white/55')}>
+                <span className={cn('size-1.5 shrink-0 rounded-full', here ? 'bg-ciano' : 'bg-white/20')} />
+                <span className="flex-1">{section.title}</span>
+                <ChevronRight className={cn('size-3.5 transition-transform', isOpen && 'rotate-90')} />
+              </button>
+            )}
+            {isOpen && (
+              <div className={cn('space-y-0.5', !single && 'pb-2')}>
+                {groupItems(section.items).map((g) =>
+                  g.group
+                    ? <NavGroup key={g.group} title={g.group} items={g.items} activeHref={activeHref} />
+                    : <Fragment key={g.items[0]!.href}>{g.items.map((item) => <SideLink key={item.href} item={item} active={item.href === activeHref} />)}</Fragment>,
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </nav>
   );
 }

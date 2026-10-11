@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { MapPin, Pencil, Plus, Trash2 } from 'lucide-react';
+import { CopyPlus, MapPin, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { FormMessage } from '@/components/ui/alert';
@@ -10,7 +10,7 @@ import { Input, Label, Select } from '@/components/ui/input';
 import { EVENT_STATUSES, labelOf } from '@/domain/marketing/constants';
 import { cn } from '@/lib/cn';
 import type { EventRow, MktOptions } from '@/server/services/marketing-service';
-import { deleteEventAction, saveEventAction } from '../actions';
+import { deleteEventAction, repeatEventAction, saveEventAction } from '../actions';
 import { CampaignStatusBadge, daysLabel, fmtDate } from '../_components/ui';
 import { useRun } from '../_components/useRun';
 
@@ -90,6 +90,10 @@ export function EventsClient({ events, options, openNew, perms, today }: { today
               ))}
               {e.campaigns.length === 0 && e.daysTo >= 0 && (
                 <p className="rounded-lg bg-atencao/10 px-2 py-1.5 text-xs text-atencao">Sem campanha vinculada — este evento ainda não tem plano de divulgação.</p>
+              )}
+              {perms.edit && e.daysTo < 0 && (
+                <button type="button" disabled={pending} onClick={() => run(() => repeatEventAction(e.id), (r) => { if (r.ok) setMsg({ ok: `Criado para ${r.data.date.split('-').reverse().join('/')} (mesmo dia da semana) como planejado.` }); })}
+                  className="inline-flex items-center gap-1 pt-1 text-xs font-semibold text-nacao"><CopyPlus className="size-3" /> Repetir em {Number(e.startDate.slice(0, 4)) + 1}</button>
               )}
               {perms.edit && e.daysTo >= 0 && (
                 <Link href={`/marketing/campanhas/nova?evento=${e.id}`} className="inline-flex items-center gap-1 pt-1 text-xs font-semibold text-nacao"><Plus className="size-3" /> Criar campanha do evento</Link>

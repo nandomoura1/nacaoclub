@@ -13,6 +13,7 @@ import { readiness } from '@/domain/marketing/readiness';
 import { dueFromOffset } from '@/domain/marketing/tasks';
 import { generateMeetingMinutes, generateTasks, recommendActions, type CampaignBrief, type MeetingOut } from '@/server/marketing/ai/service';
 import { createTaskIn } from './mkt-task-service';
+import { memoryContext } from './mkt-memory-service';
 import { dt, iso, listAreas, marketingFacts, type RecoPayload, type SuggestedTasksPayload } from './marketing-service';
 
 /**
@@ -44,7 +45,7 @@ export async function suggestCampaignTasks(principal: Principal | null, campaign
   assertCan(principal, 'mkt.ai');
   assertCan(principal, 'mkt.edit');
   const { c, brief, existing } = await campaignBrief(campaignId);
-  const { out, version, model } = await generateTasks(brief, existing, today);
+  const { out, version, model } = await generateTasks(brief, existing, today, await memoryContext(brief.inicio));
   if (!out.tarefas.length) throw new AppError('A IA não encontrou tarefas novas para sugerir.');
   return prisma.$transaction(async (tx) => {
     const s = await tx.mktAiSuggestion.create({ data: { kind: 'TAREFAS_CAMPANHA', campaignId, payload: out as unknown as Prisma.InputJsonValue, promptVersion: version, model, createdById: principal.id } });
@@ -197,7 +198,7 @@ export async function refreshRecommendations(principal: Principal | null, today:
     }),
     tarefasAtrasadas: f.tasks.filter((t) => t.dueDate && t.dueDate < today && !['EXECUTADO', 'RESULTADOS'].includes(t.column)).length,
   };
-  const { out, version, model } = await recommendActions(ctx, att);
+  const { out, version, model } = await recommendActions(ctx, att, await memoryContext(today));
   return prisma.$transaction(async (tx) => {
     const s = await tx.mktAiSuggestion.create({ data: { kind: 'RECOMENDACOES', payload: out as unknown as Prisma.InputJsonValue, promptVersion: version, model, createdById: principal.id } });
     await audit(tx, { actorId: principal.id, ...meta }, { action: 'mkt.ai_suggested', entityType: 'mkt_ai_suggestion', entityId: s.id, after: { recomendacoes: out.recomendacoes.length }, summary: `${principal.name} atualizou as recomendações da IA (${out.recomendacoes.length})` });

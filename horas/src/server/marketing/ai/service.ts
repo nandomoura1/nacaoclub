@@ -6,6 +6,15 @@ import type { AreaKey } from '@/domain/marketing/constants';
 import { TASKS_PROMPT_VERSION, TASKS_SYSTEM, TasksSchema } from './prompts/tasks';
 import { MEETING_PROMPT_VERSION, MEETING_SYSTEM, MeetingSchema } from './prompts/meeting';
 import { RECO_PROMPT_VERSION, RECO_SYSTEM, RecoSchema } from './prompts/recommendations';
+import { SCHEDULE_PROMPT_VERSION, SCHEDULE_SYSTEM, ScheduleSchema } from './prompts/schedule';
+import { MEMORY_PROMPT_VERSION, MEMORY_SYSTEM, MemorySchema } from './prompts/memory';
+import type Anthropic from '@anthropic-ai/sdk';
+import type { ScheduleItem } from '@/domain/marketing/schedule-import';
+
+type Block = Anthropic.Beta.BetaContentBlockParam;
+
+/** Memória da Nação + histórico do mesmo período do ano anterior (vai junto em sugestões). */
+export interface MemoryContext { memoria: string | null; historico: string[] }
 
 /**
  * MarketingAIService: o único lugar que fala com o modelo no Marketing.
@@ -25,7 +34,7 @@ export type TasksOut = z.infer<typeof TasksSchema>;
 export type MeetingOut = z.infer<typeof MeetingSchema>;
 export type RecoOut = z.infer<typeof RecoSchema>;
 
-export async function generateTasks(brief: CampaignBrief, existing: string[], today: string): Promise<{ out: TasksOut; version: string; model: string }> {
+export async function generateTasks(brief: CampaignBrief, existing: string[], today: string, memory: MemoryContext | null = null): Promise<{ out: TasksOut; version: string; model: string }> {
   const template = baseTemplate(brief.tipo, !!brief.evento);
   if (isFake()) {
     const out: TasksOut = {
@@ -34,7 +43,7 @@ export async function generateTasks(brief: CampaignBrief, existing: string[], to
     };
     return { out, version: TASKS_PROMPT_VERSION, model: 'exemplo local' };
   }
-  const input = { hoje: today, campanha: brief, tarefasExistentes: existing, modeloBase: template.map((t) => ({ area: t.area, titulo: t.title, offsetDias: t.offset })) };
+  const input = { hoje: today, campanha: brief, tarefasExistentes: existing, modeloBase: template.map((t) => ({ area: t.area, titulo: t.title, offsetDias: t.offset })), memoriaDaNacao: memory?.memoria ?? 'nenhuma', historicoMesmoPeriodoAnoAnterior: memory?.historico ?? [] };
   const out = await askModel(TasksSchema, TASKS_SYSTEM, `Monte as tarefas desta campanha.\n${JSON.stringify(input, null, 1)}`, 12000);
   return { out, version: TASKS_PROMPT_VERSION, model: MKT_MODEL };
 }
@@ -59,7 +68,7 @@ export interface RecoContext {
   tarefasAtrasadas: number;
 }
 
-export async function recommendActions(ctx: RecoContext, attention: AttentionItem[]): Promise<{ out: RecoOut; version: string; model: string }> {
+export async function recommendActions(ctx: RecoContext, attention: AttentionItem[], memory: MemoryContext | null = null): Promise<{ out: RecoOut; version: string; model: string }> {
   if (isFake() || (!ctx.alertas.length && !ctx.campanhas.length)) {
     const out: RecoOut = {
       recomendacoes: attention.slice(0, 5).map((a) => ({
@@ -71,6 +80,36 @@ export async function recommendActions(ctx: RecoContext, attention: AttentionIte
     };
     return { out, version: RECO_PROMPT_VERSION, model: isFake() ? 'exemplo local' : 'regras' };
   }
-  const out = await askModel(RecoSchema, RECO_SYSTEM, `Fatos de hoje:\n${JSON.stringify(ctx, null, 1)}`, 4000);
+  const out = await askModel(RecoSchema, RECO_SYSTEM, `Fatos de hoje:\n${JSON.stringify({ ...ctx, memoriaDaNacao: memory?.memoria ?? 'nenhuma', historicoMesmoPeriodoAnoAnterior: memory?.historico ?? [] }, null, 1)}`, 4000);
   return { out, version: RECO_PROMPT_VERSION, model: MKT_MODEL };
+}
+
+export type ScheduleOut = { itens: ScheduleItem[]; avisos: string[] };
+
+/** Cronograma (documento) → itens datados para revisão. */
+export async function extractSchedule(blocks: Block[], today: string): Promise<{ out: ScheduleOut; version: string; model: string }> {
+  if (isFake()) {
+    const y = today.slice(0, 4);
+    const out: ScheduleOut = {
+      itens: [
+        { data: `${y}-03-14`, dataFim: null, titulo: 'Nação Celebration — Etapa 1', tipo: 'EVENTO', detalhes: 'Evento patrocinado com camisetas da temporada.', parceiro: 'Brasal', aConfirmar: false, campanhaTipo: null, origem: 'exemplo local' },
+        { data: `${y}-08-01`, dataFim: `${y}-08-31`, titulo: 'Pai Treina Grátis', tipo: 'CAMPANHA', detalhes: 'Voucher de 5 dias para pais.', parceiro: null, aConfirmar: false, campanhaTipo: 'AQUISICAO', origem: 'exemplo local' },
+        { data: `${y}-09-01`, dataFim: `${y}-09-30`, titulo: 'Tema do mês: Superação', tipo: 'TEMA_DO_MES', detalhes: null, parceiro: null, aConfirmar: false, campanhaTipo: null, origem: 'exemplo local' },
+        { data: `${y}-12-19`, dataFim: null, titulo: 'Murph de Natal', tipo: 'EVENTO', detalhes: 'Camiseta 30 dias antes para venda.', parceiro: 'Brasal', aConfirmar: true, campanhaTipo: null, origem: 'exemplo local' },
+        { data: `${y}-12-25`, dataFim: null, titulo: 'Natal', tipo: 'FERIADO', detalhes: null, parceiro: null, aConfirmar: false, campanhaTipo: null, origem: 'exemplo local' },
+        { data: `${y}-09-27`, dataFim: null, titulo: 'Evento privado (locação)', tipo: 'PRIVADO', detalhes: '9h–12h', parceiro: null, aConfirmar: false, campanhaTipo: null, origem: 'exemplo local' },
+      ],
+      avisos: [],
+    };
+    return { out, version: SCHEDULE_PROMPT_VERSION, model: 'exemplo local' };
+  }
+  const out = await askModel(ScheduleSchema, SCHEDULE_SYSTEM, [...blocks, { type: 'text', text: `Hoje é ${today}. Liste todos os itens datados do cronograma.` }], 32000);
+  return { out: out as ScheduleOut, version: SCHEDULE_PROMPT_VERSION, model: MKT_MODEL };
+}
+
+/** Documento → rascunho de memória (o humano revisa antes de salvar). */
+export async function draftMemory(blocks: Block[]): Promise<{ titulo: string; aprendizados: string; version: string; model: string }> {
+  if (isFake()) return { titulo: 'Memória de exemplo', aprendizados: '- Exemplo local (AI_FAKE): Nação Celebration acontece em etapas ao longo do ano.', version: MEMORY_PROMPT_VERSION, model: 'exemplo local' };
+  const out = await askModel(MemorySchema, MEMORY_SYSTEM, [...blocks, { type: 'text', text: 'Escreva a memória de marketing deste documento.' }], 6000);
+  return { ...out, version: MEMORY_PROMPT_VERSION, model: MKT_MODEL };
 }

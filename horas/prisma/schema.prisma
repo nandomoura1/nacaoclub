@@ -25,16 +25,16 @@ datasource db {
 /// Linha única (id = 1). O dia de corte da competência mora aqui:
 /// 26 → competência "Setembro" = 26/08 a 25/09.
 model AppSettings {
-  id             Int      @id @default(1)
-  periodStartDay Int      @default(26) @map("period_start_day")
-  timezone       String   @default("America/Sao_Paulo")
+  id                Int       @id @default(1)
+  periodStartDay    Int       @default(26) @map("period_start_day")
+  timezone          String    @default("America/Sao_Paulo")
   /// Mensagem geral aos professores das Aulas Coletivas (CrossFit, Futevôlei, Funcional…), no texto da grade.
-  teacherGuidelines String? @map("teacher_guidelines")
+  teacherGuidelines String?   @map("teacher_guidelines")
   /// Mensagem geral aos professores da Musculação (Nação Fit).
-  gymGuidelines     String? @map("gym_guidelines")
+  gymGuidelines     String?   @map("gym_guidelines")
   /// Domingo e feriado valem o dobro a partir desta data (antes dela, nada muda). Vazio = sempre.
   doubleHoursFrom   DateTime? @map("double_hours_from") @db.Date
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
 
   @@map("app_settings")
 }
@@ -148,16 +148,16 @@ model UserRole {
 /// Área de coordenação: Nação Fit, CrossFit, Aulas Coletivas, Futevôlei…
 /// O escopo do coordenador é definido por área, não por pessoa.
 model CoordinationArea {
-  id        String    @id @default(uuid()) @db.Uuid
-  name      String    @unique
-  color     String    @default("#0169E9")
-  sortOrder Int       @default(0) @map("sort_order")
-  active    Boolean   @default(true)
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
+  id                String    @id @default(uuid()) @db.Uuid
+  name              String    @unique
+  color             String    @default("#0169E9")
+  sortOrder         Int       @default(0) @map("sort_order")
+  active            Boolean   @default(true)
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
   /// Não usado: as mensagens gerais são por gênero (app_settings: Musculação × Aulas Coletivas).
-  teacherGuidelines String? @map("teacher_guidelines")
+  teacherGuidelines String?   @map("teacher_guidelines")
 
   userScopes UserAreaScope[]
   modalities Modality[]
@@ -237,13 +237,13 @@ model Modality {
   createdAt            DateTime @default(now()) @map("created_at")
   updatedAt            DateTime @updatedAt @map("updated_at")
 
-  area       CoordinationArea  @relation(fields: [areaId], references: [id], onDelete: Restrict)
-  costCenter CostCenter?       @relation(fields: [costCenterId], references: [id], onDelete: SetNull)
-  teachers   TeacherModality[]
-  primaryOf  Teacher[]         @relation("PrimaryModality")
-  aliases    TeacherAlias[]
-  slotVersions ScheduleSlotVersion[]
-  occurrences  ClassOccurrence[]
+  area          CoordinationArea      @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  costCenter    CostCenter?           @relation(fields: [costCenterId], references: [id], onDelete: SetNull)
+  teachers      TeacherModality[]
+  primaryOf     Teacher[]             @relation("PrimaryModality")
+  aliases       TeacherAlias[]
+  slotVersions  ScheduleSlotVersion[]
+  occurrences   ClassOccurrence[]
   manualEntries ManualEntry[]
   workoutWeeks  WorkoutWeek[]
   dutySectors   DutySector[]
@@ -368,41 +368,41 @@ model Holiday {
 // ─────────────────────────────────────────────────────────────
 
 model Teacher {
-  id                 String    @id @default(uuid()) @db.Uuid
-  name               String
+  id                String    @id @default(uuid()) @db.Uuid
+  name              String
   /// Como aparece na grade e no card: "Rafa", "Ju".
-  displayName        String?   @map("display_name")
-  email              String?
-  phone              String?
-  admissionDate      DateTime? @map("admission_date") @db.Date
-  terminationDate    DateTime? @map("termination_date") @db.Date
-  active             Boolean   @default(true)
-  primaryModalityId  String?   @map("primary_modality_id") @db.Uuid
-  positionId         String?   @map("position_id") @db.Uuid
-  contractTypeId     String?   @map("contract_type_id") @db.Uuid
-  level              String?
-  notes              String?
+  displayName       String?   @map("display_name")
+  email             String?
+  phone             String?
+  admissionDate     DateTime? @map("admission_date") @db.Date
+  terminationDate   DateTime? @map("termination_date") @db.Date
+  active            Boolean   @default(true)
+  primaryModalityId String?   @map("primary_modality_id") @db.Uuid
+  positionId        String?   @map("position_id") @db.Uuid
+  contractTypeId    String?   @map("contract_type_id") @db.Uuid
+  level             String?
+  notes             String?
   /// Orientações só deste professor, no texto da grade compartilhado.
-  guidelines         String?
-  createdAt          DateTime  @default(now()) @map("created_at")
-  updatedAt          DateTime  @updatedAt @map("updated_at")
-  createdById        String?   @map("created_by") @db.Uuid
+  guidelines        String?
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  createdById       String?   @map("created_by") @db.Uuid
 
-  primaryModality Modality?         @relation("PrimaryModality", fields: [primaryModalityId], references: [id], onDelete: SetNull)
-  position        Position?         @relation(fields: [positionId], references: [id], onDelete: SetNull)
-  contractType    ContractType?     @relation(fields: [contractTypeId], references: [id], onDelete: SetNull)
-  modalities      TeacherModality[]
-  aliases         TeacherAlias[]
-  slotAssignments SlotVersionTeacher[]
-  plannedIn       ClassAssignment[]    @relation("PlannedAssignments")
-  executedIn      ClassAssignment[]    @relation("ExecutingAssignments")
-  leaves          Leave[]              @relation("TeacherLeaves")
-  covering        Leave[]              @relation("LeaveSubstitute")
-  manualEntries   ManualEntry[]
-  duties          DutyAssignment[]
-  userLink        UserTeacher?
+  primaryModality  Modality?            @relation("PrimaryModality", fields: [primaryModalityId], references: [id], onDelete: SetNull)
+  position         Position?            @relation(fields: [positionId], references: [id], onDelete: SetNull)
+  contractType     ContractType?        @relation(fields: [contractTypeId], references: [id], onDelete: SetNull)
+  modalities       TeacherModality[]
+  aliases          TeacherAlias[]
+  slotAssignments  SlotVersionTeacher[]
+  plannedIn        ClassAssignment[]    @relation("PlannedAssignments")
+  executedIn       ClassAssignment[]    @relation("ExecutingAssignments")
+  leaves           Leave[]              @relation("TeacherLeaves")
+  covering         Leave[]              @relation("LeaveSubstitute")
+  manualEntries    ManualEntry[]
+  duties           DutyAssignment[]
+  userLink         UserTeacher?
   personalWorkouts PersonalWorkout[]
-  documents       TeacherDocument[]
+  documents        TeacherDocument[]
 
   @@index([active, name])
   @@map("teachers")
@@ -446,8 +446,8 @@ model ScheduleSlot {
   createdAt   DateTime @default(now()) @map("created_at")
   createdById String?  @map("created_by") @db.Uuid
 
-  versions ScheduleSlotVersion[]
-  leaves   Leave[]
+  versions         ScheduleSlotVersion[]
+  leaves           Leave[]
   personalWorkouts PersonalWorkout[]
 
   @@map("schedule_slots")
@@ -581,18 +581,18 @@ model ClassOccurrence {
   createdAt            DateTime         @default(now()) @map("created_at")
   updatedAt            DateTime         @updatedAt @map("updated_at")
 
-  period             PayrollPeriod       @relation(fields: [periodId], references: [id], onDelete: Restrict)
+  period             PayrollPeriod        @relation(fields: [periodId], references: [id], onDelete: Restrict)
   slotVersion        ScheduleSlotVersion? @relation(fields: [slotVersionId], references: [id], onDelete: Restrict)
-  modality           Modality            @relation(fields: [modalityId], references: [id], onDelete: Restrict)
-  activityType       ActivityType        @relation(fields: [activityTypeId], references: [id], onDelete: Restrict)
-  space              Space?              @relation(fields: [spaceId], references: [id], onDelete: SetNull)
-  holiday            Holiday?            @relation(fields: [holidayId], references: [id], onDelete: SetNull)
-  cancellationReason CancellationReason? @relation(fields: [cancellationReasonId], references: [id], onDelete: Restrict)
+  modality           Modality             @relation(fields: [modalityId], references: [id], onDelete: Restrict)
+  activityType       ActivityType         @relation(fields: [activityTypeId], references: [id], onDelete: Restrict)
+  space              Space?               @relation(fields: [spaceId], references: [id], onDelete: SetNull)
+  holiday            Holiday?             @relation(fields: [holidayId], references: [id], onDelete: SetNull)
+  cancellationReason CancellationReason?  @relation(fields: [cancellationReasonId], references: [id], onDelete: Restrict)
   assignments        ClassAssignment[]
   exceptions         ClassException[]
   /// Aula nascida de uma escala de fim de semana/feriado (horas de plantão).
-  dutyShiftId        String?          @map("duty_shift_id") @db.Uuid
-  dutyShift          DutyShift?       @relation(fields: [dutyShiftId], references: [id], onDelete: Cascade)
+  dutyShiftId        String?              @map("duty_shift_id") @db.Uuid
+  dutyShift          DutyShift?           @relation(fields: [dutyShiftId], references: [id], onDelete: Cascade)
 
   @@unique([slotId, date])
   @@index([periodId, date])
@@ -660,18 +660,18 @@ enum ExceptionType {
 
 /// Fato registrado sobre uma aula. Somente-inclusão: desfazer = nova exceção REVERSAO.
 model ClassException {
-  id                 String        @id @default(uuid()) @db.Uuid
-  occurrenceId       String        @map("occurrence_id") @db.Uuid
-  assignmentId       String?       @map("assignment_id") @db.Uuid
-  type               ExceptionType
-  cancellationReasonId String?     @map("cancellation_reason_id") @db.Uuid
-  notes              String?
-  before             Json?
-  after              Json?
-  revertsExceptionId String?       @map("reverts_exception_id") @db.Uuid
-  leaveId            String?       @map("leave_id") @db.Uuid
-  createdById        String?       @map("created_by") @db.Uuid
-  createdAt          DateTime      @default(now()) @map("created_at")
+  id                   String        @id @default(uuid()) @db.Uuid
+  occurrenceId         String        @map("occurrence_id") @db.Uuid
+  assignmentId         String?       @map("assignment_id") @db.Uuid
+  type                 ExceptionType
+  cancellationReasonId String?       @map("cancellation_reason_id") @db.Uuid
+  notes                String?
+  before               Json?
+  after                Json?
+  revertsExceptionId   String?       @map("reverts_exception_id") @db.Uuid
+  leaveId              String?       @map("leave_id") @db.Uuid
+  createdById          String?       @map("created_by") @db.Uuid
+  createdAt            DateTime      @default(now()) @map("created_at")
 
   occurrence ClassOccurrence @relation(fields: [occurrenceId], references: [id], onDelete: Restrict)
   leave      Leave?          @relation(fields: [leaveId], references: [id], onDelete: Restrict)
@@ -701,21 +701,21 @@ enum LeaveCoverage {
 
 /// Período de ausência. Vale para as aulas já geradas E para as geradas depois.
 model Leave {
-  id           String        @id @default(uuid()) @db.Uuid
-  teacherId    String        @map("teacher_id") @db.Uuid
-  type         LeaveType
-  startDate    DateTime      @map("start_date") @db.Date
-  endDate      DateTime      @map("end_date") @db.Date
-  coverage     LeaveCoverage @default(PENDENTE)
-  substituteId String?       @map("substitute_id") @db.Uuid
+  id            String        @id @default(uuid()) @db.Uuid
+  teacherId     String        @map("teacher_id") @db.Uuid
+  type          LeaveType
+  startDate     DateTime      @map("start_date") @db.Date
+  endDate       DateTime      @map("end_date") @db.Date
+  coverage      LeaveCoverage @default(PENDENTE)
+  substituteId  String?       @map("substitute_id") @db.Uuid
   /// Substituição só nesta aula da grade (vazio = todas as aulas do professor).
-  slotId       String?       @map("slot_id") @db.Uuid
-  notes        String?
-  createdById  String?       @map("created_by") @db.Uuid
-  createdAt    DateTime      @default(now()) @map("created_at")
+  slotId        String?       @map("slot_id") @db.Uuid
+  notes         String?
+  createdById   String?       @map("created_by") @db.Uuid
+  createdAt     DateTime      @default(now()) @map("created_at")
   /// Ausência anulada (não se apaga: as aulas voltam ao previsto, com registro).
-  cancelledAt   DateTime?    @map("cancelled_at")
-  cancelledById String?      @map("cancelled_by") @db.Uuid
+  cancelledAt   DateTime?     @map("cancelled_at")
+  cancelledById String?       @map("cancelled_by") @db.Uuid
 
   teacher    Teacher          @relation("TeacherLeaves", fields: [teacherId], references: [id], onDelete: Restrict)
   substitute Teacher?         @relation("LeaveSubstitute", fields: [substituteId], references: [id], onDelete: Restrict)
@@ -879,14 +879,14 @@ model WorkoutBlock {
 
 /// Setor escalado: Academia, CrossFit e HYROX, Brinquedoteca…
 model DutySector {
-  id         String  @id @default(uuid()) @db.Uuid
-  name       String  @unique
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String  @unique
   /// As horas da escala entram nesta modalidade (e na área dela).
-  modalityId String  @map("modality_id") @db.Uuid
+  modalityId  String  @map("modality_id") @db.Uuid
   /// Turnos padrão: { "SAB": [[420, 1020]], "DOM": [[480, 840]], "FERIADO": [[480, 840]] } em minutos.
-  defaults   Json    @default("{}")
-  sortOrder  Int     @default(0) @map("sort_order")
-  active     Boolean @default(true)
+  defaults    Json    @default("{}")
+  sortOrder   Int     @default(0) @map("sort_order")
+  active      Boolean @default(true)
   /// false = escala só organizacional (ex.: Aulões, pagos pelos próprios alunos): não gera horas.
   countsHours Boolean @default(true) @map("counts_hours")
 
@@ -1323,25 +1323,25 @@ model FinPeriod {
 
 /// Documento enviado (metadados; os bytes ficam em fin_document_files).
 model FinDocument {
-  id           String       @id @default(uuid()) @db.Uuid
-  periodId     String?      @map("period_id") @db.Uuid
-  kind         String
-  filename     String
-  mimeType     String       @map("mime_type")
-  sizeBytes    Int          @map("size_bytes")
-  sha256       String       @db.Char(64)
-  status       FinDocStatus @default(PROCESSING)
-  origin       FinDocOrigin @default(UPLOAD)
+  id            String       @id @default(uuid()) @db.Uuid
+  periodId      String?      @map("period_id") @db.Uuid
+  kind          String
+  filename      String
+  mimeType      String       @map("mime_type")
+  sizeBytes     Int          @map("size_bytes")
+  sha256        String       @db.Char(64)
+  status        FinDocStatus @default(PROCESSING)
+  origin        FinDocOrigin @default(UPLOAD)
   /// N-ésimo documento deste tipo na competência.
-  version      Int          @default(1)
-  notes        String?
-  error        String?
+  version       Int          @default(1)
+  notes         String?
+  error         String?
   /// Saída bruta da extração (auditoria do que a IA leu).
-  extraction   Json?
-  detectedMonth String?     @map("detected_month") @db.Char(7)
-  uploadedById String?      @map("uploaded_by") @db.Uuid
-  createdAt    DateTime     @default(now()) @map("created_at")
-  updatedAt    DateTime     @updatedAt @map("updated_at")
+  extraction    Json?
+  detectedMonth String?      @map("detected_month") @db.Char(7)
+  uploadedById  String?      @map("uploaded_by") @db.Uuid
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
 
   period FinPeriod?       @relation(fields: [periodId], references: [id], onDelete: Cascade)
   file   FinDocumentFile?
@@ -1663,6 +1663,8 @@ enum MktCalendarKind {
   SAUDE
   ENDOMARKETING
   AVISO
+  TEMA_DO_MES
+  CONTEUDO
   OUTRO
 }
 
@@ -1702,11 +1704,14 @@ model MktEvent {
   createdById     String?        @map("created_by") @db.Uuid
   createdAt       DateTime       @default(now()) @map("created_at")
   updatedAt       DateTime       @updatedAt @map("updated_at")
+  /// Lote de importação (cronograma) que criou o registro — permite desfazer.
+  importId        String?        @map("import_id") @db.Uuid
 
   campaigns MktCampaign[]
   tasks     MktTask[]
 
   @@index([startDate])
+  @@index([importId])
   @@map("mkt_events")
 }
 
@@ -1740,6 +1745,8 @@ model MktCampaign {
   createdById       String?           @map("created_by") @db.Uuid
   createdAt         DateTime          @default(now()) @map("created_at")
   updatedAt         DateTime          @updatedAt @map("updated_at")
+  /// Lote de importação (cronograma) que criou o registro — permite desfazer.
+  importId          String?           @map("import_id") @db.Uuid
 
   event       MktEvent?         @relation(fields: [eventId], references: [id], onDelete: SetNull)
   tasks       MktTask[]
@@ -1747,36 +1754,37 @@ model MktCampaign {
 
   @@index([startDate])
   @@index([status])
+  @@index([importId])
   @@map("mkt_campaigns")
 }
 
 model MktTask {
-  id            String        @id @default(uuid()) @db.Uuid
-  title         String
-  description   String?
-  campaignId    String?       @map("campaign_id") @db.Uuid
-  eventId       String?       @map("event_id") @db.Uuid
-  areaId        String?       @map("area_id") @db.Uuid
-  assigneeId    String?       @map("assignee_id") @db.Uuid
-  collaboratorIds String[]    @default([]) @map("collaborator_ids") @db.Uuid
-  dueDate       DateTime?     @map("due_date") @db.Date
-  priority      MktPriority   @default(MEDIA)
-  column        MktTaskColumn @default(BACKLOG)
-  position      Float         @default(1000)
-  tags          String[]      @default([])
-  origin        MktTaskOrigin @default(MANUAL)
+  id              String        @id @default(uuid()) @db.Uuid
+  title           String
+  description     String?
+  campaignId      String?       @map("campaign_id") @db.Uuid
+  eventId         String?       @map("event_id") @db.Uuid
+  areaId          String?       @map("area_id") @db.Uuid
+  assigneeId      String?       @map("assignee_id") @db.Uuid
+  collaboratorIds String[]      @default([]) @map("collaborator_ids") @db.Uuid
+  dueDate         DateTime?     @map("due_date") @db.Date
+  priority        MktPriority   @default(MEDIA)
+  column          MktTaskColumn @default(BACKLOG)
+  position        Float         @default(1000)
+  tags            String[]      @default([])
+  origin          MktTaskOrigin @default(MANUAL)
   /// Marco de antecedência que originou a tarefa (ex.: "D-7").
-  milestone     String?
+  milestone       String?
   /// Origem externa (ex.: "trello:<id do card>") — evita importar o mesmo card duas vezes.
-  externalRef   String?       @unique @map("external_ref")
-  doneAt        DateTime?     @map("done_at")
-  createdById   String?       @map("created_by") @db.Uuid
-  createdAt     DateTime      @default(now()) @map("created_at")
-  updatedAt     DateTime      @updatedAt @map("updated_at")
+  externalRef     String?       @unique @map("external_ref")
+  doneAt          DateTime?     @map("done_at")
+  createdById     String?       @map("created_by") @db.Uuid
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
 
-  campaign  MktCampaign?       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  event     MktEvent?          @relation(fields: [eventId], references: [id], onDelete: SetNull)
-  area      MktArea?           @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  campaign  MktCampaign?        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  event     MktEvent?           @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  area      MktArea?            @relation(fields: [areaId], references: [id], onDelete: SetNull)
   checklist MktTaskCheckItem[]
   links     MktTaskLink[]
   dependsOn MktTaskDependency[] @relation("TaskDependsOn")
@@ -1849,8 +1857,11 @@ model MktCalendarItem {
   createdById String?         @map("created_by") @db.Uuid
   createdAt   DateTime        @default(now()) @map("created_at")
   updatedAt   DateTime        @updatedAt @map("updated_at")
+  /// Lote de importação (cronograma) que criou o registro — permite desfazer.
+  importId    String?         @map("import_id") @db.Uuid
 
   @@index([startDate])
+  @@index([importId])
   @@map("mkt_calendar_items")
 }
 
@@ -1890,4 +1901,33 @@ model MktMeeting {
 
   @@index([date])
   @@map("mkt_meetings")
+}
+
+/// Importação de cronograma (documento → eventos, campanhas e datas). Desfazível.
+model MktImport {
+  id          String    @id @default(uuid()) @db.Uuid
+  source      String
+  /// Quantos registros de cada tipo foram criados.
+  counts      Json
+  undoneAt    DateTime? @map("undone_at")
+  createdById String?   @map("created_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@map("mkt_imports")
+}
+
+/// Memória da Nação: aprendizados de marketing (revisados por humano) que a IA usa como contexto.
+model MktKnowledge {
+  id          String   @id @default(uuid()) @db.Uuid
+  title       String
+  /// Arquivo/documento de origem (ou "manual").
+  source      String?
+  content     String
+  active      Boolean  @default(true)
+  createdById String?  @map("created_by") @db.Uuid
+  updatedById String?  @map("updated_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("mkt_knowledge")
 }

@@ -4,7 +4,7 @@ import { PROGRAM_MODALITIES } from '@/domain/programming/modalities';
 export type NavIcon =
   | 'hoje' | 'calendario' | 'pendencias' | 'grade' | 'professores'
   | 'fechamento' | 'relatorios' | 'escalas' | 'treinos' | 'benchmarks' | 'dna' | 'treinos-ia' | 'usuarios' | 'historico' | 'cadastros' | 'condominio' | 'cobrancas' | 'financeiro' | 'fin-historico' | 'fin-importar' | 'documentos' | 'empresas'
-  | 'mkt' | 'mkt-campanhas' | 'mkt-kanban' | 'mkt-eventos' | 'mkt-reuniao' | 'mkt-conteudo' | 'mkt-interna' | 'mkt-canais' | 'mkt-leads' | 'mkt-biblioteca' | 'mkt-trafego' | 'mkt-performance';
+  | 'mkt' | 'mkt-campanhas' | 'mkt-kanban' | 'mkt-eventos' | 'mkt-reuniao' | 'mkt-conteudo' | 'mkt-interna' | 'mkt-canais' | 'mkt-leads' | 'mkt-biblioteca' | 'mkt-trafego' | 'mkt-performance' | 'mkt-memoria';
 
 export interface NavItem {
   href: string;
@@ -77,6 +77,7 @@ export const NAV_MARKETING: NavItem[] = [
   { href: '/marketing/kanban', label: 'Kanban', icon: 'mkt-kanban', permission: 'mkt.view' },
   { href: '/marketing/eventos', label: 'Eventos', icon: 'mkt-eventos', permission: 'mkt.view' },
   { href: '/marketing/reuniao', label: 'Reunião semanal', icon: 'mkt-reuniao', permission: 'mkt.view' },
+  { href: '/marketing/memoria', label: 'Memória da Nação', icon: 'mkt-memoria', permission: 'mkt.view' },
   { href: '/marketing/conteudo', label: 'Conteúdo & Social', icon: 'mkt-conteudo', permission: 'mkt.view', soon: 'breve' },
   { href: '/marketing/interna', label: 'Comunicação Interna', icon: 'mkt-interna', permission: 'mkt.view', soon: 'breve' },
   { href: '/marketing/canais', label: 'Canais & Links', icon: 'mkt-canais', permission: 'mkt.view', soon: 'breve' },
@@ -85,6 +86,7 @@ export const NAV_MARKETING: NavItem[] = [
   { href: '/marketing/trafego', label: 'Tráfego Pago', icon: 'mkt-trafego', permission: 'mkt.view', soon: 'breve' },
   { href: '/marketing/performance', label: 'Performance', icon: 'mkt-performance', permission: 'mkt.view', soon: 'breve' },
   { href: '/marketing/ia', label: 'IA Marketing', icon: 'treinos-ia', permission: 'mkt.view', soon: 'breve' },
+  { href: '/marketing/importar-cronograma', label: 'Importar cronograma', icon: 'fin-importar', permission: 'mkt.admin' },
   { href: '/marketing/importar-trello', label: 'Importar do Trello', icon: 'fin-importar', permission: 'mkt.admin' },
   { href: '/marketing/configuracoes', label: 'Configurações', icon: 'cadastros', permission: 'mkt.admin' },
 ];

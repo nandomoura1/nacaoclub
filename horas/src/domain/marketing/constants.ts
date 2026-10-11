@@ -104,6 +104,8 @@ export const CALENDAR_KINDS = [
   { id: 'SAUDE', label: 'Campanha de saúde' },
   { id: 'ENDOMARKETING', label: 'Endomarketing' },
   { id: 'AVISO', label: 'Aviso / mudança de horário' },
+  { id: 'TEMA_DO_MES', label: 'Tema do mês' },
+  { id: 'CONTEUDO', label: 'Pauta de conteúdo' },
   { id: 'OUTRO', label: 'Outro' },
 ] as const;
 export type CalendarKind = (typeof CALENDAR_KINDS)[number]['id'];

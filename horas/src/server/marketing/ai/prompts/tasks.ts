@@ -1,7 +1,7 @@
 import { z } from 'zod/v4';
 import { BRAND_CONTEXT } from './brand';
 
-export const TASKS_PROMPT_VERSION = 'mkt-tasks@1';
+export const TASKS_PROMPT_VERSION = 'mkt-tasks@2';
 const AREA = z.enum(['PLANEJAMENTO', 'COMUNICACAO', 'CONTEUDO', 'DESIGN', 'COMERCIAL']);
 
 export const TasksSchema = z.object({
@@ -30,4 +30,5 @@ Regras:
 - Não repita tarefas que já existem (lista "tarefasExistentes").
 - Prazos coerentes: planejamento cedo (D-30 a D-21), criativos e roteiros D-21 a D-10, comunicação interna D-10 a D-1, cobertura no D0, pós D+1 a D+7.
 - Campanha sem venda/inscrição não precisa de tarefas comerciais.
-- O "modeloBase" é referência: adapte ao tipo, público e modalidade.`;
+- O "modeloBase" é referência: adapte ao tipo, público e modalidade.
+- "memoriaDaNacao" são aprendizados aprovados pela equipe (processo, parceiros, canais, eventos-assinatura): siga-os. "historicoMesmoPeriodoAnoAnterior" mostra o que a Nação fez nessa época no ano passado: use como referência, sem copiar datas.`;

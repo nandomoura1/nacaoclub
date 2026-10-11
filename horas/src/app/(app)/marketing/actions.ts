@@ -14,6 +14,8 @@ import {
   createMeeting, decideMinutes, decideRecommendation, decideTaskSuggestion, generateMinutes, refreshMeetingAgenda, refreshRecommendations, saveMeetingNotes, suggestCampaignTasks,
 } from '@/server/services/mkt-ai-service';
 import { importTrello, trelloAlreadyImported, type TrelloImportResult } from '@/server/services/mkt-trello-service';
+import { analyzeSchedule, commitSchedule, repeatEventNextYear, undoImport } from '@/server/services/mkt-import-service';
+import { deleteKnowledge, draftKnowledge, saveKnowledge } from '@/server/services/mkt-memory-service';
 
 const refresh = (...paths: string[]) => {
   revalidatePath('/marketing', 'layout');
@@ -128,4 +130,31 @@ export async function trelloAlreadyImportedAction(cardIds: string[]): Promise<Ac
 }
 export async function importTrelloAction(input: unknown): Promise<ActionResult<TrelloImportResult>> {
   return runAction(async () => { const r = await importTrello(await getPrincipal(), input, await requestMeta()); refresh('/marketing/kanban'); return r; });
+}
+
+// Cronograma (documento → base) e Memória da Nação
+const docInput = (fd: FormData) => {
+  const f = fd.get('file');
+  return { file: f instanceof File && f.size ? f : null, text: typeof fd.get('text') === 'string' ? String(fd.get('text')) : null };
+};
+export async function analyzeScheduleAction(fd: FormData): Promise<ActionResult<string>> {
+  return runAction(async () => analyzeSchedule(await getPrincipal(), docInput(fd), todayIso(), await requestMeta()));
+}
+export async function commitScheduleAction(suggestionId: string, decisions: unknown): Promise<ActionResult<{ eventos: number; campanhas: number; datas: number; duplicados: number }>> {
+  return runAction(async () => { const r = await commitSchedule(await getPrincipal(), suggestionId, decisions, await requestMeta()); refresh(); return r; });
+}
+export async function undoImportAction(importId: string): Promise<ActionResult<{ removidos: number; mantidos: number }>> {
+  return runAction(async () => { const r = await undoImport(await getPrincipal(), importId, await requestMeta()); refresh(); return r; });
+}
+export async function repeatEventAction(eventId: string): Promise<ActionResult<{ id: string; date: string }>> {
+  return runAction(async () => { const r = await repeatEventNextYear(await getPrincipal(), eventId, await requestMeta()); refresh('/marketing/eventos'); return r; });
+}
+export async function draftKnowledgeAction(fd: FormData): Promise<ActionResult<{ title: string; content: string; source: string }>> {
+  return runAction(async () => draftKnowledge(await getPrincipal(), docInput(fd), await requestMeta()));
+}
+export async function saveKnowledgeAction(id: string | null, values: Record<string, unknown>): Promise<ActionResult<string>> {
+  return runAction(async () => { const r = await saveKnowledge(await getPrincipal(), id, values, await requestMeta()); refresh('/marketing/memoria'); return r; }, 'Memória salva.');
+}
+export async function deleteKnowledgeAction(id: string): Promise<ActionResult> {
+  return runAction(async () => { await deleteKnowledge(await getPrincipal(), id, await requestMeta()); refresh('/marketing/memoria'); return undefined; }, 'Memória excluída.');
 }
