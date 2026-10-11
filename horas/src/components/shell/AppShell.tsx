@@ -96,8 +96,13 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const mobileItems = sections.flatMap((s) => s.items).filter((i) => i.mobile && !i.soon).slice(0, 4);
+  // Barra inferior: um botão por área (Horas, Treinos, Financeiro…). Com uma área só, os atalhos dela.
+  const barSections = sections.filter((s) => s.bar && s.items.some((i) => !i.soon)).sort((a, b) => a.bar!.order - b.bar!.order).slice(0, 4);
+  const bySection = barSections.length >= 2;
   const [menuOpen, setMenuOpen] = useState(false);
-  useEffect(() => setMenuOpen(false), [pathname]);
+  const [sheet, setSheet] = useState<string | null>(null);
+  useEffect(() => { setMenuOpen(false); setSheet(null); }, [pathname]);
+  const sheetSection = sections.find((s) => s.title === sheet);
   const all = sections.flatMap((s) => s.items).filter((i) => !i.soon);
   // Item ativo = o de href mais longo que casa (Cadastro de Treino não acende em /treinos/ia).
   const activeHref = all.filter((i) => isActive(pathname, i.href)).sort((a, b) => b.href.length - a.href.length)[0]?.href;
@@ -130,7 +135,17 @@ export function AppShell({
 
       {/* Navegação inferior mobile */}
       <nav className="fixed inset-x-0 bottom-0 z-30 flex border-t border-borda bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden print:hidden">
-          {mobileItems.map((item) => {
+          {bySection && barSections.map((s) => {
+            const Icon = ICONS[s.bar!.icon];
+            const items = s.items.filter((i) => !i.soon);
+            const active = sheet ? sheet === s.title : s.items.some((i) => i.href === activeHref);
+            const cls = cn('flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-0.5 text-[11px] font-semibold', active ? 'text-nacao' : 'text-tinta-fraca');
+            const label = <><Icon className="size-5" /><span className="max-w-full truncate">{s.bar!.label}</span></>;
+            return items.length === 1
+              ? <Link key={s.title} href={items[0]!.href} className={cls}>{label}</Link>
+              : <button key={s.title} type="button" aria-expanded={sheet === s.title} onClick={() => { setMenuOpen(false); setSheet(sheet === s.title ? null : s.title); }} className={cls}>{label}</button>;
+          })}
+          {!bySection && mobileItems.map((item) => {
             const Icon = ICONS[item.icon];
             const active = isActive(pathname, item.href);
             return (
@@ -149,7 +164,7 @@ export function AppShell({
           })}
           <button
             type="button"
-            onClick={() => setMenuOpen(true)}
+            onClick={() => { setSheet(null); setMenuOpen(true); }}
             aria-expanded={menuOpen}
             className={cn('flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-semibold', menuOpen ? 'text-nacao' : 'text-tinta-fraca')}
           >
@@ -157,6 +172,30 @@ export function AppShell({
             Menu
           </button>
         </nav>
+
+      {/* Área tocada na barra: as telas dela, de baixo para cima */}
+      {sheetSection && (
+        <div className="fixed inset-0 z-20 lg:hidden print:hidden" role="dialog" aria-modal="true" aria-label={sheetSection.title}>
+          <button type="button" aria-label="Fechar" className="absolute inset-0 bg-navy/40" onClick={() => setSheet(null)} />
+          <div className="absolute inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] max-h-[70dvh] overflow-y-auto rounded-t-2xl bg-white p-3 shadow-2xl">
+            <p className="px-2 pb-2 font-titulo text-xs font-bold uppercase tracking-[0.18em] text-nacao">{sheetSection.title}</p>
+            <div className="grid grid-cols-2 gap-1.5">
+              {sheetSection.items.filter((i) => !i.soon).map((item, idx, arr) => {
+                const Icon = ICONS[item.icon];
+                const showGroup = item.group && item.group !== arr[idx - 1]?.group;
+                return (
+                  <Fragment key={item.href}>
+                    {showGroup && <p className="col-span-2 px-2 pt-2 text-[11px] font-semibold uppercase tracking-wide text-tinta-fraca">{item.group}</p>}
+                    <Link href={item.href} className={cn('flex items-center gap-2 rounded-xl border px-3 py-2.5 text-[13px] font-semibold leading-tight', item.href === activeHref ? 'border-nacao bg-nacao/5 text-nacao' : 'border-borda text-navy')}>
+                      <Icon className="size-4 shrink-0" /><span className="min-w-0">{item.label}</span>
+                    </Link>
+                  </Fragment>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Menu completo no celular: todas as ferramentas, conta e sair */}
       {menuOpen && (

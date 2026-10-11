@@ -24,6 +24,8 @@ export interface NavItem {
 export interface NavSection {
   title: string;
   items: NavItem[];
+  /** Botão da área na barra inferior do celular (sem = só no Menu). */
+  bar?: { label: string; icon: NavIcon; order: number };
 }
 
 export const NAV_HORAS: NavItem[] = [
@@ -101,10 +103,10 @@ export const NAV_ADMIN: NavItem[] = [
 
 /** Menu lateral: uma seção por ferramenta. Seção sem item visível some. */
 export const NAV_SECTIONS: NavSection[] = [
-  { title: 'Gestão de Horas', items: NAV_HORAS },
-  { title: 'Treinos', items: NAV_TREINOS },
-  { title: 'Condomínio Nação', items: NAV_CONDOMINIO },
-  { title: 'Financeiro', items: NAV_FINANCEIRO },
-  { title: 'Marketing', items: NAV_MARKETING },
+  { title: 'Gestão de Horas', items: NAV_HORAS, bar: { label: 'Horas', icon: 'hoje', order: 1 } },
+  { title: 'Treinos', items: NAV_TREINOS, bar: { label: 'Treinos', icon: 'treinos', order: 2 } },
+  { title: 'Condomínio Nação', items: NAV_CONDOMINIO, bar: { label: 'Condomínio', icon: 'condominio', order: 5 } },
+  { title: 'Financeiro', items: NAV_FINANCEIRO, bar: { label: 'Financeiro', icon: 'financeiro', order: 3 } },
+  { title: 'Marketing', items: NAV_MARKETING, bar: { label: 'Marketing', icon: 'mkt', order: 4 } },
   { title: 'Administração', items: NAV_ADMIN },
 ];

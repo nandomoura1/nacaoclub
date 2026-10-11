@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { CalendarClock, CalendarPlus, ShieldCheck, Repeat2 } from 'lucide-react';
+import { CalendarClock, CalendarPlus, ShieldCheck, Repeat2, PartyPopper, Flag, CalendarHeart, ChevronRight } from 'lucide-react';
 import { Card, PageHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
@@ -15,6 +15,7 @@ import { can } from '@/server/auth/authz';
 import { requirePrincipal } from '@/server/auth/session';
 import { prisma } from '@/server/db';
 import { listOccurrences, periodStartDay } from '@/server/services/period-service';
+import { nacaoAgenda, type AgendaItem } from '@/server/services/agenda-service';
 
 export const metadata: Metadata = { title: 'Hoje' };
 
@@ -43,7 +44,10 @@ export default async function HojePage({ searchParams }: { searchParams: Promise
   const ref = periodOf(day, startDay);
   const period = await prisma.payrollPeriod.findUnique({ where: { year_month: { year: ref.year, month: ref.month } } });
   const canView = can(principal, 'schedule.view');
-  const lessons = canView && period?.generatedAt ? await listOccurrences(principal, { start: day, end: day }) : [];
+  const [lessons, agenda] = await Promise.all([
+    canView && period?.generatedAt ? listOccurrences(principal, { start: day, end: day }) : Promise.resolve([]),
+    nacaoAgenda(principal, day),
+  ]);
 
   const nowMin = (() => {
     const [h, m] = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Sao_Paulo' }).format(new Date()).split(':').map(Number);
@@ -73,6 +77,8 @@ export default async function HojePage({ searchParams }: { searchParams: Promise
           </p>
         )}
       </div>
+
+      {agenda && <Agenda day={day} tomorrow={tomorrow} agenda={agenda} />}
 
       {pending.length > 0 && (
         <Card className="mb-4 flex items-center gap-3 border-critico/30 bg-critico/5 p-4">
@@ -126,5 +132,46 @@ export default async function HojePage({ searchParams }: { searchParams: Promise
         ))}
       </div>
     </>
+  );
+}
+
+const KIND_ICON = { evento: PartyPopper, campanha: Flag, data: CalendarHeart } as const;
+const KIND_TONE = { evento: 'bg-nacao/10 text-nacao', campanha: 'bg-ciano/15 text-navy', data: 'bg-fundo text-tinta-suave' } as const;
+
+/** Cronograma da Nação: o que acontece no dia e o que vem nos próximos 7 dias. */
+function Agenda({ day, tomorrow, agenda }: { day: string; tomorrow: boolean; agenda: { day: AgendaItem[]; next: AgendaItem[] } }) {
+  const short = (d: string) => `${WEEKDAYS[weekdayOf(d) - 1]!.short} ${d.slice(8, 10)}/${d.slice(5, 7)}`;
+  const span = (a: AgendaItem) => (a.end && a.end !== a.start ? `${a.start.slice(8, 10)}/${a.start.slice(5, 7)} a ${a.end.slice(8, 10)}/${a.end.slice(5, 7)}` : null);
+  const Row = ({ a, showDate }: { a: AgendaItem; showDate?: boolean }) => {
+    const Icon = KIND_ICON[a.kind];
+    const body = (
+      <>
+        <span className={cn('grid size-8 shrink-0 place-items-center rounded-lg', KIND_TONE[a.kind])}><Icon className="size-4" /></span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold text-navy">{a.title}</span>
+          <span className="block text-xs text-tinta-suave">{a.tag}{showDate ? ` · ${span(a) ?? short(a.start)}` : span(a) ? ` · ${span(a)}` : ''}{a.tentative ? ' · a confirmar' : ''}</span>
+        </span>
+        {a.href && <ChevronRight className="size-4 shrink-0 text-tinta-fraca" />}
+      </>
+    );
+    return a.href
+      ? <Link href={a.href} className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-fundo">{body}</Link>
+      : <div className="flex items-center gap-3 px-2 py-1.5">{body}</div>;
+  };
+  if (!agenda.day.length && !agenda.next.length) return null;
+  return (
+    <Card className="mb-4 grid gap-4 p-4 md:grid-cols-2 [&>*]:min-w-0">
+      <div>
+        <h2 className="mb-1 flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.14em] text-nacao"><PartyPopper className="size-3.5" /> Na Nação {tomorrow ? 'amanhã' : 'hoje'}</h2>
+        {agenda.day.length ? <div className="-mx-2">{agenda.day.map((a) => <Row key={a.kind + a.id} a={a} />)}</div>
+          : <p className="py-2 text-sm text-tinta-suave">Nenhum evento ou data no cronograma {tomorrow ? 'amanhã' : 'hoje'}.</p>}
+      </div>
+      <div>
+        <h2 className="mb-1 text-xs font-extrabold uppercase tracking-[0.14em] text-tinta-fraca">Próximos 7 dias</h2>
+        {agenda.next.length ? <div className="-mx-2">{agenda.next.slice(0, 8).map((a) => <Row key={a.kind + a.id} a={a} showDate />)}</div>
+          : <p className="py-2 text-sm text-tinta-suave">Nada no cronograma até {formatDateBR(addDays(day, 7))}.</p>}
+        {agenda.next.length > 8 && <p className="px-2 text-xs text-tinta-suave">+ {agenda.next.length - 8} no calendário de marketing</p>}
+      </div>
+    </Card>
   );
 }
