@@ -95,3 +95,19 @@ describe.skipIf(!hasDb)('Financeiro — estoque e contexto dos sócios', () => {
     expect([p.partnerContext, p.exclusions]).toEqual([null, []]);
   });
 });
+
+describe.skipIf(!hasDb)('Financeiro — explicação do gestor na linha', () => {
+  it('nota e motivo ficam na própria linha (meta) para a análise', async () => {
+    const { addFinLine, updateFinLine } = await import('@/server/services/fin-service');
+    const admin = await makeUser('ADMIN', { name: 'Admin Nota' });
+    const M = `${2100 + Math.floor(Math.random() * 800)}-03`;
+    await createFinPeriod(admin.principal, M, META);
+    const id = await addFinLine(admin.principal, M, { dataset: 'DESPESA', key: 'desp.outras', label: 'Conserto', unit: null, amountCents: 300_00, quantity: null, classification: null, meta: { nota: 'quebrou a bomba' }, reason: 'não veio no DRE' }, META);
+    let l = await prisma.finLine.findUniqueOrThrow({ where: { id } });
+    expect(l.meta).toEqual({ nota: 'quebrou a bomba', motivo: 'não veio no DRE' });
+    await updateFinLine(admin.principal, id, { amountCents: 350_00, reason: 'nota fiscal final' }, META);
+    l = await prisma.finLine.findUniqueOrThrow({ where: { id } });
+    expect(l.meta).toEqual({ nota: 'quebrou a bomba', motivo: 'nota fiscal final' });
+    expect(l.amountCents).toBe(350_00);
+  });
+});

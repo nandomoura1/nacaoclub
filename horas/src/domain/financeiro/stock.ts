@@ -13,6 +13,8 @@ export interface StockSummary {
   /** Valor do estoque considerado (só itens com saldo e valor positivos). */
   valueCents: number;
   items: number;
+  /** Unidades em estoque (soma dos saldos positivos valorizados). */
+  units: number;
   negative: { count: number; cents: number };
   /** Itens com saldo positivo mas sem custo (não entram no valor). */
   noCost: number;
@@ -29,10 +31,51 @@ export function stockSummary(lines: StockLine[]): StockSummary | null {
   return {
     valueCents: valued.reduce((s, l) => s + l.amountCents!, 0),
     items: valued.length,
+    units: valued.reduce((s, l) => s + (l.quantity ?? 0), 0),
     negative: { count: neg.length, cents: neg.reduce((s, l) => s + Math.abs(l.amountCents ?? 0), 0) },
     noCost: ok.length - valued.length,
     top: [...valued].sort((a, b) => b.amountCents! - a.amountCents!).slice(0, 10).map((l) => ({ label: l.label, quantity: l.quantity, cents: l.amountCents! })),
   };
+}
+
+// ── Produto a produto: quantidade, custo, variação e giro ─────
+
+export interface StockItemView {
+  label: string;
+  qtyFinal: number | null;
+  unitCostCents: number | null;
+  valueFinal: number;
+  qtyInicial: number | null;
+  valueInicial: number | null;
+  /** Unidades vendidas no PDV no mês (mesmo produto pelo nome), se houver. */
+  soldQty: number | null;
+  /** Dias que o saldo final dura no ritmo de venda do mês. */
+  coverageDays: number | null;
+}
+
+/** Nome comparável: sem acento, minúsculas, sem unidade de medida solta. */
+export const productKey = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  .replace(/\b(un|und|unid|unidade|cx|pct|kg|g|ml|l|lt)\b\.?/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim();
+
+/**
+ * Cruza a posição final com a inicial e com as vendas do PDV: quantidade,
+ * custo unitário, valor, vendido no mês e cobertura em dias. Negativos fora.
+ */
+export function stockItems(finalLines: StockLine[], initialLines: StockLine[], sold: { label: string; quantity: number | null }[], daysInMonth: number): StockItemView[] {
+  const ok = (l: StockLine) => !isNegativeStock(l) && (l.quantity === null || l.quantity > 0) && l.amountCents !== null && l.amountCents > 0;
+  const init = new Map(initialLines.filter(ok).map((l) => [productKey(l.label), l]));
+  const soldBy = new Map<string, number>();
+  for (const s of sold) if (s.quantity !== null) soldBy.set(productKey(s.label), (soldBy.get(productKey(s.label)) ?? 0) + s.quantity);
+  return finalLines.filter(ok).map((l) => {
+    const k = productKey(l.label);
+    const i = init.get(k);
+    const soldQty = soldBy.has(k) ? soldBy.get(k)! : null;
+    return {
+      label: l.label, qtyFinal: l.quantity, unitCostCents: l.quantity ? Math.round(l.amountCents! / l.quantity) : null, valueFinal: l.amountCents!,
+      qtyInicial: i ? i.quantity : null, valueInicial: i ? i.amountCents : null, soldQty,
+      coverageDays: soldQty && soldQty > 0 && l.quantity ? Math.round((l.quantity / (soldQty / daysInMonth)) * 10) / 10 : null,
+    };
+  }).sort((a, b) => b.valueFinal - a.valueFinal);
 }
 
 // ── Leitura determinística de planilha (XLSX/CSV) ───────────────

@@ -1,7 +1,8 @@
 import { z } from 'zod/v4';
 import { askModel, isFake } from '@/server/ai/workout-generator';
-import { KEY_INDICATORS, compareMetrics, type Ind, type Metrics } from '@/domain/financeiro/metrics';
+import { KEY_INDICATORS, compareMetrics, type FinLineData, type Ind, type Metrics } from '@/domain/financeiro/metrics';
 import { exclusionsView, type Exclusion } from '@/domain/financeiro/adjustments';
+import { DATASETS, DEFAULT_CATEGORIES, DOC_KINDS } from '@/domain/financeiro/taxonomy';
 
 /**
  * Análise executiva do Relatório Financeiro. A IA recebe os indicadores já
@@ -41,6 +42,8 @@ Regras absolutas:
 - Alertas (divergências, conciliações, metas) devem aparecer em pontos de atenção.
 - CONTEXTO DOS SÓCIOS: informação dada pelos sócios para tornar a leitura mais assertiva (pagamento pontual, mês atípico, mudança de operação…). Use para QUALIFICAR a leitura dos números relacionados ("segundo os sócios, …"), para não tratar como tendência o que é pontual e para não apontar como risco o que já está explicado. Nunca altere números nem crie valores a partir do contexto.
 - ITENS DESCONSIDERADOS: os sócios retiraram estes itens deste relatório por estarem enviesados. Não analise, não cite valores, não compare e não use esses itens em resumo, pontos positivos, pontos de atenção, riscos, resumo dos sócios ou conclusão. Na seção correspondente escreva exatamente "Desconsiderado pelos sócios neste relatório: <motivo>."
+- INFORMAÇÕES DO GESTOR ("informacoesDoGestor"): explicações escritas pelo gestor em contas específicas, lançamentos feitos à mão, correções com motivo, justificativas de conciliação e observações dos documentos. Considere TODAS ao comentar a seção correspondente (ex.: uma explicação numa conta de pessoal entra no comentário de pessoal) e nos pontos de atenção/riscos — elas explicam o número, não o alteram. Cite como "segundo o gestor…". Uma divergência justificada não deve ser tratada como problema em aberto.
+- ESTOQUE: use a quantidade e o valor de cada produto (custo unitário, saldo, vendido no mês e cobertura em dias) para comentar capital parado em estoque, itens com cobertura alta ou sem venda e o efeito no CMV. Não some você mesmo: os totais já vêm prontos.
 - CMV "ajustado pelo estoque" = compras − variação do estoque; o estoque cobre só os produtos controlados (produção própria e insumos indiretos ficam fora) e produtos com saldo negativo foram ignorados: sempre chame de estimativa.`;
 
 const money = (c: number) => `R$ ${(c / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -51,7 +54,7 @@ const fmt = (i: Ind): string => {
 };
 
 /** O que vai para a IA: só valores já formatados, com fórmula e estado. */
-export function analysisInput(month: string, m: Metrics, prev: { month: string; m: Metrics } | null, notes: string | null, decisions: string | null, ctx: { partnerContext: string | null; exclusions: Exclusion[] } = { partnerContext: null, exclusions: [] }) {
+export function analysisInput(month: string, m: Metrics, prev: { month: string; m: Metrics } | null, notes: string | null, decisions: string | null, ctx: { partnerContext: string | null; exclusions: Exclusion[]; manual?: ManagerInputs } = { partnerContext: null, exclusions: [] }) {
   const pct = (r: number | null) => (r === null ? 'não informado' : `${(r * 100).toFixed(1).replace('.', ',')}%`);
   const ex = exclusionsView(ctx.exclusions);
   const est = m.estoque;
@@ -76,6 +79,10 @@ export function analysisInput(month: string, m: Metrics, prev: { month: string; 
         inicial: fmt(est.inicial), final: fmt(est.final), variacao: fmt(est.variacao),
         fonteDoInicial: est.inicialFonte === 'mes_anterior' ? 'posição final do mês anterior' : est.inicialFonte === 'documento' ? 'posição do início do mês' : 'não informado',
         produtosComSaldoNegativoIgnorados: est.resumoFinal?.negative.count ?? 0,
+        produtosValorizados: est.resumoFinal?.items ?? 0,
+        unidadesEmEstoque: est.resumoFinal ? est.resumoFinal.units.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : 'não informado',
+        produtosSemVendaNoMes: est.semVenda ? `${est.semVenda.count} produto(s), ${money(est.semVenda.cents)} parados` : 'sem ranking de produtos do PDV para comparar',
+        porProduto: (est.itens ?? []).slice(0, 25).map((i) => `${i.label}: saldo ${i.qtyFinal ?? '—'} × custo ${i.unitCostCents === null ? '—' : money(i.unitCostCents)} = ${money(i.valueFinal)}${i.qtyInicial !== null ? ` (início do mês: ${i.qtyInicial})` : ''}${i.soldQty !== null ? ` · vendido no mês: ${i.soldQty}` : ''}${i.coverageDays !== null ? ` · cobertura ${i.coverageDays.toLocaleString('pt-BR')} dias` : ''}`),
       } : 'sem posição de estoque',
     },
     payout: { distribuicao: fmt(m.payout.distribuicao), antecipacao: fmt(m.payout.antecipacao), total: fmt(m.payout.total), totalPct: fmt(m.payout.totalPct) },
@@ -91,6 +98,7 @@ export function analysisInput(month: string, m: Metrics, prev: { month: string; 
     observacoesDoGestor: notes || 'nenhuma',
     decisoesDosSocios: decisions || 'nenhuma',
     contextoDosSocios: ctx.partnerContext || 'nenhum',
+    informacoesDoGestor: ctx.manual && Object.values(ctx.manual).some((v) => v.length) ? ctx.manual : 'nenhuma',
     itensDesconsiderados: ex.list.map((e) => `${e.item.label} — motivo: ${e.reason}`),
   };
   // Os dados dos itens desconsiderados nem chegam à IA.
@@ -115,4 +123,33 @@ export async function generateAnalysis(input: ReturnType<typeof analysisInput>):
   }
   const out = await askModel(AnalysisSchema, SYSTEM, `Dados do mês (já calculados pelo sistema; não altere nenhum número):\n${JSON.stringify(input, null, 1)}`, 16000);
   return { ...out, model: 'claude-opus-5-5', generatedAt };
+}
+
+export interface ManagerInputs {
+  explicacoesDeContas: string[];
+  lancamentosManuais: string[];
+  correcoes: string[];
+  justificativasDeConciliacao: string[];
+  observacoesDosDocumentos: string[];
+}
+
+/** Tudo o que o gestor escreveu à mão sobre os números do mês, em texto para a IA. */
+export function managerInputs(
+  lines: (FinLineData & { status: string })[], m: Metrics,
+  recs: { key: string; justification: string }[], docs: { kind: string; filename: string; notes: string | null }[],
+): ManagerInputs {
+  const cat = new Map(DEFAULT_CATEGORIES.map((c) => [c.key, c.label]));
+  const ds = (d: string) => DATASETS.find((x) => x.id === d)?.label ?? d;
+  const val = (l: FinLineData) => [l.amountCents !== null ? money(l.amountCents) : null, l.quantity !== null ? `${l.quantity.toLocaleString('pt-BR')} un.` : null].filter(Boolean).join(' · ');
+  const name = (l: FinLineData) => `${ds(l.dataset)} · ${l.key && cat.has(l.key) ? `${cat.get(l.key)} — ` : ''}${l.label}${l.unit ? ` (${l.unit})` : ''}: ${val(l)}`;
+  const note = (l: FinLineData) => (typeof l.meta?.nota === 'string' ? l.meta.nota : null);
+  const why = (l: FinLineData) => (typeof l.meta?.motivo === 'string' ? l.meta.motivo : null);
+  const checkMsg = new Map(m.checks.map((c) => [c.key, c.message]));
+  return {
+    explicacoesDeContas: lines.filter((l) => note(l)).map((l) => `${name(l)} — explicação: ${note(l)}`),
+    lancamentosManuais: lines.filter((l) => l.status === 'MANUAL').map((l) => `${name(l)}${why(l) ? ` — motivo: ${why(l)}` : ''}`),
+    correcoes: lines.filter((l) => l.status === 'EDITED' && why(l)).map((l) => `${name(l)} — corrigido: ${why(l)}`),
+    justificativasDeConciliacao: recs.map((r) => `${checkMsg.get(r.key) ?? r.key} — justificativa: ${r.justification}`),
+    observacoesDosDocumentos: docs.filter((d) => d.notes).map((d) => `${DOC_KINDS.find((k) => k.id === d.kind)?.label ?? d.kind} (${d.filename}): ${d.notes}`),
+  };
 }

@@ -333,6 +333,8 @@ function LineRow({ l, categories, doc, canEdit, pending, showOrigin, onOrigin, o
             {l.classification ? ` · ${l.classification}` : ''}{ca ? ` · Conta Assinada: ${String(ca)}` : ''}
             {l.confirmedBy && l.status !== 'EXTRACTED' ? ` · ${l.confirmedBy}` : ''}
           </p>
+          {typeof l.meta?.nota === 'string' && <p className="mt-0.5 text-xs italic text-nacao">Gestor: {l.meta.nota}</p>}
+          {typeof l.meta?.motivo === 'string' && <p className="mt-0.5 text-xs text-tinta-suave">Motivo da alteração: {l.meta.motivo}</p>}
         </div>
         <span className="font-bold tabular-nums text-navy">{lineValue(l)}</span>
         <Badge tone={s?.tone}>{s?.label ?? l.status}</Badge>
@@ -435,7 +437,7 @@ function ReportTab({ p, perms, pending, run }: { p: FinPeriodView; perms: Perms;
       {p.lines.some((l) => l.status === 'EXTRACTED') && <p className="rounded-lg border border-atencao/40 bg-atencao/5 p-2 text-sm print:hidden">Há dados ainda não conferidos — este relatório é uma prévia.</p>}
       <div>
         <ReportView month={p.month} m={p.metrics} analysis={p.analysis} previous={p.previous} managerNotes={p.managerNotes} partnerDecisions={p.partnerDecisions} mode={mode} version={p.status === 'APPROVED' ? p.version : null}
-          adjust={{ partnerContext: p.partnerContext, exclusions: p.exclusions }} />
+          adjust={{ partnerContext: p.partnerContext, exclusions: p.exclusions, accountNotes: accountNotes(p.lines) }} />
       </div>
     </div>
   );
@@ -499,6 +501,11 @@ function ContextCard({ p, canEdit, pending, run, generating, setGenerating }: { 
       )}
     </Card>
   );
+}
+
+/** Explicações que o gestor escreveu nas contas (aparecem no relatório). */
+export function accountNotes(lines: { label: string; unit: string | null; meta: Record<string, unknown> | null }[]) {
+  return lines.filter((l) => typeof l.meta?.nota === 'string').map((l) => ({ label: [l.label, l.unit].filter(Boolean).join(' · '), note: String(l.meta!.nota) }));
 }
 
 // ── Versões e aprovação ──────────────────────────────────────

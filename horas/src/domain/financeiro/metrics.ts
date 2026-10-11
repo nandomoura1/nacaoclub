@@ -2,7 +2,7 @@ import {
   CMV_PURCHASES_KEY, PAYMENT_METHODS, PAYOUT_KEYS, PRODUCT_GROUPS, SALES_REVENUE_KEY, SERVICES_REVENUE_KEY, TENNIS_PARTNERSHIP_KEY,
   type CategoryDef, type Dataset, type SignedAccountClass,
 } from './taxonomy';
-import { stockSummary, type StockSummary } from './stock';
+import { stockItems, stockSummary, type StockItemView, type StockSummary } from './stock';
 
 /**
  * Motor de regras do Relatório Financeiro — determinístico e puro. A IA nunca
@@ -87,6 +87,10 @@ export interface Metrics {
     final: Ind; inicial: Ind; variacao: Ind;
     inicialFonte: 'documento' | 'mes_anterior' | null;
     resumoFinal: StockSummary | null; resumoInicial: StockSummary | null;
+    /** Produto a produto (maiores valores primeiro; até 40). */
+    itens?: StockItemView[];
+    /** Com saldo no fim do mês e sem venda no PDV no mês (só quando há ranking de produtos). */
+    semVenda?: { count: number; cents: number };
   };
   payout: { distribuicao: Ind; antecipacao: Ind; retiradas: Ind; total: Ind; distribuicaoPct: Ind; totalPct: Ind };
   fluxo: { diferenca: Ind; pagamentosAntesPayout: Ind; geracaoAntesPayout: Ind };
@@ -106,7 +110,7 @@ const BRL = (c: number) => `R$ ${(c / 100).toLocaleString('pt-BR', { minimumFrac
 const PCT = (r: number) => `${(r * 100).toFixed(1).replace('.', ',')}%`;
 
 /** Estoque de abertura vindo do mês anterior (posição final dele). */
-export interface MetricsOptions { openingStockCents?: number | null }
+export interface MetricsOptions { openingStockCents?: number | null; daysInMonth?: number }
 
 export function computeMetrics(lines: FinLineData[], categories: CategoryDef[], targets: Targets = DEFAULT_TARGETS, previous?: Metrics | null, opts: MetricsOptions = {}): Metrics {
   const cat = new Map(categories.map((c) => [c.key, c]));
@@ -273,7 +277,13 @@ export function computeMetrics(lines: FinLineData[], categories: CategoryDef[], 
     : openingPrev !== null ? ind(openingPrev, 'BRL', 'Estoque inicial = posição final do mês anterior (negativos ignorados)') : NA('BRL', 'Estoque inicial (posição do fim do mês anterior)');
   const inicialFonte = resumoInicial ? 'documento' as const : openingPrev !== null ? 'mes_anterior' as const : null;
   const variacao = minus(efStock, eiStock, 'Estoque final − estoque inicial (positivo = comprou mais do que consumiu)');
-  const estoque = (resumoFinal || resumoInicial) ? { final: efStock, inicial: eiStock, variacao, inicialFonte, resumoFinal, resumoInicial } : undefined;
+  const soldLines = of('PDV_PRODUTO').map((l) => ({ label: l.label, quantity: l.quantity }));
+  const allItems = stockItems(stockLines.filter((l) => l.moment === 'final'), stockLines.filter((l) => l.moment === 'inicial'), soldLines, opts.daysInMonth ?? 30);
+  const unsold = soldLines.length ? allItems.filter((i) => !i.soldQty) : [];
+  const estoque = (resumoFinal || resumoInicial) ? {
+    final: efStock, inicial: eiStock, variacao, inicialFonte, resumoFinal, resumoInicial, itens: allItems.slice(0, 40),
+    semVenda: soldLines.length ? { count: unsold.length, cents: unsold.reduce((s, i) => s + i.valueFinal, 0) } : undefined,
+  } : undefined;
 
   const ei = pdv('estoque_inicial')?.amountCents ?? null;
   const ef = pdv('estoque_final')?.amountCents ?? null;

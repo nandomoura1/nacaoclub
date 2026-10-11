@@ -131,7 +131,7 @@ export function ReportView({ month, m, analysis, previous, managerNotes, partner
   month: Month; m: Metrics; analysis: Analysis | null; previous: { month: Month; m: Metrics } | null;
   managerNotes: string | null; partnerDecisions: string | null; mode: ReportMode; version: number | null;
   /** Contexto e itens desconsiderados pelos sócios. */
-  adjust?: { partnerContext: string | null; exclusions: Exclusion[] };
+  adjust?: { partnerContext: string | null; exclusions: Exclusion[]; accountNotes?: { label: string; note: string }[] };
 }) {
   const ex = exclusionsView(adjust?.exclusions);
   const checks = m.checks.filter((c) => ex.keepCheck(c.key));
@@ -211,9 +211,11 @@ export function ReportView({ month, m, analysis, previous, managerNotes, partner
     </div>
   );
 
-  const context = (managerNotes || partnerDecisions || adjust?.partnerContext || ex.any) && (
+  const notes = adjust?.accountNotes ?? [];
+  const context = (managerNotes || partnerDecisions || adjust?.partnerContext || ex.any || notes.length > 0) && (
     <div className="grid gap-3 sm:grid-cols-2 [&>*]:min-w-0">
       {adjust?.partnerContext && <div className="rounded-xl border border-dashed border-nacao/30 bg-white p-3 text-sm sm:col-span-2"><p className="font-titulo text-[10px] font-bold uppercase tracking-[0.18em] text-nacao">Contexto dos sócios</p><p className="mt-1 whitespace-pre-line leading-relaxed">{adjust.partnerContext}</p><Note>Considerado na leitura da IA — não altera os números.</Note></div>}
+      {notes.length > 0 && <div className="rounded-xl border border-dashed border-nacao/30 bg-white p-3 text-sm sm:col-span-2"><p className="font-titulo text-[10px] font-bold uppercase tracking-[0.18em] text-nacao">Explicações do gestor sobre as contas</p><ul className="mt-1 space-y-0.5">{notes.map((n, i) => <li key={i}><b>{n.label}:</b> {n.note}</li>)}</ul><Note>Contexto — considerado pela análise; não altera os números.</Note></div>}
       {ex.any && <div className="rounded-xl border border-dashed border-tinta-fraca/40 bg-fundo p-3 text-sm sm:col-span-2"><p className="flex items-center gap-1.5 font-titulo text-[10px] font-bold uppercase tracking-[0.18em] text-tinta-suave"><EyeOff className="size-3" /> Desconsiderado neste relatório</p><ul className="mt-1 space-y-0.5">{ex.list.map((e) => <li key={e.key}><b>{e.item.label}:</b> {e.reason}</li>)}</ul><Note>Os números continuam calculados e guardados; só não entram na leitura deste mês.</Note></div>}
       {managerNotes && <div className="rounded-xl border border-dashed border-nacao/30 bg-white p-3 text-sm"><p className="font-titulo text-[10px] font-bold uppercase tracking-[0.18em] text-nacao">Observações do gestor</p><p className="mt-1 whitespace-pre-line leading-relaxed">{managerNotes}</p><Note>Contexto — não é dado financeiro.</Note></div>}
       {partnerDecisions && <div className="rounded-xl border border-dashed border-nacao/30 bg-white p-3 text-sm"><p className="font-titulo text-[10px] font-bold uppercase tracking-[0.18em] text-nacao">Decisões dos sócios</p><p className="mt-1 whitespace-pre-line leading-relaxed">{partnerDecisions}</p></div>}
@@ -394,19 +396,28 @@ export function ReportView({ month, m, analysis, previous, managerNotes, partner
 /** Estoque: inicial, final, variação, negativos ignorados e os itens de maior valor. */
 function StockBlock({ m }: { m: Metrics }) {
   const e = m.estoque!;
+  const items = e.itens ?? [];
+  const hasSales = items.some((i) => i.soldQty !== null);
   return (
     <div className="space-y-2 rounded-xl border border-borda p-3">
       <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-tinta-suave"><Boxes className="size-3.5 text-nacao" /> Posição de estoque</p>
       <Stats cols={4} rows={[['Compras do mês', m.lanchonete.compras], ['Estoque inicial', e.inicial], ['Estoque final', e.final], ['Variação do estoque', e.variacao]]} />
       <Note>
         {e.inicialFonte === 'mes_anterior' ? 'Estoque inicial = posição do fim do mês anterior. ' : e.inicialFonte === 'documento' ? 'Estoque inicial = posição do início do mês. ' : 'Sem estoque inicial: o CMV ainda não foi ajustado. '}
-        {e.resumoFinal && `${e.resumoFinal.items} produto(s) valorizado(s) no fim do mês`}
+        {e.resumoFinal && `${e.resumoFinal.items} produto(s) · ${e.resumoFinal.units.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} unidade(s) em estoque no fim do mês`}
         {e.resumoFinal && e.resumoFinal.negative.count > 0 && ` · ${e.resumoFinal.negative.count} com saldo negativo ignorado(s)`}
-        {e.resumoFinal && e.resumoFinal.noCost > 0 && ` · ${e.resumoFinal.noCost} sem custo`}.
+        {e.resumoFinal && e.resumoFinal.noCost > 0 && ` · ${e.resumoFinal.noCost} sem custo`}
+        {e.semVenda && e.semVenda.count > 0 && ` · ${e.semVenda.count} sem venda no mês (${brl(e.semVenda.cents)} parados)`}.
       </Note>
-      {e.resumoFinal && e.resumoFinal.top.length > 0 && (
-        <Table head={['Maiores itens em estoque', 'Saldo', 'Valor']} align={['l', 'r', 'r']} rows={e.resumoFinal.top.slice(0, 8).map((t) => [t.label, t.quantity === null ? '—' : t.quantity.toLocaleString('pt-BR'), brl(t.cents)])} />
+      {items.length > 0 && (
+        <Table head={hasSales ? ['Produto', 'Saldo', 'Custo un.', 'Valor', 'Vendido no mês', 'Cobertura'] : ['Produto', 'Saldo', 'Custo un.', 'Valor']} align={['l', 'r', 'r', 'r', 'r', 'r']}
+          rows={items.slice(0, 15).map((t) => {
+            const row: ReactNode[] = [t.label, t.qtyFinal === null ? '—' : t.qtyFinal.toLocaleString('pt-BR'), t.unitCostCents === null ? '—' : brl(t.unitCostCents), brl(t.valueFinal)];
+            if (hasSales) row.push(t.soldQty === null ? <span key="s" className="text-atencao">sem venda</span> : t.soldQty.toLocaleString('pt-BR'), t.coverageDays === null ? '—' : `${t.coverageDays.toLocaleString('pt-BR')} dias`);
+            return row;
+          })} />
       )}
+      {items.length > 15 && <Note>Mostrando os 15 de maior valor de {items.length}.</Note>}
     </div>
   );
 }

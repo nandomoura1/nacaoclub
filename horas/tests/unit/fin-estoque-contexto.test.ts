@@ -115,3 +115,54 @@ describe('ajustes dos sócios', () => {
     expect(Object.keys(analysisInput('2030-10', m, null, null, null).indicadores)).toContain('CMV');
   });
 });
+
+import { productKey, stockItems } from '@/domain/financeiro/stock';
+import { managerInputs } from '@/server/financeiro/analysis';
+
+describe('estoque produto a produto', () => {
+  it('quantidade, custo unitário, valor, variação e cobertura pelas vendas do PDV', () => {
+    const items = stockItems(
+      [{ label: 'Refrigerante Lata', quantity: 300, amountCents: 900_00 }, { label: 'Água 500ml', quantity: 400, amountCents: 400_00 }, { label: 'Picolé', quantity: -5, amountCents: -25_00 }],
+      [{ label: 'refrigerante lata', quantity: 200, amountCents: 600_00 }],
+      [{ label: 'Refrigerante lata', quantity: 600 }],
+      30,
+    );
+    expect(items.map((i) => i.label)).toEqual(['Refrigerante Lata', 'Água 500ml']);
+    expect(items[0]).toMatchObject({ qtyFinal: 300, unitCostCents: 300, valueFinal: 900_00, qtyInicial: 200, soldQty: 600, coverageDays: 15 });
+    expect(items[1]).toMatchObject({ soldQty: null, coverageDays: null });
+    expect(productKey('Água 500 ML')).toBe(productKey('agua 500'));
+  });
+
+  it('métricas: unidades em estoque e itens sem venda no mês', () => {
+    const m = computeMetrics([...base(), S('final', 'Refrigerante lata', 300, 900_00), S('final', 'Água 500ml', 400, 400_00),
+      L('PDV_PRODUTO', 'bebidas_nao_alcoolicas', 1800_00, { label: 'Refrigerante lata', quantity: 600 })], DEFAULT_CATEGORIES, undefined, null, { daysInMonth: 31 });
+    expect(m.estoque!.resumoFinal!.units).toBe(700);
+    expect(m.estoque!.semVenda).toEqual({ count: 1, cents: 400_00 });
+    expect(m.estoque!.itens![0]!.coverageDays).toBe(15.5);
+    const input = analysisInput('2030-10', m, null, null, null);
+    const est = (input.cmv as { estoque: { porProduto: string[]; unidadesEmEstoque: string } }).estoque;
+    expect(est.unidadesEmEstoque).toBe('700');
+    expect(est.porProduto[0]).toBe('Refrigerante lata: saldo 300 × custo R$ 3,00 = R$ 900,00 · vendido no mês: 600 · cobertura 15,5 dias');
+  });
+});
+
+describe('informações manuais do gestor na análise', () => {
+  it('explicações, lançamentos manuais, correções, conciliações e observações dos documentos vão para a IA', () => {
+    const lines = [
+      { ...L('DESPESA', 'pessoal.salarios', 100_000_00, { label: 'Salários', meta: { nota: 'inclui rescisão pontual de R$ 8 mil' } }), status: 'CONFIRMED' },
+      { ...L('DESPESA', 'desp.outras', 3_000_00, { label: 'Conserto da piscina', meta: { motivo: 'não estava no DRE' } }), status: 'MANUAL' },
+      { ...L('DESPESA', 'desp.energia', 20_000_00, { label: 'Energia', meta: { motivo: 'valor corrigido pela fatura' } }), status: 'EDITED' },
+      { ...L('DESPESA', 'desp.agua', 2_000_00, { label: 'Água' }), status: 'CONFIRMED' },
+    ];
+    const m = computeMetrics(base(), DEFAULT_CATEGORIES);
+    const mi = managerInputs(lines, m, [{ key: 'pdv_vs_vendas', justification: 'estorno do dia 31' }], [{ kind: 'PDV', filename: 'pdv.pdf', notes: 'PDV ficou fora do ar dia 12' }, { kind: 'CAIXA', filename: 'c.pdf', notes: null }]);
+    expect(mi.explicacoesDeContas).toEqual(['Pagamentos · Salários — Salários: R$ 100.000,00 — explicação: inclui rescisão pontual de R$ 8 mil']);
+    expect(mi.lancamentosManuais[0]).toMatch(/Conserto da piscina.*motivo: não estava no DRE/);
+    expect(mi.correcoes[0]).toMatch(/Energia.*corrigido: valor corrigido pela fatura/);
+    expect(mi.justificativasDeConciliacao).toEqual(['pdv_vs_vendas — justificativa: estorno do dia 31']);
+    expect(mi.observacoesDosDocumentos).toEqual(['PDV Lanchonete (pdv.pdf): PDV ficou fora do ar dia 12']);
+    const input = analysisInput('2030-10', m, null, null, null, { partnerContext: null, exclusions: [], manual: mi });
+    expect(input.informacoesDoGestor).toBe(mi);
+    expect(analysisInput('2030-10', m, null, null, null).informacoesDoGestor).toBe('nenhuma');
+  });
+});

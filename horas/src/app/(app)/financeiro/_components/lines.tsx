@@ -70,6 +70,7 @@ export function LineForm({ initial, categories, needReason, onSave, onCancel, pe
   const [qty, setQty] = useState(initial.quantity === null ? '' : String(initial.quantity).replace('.', ','));
   const [cls, setCls] = useState(initial.classification ?? '');
   const [caClass, setCaClass] = useState(String(initial.meta?.contaAssinadaClasse ?? ''));
+  const [nota, setNota] = useState(String(initial.meta?.nota ?? ''));
   const [reason, setReason] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const opts = keyOptions(ds, categories);
@@ -83,6 +84,7 @@ export function LineForm({ initial, categories, needReason, onSave, onCancel, pe
     if (needReason && reason.trim().length < 3) return setErr('Informe o motivo (a competência já foi aprovada).');
     const meta: Record<string, unknown> = { ...(initial.meta ?? {}) };
     if (ds === 'PDV_PAGAMENTO' && key === 'conta_assinada' && caClass) meta.contaAssinadaClasse = caClass; else delete meta.contaAssinadaClasse;
+    if (nota.trim()) meta.nota = nota.trim().slice(0, 600); else delete meta.nota;
     onSave({ dataset: ds, key: key || null, label: label.trim(), unit: unit.trim() || null, amountCents, quantity: quantity as number | null, classification: cls || null, meta: Object.keys(meta).length ? meta : null }, needReason ? reason.trim() : null);
   };
   return (
@@ -100,6 +102,7 @@ export function LineForm({ initial, categories, needReason, onSave, onCancel, pe
       {ds === 'PDV_PAGAMENTO' && key === 'conta_assinada' && (
         <div><Label>Conta Assinada é…</Label><Select value={caClass} onChange={(e) => setCaClass(e.target.value)}><option value="">não classificada</option>{SIGNED_ACCOUNT_CLASSES.map((c) => <option key={c}>{c}</option>)}</Select></div>
       )}
+      <div className="sm:col-span-2 lg:col-span-4"><Label>Explicação do gestor (opcional — a IA considera na análise)</Label><Input value={nota} onChange={(e) => setNota(e.target.value)} placeholder="ex.: inclui R$ 8 mil de rescisão pontual; conta de energia de dois meses" /></div>
       {needReason && <div className="sm:col-span-2 lg:col-span-3"><Label>Motivo da alteração (obrigatório)</Label><Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="ex.: folha corrigida pela contabilidade" /></div>}
       <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-4">
         <Button size="sm" disabled={pending} onClick={submit}><Check /> {submitLabel}</Button>

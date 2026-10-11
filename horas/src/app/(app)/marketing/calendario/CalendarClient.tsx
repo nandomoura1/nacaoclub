@@ -62,6 +62,10 @@ export function CalendarClient({ view, anchor, today, entries, options, filters,
   const step = (n: number) => qs({ d: view === 'semana' ? addDays(anchor, 7 * n) : view === 'ano' ? `${Number(anchor.slice(0, 4)) + n}-01-01` : `${shiftMonth(anchor.slice(0, 7), n)}-01` });
   const title = view === 'semana' ? `Semana de ${fmtDate(mondayOf(anchor))} a ${fmtDate(addDays(mondayOf(anchor), 6))}` : view === 'ano' ? anchor.slice(0, 4) : monthName(anchor.slice(0, 7));
   const movable = (e: CalEntry) => canEdit && e.kind !== 'feriado';
+  // Itens de uma semana ou mais (tema do mês, mês de saúde, campanha longa, colônia) vão para a faixa do período, não para cada dia.
+  const isLong = (e: CalEntry) => e.kind !== 'tarefa' && (Date.parse(e.end) - Date.parse(e.start)) / 86_400_000 >= 6;
+  const longOnes = entries.filter(isLong).sort((a, b) => a.start.localeCompare(b.start));
+  const dayEntries = entries.filter((e) => !isLong(e));
 
   const open = (e: CalEntry) => {
     if (e.kind === 'tarefa') return setTask(e.id);
@@ -147,12 +151,26 @@ export function CalendarClient({ view, anchor, today, entries, options, filters,
         </Card>
       )}
 
+      {view !== 'ano' && longOnes.length > 0 && (
+        <Card className="p-3">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-tinta-suave">Neste período</p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {longOnes.map((e) => (
+              <button key={`${e.kind}${e.id}`} type="button" onClick={() => open(e)} title={e.tag}
+                className={cn('max-w-full truncate rounded-full px-2.5 py-1 text-left text-xs font-semibold', kindCls(e.kind))}>
+                {e.title} <span className="font-normal opacity-80">· {fmtDate(e.start)}–{fmtDate(e.end)}</span>
+              </button>
+            ))}
+          </div>
+        </Card>
+      )}
+
       {view === 'mes' && (
         <div className="overflow-x-auto">
           <div className="grid min-w-[44rem] grid-cols-7 overflow-hidden rounded-2xl border border-borda bg-borda [gap:1px]">
             {WEEKDAYS.map((w) => <div key={w} className="bg-fundo px-2 py-1 text-center text-[11px] font-bold uppercase text-tinta-suave">{w}</div>)}
             {monthGrid(anchor.slice(0, 7)).flat().map((day) => {
-              const list = onDay(entries, day);
+              const list = onDay(dayEntries, day);
               const out = day.slice(0, 7) !== anchor.slice(0, 7);
               return (
                 <div key={day} {...dayProps(day)} className={cn('group min-h-28 bg-white p-1', out && 'bg-fundo/60', over === day && 'bg-nacao/10 ring-2 ring-inset ring-nacao')}>
@@ -176,7 +194,7 @@ export function CalendarClient({ view, anchor, today, entries, options, filters,
           {Array.from({ length: 7 }, (_, i) => addDays(mondayOf(anchor), i)).map((day, i) => (
             <div key={day} {...dayProps(day)} className={cn('min-h-40 rounded-xl border border-borda bg-white p-2', over === day && 'bg-nacao/10 ring-2 ring-nacao', day === today && 'border-nacao')}>
               <p className="mb-1 text-xs font-bold text-navy">{WEEKDAYS[i]} <span className="font-normal text-tinta-suave">{fmtDate(day)}</span></p>
-              <div className="space-y-1">{onDay(entries, day).map((e) => <Chip key={`${e.kind}${e.id}`} e={e} day={day} draggable={movable(e)} onOpen={open} />)}</div>
+              <div className="space-y-1">{onDay(dayEntries, day).map((e) => <Chip key={`${e.kind}${e.id}`} e={e} day={day} draggable={movable(e)} onOpen={open} />)}</div>
             </div>
           ))}
         </div>

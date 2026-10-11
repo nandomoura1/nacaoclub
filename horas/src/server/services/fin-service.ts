@@ -7,13 +7,13 @@ import { assertCan } from '@/server/auth/authz';
 import type { Principal } from '@/server/auth/principal';
 import type { RequestMeta } from '@/server/auth/session';
 import { AppError, NotFoundError } from '@/server/errors';
-import { addMonths, isMonth, monthLabel, type Month } from '@/domain/condominio/months';
+import { addMonths, daysInMonth, isMonth, monthLabel, type Month } from '@/domain/condominio/months';
 import { computeMetrics, DEFAULT_TARGETS, KEY_INDICATORS, type FinLineData, type Metrics, type Targets } from '@/domain/financeiro/metrics';
 import { DATASETS, DEFAULT_CATEGORIES, DOC_KINDS, stockMomentOf, type CategoryDef, type Dataset, type DocKind } from '@/domain/financeiro/taxonomy';
 import { isNegativeStock, parseStockTable, stockSummary } from '@/domain/financeiro/stock';
 import { parseExclusions, REPORT_ITEMS, type Exclusion } from '@/domain/financeiro/adjustments';
 import { ACCEPTED, MAX_FILE_BYTES, extractDocument, fileToBlocks, tableRows, toLineInput, type Extraction } from '@/server/financeiro/extract';
-import { analysisInput, generateAnalysis, type Analysis } from '@/server/financeiro/analysis';
+import { analysisInput, generateAnalysis, managerInputs, type Analysis } from '@/server/financeiro/analysis';
 import { readPackageWorkbook } from '@/server/import/fin-package-xlsx';
 import { compareFileKpis, isPackage, parsePackage } from '@/domain/financeiro/package';
 
@@ -132,7 +132,7 @@ async function liveMetrics(db: Tx, periodId: string, month: Month) {
   const [lines, cats, targets, prev, opening] = await Promise.all([
     db.finLine.findMany({ where: { periodId } }), listCategories(db), getFinTargets(db), previousApproved(db, month), openingStock(db, month),
   ]);
-  return { metrics: computeMetrics(lines.map(toData), cats, targets, prev?.m ?? null, { openingStockCents: opening }), prev, targets, lines };
+  return { metrics: computeMetrics(lines.map(toData), cats, targets, prev?.m ?? null, { openingStockCents: opening, daysInMonth: daysInMonth(month) }), prev, targets, lines };
 }
 
 export async function listFinPeriods(principal: Principal | null) {
@@ -436,7 +436,10 @@ export async function updateFinLine(principal: Principal | null, lineId: string,
     const period = await editablePeriod(tx, l.periodId);
     if (period.version > 0 && (!reason || reason.length < 3)) throw new AppError('Esta competência já foi aprovada: informe o motivo da alteração.');
     const next = { ...patch, meta: patch.meta === undefined ? undefined : ((patch.meta ?? undefined) as Prisma.InputJsonValue | undefined) };
-    const after = await tx.finLine.update({ where: { id: lineId }, data: { ...next, status: l.status === 'MANUAL' ? 'MANUAL' : 'EDITED', confirmedById: principal.id, confirmedAt: new Date() } });
+    // O motivo da correção fica na linha (meta.motivo) para a análise da IA, além da auditoria.
+    const baseMeta = (next.meta === undefined ? l.meta : next.meta) as Record<string, unknown> | null | undefined;
+    const meta2 = reason ? ({ ...(baseMeta ?? {}), motivo: reason } as Prisma.InputJsonValue) : next.meta;
+    const after = await tx.finLine.update({ where: { id: lineId }, data: { ...next, meta: meta2, status: l.status === 'MANUAL' ? 'MANUAL' : 'EDITED', confirmedById: principal.id, confirmedAt: new Date() } });
     if (after.amountCents === null && after.quantity === null) throw new AppError('O dado precisa de um valor ou quantidade.');
     if (period.status === 'APPROVED') await tx.finPeriod.update({ where: { id: period.id }, data: { status: 'REVIEW' } });
     const pick = (x: typeof l) => ({ dataset: x.dataset, key: x.key, label: x.label, unit: x.unit, amountCents: x.amountCents, quantity: num(x.quantity), classification: x.classification, meta: x.meta });
@@ -457,7 +460,7 @@ export async function addFinLine(principal: Principal | null, month: string, inp
     const period = await tx.finPeriod.findUnique({ where: { month } });
     if (!period) throw new NotFoundError('Competência não encontrada.');
     if (period.version > 0 && (!reason || reason.length < 3)) throw new AppError('Esta competência já foi aprovada: informe o motivo da inclusão.');
-    const row = await tx.finLine.create({ data: { ...l, meta: (l.meta ?? undefined) as Prisma.InputJsonValue | undefined, periodId: period.id, status: 'MANUAL', rule: l.rule ?? 'Lançamento manual', createdById: principal.id, confirmedById: principal.id, confirmedAt: new Date() } });
+    const row = await tx.finLine.create({ data: { ...l, meta: (reason ? { ...(l.meta ?? {}), motivo: reason } : (l.meta ?? undefined)) as Prisma.InputJsonValue | undefined, periodId: period.id, status: 'MANUAL', rule: l.rule ?? 'Lançamento manual', createdById: principal.id, confirmedById: principal.id, confirmedAt: new Date() } });
     if (period.status !== 'REVIEW') await tx.finPeriod.update({ where: { id: period.id }, data: { status: 'REVIEW' } });
     await audit(tx, { actorId: principal.id, ...meta }, { action: 'fin.line_added', entityType: 'fin_line', entityId: row.id, after: { ...l, motivo: reason ?? null }, summary: `${principal.name} incluiu "${l.label}" à mão em ${monthLabel(month)}` });
     return row.id;
@@ -522,7 +525,12 @@ export async function runFinAnalysis(principal: Principal | null, month: string,
   if (!p) throw new NotFoundError('Competência não encontrada.');
   const { metrics, prev, lines } = await liveMetrics(prisma, p.id, month);
   if (!lines.length) throw new AppError('Envie e confira os documentos antes de gerar a análise.');
-  const analysis = await generateAnalysis(analysisInput(month, metrics, prev, p.managerNotes, p.partnerDecisions, { partnerContext: p.partnerContext, exclusions: parseExclusions(p.reportExclusions) }));
+  const [recs, docs] = await Promise.all([
+    prisma.finReconciliation.findMany({ where: { periodId: p.id } }),
+    prisma.finDocument.findMany({ where: { periodId: p.id, notes: { not: null } }, select: { kind: true, filename: true, notes: true } }),
+  ]);
+  const manual = managerInputs(lines.map((l) => ({ ...toData(l), status: l.status })), metrics, recs, docs);
+  const analysis = await generateAnalysis(analysisInput(month, metrics, prev, p.managerNotes, p.partnerDecisions, { partnerContext: p.partnerContext, exclusions: parseExclusions(p.reportExclusions), manual }));
   await prisma.$transaction(async (tx) => {
     await tx.finPeriod.update({ where: { id: p.id }, data: { analysis: analysis as unknown as Prisma.InputJsonValue, analysisAt: new Date() } });
     await audit(tx, { actorId: principal.id, ...meta }, { action: 'fin.analysis', entityType: 'fin_period', entityId: p.id, summary: `${principal.name} gerou a análise do Relatório Financeiro de ${monthLabel(month)}` });
