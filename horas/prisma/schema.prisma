@@ -1583,3 +1583,301 @@ model CompanyDocumentFile {
 
   @@map("company_document_files")
 }
+
+// ─────────────────────────────────────────────────────────────
+// Marketing Nação (Fase 1): áreas, campanhas, eventos, tarefas (Kanban),
+// calendário, sugestões da IA (sempre com aceite humano) e reunião semanal.
+// Pessoas e modalidades por id (sem tocar nos modelos existentes).
+// ─────────────────────────────────────────────────────────────
+
+enum MktCampaignType {
+  AQUISICAO
+  RENOVACAO
+  RETENCAO
+  EVENTO
+  INSTITUCIONAL
+  ENDOMARKETING
+  AWARENESS
+  PARCERIA
+  VENDAS
+  LANCAMENTO
+}
+
+enum MktCampaignStatus {
+  IDEIA
+  PLANEJAMENTO
+  PRODUCAO
+  AGUARDANDO_APROVACAO
+  PROGRAMADA
+  ATIVA
+  FINALIZADA
+  ANALISE
+}
+
+enum MktTaskColumn {
+  BACKLOG
+  PROXIMAS
+  SEMANA
+  PRODUCAO
+  APROVACAO
+  PROGRAMADO
+  EXECUTADO
+  RESULTADOS
+}
+
+enum MktPriority {
+  BAIXA
+  MEDIA
+  ALTA
+  URGENTE
+}
+
+enum MktTaskOrigin {
+  MANUAL
+  IA
+  REUNIAO
+  ANTECEDENCIA
+}
+
+enum MktEventStatus {
+  PLANEJADO
+  CONFIRMADO
+  REALIZADO
+  CANCELADO
+}
+
+enum MktCalendarKind {
+  DATA_COMEMORATIVA
+  ACAO_COMERCIAL
+  PARCERIA
+  ATIVACAO
+  LANCAMENTO
+  SAUDE
+  ENDOMARKETING
+  AVISO
+  OUTRO
+}
+
+enum MktSuggestionStatus {
+  PENDENTE
+  ACEITA
+  PARCIAL
+  RECUSADA
+}
+
+model MktArea {
+  id            String  @id @default(uuid()) @db.Uuid
+  key           String  @unique
+  name          String
+  color         String
+  question      String?
+  defaultUserId String? @map("default_user_id") @db.Uuid
+  sortOrder     Int     @default(0) @map("sort_order")
+
+  tasks MktTask[]
+
+  @@map("mkt_areas")
+}
+
+model MktEvent {
+  id              String         @id @default(uuid()) @db.Uuid
+  name            String
+  startDate       DateTime       @map("start_date") @db.Date
+  endDate         DateTime?      @map("end_date") @db.Date
+  location        String?
+  audience        String?
+  registrationUrl String?        @map("registration_url")
+  modalityId      String?        @map("modality_id") @db.Uuid
+  status          MktEventStatus @default(PLANEJADO)
+  ownerId         String?        @map("owner_id") @db.Uuid
+  notes           String?
+  createdById     String?        @map("created_by") @db.Uuid
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  campaigns MktCampaign[]
+  tasks     MktTask[]
+
+  @@index([startDate])
+  @@map("mkt_events")
+}
+
+model MktCampaign {
+  id                String            @id @default(uuid()) @db.Uuid
+  name              String
+  type              MktCampaignType
+  status            MktCampaignStatus @default(IDEIA)
+  objective         String?
+  audience          String?
+  product           String?
+  offer             String?
+  message           String?
+  cta               String?
+  /// Chaves de canais (externos/internos) — Fase 2 ganha tabela própria com URL/UTM.
+  channels          String[]          @default([])
+  conversionChannel String?           @map("conversion_channel")
+  conversionUrl     String?           @map("conversion_url")
+  leadOwnerId       String?           @map("lead_owner_id") @db.Uuid
+  measurement       String?
+  goal              String?
+  kpis              String?
+  startDate         DateTime          @map("start_date") @db.Date
+  endDate           DateTime?         @map("end_date") @db.Date
+  budgetCents       Int?              @map("budget_cents")
+  ownerId           String?           @map("owner_id") @db.Uuid
+  participantIds    String[]          @default([]) @map("participant_ids") @db.Uuid
+  modalityId        String?           @map("modality_id") @db.Uuid
+  eventId           String?           @map("event_id") @db.Uuid
+  notes             String?
+  createdById       String?           @map("created_by") @db.Uuid
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+
+  event       MktEvent?         @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  tasks       MktTask[]
+  suggestions MktAiSuggestion[]
+
+  @@index([startDate])
+  @@index([status])
+  @@map("mkt_campaigns")
+}
+
+model MktTask {
+  id            String        @id @default(uuid()) @db.Uuid
+  title         String
+  description   String?
+  campaignId    String?       @map("campaign_id") @db.Uuid
+  eventId       String?       @map("event_id") @db.Uuid
+  areaId        String?       @map("area_id") @db.Uuid
+  assigneeId    String?       @map("assignee_id") @db.Uuid
+  collaboratorIds String[]    @default([]) @map("collaborator_ids") @db.Uuid
+  dueDate       DateTime?     @map("due_date") @db.Date
+  priority      MktPriority   @default(MEDIA)
+  column        MktTaskColumn @default(BACKLOG)
+  position      Float         @default(1000)
+  tags          String[]      @default([])
+  origin        MktTaskOrigin @default(MANUAL)
+  /// Marco de antecedência que originou a tarefa (ex.: "D-7").
+  milestone     String?
+  doneAt        DateTime?     @map("done_at")
+  createdById   String?       @map("created_by") @db.Uuid
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  campaign  MktCampaign?       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  event     MktEvent?          @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  area      MktArea?           @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  checklist MktTaskCheckItem[]
+  links     MktTaskLink[]
+  dependsOn MktTaskDependency[] @relation("TaskDependsOn")
+  blocking  MktTaskDependency[] @relation("TaskBlocks")
+
+  @@index([column, position])
+  @@index([campaignId])
+  @@index([dueDate])
+  @@map("mkt_tasks")
+}
+
+model MktTaskCheckItem {
+  id       String  @id @default(uuid()) @db.Uuid
+  taskId   String  @map("task_id") @db.Uuid
+  text     String
+  done     Boolean @default(false)
+  position Int     @default(0)
+
+  task MktTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@map("mkt_task_check_items")
+}
+
+model MktTaskLink {
+  id     String  @id @default(uuid()) @db.Uuid
+  taskId String  @map("task_id") @db.Uuid
+  url    String
+  label  String?
+
+  task MktTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@map("mkt_task_links")
+}
+
+model MktTaskDependency {
+  taskId      String @map("task_id") @db.Uuid
+  dependsOnId String @map("depends_on_id") @db.Uuid
+
+  task      MktTask @relation("TaskDependsOn", fields: [taskId], references: [id], onDelete: Cascade)
+  dependsOn MktTask @relation("TaskBlocks", fields: [dependsOnId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, dependsOnId])
+  @@map("mkt_task_dependencies")
+}
+
+model MktComment {
+  id         String   @id @default(uuid()) @db.Uuid
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id") @db.Uuid
+  authorId   String?  @map("author_id") @db.Uuid
+  body       String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([entityType, entityId])
+  @@map("mkt_comments")
+}
+
+model MktCalendarItem {
+  id          String          @id @default(uuid()) @db.Uuid
+  title       String
+  kind        MktCalendarKind
+  startDate   DateTime        @map("start_date") @db.Date
+  endDate     DateTime?       @map("end_date") @db.Date
+  description String?
+  modalityId  String?         @map("modality_id") @db.Uuid
+  ownerId     String?         @map("owner_id") @db.Uuid
+  audience    String?
+  createdById String?         @map("created_by") @db.Uuid
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  @@index([startDate])
+  @@map("mkt_calendar_items")
+}
+
+model MktAiSuggestion {
+  id            String              @id @default(uuid()) @db.Uuid
+  /// TAREFAS_CAMPANHA | ATA_REUNIAO | RECOMENDACOES
+  kind          String
+  campaignId    String?             @map("campaign_id") @db.Uuid
+  meetingId     String?             @map("meeting_id") @db.Uuid
+  payload       Json
+  status        MktSuggestionStatus @default(PENDENTE)
+  promptVersion String              @map("prompt_version")
+  model         String?
+  createdById   String?             @map("created_by") @db.Uuid
+  decidedById   String?             @map("decided_by") @db.Uuid
+  decidedAt     DateTime?           @map("decided_at")
+  createdAt     DateTime            @default(now()) @map("created_at")
+
+  campaign MktCampaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  meeting  MktMeeting?  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@index([kind, status])
+  @@map("mkt_ai_suggestions")
+}
+
+model MktMeeting {
+  id          String   @id @default(uuid()) @db.Uuid
+  date        DateTime @db.Date
+  agenda      Json
+  notes       String?
+  minutes     String?
+  createdById String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  suggestions MktAiSuggestion[]
+
+  @@index([date])
+  @@map("mkt_meetings")
+}

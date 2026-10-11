@@ -30,6 +30,11 @@ export const PERMISSIONS = {
   'admin.users': 'Gerenciar usuários e permissões',
   'company.view': 'Empresas: ver dados gerais, contas bancárias e documentos',
   'company.edit': 'Empresas: cadastrar dados e enviar/arquivar documentos',
+  'mkt.view': 'Marketing: ver Command Center, calendário, campanhas e Kanban',
+  'mkt.edit': 'Marketing: criar e editar campanhas, eventos e tarefas',
+  'mkt.approve': 'Marketing: aprovar campanhas (programar/ativar)',
+  'mkt.ai': 'Marketing: usar a IA (sugerir tarefas, ata, recomendações)',
+  'mkt.admin': 'Marketing: áreas e responsáveis padrão',
   'audit.view': 'Ver o histórico de alterações',
   'import.run': 'Importar planilhas',
   'workout.edit': 'Lançar treinos da semana e gerar a arte de divulgação',
@@ -58,7 +63,7 @@ export function isPermissionKey(value: string): value is PermissionKey {
 }
 
 export const SYSTEM_ROLES: Record<
-  'ADMIN' | 'COORDENADOR' | 'CONSULTA' | 'PROFESSOR',
+  'ADMIN' | 'COORDENADOR' | 'CONSULTA' | 'PROFESSOR' | 'MARKETING',
   { name: string; description: string; permissions: PermissionKey[] }
 > = {
   ADMIN: {
@@ -95,6 +100,11 @@ export const SYSTEM_ROLES: Record<
     name: 'Professor',
     description: 'Vê o próprio extrato de horas e os treinos; cria treinos de Personal para as próprias aulas.',
     permissions: ['hours.own', 'workout.view', 'workout.personal'],
+  },
+  MARKETING: {
+    name: 'Marketing',
+    description: 'Equipe de marketing e comercial: campanhas, eventos, tarefas, calendário e IA de marketing.',
+    permissions: ['mkt.view', 'mkt.edit', 'mkt.ai'],
   },
 };
 
