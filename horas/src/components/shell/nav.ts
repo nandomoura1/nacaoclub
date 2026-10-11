@@ -4,7 +4,7 @@ import { PROGRAM_MODALITIES } from '@/domain/programming/modalities';
 export type NavIcon =
   | 'hoje' | 'calendario' | 'pendencias' | 'grade' | 'professores'
   | 'fechamento' | 'relatorios' | 'escalas' | 'treinos' | 'benchmarks' | 'dna' | 'treinos-ia' | 'usuarios' | 'historico' | 'cadastros' | 'condominio' | 'cobrancas' | 'financeiro' | 'fin-historico' | 'fin-importar' | 'documentos' | 'empresas'
-  | 'mkt' | 'mkt-campanhas' | 'mkt-kanban' | 'mkt-eventos' | 'mkt-reuniao' | 'mkt-conteudo' | 'mkt-interna' | 'mkt-canais' | 'mkt-leads' | 'mkt-biblioteca' | 'mkt-trafego' | 'mkt-performance' | 'mkt-memoria';
+  | 'mkt' | 'mkt-campanhas' | 'mkt-kanban' | 'mkt-eventos' | 'mkt-reuniao' | 'mkt-conteudo' | 'mkt-interna' | 'mkt-canais' | 'mkt-leads' | 'mkt-biblioteca' | 'mkt-trafego' | 'mkt-performance' | 'mkt-memoria' | 'whatsapp';
 
 export interface NavItem {
   href: string;
@@ -95,6 +95,7 @@ export const NAV_ADMIN: NavItem[] = [
   { href: '/admin/empresas', label: 'Empresas', icon: 'empresas', permission: 'company.view' },
   { href: '/admin/cadastros', label: 'Cadastros', icon: 'cadastros', permission: 'admin.catalog' },
   { href: '/admin/usuarios', label: 'Usuários', icon: 'usuarios', permission: 'admin.users' },
+  { href: '/admin/whatsapp', label: 'WhatsApp (Z-API)', icon: 'whatsapp', permission: 'whatsapp.admin' },
   { href: '/admin/historico', label: 'Histórico', icon: 'historico', permission: 'audit.view' },
 ];
 

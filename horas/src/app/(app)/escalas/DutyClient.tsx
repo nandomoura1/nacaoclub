@@ -1,5 +1,7 @@
 'use client';
 
+import { SendWhatsApp } from '@/components/whatsapp/SendWhatsApp';
+
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { CalendarPlus, Copy, FileText, MessageCircle, Plus, Save, TriangleAlert, X } from 'lucide-react';
@@ -183,6 +185,7 @@ export function DutyClient({ duty, people, title }: { duty: DutyView; people: Pe
             <textarea readOnly value={text} rows={18} className="w-full rounded-lg border border-borda bg-fundo p-3 font-mono text-xs" />
             <div className="mt-3 flex gap-2">
               <Button onClick={async () => { await navigator.clipboard.writeText(text); setMsg({ ok: 'Texto copiado. É só colar no grupo.' }); setText(null); }}><Copy /> Copiar</Button>
+              <SendWhatsApp kind="ESCALA" text={text} label="Enviar pela Z-API" />
               <Button variant="ghost" onClick={() => setText(null)}>Fechar</Button>
             </div>
           </Card>

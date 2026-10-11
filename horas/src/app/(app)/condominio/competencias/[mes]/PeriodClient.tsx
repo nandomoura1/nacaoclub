@@ -1,5 +1,8 @@
 'use client';
 
+import { SendWhatsApp } from '@/components/whatsapp/SendWhatsApp';
+import { sendCondoChargeAction } from '@/app/(app)/whatsapp/actions';
+
 import { useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -392,6 +395,8 @@ function ChargeActions({ charge, month, name, dueDate, totalCents, settings, can
         <a href={`/condominio/competencias/${month}/pdf?cobranca=${charge.id}`} target="_blank" rel="noopener" className={buttonVariants({ variant: 'secondary', size: 'sm' })}><FileDown /> PDF</a>
         <a href={`https://wa.me/${waPhone(phone) ?? ''}?text=${encodeURIComponent(text)}`} target="_blank" rel="noopener" className={buttonVariants({ variant: 'ghost', size: 'sm' })}
           onClick={() => { if (canPay && charge.status === 'PENDING') mark('SENT'); }}><MessageCircle /> WhatsApp</a>
+        <SendWhatsApp kind="CONDOMINIO" text={text} defaultTo={phone} label="Enviar PDF pela Z-API" variant="ghost"
+          send={(to, body) => sendCondoChargeAction(month, charge.id, to, body)} onSent={() => { if (canPay && charge.status === 'PENDING') mark('SENT'); }} />
         {canPay && charge.status !== 'PAID' && <Button size="sm" variant="ghost" onClick={() => setPaying((v) => !v)}><Check /> Registrar pagamento</Button>}
         {canPay && charge.status === 'PAID' && <Button size="sm" variant="ghost" onClick={() => { if (confirm('Desfazer o pagamento registrado?')) mark('PENDING'); }}><Undo2 /> Desfazer</Button>}
       </div>

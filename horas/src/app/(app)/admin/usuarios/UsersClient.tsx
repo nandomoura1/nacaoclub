@@ -1,5 +1,8 @@
 'use client';
 
+import { SendWhatsApp } from '@/components/whatsapp/SendWhatsApp';
+import { accessMessage } from '@/domain/whatsapp';
+
 import { useMemo, useState, useTransition } from 'react';
 import { Copy, KeyRound, Pencil, Plus, Search, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -34,7 +37,7 @@ type Editing = { mode: 'create' } | { mode: 'edit'; user: UserRow } | null;
 export function UsersClient({ users, roles, areas, teachers }: { users: UserRow[]; roles: RoleOption[]; areas: AreaOption[]; teachers: TeacherOption[] }) {
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<Editing>(null);
-  const [secret, setSecret] = useState<{ name: string; password: string } | null>(null);
+  const [secret, setSecret] = useState<{ name: string; email: string; password: string } | null>(null);
 
   const roleName = useMemo(() => new Map(roles.map((r) => [r.key, r.name])), [roles]);
   const areaById = useMemo(() => new Map(areas.map((a) => [a.id, a])), [areas]);
@@ -115,7 +118,7 @@ export function UsersClient({ users, roles, areas, teachers }: { users: UserRow[
   );
 }
 
-function TemporaryPassword({ name, password, onClose }: { name: string; password: string; onClose: () => void }) {
+function TemporaryPassword({ name, email, password, onClose }: { name: string; email: string; password: string; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
   return (
     <Card className="mb-4 border-ciano bg-ciano/5 p-4">
@@ -135,6 +138,8 @@ function TemporaryPassword({ name, password, onClose }: { name: string; password
             >
               <Copy /> {copied ? 'Copiada' : 'Copiar'}
             </Button>
+            <SendWhatsApp kind="ACESSO" hasSecret label="Enviar acesso pelo WhatsApp"
+              text={accessMessage({ name, email, password, url: typeof window === 'undefined' ? '' : `${window.location.origin}/login` })} />
           </div>
         </div>
         <button onClick={onClose} className="text-tinta-fraca hover:text-tinta" aria-label="Fechar">
@@ -160,7 +165,7 @@ function UserSheet({
   teachers: TeacherOption[];
   linked: Map<string, string>;
   onClose: () => void;
-  onSecret: (s: { name: string; password: string }) => void;
+  onSecret: (s: { name: string; email: string; password: string }) => void;
 }) {
   const initial = editing.mode === 'edit' ? editing.user : null;
   const [form, setForm] = useState<UserFormPayload>({
@@ -187,7 +192,7 @@ function UserSheet({
       if (editing.mode === 'create') {
         const r = await createUserAction(form);
         if (!r.ok) return setError(r.error);
-        onSecret({ name: form.name, password: r.data.temporaryPassword });
+        onSecret({ name: form.name, email: form.email, password: r.data.temporaryPassword });
       } else {
         const r = await updateUserAction(editing.user.id, form);
         if (!r.ok) return setError(r.error);
@@ -202,7 +207,7 @@ function UserSheet({
     start(async () => {
       const r = await resetPasswordAction(editing.user.id);
       if (!r.ok) return setError(r.error);
-      onSecret({ name: editing.user.name, password: r.data.temporaryPassword });
+      onSecret({ name: editing.user.name, email: editing.user.email, password: r.data.temporaryPassword });
       onClose();
     });
   };

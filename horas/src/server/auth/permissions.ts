@@ -52,6 +52,8 @@ export const PERMISSIONS = {
   'fin.approve': 'Financeiro: aprovar a competência (gera uma versão)',
   'fin.export': 'Financeiro: imprimir/exportar relatórios',
   'fin.admin': 'Financeiro: metas, limites e categorias',
+  'whatsapp.send': 'WhatsApp: enviar mensagens pelo sistema (Z-API)',
+  'whatsapp.admin': 'WhatsApp: ver a conexão, testar e consultar o registro de envios',
 } as const;
 
 export type PermissionKey = keyof typeof PERMISSIONS;
@@ -89,6 +91,7 @@ export const SYSTEM_ROLES: Record<
       'workout.view',
       'workout.personal',
       'duty.edit',
+      'whatsapp.send',
     ],
   },
   CONSULTA: {
