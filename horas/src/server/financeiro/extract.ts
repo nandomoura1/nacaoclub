@@ -4,6 +4,7 @@ import JSZip from 'jszip';
 import { z } from 'zod/v4';
 import { AppError } from '@/server/errors';
 import { askModel, isFake } from '@/server/ai/workout-generator';
+import { withoutTables } from '@/server/import/fin-package-xlsx';
 import {
   DATASETS, DEFAULT_CATEGORIES, PAYMENT_METHODS, PDV_SUMMARY_KEYS, PRODUCT_GROUPS, SIGNED_ACCOUNT_CLASSES, SUMMARY_INDICATORS,
   type Dataset, type DocKind,
@@ -116,6 +117,7 @@ O documento pode ser um ou vários prints de tela (cada print = uma página/imag
 - CAIXA: saldos (rotulo = banco, unidade = conta). chave = "disponivel" para saldo em conta/aplicação; "a_receber" para recebíveis/previsto a receber (NUNCA misture).
 - INVESTIMENTO: investimentos (estacionamento, sala HYROX, equipamentos, vestiário, obras, máquinas…), classificacao CAPEX ou OPEX.
 - FINANCIAMENTO: empréstimos, aportes, financiamentos, crédito de sócios (chave = emprestimo | aporte | financiamento | credito_socio).
+- ESTOQUE: posição de estoque, UMA linha por produto (rotulo = produto; unidade = unidade de medida; quantidade = saldo, inclusive negativo, exatamente como no documento; valorReais = valor total do item = saldo × custo; se só houver custo unitário, use valorReais = saldo × custo unitário e diga isso na regra). chave = "final" (o sistema ajusta). Não pule produtos com saldo negativo nem some você mesmo.
 - INDICADOR: só para RELATÓRIOS ANTERIORES já prontos: indicadores consolidados. chave ∈ {${SUMMARY_INDICATORS.map((i) => i.key).join(', ')}} (cmv_pct em quantidade = número do percentual, ex.: 38.5; alunos em quantidade; o resto em valorReais).
 
 # Categorias de receita e despesa (use exatamente estas chaves)
@@ -140,6 +142,8 @@ const KIND_HINT: Record<DocKind, string> = {
   FORMAS_PAGAMENTO: 'Formas de pagamento do PDV: PDV_PAGAMENTO, uma por forma (Conta Assinada separada por classe quando possível).',
   CAIXA: 'Posição de caixa: CAIXA, uma linha por conta (disponível × a receber).',
   ALUNOS: 'Base de alunos: ALUNOS, uma linha por modalidade.',
+  ESTOQUE: 'Posição de estoque no fim do mês: ESTOQUE, uma linha por produto com saldo e valor (custo).',
+  ESTOQUE_INICIAL: 'Posição de estoque no início do mês: ESTOQUE, uma linha por produto com saldo e valor (custo).',
   OUTROS: 'Documento diverso: extraia o que se encaixar nos datasets (investimentos, financiamentos, receitas, despesas…).',
   RELATORIO_ANTERIOR: 'Relatório financeiro mensal já produzido: extraia a competência, os indicadores consolidados (INDICADOR) e os detalhes escritos; resuma conclusões em observacoes.',
 };
@@ -167,6 +171,8 @@ export function fakeExtraction(kind: DocKind, month: string | null): Extraction 
     FORMAS_PAGAMENTO: [l('PDV_PAGAMENTO', 'pix', 'PIX', 10000), l('PDV_PAGAMENTO', 'credito', 'Crédito', 5200), l('PDV_PAGAMENTO', 'ticket_funcionario', 'Ticket Funcionário', 1800)],
     CAIXA: [l('CAIXA', 'disponivel', 'Banco Exemplo', 30000, { unidade: 'Conta corrente' })],
     ALUNOS: [l('ALUNOS', null, 'Modalidade A', null, { unidade: 'Modalidade A', quantidade: 90 }), l('ALUNOS', null, 'Tênis', null, { unidade: 'Tênis', quantidade: 12 })],
+    ESTOQUE: [l('ESTOQUE', 'final', 'Refrigerante lata', 900, { quantidade: 300 }), l('ESTOQUE', 'final', 'Água 500ml', 400, { quantidade: 400 }), l('ESTOQUE', 'final', 'Picolé', -60, { quantidade: -12 })],
+    ESTOQUE_INICIAL: [l('ESTOQUE', 'inicial', 'Refrigerante lata', 600, { quantidade: 200 }), l('ESTOQUE', 'inicial', 'Água 500ml', 500, { quantidade: 500 })],
     OUTROS: [l('INVESTIMENTO', 'equipamentos', 'Equipamentos', 2000, { classificacao: 'CAPEX' })],
     RELATORIO_ANTERIOR: [l('INDICADOR', 'recebimentos', 'Recebimentos', 60000), l('INDICADOR', 'pagamentos', 'Pagamentos', 55000), l('INDICADOR', 'alunos', 'Base de alunos', null, { quantidade: 210 })],
   }[kind];
@@ -184,4 +190,33 @@ export function toLineInput(x: Extraction['linhas'][number]) {
     classification: x.classificacao?.trim() || null, meta: Object.keys(meta).length ? meta : null,
     sourceRef: x.origem.slice(0, 200), sourceValue: x.valorOriginal.slice(0, 300), rule: x.regra.slice(0, 300),
   };
+}
+
+/** Linhas cruas de XLSX/CSV com referência (para leituras determinísticas, ex.: estoque). */
+export async function tableRows(f: { bytes: Buffer; filename: string }): Promise<{ ref: string; cells: unknown[] }[] | null> {
+  const name = f.filename.toLowerCase();
+  if (name.endsWith('.csv')) {
+    const text = f.bytes.toString('utf8').replace(/^\uFEFF/, '');
+    const lines = text.split(/\r?\n/);
+    const sep = [';', '\t', ','].map((c) => [c, (lines[0] ?? '').split(c).length] as const).sort((a, b) => b[1] - a[1])[0]![0];
+    return lines.map((l, i) => ({ ref: `linha ${i + 1}`, cells: l.split(sep).map((c) => c.replace(/^"|"$/g, '').trim()) }));
+  }
+  if (!name.endsWith('.xlsx')) return null;
+  const wb = new ExcelJS.Workbook();
+  // Tabelas do Excel (ListObjects) derrubam o exceljs: saem antes de ler.
+  await wb.xlsx.load(await withoutTables(new Uint8Array(f.bytes).buffer));
+  // A aba com mais linhas é a da posição.
+  const ws = [...wb.worksheets].sort((a, b) => b.actualRowCount - a.actualRowCount)[0];
+  if (!ws) return null;
+  const out: { ref: string; cells: unknown[] }[] = [];
+  ws.eachRow({ includeEmpty: false }, (row, n) => {
+    const cells: unknown[] = [];
+    row.eachCell({ includeEmpty: true }, (c, col) => {
+      const v = c.value as unknown;
+      cells[col - 1] = v && typeof v === 'object' && 'result' in (v as object) ? (v as { result: unknown }).result
+        : v && typeof v === 'object' && 'richText' in (v as object) ? (v as { richText: { text: string }[] }).richText.map((t) => t.text).join('') : v;
+    });
+    out.push({ ref: `aba "${ws.name}", linha ${n}`, cells });
+  });
+  return out;
 }

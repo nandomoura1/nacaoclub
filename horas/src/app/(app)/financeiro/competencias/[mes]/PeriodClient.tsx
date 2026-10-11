@@ -4,7 +4,7 @@ import { useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowLeft, CheckCheck, ClipboardPaste, X, CheckCircle2, Download, Eye, FileUp, History, Pencil, Plus, Printer, RefreshCw, Save, Sparkles, Trash2, TriangleAlert,
+  ArrowLeft, CheckCheck, ClipboardPaste, X, CheckCircle2, EyeOff, MessageSquareQuote, Download, Eye, FileUp, History, Pencil, Plus, Printer, RefreshCw, Save, Sparkles, Trash2, TriangleAlert,
 } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +14,7 @@ import { Input, Label } from '@/components/ui/input';
 import { monthTitle } from '@/domain/condominio/months';
 import { DATASETS, DOC_KINDS, type DocKind } from '@/domain/financeiro/taxonomy';
 import { KEY_INDICATORS } from '@/domain/financeiro/metrics';
+import { REPORT_ITEMS } from '@/domain/financeiro/adjustments';
 import { cn } from '@/lib/cn';
 import type { FinPeriodView } from '@/server/services/fin-service';
 import { DOC_STATUS, FIN_STATUS, Kpi } from '../../_components/fmt';
@@ -22,7 +23,7 @@ import { ReportView, type ReportMode } from '../../_components/ReportView';
 import { compressImage, imagesFrom, isImage, MAX_PRINTS } from '../../_components/screenshots';
 import {
   addLineAction, analysisAction, approveAction, confirmLinesAction, deleteDocumentAction, deleteLineAction, processDocumentAction,
-  saveNotesAction, saveReconciliationAction, updateLineAction, uploadDocumentAction,
+  saveNotesAction, saveReconciliationAction, saveReportContextAction, updateLineAction, uploadDocumentAction,
 } from '../../actions';
 
 const TABS = [
@@ -417,8 +418,11 @@ function CheckItem({ month, c, justification, canEdit, pending, run }: { month: 
 function ReportTab({ p, perms, pending, run }: { p: FinPeriodView; perms: Perms; pending: boolean; run: RunFn }) {
   const [mode, setMode] = useState<ReportMode>('completo');
   const [generating, setGenerating] = useState(false);
+  const stale = !!(p.analysis && p.contextAt && p.contextAt > p.analysis.generatedAt);
   return (
     <div className="space-y-3">
+      <ContextCard p={p} canEdit={perms.canEdit} pending={pending} run={run} generating={generating} setGenerating={setGenerating} />
+      {stale && <p className="rounded-lg border border-atencao/40 bg-atencao/5 p-2 text-sm print:hidden">O contexto dos sócios mudou depois da última análise. Gere a análise de novo para a IA considerar.</p>}
       <div className="flex flex-wrap items-center gap-2 print:hidden">
         <div className="inline-flex rounded-lg border border-borda p-0.5">
           {(['completo', 'socios'] as const).map((m) => (
@@ -426,18 +430,74 @@ function ReportTab({ p, perms, pending, run }: { p: FinPeriodView; perms: Perms;
           ))}
         </div>
         <span className="flex-1" />
-        {perms.canEdit && (
-          <Button size="sm" variant="secondary" disabled={pending || generating || !p.lines.length} onClick={() => { setGenerating(true); run(() => analysisAction(p.month), () => setGenerating(false)); }}>
-            <Sparkles /> {generating && pending ? 'Escrevendo a análise…' : p.analysis ? 'Gerar a análise de novo' : 'Gerar análise (IA)'}
-          </Button>
-        )}
         <Button size="sm" variant="secondary" onClick={() => window.print()}><Printer /> Imprimir / PDF</Button>
       </div>
       {p.lines.some((l) => l.status === 'EXTRACTED') && <p className="rounded-lg border border-atencao/40 bg-atencao/5 p-2 text-sm print:hidden">Há dados ainda não conferidos — este relatório é uma prévia.</p>}
       <div>
-        <ReportView month={p.month} m={p.metrics} analysis={p.analysis} previous={p.previous} managerNotes={p.managerNotes} partnerDecisions={p.partnerDecisions} mode={mode} version={p.status === 'APPROVED' ? p.version : null} />
+        <ReportView month={p.month} m={p.metrics} analysis={p.analysis} previous={p.previous} managerNotes={p.managerNotes} partnerDecisions={p.partnerDecisions} mode={mode} version={p.status === 'APPROVED' ? p.version : null}
+          adjust={{ partnerContext: p.partnerContext, exclusions: p.exclusions }} />
       </div>
     </div>
+  );
+}
+
+/** Antes de gerar a análise: o que os sócios sabem do mês e o que não deve entrar no relatório. */
+function ContextCard({ p, canEdit, pending, run, generating, setGenerating }: { p: FinPeriodView; canEdit: boolean; pending: boolean; run: RunFn; generating: boolean; setGenerating: (v: boolean) => void }) {
+  const [text, setText] = useState(p.partnerContext ?? '');
+  const [ex, setEx] = useState<Record<string, string>>(Object.fromEntries(p.exclusions.map((e) => [e.key, e.reason])));
+  const [open, setOpen] = useState(!p.analysis || !!p.partnerContext || p.exclusions.length > 0);
+  const values = { partnerContext: text.trim() || null, exclusions: Object.entries(ex).map(([key, reason]) => ({ key, reason })) };
+  const dirty = (p.partnerContext ?? '') !== text.trim() || JSON.stringify(Object.fromEntries(p.exclusions.map((e) => [e.key, e.reason]))) !== JSON.stringify(ex);
+  const missingReason = Object.values(ex).some((r) => r.trim().length < 3);
+  const toggle = (key: string, on: boolean) => setEx((cur) => { const n = { ...cur }; if (on) n[key] = ''; else delete n[key]; return n; });
+  if (!canEdit && !p.partnerContext && !p.exclusions.length) return null;
+  return (
+    <Card className="border-nacao/25 p-4 print:hidden">
+      <button type="button" onClick={() => setOpen(!open)} className="flex w-full items-center gap-2 text-left">
+        <MessageSquareQuote className="size-4 text-nacao" />
+        <span className="flex-1 font-bold text-navy">Contexto dos sócios para este relatório</span>
+        <span className="text-xs text-tinta-suave">{p.exclusions.length ? `${p.exclusions.length} item(ns) desconsiderado(s) · ` : ''}{open ? 'fechar' : 'abrir'}</span>
+      </button>
+      {open && (
+        <div className="mt-3 grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
+          <div>
+            <Label>O que a IA precisa saber antes de analisar</Label>
+            <textarea className="mt-1 min-h-40 w-full rounded-lg border border-borda p-2 text-sm" value={text} disabled={!canEdit} onChange={(e) => setText(e.target.value)}
+              placeholder={'Ex.:\n• O 13º de dezembro foi pago adiantado em novembro.\n• R$ 18 mil de pagamentos são da obra do vestiário (pontual).\n• Compramos bebida em volume para o evento do dia 20; parte ficou em estoque.'} />
+            <p className="mt-1 text-xs text-tinta-suave">A IA usa para interpretar os números (não altera nenhum valor). Aparece no relatório como “Contexto dos sócios”.</p>
+          </div>
+          <div>
+            <Label>Desconsiderar neste relatório (enviesado)</Label>
+            <ul className="mt-1 space-y-1.5">
+              {REPORT_ITEMS.map((i) => {
+                const on = i.key in ex;
+                return (
+                  <li key={i.key} className={cn('rounded-lg border px-2 py-1.5 text-sm', on ? 'border-tinta-fraca/50 bg-fundo' : 'border-borda')}>
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" checked={on} disabled={!canEdit} onChange={(e) => toggle(i.key, e.target.checked)} />
+                      <span className={cn('flex-1', on && 'font-semibold')}>{i.label}</span>
+                      {on && <EyeOff className="size-3.5 text-tinta-suave" />}
+                    </label>
+                    {on && <Input className="mt-1 h-8 text-xs" value={ex[i.key]} disabled={!canEdit} onChange={(e) => setEx({ ...ex, [i.key]: e.target.value })} placeholder={`Motivo (obrigatório)${i.hint ? ` — ${i.hint}` : ''}`} />}
+                  </li>
+                );
+              })}
+            </ul>
+            <p className="mt-1 text-xs text-tinta-suave">O número continua calculado e guardado; sai da análise, dos alertas e dos cards, e o relatório mostra o motivo.</p>
+          </div>
+        </div>
+      )}
+      {canEdit && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {open && <Button size="sm" variant="secondary" disabled={pending || !dirty || missingReason} onClick={() => run(() => saveReportContextAction(p.month, values))}><Save /> Salvar contexto</Button>}
+          <Button size="sm" disabled={pending || missingReason || !p.lines.length}
+            onClick={() => { setGenerating(true); run(async () => { const r = dirty ? await saveReportContextAction(p.month, values) : { ok: true as const }; return r.ok ? analysisAction(p.month) : r; }, () => setGenerating(false)); }}>
+            <Sparkles /> {generating && pending ? 'Escrevendo a análise…' : `${dirty ? 'Salvar e gerar' : p.analysis ? 'Gerar de novo' : 'Gerar'} a análise (IA)`}
+          </Button>
+          {missingReason && <span className="text-xs text-critico">Informe o motivo de cada item desconsiderado.</span>}
+        </div>
+      )}
+    </Card>
   );
 }
 

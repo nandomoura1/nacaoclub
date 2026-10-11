@@ -1,6 +1,7 @@
 import { z } from 'zod/v4';
 import { askModel, isFake } from '@/server/ai/workout-generator';
 import { KEY_INDICATORS, compareMetrics, type Ind, type Metrics } from '@/domain/financeiro/metrics';
+import { exclusionsView, type Exclusion } from '@/domain/financeiro/adjustments';
 
 /**
  * Análise executiva do Relatório Financeiro. A IA recebe os indicadores já
@@ -37,7 +38,10 @@ Regras absolutas:
 - Base de alunos = matrículas/participações, não clientes únicos.
 - Indicador "não informado" → escreva "Dado não informado." Quando houver dúvida, escreva "Dado requer validação."
 - Observações do gestor e decisões dos sócios são CONTEXTO, não dado financeiro: cite como "segundo o gestor…" e não transforme em número nem em causa comprovada. Não transforme correlação em causalidade.
-- Alertas (divergências, conciliações, metas) devem aparecer em pontos de atenção.`;
+- Alertas (divergências, conciliações, metas) devem aparecer em pontos de atenção.
+- CONTEXTO DOS SÓCIOS: informação dada pelos sócios para tornar a leitura mais assertiva (pagamento pontual, mês atípico, mudança de operação…). Use para QUALIFICAR a leitura dos números relacionados ("segundo os sócios, …"), para não tratar como tendência o que é pontual e para não apontar como risco o que já está explicado. Nunca altere números nem crie valores a partir do contexto.
+- ITENS DESCONSIDERADOS: os sócios retiraram estes itens deste relatório por estarem enviesados. Não analise, não cite valores, não compare e não use esses itens em resumo, pontos positivos, pontos de atenção, riscos, resumo dos sócios ou conclusão. Na seção correspondente escreva exatamente "Desconsiderado pelos sócios neste relatório: <motivo>."
+- CMV "ajustado pelo estoque" = compras − variação do estoque; o estoque cobre só os produtos controlados (produção própria e insumos indiretos ficam fora) e produtos com saldo negativo foram ignorados: sempre chame de estimativa.`;
 
 const money = (c: number) => `R$ ${(c / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const fmt = (i: Ind): string => {
@@ -47,11 +51,13 @@ const fmt = (i: Ind): string => {
 };
 
 /** O que vai para a IA: só valores já formatados, com fórmula e estado. */
-export function analysisInput(month: string, m: Metrics, prev: { month: string; m: Metrics } | null, notes: string | null, decisions: string | null) {
+export function analysisInput(month: string, m: Metrics, prev: { month: string; m: Metrics } | null, notes: string | null, decisions: string | null, ctx: { partnerContext: string | null; exclusions: Exclusion[] } = { partnerContext: null, exclusions: [] }) {
   const pct = (r: number | null) => (r === null ? 'não informado' : `${(r * 100).toFixed(1).replace('.', ',')}%`);
-  return {
+  const ex = exclusionsView(ctx.exclusions);
+  const est = m.estoque;
+  const input = {
     competencia: month,
-    indicadores: Object.fromEntries(KEY_INDICATORS.map((k) => [k.label, fmt(k.get(m))])),
+    indicadores: Object.fromEntries(KEY_INDICATORS.filter((k) => !ex.indicator(k.key)).map((k) => [k.label, fmt(k.get(m))])),
     recebimentosPorCategoria: m.revenueByCategory.map((r) => `${r.label}: ${money(r.cents)} (${pct(r.ratio)})`),
     pagamentosPorCategoria: m.expenseByCategory.slice(0, 15).map((r) => `${r.label} [${r.classification}]: ${money(r.cents)} (${pct(r.ratio)})`),
     pessoal: { total: fmt(m.pessoal), pctRecebimentos: fmt(m.pessoalPctRecebimentos), pctServicos: fmt(m.pessoalPctServicos), porAluno: fmt(m.custoPessoalPorAluno), foraDaFolha: m.pessoalExcluded.map((r) => `${r.label}: ${money(r.cents)}`) },
@@ -63,20 +69,38 @@ export function analysisInput(month: string, m: Metrics, prev: { month: string; 
       formas: m.lanchonete.payments.map((p) => `${p.label}: ${money(p.cents)} (${pct(p.ratio)})`),
       top5: m.topProdutos.slice(0, 5).map((p) => `${p.label}${p.interno ? ' [consumo interno]' : ''}: ${money(p.cents)}`),
     },
-    cmv: { metodo: m.cmv.metodo ?? 'não informado', pct: fmt(m.cmv.pct) },
+    cmv: {
+      metodo: m.cmv.metodo === 'ajustado_estoque' ? 'ajustado pelo estoque (compras − variação do estoque; estimativa)' : m.cmv.metodo === 'real' ? 'real com estoques' : m.cmv.metodo === 'estimado_compras' ? 'estimado por compras' : 'não informado',
+      valor: fmt(m.cmv.valor), pct: fmt(m.cmv.pct),
+      estoque: est ? {
+        inicial: fmt(est.inicial), final: fmt(est.final), variacao: fmt(est.variacao),
+        fonteDoInicial: est.inicialFonte === 'mes_anterior' ? 'posição final do mês anterior' : est.inicialFonte === 'documento' ? 'posição do início do mês' : 'não informado',
+        produtosComSaldoNegativoIgnorados: est.resumoFinal?.negative.count ?? 0,
+      } : 'sem posição de estoque',
+    },
     payout: { distribuicao: fmt(m.payout.distribuicao), antecipacao: fmt(m.payout.antecipacao), total: fmt(m.payout.total), totalPct: fmt(m.payout.totalPct) },
     fluxo: { diferenca: fmt(m.fluxo.diferenca), pagamentosAntesPayout: fmt(m.fluxo.pagamentosAntesPayout), geracaoAntesPayout: fmt(m.fluxo.geracaoAntesPayout) },
     caixa: { disponivel: fmt(m.caixa.disponivel), aReceber: fmt(m.caixa.aReceber), contas: m.caixa.accounts.map((a) => `${a.label} [${a.kind}]: ${money(a.cents)}`) },
     alunos: { total: fmt(m.alunos.total), porModalidade: m.alunos.byModality.map((a) => `${a.label}: ${a.qty}`) },
     investimentos: { total: fmt(m.investimentos.total), itens: m.investimentos.items.map((i) => `${i.label}: ${money(i.cents)}`) },
-    alertas: m.checks.map((c) => `[${c.level}] ${c.message}`),
-    comparacaoComMesAnterior: prev ? {
+    alertas: m.checks.filter((c) => ex.keepCheck(c.key)).map((c) => `[${c.level}] ${c.message}`),
+    comparacaoComMesAnterior: ex.has('comparacao') ? `Desconsiderada pelos sócios: ${ex.reason('comparacao')}` : prev ? {
       mesAnterior: prev.month,
-      linhas: compareMetrics(prev.m, m).filter((r) => r.a !== null && r.b !== null).map((r) => `${r.label}: ${r.unit === 'BRL' ? money(r.a!) : r.unit === 'PCT' ? pct(r.a) : r.a} → ${r.unit === 'BRL' ? money(r.b!) : r.unit === 'PCT' ? pct(r.b) : r.b}${r.deltaPct !== null ? ` (${r.deltaPct > 0 ? '+' : ''}${(r.deltaPct * 100).toFixed(1).replace('.', ',')}%)` : ''}`),
+      linhas: compareMetrics(prev.m, m).filter((r) => r.a !== null && r.b !== null && !ex.indicator(r.key)).map((r) => `${r.label}: ${r.unit === 'BRL' ? money(r.a!) : r.unit === 'PCT' ? pct(r.a) : r.a} → ${r.unit === 'BRL' ? money(r.b!) : r.unit === 'PCT' ? pct(r.b) : r.b}${r.deltaPct !== null ? ` (${r.deltaPct > 0 ? '+' : ''}${(r.deltaPct * 100).toFixed(1).replace('.', ',')}%)` : ''}`),
     } : 'sem mês anterior aprovado',
     observacoesDoGestor: notes || 'nenhuma',
     decisoesDosSocios: decisions || 'nenhuma',
+    contextoDosSocios: ctx.partnerContext || 'nenhum',
+    itensDesconsiderados: ex.list.map((e) => `${e.item.label} — motivo: ${e.reason}`),
   };
+  // Os dados dos itens desconsiderados nem chegam à IA.
+  const sectionData: Record<string, (keyof typeof input)[]> = {
+    recebimentos: ['recebimentosPorCategoria'], pagamentos: ['pagamentosPorCategoria'], pessoal: ['pessoal'], tenis: ['tenis'], lanchonete: ['lanchonete'],
+    cmv: ['cmv'], payout: ['payout'], fluxo: ['fluxo'], caixa: ['caixa'], alunos: ['alunos'], investimentos: ['investimentos'],
+  };
+  const out: Record<string, unknown> = { ...input };
+  for (const e of ex.list) for (const k of sectionData[e.key] ?? []) out[k] = `DESCONSIDERADO pelos sócios: ${e.reason}`;
+  return out as typeof input;
 }
 
 export async function generateAnalysis(input: ReturnType<typeof analysisInput>): Promise<Analysis> {

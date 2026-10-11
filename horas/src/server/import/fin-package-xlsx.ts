@@ -7,7 +7,7 @@ import type { Cell, Sheets } from '@/domain/financeiro/package';
  * Os valores estão nas células; a tabela é só formatação/metadado — removemos
  * essa camada (arquivos xl/tables, <tableParts> e as relações) antes de ler.
  */
-async function withoutTables(buffer: ArrayBuffer): Promise<ArrayBuffer> {
+export async function withoutTables(buffer: ArrayBuffer): Promise<ArrayBuffer> {
   const zip = await JSZip.loadAsync(buffer);
   const tables = Object.keys(zip.files).filter((f) => /^xl\/tables\//.test(f));
   if (!tables.length) return buffer;

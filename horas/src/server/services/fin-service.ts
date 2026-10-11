@@ -7,10 +7,12 @@ import { assertCan } from '@/server/auth/authz';
 import type { Principal } from '@/server/auth/principal';
 import type { RequestMeta } from '@/server/auth/session';
 import { AppError, NotFoundError } from '@/server/errors';
-import { isMonth, monthLabel, type Month } from '@/domain/condominio/months';
+import { addMonths, isMonth, monthLabel, type Month } from '@/domain/condominio/months';
 import { computeMetrics, DEFAULT_TARGETS, KEY_INDICATORS, type FinLineData, type Metrics, type Targets } from '@/domain/financeiro/metrics';
-import { DATASETS, DEFAULT_CATEGORIES, DOC_KINDS, type CategoryDef, type Dataset, type DocKind } from '@/domain/financeiro/taxonomy';
-import { ACCEPTED, MAX_FILE_BYTES, extractDocument, fileToBlocks, toLineInput, type Extraction } from '@/server/financeiro/extract';
+import { DATASETS, DEFAULT_CATEGORIES, DOC_KINDS, stockMomentOf, type CategoryDef, type Dataset, type DocKind } from '@/domain/financeiro/taxonomy';
+import { isNegativeStock, parseStockTable, stockSummary } from '@/domain/financeiro/stock';
+import { parseExclusions, REPORT_ITEMS, type Exclusion } from '@/domain/financeiro/adjustments';
+import { ACCEPTED, MAX_FILE_BYTES, extractDocument, fileToBlocks, tableRows, toLineInput, type Extraction } from '@/server/financeiro/extract';
 import { analysisInput, generateAnalysis, type Analysis } from '@/server/financeiro/analysis';
 import { readPackageWorkbook } from '@/server/import/fin-package-xlsx';
 import { compareFileKpis, isPackage, parsePackage } from '@/domain/financeiro/package';
@@ -103,6 +105,9 @@ export interface VersionSnapshot {
   documents: { id: string; kind: string; filename: string; sha256: string }[];
   managerNotes: string | null;
   partnerDecisions: string | null;
+  /** Contexto e itens desconsiderados pelos sócios (versões antigas não têm). */
+  partnerContext?: string | null;
+  exclusions?: Exclusion[];
   analysis: Analysis | null;
   targets: Targets;
 }
@@ -115,11 +120,19 @@ async function previousApproved(db: Tx, month: Month): Promise<{ month: Month; m
   return v ? { month: p.month as Month, m: (v.snapshot as unknown as VersionSnapshot).metrics } : null;
 }
 
+/** Estoque de abertura = posição de estoque do fim do mês anterior (negativos ignorados). */
+async function openingStock(db: Tx, month: Month): Promise<number | null> {
+  const prev = await db.finPeriod.findUnique({ where: { month: addMonths(month, -1) }, select: { id: true } });
+  if (!prev) return null;
+  const rows = await db.finLine.findMany({ where: { periodId: prev.id, dataset: 'ESTOQUE', OR: [{ key: 'final' }, { key: null }] }, select: { label: true, quantity: true, amountCents: true } });
+  return stockSummary(rows.map((r) => ({ label: r.label, quantity: num(r.quantity), amountCents: r.amountCents })))?.valueCents ?? null;
+}
+
 async function liveMetrics(db: Tx, periodId: string, month: Month) {
-  const [lines, cats, targets, prev] = await Promise.all([
-    db.finLine.findMany({ where: { periodId } }), listCategories(db), getFinTargets(db), previousApproved(db, month),
+  const [lines, cats, targets, prev, opening] = await Promise.all([
+    db.finLine.findMany({ where: { periodId } }), listCategories(db), getFinTargets(db), previousApproved(db, month), openingStock(db, month),
   ]);
-  return { metrics: computeMetrics(lines.map(toData), cats, targets, prev?.m ?? null), prev, targets, lines };
+  return { metrics: computeMetrics(lines.map(toData), cats, targets, prev?.m ?? null, { openingStockCents: opening }), prev, targets, lines };
 }
 
 export async function listFinPeriods(principal: Principal | null) {
@@ -154,6 +167,7 @@ export async function getFinPeriod(principal: Principal | null, month: string) {
   ]);
   return {
     id: p.id, month, status: p.status, version: p.version, managerNotes: p.managerNotes, partnerDecisions: p.partnerDecisions,
+    partnerContext: p.partnerContext, exclusions: parseExclusions(p.reportExclusions), contextAt: p.contextAt?.toISOString() ?? null,
     analysis: (p.analysis as unknown as Analysis | null) ?? null, approvedAt: p.approvedAt?.toISOString() ?? null,
     documents: p.documents.map((d) => ({
       id: d.id, kind: d.kind as DocKind, filename: d.filename, sizeBytes: d.sizeBytes, status: d.status, origin: d.origin, version: d.version, notes: d.notes, error: d.error,
@@ -219,6 +233,32 @@ export async function saveFinNotes(principal: Principal | null, month: string, i
     const data = { managerNotes: clean(input.managerNotes), partnerDecisions: clean(input.partnerDecisions) };
     await tx.finPeriod.update({ where: { id: p.id }, data });
     await audit(tx, { actorId: principal.id, ...meta }, { action: 'fin.notes', entityType: 'fin_period', entityId: p.id, before: { managerNotes: p.managerNotes, partnerDecisions: p.partnerDecisions }, after: data, summary: `${principal.name} atualizou as observações/decisões de ${monthLabel(month)}` });
+  });
+}
+
+const contextSchema = z.object({
+  partnerContext: z.string().max(6000).nullable(),
+  exclusions: z.array(z.object({ key: z.enum(REPORT_ITEMS.map((i) => i.key) as [string, ...string[]]), reason: z.string().trim().min(3, 'Diga por que o item será desconsiderado.').max(300) })).max(REPORT_ITEMS.length),
+});
+
+/** Contexto dos sócios + itens desconsiderados: valem para a próxima análise e para o relatório. */
+export async function saveFinReportContext(principal: Principal | null, month: string, input: unknown, meta: RequestMeta) {
+  assertCan(principal, 'fin.edit');
+  assertMonth(month);
+  const r = contextSchema.safeParse(input);
+  if (!r.success) throw new AppError(r.error.issues[0]?.message ?? 'Dados inválidos.');
+  const partnerContext = r.data.partnerContext?.trim() || null;
+  const exclusions = [...new Map(r.data.exclusions.map((e) => [e.key, e])).values()];
+  await prisma.$transaction(async (tx) => {
+    const p = await tx.finPeriod.findUnique({ where: { month } });
+    if (!p) throw new NotFoundError('Competência não encontrada.');
+    await tx.finPeriod.update({ where: { id: p.id }, data: { partnerContext, reportExclusions: exclusions as unknown as Prisma.InputJsonValue, contextAt: new Date() } });
+    const labels = exclusions.map((e) => REPORT_ITEMS.find((i) => i.key === e.key)!.label);
+    await audit(tx, { actorId: principal.id, ...meta }, {
+      action: 'fin.report_context', entityType: 'fin_period', entityId: p.id,
+      before: { contexto: p.partnerContext, desconsiderados: parseExclusions(p.reportExclusions) }, after: { contexto: partnerContext, desconsiderados: exclusions },
+      summary: `${principal.name} atualizou o contexto dos sócios de ${monthLabel(month)}${labels.length ? ` (desconsiderados: ${labels.join(', ')})` : ''}`,
+    });
   });
 }
 
@@ -289,8 +329,20 @@ export async function processFinDocument(principal: Principal | null, documentId
   if (!doc || !doc.file) throw new NotFoundError('Documento não encontrado.');
   if (!doc.period) throw new AppError('Documento sem competência.');
   let ex: Extraction;
+  const moment = stockMomentOf(doc.kind as DocKind);
   try {
-    ex = await extractDocument(doc.kind as DocKind, await fileToBlocks({ bytes: Buffer.from(doc.file.data), mimeType: doc.mimeType, filename: doc.filename }), doc.period.month);
+    const bytes = Buffer.from(doc.file.data);
+    // Estoque em planilha: leitura direta das colunas (sem IA). PDF/print: a IA lê.
+    const parsed = moment ? await tableRows({ bytes, filename: doc.filename }).then((rows) => (rows ? parseStockTable(rows) : null)).catch(() => null) : null;
+    ex = parsed ? stockExtraction(parsed) : await extractDocument(doc.kind as DocKind, await fileToBlocks({ bytes, mimeType: doc.mimeType, filename: doc.filename }), doc.period.month);
+    if (moment) {
+      const other = ex.linhas.filter((l) => l.dataset !== 'ESTOQUE').length;
+      ex = { ...ex, linhas: ex.linhas.filter((l) => l.dataset === 'ESTOQUE').map((l) => ({ ...l, chave: moment })) };
+      if (other) ex.avisos.push(`${other} dado(s) que não são de estoque foram ignorados neste documento.`);
+      const neg = ex.linhas.filter((l) => isNegativeStock({ label: l.rotulo, quantity: l.quantidade, amountCents: l.valorReais === null ? null : Math.round(l.valorReais * 100) })).length;
+      if (neg) ex.avisos.push(`${neg} produto(s) com estoque negativo: ficam registrados, mas não entram no valor do estoque nem no CMV.`);
+      if (!ex.linhas.length) throw new AppError('Não encontrei produtos com saldo neste documento. Confira se é a posição de estoque.');
+    }
   } catch (e) {
     const msg = e instanceof AppError ? e.message : 'Falha ao ler o documento.';
     await prisma.finDocument.update({ where: { id: documentId }, data: { status: 'ERROR', error: msg } });
@@ -313,6 +365,20 @@ export async function processFinDocument(principal: Principal | null, documentId
     await audit(tx, { actorId: principal.id, ...meta }, { action: 'fin.doc_extracted', entityType: 'fin_document', entityId: documentId, after: { linhas: valid.length, avisos: avisos.length }, summary: `${principal.name} processou "${doc.filename}": ${valid.length} dado(s) para conferir${avisos.length ? `, ${avisos.length} aviso(s)` : ''}` });
     return { lines: valid.length, warnings: avisos };
   });
+}
+
+/** Planilha de estoque lida pelas colunas → mesmo formato da extração da IA (com origem de cada linha). */
+function stockExtraction(p: NonNullable<ReturnType<typeof parseStockTable>>): Extraction {
+  return {
+    competencia: null,
+    tipoIdentificado: `Posição de estoque (planilha lida pelas colunas: ${p.header.slice(0, 150)})`,
+    linhas: p.items.map((i) => ({
+      dataset: 'ESTOQUE' as const, chave: 'final', rotulo: i.label, unidade: i.unit, valorReais: i.totalCents === null ? null : i.totalCents / 100,
+      quantidade: i.quantity, classificacao: null, contaAssinadaClasse: null, vendas: null, origem: i.ref, valorOriginal: i.raw,
+      regra: i.quantity < 0 ? 'Saldo negativo: ignorado no valor do estoque' : i.totalCents === null ? 'Sem custo no documento: não entra no valor' : i.unitCostCents !== null && i.totalCents === Math.round(i.quantity * i.unitCostCents) ? 'Saldo × custo unitário' : 'Valor total do documento',
+    })),
+    avisos: p.warnings, observacoes: null,
+  };
 }
 
 export async function deleteFinDocument(principal: Principal | null, documentId: string, meta: RequestMeta) {
@@ -425,6 +491,7 @@ async function approveIn(tx: Tx, principal: Principal, periodId: string, reason:
     number,
     lines: lines.map((l) => ({ ...toData(l), status: l.status, sourceRef: l.sourceRef, documentId: l.documentId })),
     metrics, documents: docs, managerNotes: p.managerNotes, partnerDecisions: p.partnerDecisions,
+    partnerContext: p.partnerContext, exclusions: parseExclusions(p.reportExclusions),
     analysis: (p.analysis as unknown as Analysis | null) ?? null, targets,
   };
   await tx.finVersion.create({ data: { periodId, number, reason: reason?.trim().slice(0, 300) || null, snapshot: snapshot as unknown as Prisma.InputJsonValue, createdById: principal.id } });
@@ -455,7 +522,7 @@ export async function runFinAnalysis(principal: Principal | null, month: string,
   if (!p) throw new NotFoundError('Competência não encontrada.');
   const { metrics, prev, lines } = await liveMetrics(prisma, p.id, month);
   if (!lines.length) throw new AppError('Envie e confira os documentos antes de gerar a análise.');
-  const analysis = await generateAnalysis(analysisInput(month, metrics, prev, p.managerNotes, p.partnerDecisions));
+  const analysis = await generateAnalysis(analysisInput(month, metrics, prev, p.managerNotes, p.partnerDecisions, { partnerContext: p.partnerContext, exclusions: parseExclusions(p.reportExclusions) }));
   await prisma.$transaction(async (tx) => {
     await tx.finPeriod.update({ where: { id: p.id }, data: { analysis: analysis as unknown as Prisma.InputJsonValue, analysisAt: new Date() } });
     await audit(tx, { actorId: principal.id, ...meta }, { action: 'fin.analysis', entityType: 'fin_period', entityId: p.id, summary: `${principal.name} gerou a análise do Relatório Financeiro de ${monthLabel(month)}` });

@@ -6,7 +6,7 @@
 export type Dataset =
   | 'RECEITA' | 'DESPESA' | 'MODALIDADE' | 'ALUNOS'
   | 'PDV_RESUMO' | 'PDV_PAGAMENTO' | 'PDV_PRODUTO'
-  | 'CAIXA' | 'INVESTIMENTO' | 'FINANCIAMENTO' | 'INDICADOR';
+  | 'CAIXA' | 'INVESTIMENTO' | 'FINANCIAMENTO' | 'INDICADOR' | 'ESTOQUE';
 export const DATASETS: { id: Dataset; label: string }[] = [
   { id: 'RECEITA', label: 'Recebimentos' },
   { id: 'DESPESA', label: 'Pagamentos' },
@@ -19,6 +19,7 @@ export const DATASETS: { id: Dataset; label: string }[] = [
   { id: 'INVESTIMENTO', label: 'Investimentos' },
   { id: 'FINANCIAMENTO', label: 'Financiamentos e aportes' },
   { id: 'INDICADOR', label: 'Indicadores de relatório anterior' },
+  { id: 'ESTOQUE', label: 'Posição de estoque' },
 ];
 
 export type Classification = 'RECEITA' | 'OPEX' | 'CAPEX' | 'FINANCEIRO' | 'DISTRIBUICAO' | 'AJUSTE';
@@ -129,7 +130,7 @@ export const SUMMARY_INDICATORS: { key: string; label: string; unit: 'BRL' | 'PC
 ];
 
 /** Tipos de documento da Central de uploads. */
-export type DocKind = 'DRE_RECEBIMENTOS' | 'DRE_PAGAMENTOS' | 'PDV' | 'PRODUTOS' | 'FORMAS_PAGAMENTO' | 'CAIXA' | 'ALUNOS' | 'OUTROS' | 'RELATORIO_ANTERIOR';
+export type DocKind = 'DRE_RECEBIMENTOS' | 'DRE_PAGAMENTOS' | 'PDV' | 'PRODUTOS' | 'FORMAS_PAGAMENTO' | 'CAIXA' | 'ALUNOS' | 'ESTOQUE' | 'ESTOQUE_INICIAL' | 'OUTROS' | 'RELATORIO_ANTERIOR';
 export const DOC_KINDS: { id: DocKind; label: string; hint: string }[] = [
   { id: 'DRE_RECEBIMENTOS', label: 'DRE / Recebimentos', hint: 'Conta Azul: recebimentos por categoria' },
   { id: 'DRE_PAGAMENTOS', label: 'DRE / Pagamentos', hint: 'Conta Azul: pagamentos por categoria' },
@@ -138,5 +139,12 @@ export const DOC_KINDS: { id: DocKind; label: string; hint: string }[] = [
   { id: 'FORMAS_PAGAMENTO', label: 'Formas de pagamento', hint: 'Crédito, PIX, Conta Assinada, Ticket…' },
   { id: 'CAIXA', label: 'Posição de caixa', hint: 'Saldos por banco/conta' },
   { id: 'ALUNOS', label: 'Base de alunos', hint: 'Alunos por modalidade' },
+  { id: 'ESTOQUE', label: 'Posição de estoque (fim do mês)', hint: 'Saldo por produto. Negativos são ignorados. Ajusta o CMV' },
+  { id: 'ESTOQUE_INICIAL', label: 'Posição de estoque (início do mês)', hint: 'Só no 1º mês; depois vale a do mês anterior' },
   { id: 'OUTROS', label: 'Outros documentos', hint: 'Investimentos, financiamentos, notas' },
 ];
+
+/** Posição de estoque: chave da linha = momento da posição. */
+export const STOCK_MOMENTS = [{ key: 'final', label: 'Fim do mês' }, { key: 'inicial', label: 'Início do mês' }] as const;
+export type StockMoment = (typeof STOCK_MOMENTS)[number]['key'];
+export const stockMomentOf = (kind: DocKind): StockMoment | null => (kind === 'ESTOQUE' ? 'final' : kind === 'ESTOQUE_INICIAL' ? 'inicial' : null);

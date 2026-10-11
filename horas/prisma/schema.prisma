@@ -1284,6 +1284,7 @@ enum FinDataset {
   INVESTIMENTO
   FINANCIAMENTO
   INDICADOR
+  ESTOQUE
 }
 
 /// Competência do Relatório Financeiro (AAAA-MM).
@@ -1297,6 +1298,12 @@ model FinPeriod {
   managerNotes     String?         @map("manager_notes")
   /// Decisões dos sócios (não são lançamentos).
   partnerDecisions String?         @map("partner_decisions")
+  /// Contexto dos sócios para o relatório (a IA considera; não é dado financeiro).
+  partnerContext   String?         @map("partner_context")
+  /// Itens desconsiderados neste relatório: [{ key, reason }].
+  reportExclusions Json?           @map("report_exclusions")
+  /// Quando o contexto/ajustes mudaram (para avisar que a análise ficou desatualizada).
+  contextAt        DateTime?       @map("context_at")
   /// Análise escrita pela IA a partir dos indicadores calculados.
   analysis         Json?
   analysisAt       DateTime?       @map("analysis_at")

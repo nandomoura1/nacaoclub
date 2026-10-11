@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
 import {
   AlertTriangle, ArrowLeftRight, Banknote, CheckCircle2, ChefHat, CreditCard, Crown, Flag, GraduationCap, Landmark, PiggyBank, Receipt,
-  ShieldAlert, Sparkles, Trophy, Users, UtensilsCrossed, Wallet, type LucideIcon, BadgePercent, Ticket, Hammer,
+  ShieldAlert, Sparkles, Trophy, Users, UtensilsCrossed, Wallet, type LucideIcon, BadgePercent, Ticket, Hammer, EyeOff, Boxes,
 } from 'lucide-react';
 import { compareMetrics, type Ind, type Metrics } from '@/domain/financeiro/metrics';
+import { exclusionsView, type Exclusion } from '@/domain/financeiro/adjustments';
 import { firstDay, lastDay, monthTitle, type Month } from '@/domain/condominio/months';
 import { formatDateBR } from '@/domain/dates';
 import type { Analysis } from '@/server/financeiro/analysis';
@@ -29,7 +30,7 @@ const CHECK_STYLE = {
 
 const indText = (i: Ind) => fmtValue(i.value, i.unit);
 
-function Section({ n, title, icon: Icon, children, comment }: { n: number; title: string; icon: LucideIcon; children?: ReactNode; comment?: string | null }) {
+function Section({ n, title, icon: Icon, children, comment, excluded }: { n: number; title: string; icon: LucideIcon; children?: ReactNode; comment?: string | null; excluded?: string | null }) {
   return (
     <section className="break-inside-avoid rounded-[18px] border border-borda bg-white p-4 shadow-[0_1px_3px_rgba(2,43,87,0.06)] sm:p-5 print:rounded-none print:border-0 print:border-t print:p-0 print:pt-4 print:shadow-none">
       <header className="flex items-center gap-3">
@@ -41,8 +42,16 @@ function Section({ n, title, icon: Icon, children, comment }: { n: number; title
           <h2 className="font-titulo text-lg font-extrabold leading-tight text-navy">{title}</h2>
         </div>
       </header>
-      <div className="mt-4 space-y-4">{children}</div>
-      {comment && <Reading text={comment} />}
+      {excluded ? (
+        <p className="mt-4 flex items-start gap-2 rounded-xl border border-dashed border-tinta-fraca/40 bg-fundo px-3 py-2.5 text-sm text-tinta-suave">
+          <EyeOff className="mt-0.5 size-4 shrink-0" /> <span><b className="text-tinta">Desconsiderado pelos sócios neste relatório.</b> {excluded}</span>
+        </p>
+      ) : (
+        <>
+          <div className="mt-4 space-y-4">{children}</div>
+          {comment && <Reading text={comment} />}
+        </>
+      )}
     </section>
   );
 }
@@ -118,24 +127,30 @@ function Spotlight({ label, text, icon: Icon }: { label: string; text: string; i
   );
 }
 
-export function ReportView({ month, m, analysis, previous, managerNotes, partnerDecisions, mode, version }: {
+export function ReportView({ month, m, analysis, previous, managerNotes, partnerDecisions, mode, version, adjust }: {
   month: Month; m: Metrics; analysis: Analysis | null; previous: { month: Month; m: Metrics } | null;
   managerNotes: string | null; partnerDecisions: string | null; mode: ReportMode; version: number | null;
+  /** Contexto e itens desconsiderados pelos sócios. */
+  adjust?: { partnerContext: string | null; exclusions: Exclusion[] };
 }) {
+  const ex = exclusionsView(adjust?.exclusions);
+  const checks = m.checks.filter((c) => ex.keepCheck(c.key));
   const a = analysis;
   const s = a?.secoes;
   const noText = 'Análise ainda não gerada.';
-  const compare = previous ? compareMetrics(previous.m, m) : null;
+  const compare = previous && !ex.has('comparacao') ? compareMetrics(previous.m, m).filter((r) => !ex.indicator(r.key)) : null;
   const [title, year] = [monthTitle(month).split(' de ')[0], month.slice(0, 4)];
 
-  const hero: [string, Ind][] = [
-    ['Recebimentos', m.recebimentos], ['Pagamentos', m.pagamentos],
-    ['Geração antes do payout', m.fluxo.geracaoAntesPayout], ['Caixa disponível', m.caixa.disponivel],
+  const hero: [string, Ind, string][] = [
+    ['Recebimentos', m.recebimentos, 'recebimentos'], ['Pagamentos', m.pagamentos, 'pagamentos'],
+    ['Geração antes do payout', m.fluxo.geracaoAntesPayout, 'geracao'], ['Caixa disponível', m.caixa.disponivel, 'caixa'],
   ];
-  const secondary: [string, Ind, LucideIcon][] = [
-    ['Pessoal ÷ recebimentos', m.pessoalPctRecebimentos, Users], ['CMV lanchonete', m.cmv.pct, BadgePercent],
-    ['Base de alunos', m.alunos.total, GraduationCap], ['Payout total', m.payout.total, Crown],
+  const secondary: [string, Ind, LucideIcon, string][] = [
+    ['Pessoal ÷ recebimentos', m.pessoalPctRecebimentos, Users, 'pessoal_pct'], ['CMV lanchonete', m.cmv.pct, BadgePercent, 'cmv_pct'],
+    ['Base de alunos', m.alunos.total, GraduationCap, 'alunos'], ['Payout total', m.payout.total, Crown, 'payout'],
   ];
+  /** Indicador desconsiderado: some o número, fica o motivo. */
+  const shown = (key: string, ind: Ind): Ind => (ex.indicator(key) ? { ...ind, value: null, formula: `Desconsiderado pelos sócios: ${ex.indicator(key)}`, status: 'nao_informado' } : ind);
 
   const cover = (
     <header className="relative overflow-hidden rounded-[22px] bg-navy text-white print:rounded-none">
@@ -167,15 +182,15 @@ export function ReportView({ month, m, analysis, previous, managerNotes, partner
         </div>
 
         <dl className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4 [&>*]:min-w-0">
-          {hero.map(([label, ind]) => (
+          {hero.map(([label, raw, key]) => { const ind = shown(key, raw); return (
             <div key={label} className="rounded-2xl bg-white/[0.07] p-3 ring-1 ring-white/10 backdrop-blur-sm" title={ind.formula}>
               <dt className="text-[11px] font-semibold uppercase tracking-wide text-white/60">{label}</dt>
               <dd className={cn('mt-1 font-titulo text-lg font-extrabold tabular-nums sm:text-2xl', ind.value === null && 'font-corpo text-sm font-normal italic text-white/50', ind.value !== null && ind.value < 0 && 'text-[#ffb4a8]')}>
-                {indText(ind)}
+                {ex.indicator(key) ? 'desconsiderado' : indText(ind)}
               </dd>
               {ind.status === 'estimativa' && <span className="mt-1 inline-block rounded-full bg-atencao/90 px-2 text-[10px] font-semibold">estimativa</span>}
             </div>
-          ))}
+          ); })}
         </dl>
         <p className="mt-4 text-[11px] text-white/50">Fluxo financeiro do período (recebimentos e pagamentos) — não é DRE por competência nem lucro contábil.</p>
       </div>
@@ -184,28 +199,30 @@ export function ReportView({ month, m, analysis, previous, managerNotes, partner
 
   const pills = (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 [&>*]:min-w-0">
-      {secondary.map(([label, ind, Icon]) => (
+      {secondary.map(([label, raw, Icon, key]) => { const ind = shown(key, raw); return (
         <div key={label} className="relative overflow-hidden rounded-2xl border border-borda bg-white p-3" title={ind.formula}>
           <span aria-hidden className="absolute inset-x-0 top-0 h-1 bg-linear-to-r from-nacao to-ciano" />
           <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-tinta-suave"><Icon className="size-3.5 text-nacao" /> {label}</p>
           <p className={cn('mt-1 flex flex-wrap items-center gap-1.5 font-titulo text-xl font-extrabold tabular-nums text-navy', ind.value === null && 'font-corpo text-sm font-normal italic text-tinta-fraca')}>
-            {indText(ind)} <StatusTag status={ind.status} />
+            {ex.indicator(key) ? 'desconsiderado' : <>{indText(ind)} <StatusTag status={ind.status} /></>}
           </p>
         </div>
-      ))}
+      ); })}
     </div>
   );
 
-  const context = (managerNotes || partnerDecisions) && (
+  const context = (managerNotes || partnerDecisions || adjust?.partnerContext || ex.any) && (
     <div className="grid gap-3 sm:grid-cols-2 [&>*]:min-w-0">
+      {adjust?.partnerContext && <div className="rounded-xl border border-dashed border-nacao/30 bg-white p-3 text-sm sm:col-span-2"><p className="font-titulo text-[10px] font-bold uppercase tracking-[0.18em] text-nacao">Contexto dos sócios</p><p className="mt-1 whitespace-pre-line leading-relaxed">{adjust.partnerContext}</p><Note>Considerado na leitura da IA — não altera os números.</Note></div>}
+      {ex.any && <div className="rounded-xl border border-dashed border-tinta-fraca/40 bg-fundo p-3 text-sm sm:col-span-2"><p className="flex items-center gap-1.5 font-titulo text-[10px] font-bold uppercase tracking-[0.18em] text-tinta-suave"><EyeOff className="size-3" /> Desconsiderado neste relatório</p><ul className="mt-1 space-y-0.5">{ex.list.map((e) => <li key={e.key}><b>{e.item.label}:</b> {e.reason}</li>)}</ul><Note>Os números continuam calculados e guardados; só não entram na leitura deste mês.</Note></div>}
       {managerNotes && <div className="rounded-xl border border-dashed border-nacao/30 bg-white p-3 text-sm"><p className="font-titulo text-[10px] font-bold uppercase tracking-[0.18em] text-nacao">Observações do gestor</p><p className="mt-1 whitespace-pre-line leading-relaxed">{managerNotes}</p><Note>Contexto — não é dado financeiro.</Note></div>}
       {partnerDecisions && <div className="rounded-xl border border-dashed border-nacao/30 bg-white p-3 text-sm"><p className="font-titulo text-[10px] font-bold uppercase tracking-[0.18em] text-nacao">Decisões dos sócios</p><p className="mt-1 whitespace-pre-line leading-relaxed">{partnerDecisions}</p></div>}
     </div>
   );
 
-  const checkList = m.checks.length > 0 && (
+  const checkList = checks.length > 0 && (
     <ul className="space-y-2">
-      {m.checks.map((c) => (
+      {checks.map((c) => (
         <li key={c.key} className={cn('flex items-start gap-2 rounded-xl border px-3 py-2 text-sm', CHECK_STYLE[c.level].box)}>
           <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', CHECK_STYLE[c.level].tag)}>{CHECK_STYLE[c.level].label}</span>
           <span className="leading-snug">{c.message}</span>
@@ -234,15 +251,15 @@ export function ReportView({ month, m, analysis, previous, managerNotes, partner
         {pills}
         {a?.resumoSocios && <Spotlight label="Resumo para os sócios" text={a.resumoSocios} icon={Crown} />}
         <Section n={1} title="Números do mês" icon={Banknote}>
-          <Stats rows={[
-            ['Recebimentos', m.recebimentos], ['Pagamentos', m.pagamentos], ['Geração antes do payout', m.fluxo.geracaoAntesPayout],
-            ['Custo de pessoal', m.pessoal], ['Payout total', m.payout.total], ['Lanchonete (PDV)', m.lanchonete.faturamento],
-            ['CMV', m.cmv.pct], ['Base de alunos', m.alunos.total], ['Caixa disponível', m.caixa.disponivel], ['Investimentos', m.investimentos.total],
-          ]} />
+          <Stats rows={([
+            ['Recebimentos', m.recebimentos, 'recebimentos'], ['Pagamentos', m.pagamentos, 'pagamentos'], ['Geração antes do payout', m.fluxo.geracaoAntesPayout, 'geracao'],
+            ['Custo de pessoal', m.pessoal, 'pessoal'], ['Payout total', m.payout.total, 'payout'], ['Lanchonete (PDV)', m.lanchonete.faturamento, 'lanchonete'],
+            ['CMV', m.cmv.pct, 'cmv_pct'], ['Base de alunos', m.alunos.total, 'alunos'], ['Caixa disponível', m.caixa.disponivel, 'caixa'], ['Investimentos', m.investimentos.total, 'investimentos'],
+          ] as [string, Ind, string][]).filter(([, , k]) => !ex.indicator(k)).map(([l, i]) => [l, i] as [string, Ind])} />
         </Section>
         <Section n={2} title="Pontos de atenção" icon={AlertTriangle}>
           {checkList}
-          <Points items={extraAttention} empty={m.checks.length ? '' : 'Sem pontos de atenção.'} tone="atencao" />
+          <Points items={extraAttention} empty={checks.length ? '' : 'Sem pontos de atenção.'} tone="atencao" />
         </Section>
         {context}
         <Spotlight label="Conclusão" text={a?.conclusao ?? noText} icon={Flag} />
@@ -275,12 +292,12 @@ export function ReportView({ month, m, analysis, previous, managerNotes, partner
         {context}
       </Section>
 
-      <Section n={2} title="Recebimentos" icon={Banknote} comment={s?.recebimentos}>
+      <Section n={2} title="Recebimentos" icon={Banknote} comment={s?.recebimentos} excluded={ex.section('recebimentos')}>
         <Stats rows={[['Recebimentos totais', m.recebimentos], ['Receita de serviços', m.receitaServicos], ['Receita de vendas', m.receitaVendas], ['Receita operacional', m.receitaOperacional], ['Entradas financeiras', m.entradasFinanceiras]]} />
         <ShareBars rows={m.revenueByCategory.map((r) => ({ label: r.label, cents: r.cents, ratio: r.ratio }))} />
       </Section>
 
-      <Section n={3} title="Base de alunos" icon={GraduationCap} comment={s?.alunos}>
+      <Section n={3} title="Base de alunos" icon={GraduationCap} comment={s?.alunos} excluded={ex.section('alunos')}>
         <Stats cols={2} rows={[['Matrículas / participações', m.alunos.total], ['Custo de pessoal por aluno', m.custoPessoalPorAluno]]} />
         <Table head={['Modalidade', 'Alunos', '% da base', 'Receita', 'Ticket médio']} align={['l', 'r', 'r', 'r', 'r']}
           rows={m.modalidades.length
@@ -289,12 +306,12 @@ export function ReportView({ month, m, analysis, previous, managerNotes, partner
         <Note>Soma de matrículas por modalidade: uma pessoa em duas modalidades conta duas vezes (não são clientes únicos).</Note>
       </Section>
 
-      <Section n={4} title="Pagamentos" icon={Receipt} comment={s?.pagamentos}>
+      <Section n={4} title="Pagamentos" icon={Receipt} comment={s?.pagamentos} excluded={ex.section('pagamentos')}>
         <Stats rows={[['Pagamentos totais', m.pagamentos], ['Pagamentos antes do payout', m.fluxo.pagamentosAntesPayout], ['Investimentos (CAPEX)', m.capex]]} />
         <ShareBars rows={m.expenseByCategory.map((r) => ({ label: r.label, cents: r.cents, ratio: r.ratio, note: r.classification }))} />
       </Section>
 
-      <Section n={5} title="Custo de pessoal" icon={Users} comment={s?.pessoal}>
+      <Section n={5} title="Custo de pessoal" icon={Users} comment={s?.pessoal} excluded={ex.section('pessoal')}>
         <Stats cols={4} rows={[['Custo econômico', m.pessoal], ['÷ recebimentos', m.pessoalPctRecebimentos], ['÷ receita de serviços', m.pessoalPctServicos], ['Serviços por R$ 1', m.servicosPorPessoal]]} />
         <ShareBars rows={m.pessoalComponents.map((r) => ({ label: r.label, cents: r.cents, ratio: r.ratio }))} />
         {m.pessoalExcluded.length > 0 && (
@@ -305,28 +322,28 @@ export function ReportView({ month, m, analysis, previous, managerNotes, partner
         )}
       </Section>
 
-      <Section n={6} title="Tênis — parceria" icon={Trophy} comment={s?.tenis}>
+      <Section n={6} title="Tênis — parceria" icon={Trophy} comment={s?.tenis} excluded={ex.section('tenis')}>
         <Stats rows={[['Faturamento bruto', m.tenis.faturamento], ['Repasse ao parceiro', m.tenis.repasse], ['% repassado', m.tenis.pctRepasse], ['Repasse pelo contrato', m.tenis.esperado], ['Margem antes dos custos', m.tenis.margem]]} />
         <Note>Custo direto da modalidade (repasse de parceria) — não entra na folha.</Note>
       </Section>
 
-      <Section n={7} title="Lanchonete" icon={UtensilsCrossed} comment={s?.lanchonete}>
+      <Section n={7} title="Lanchonete" icon={UtensilsCrossed} comment={s?.lanchonete} excluded={ex.section('lanchonete')}>
         <Stats rows={[['Faturamento (PDV)', m.lanchonete.faturamento], ['Vendas', m.lanchonete.vendas], ['Ticket médio', m.lanchonete.ticketMedio], ['Vendas efetivas', m.lanchonete.vendasEfetivas], ['Compras para revenda', m.lanchonete.compras], ['Cancelamentos', m.lanchonete.cancelamentos], ['Estornos', m.lanchonete.estornos], ['Conta Assinada', m.lanchonete.contaAssinada], ['Conta Assinada não comercial', m.lanchonete.contaAssinadaNaoComercial]]} />
         {m.lanchonete.contaAssinadaPorClasse.length > 0 && <ShareBars rows={m.lanchonete.contaAssinadaPorClasse.map((r) => ({ label: `Conta Assinada · ${r.label}`, cents: r.cents, ratio: r.ratio }))} />}
         {m.productGroups.length > 0 && <ShareBars rows={m.productGroups.map((r) => ({ label: r.label, cents: r.cents, ratio: r.ratio }))} />}
       </Section>
 
-      <Section n={8} title="Formas de pagamento" icon={CreditCard} comment={s?.formasPagamento}>
+      <Section n={8} title="Formas de pagamento" icon={CreditCard} comment={s?.formasPagamento} excluded={ex.section('formasPagamento')}>
         <ShareBars rows={m.lanchonete.payments.map((r) => ({ label: r.label, cents: r.cents, ratio: r.ratio }))} />
         <Stats cols={2} rows={[['Soma das formas', m.lanchonete.paymentsSum]]} />
       </Section>
 
-      <Section n={9} title="Ticket Funcionário" icon={Ticket} comment={s?.ticketFuncionario}>
+      <Section n={9} title="Ticket Funcionário" icon={Ticket} comment={s?.ticketFuncionario} excluded={ex.section('ticketFuncionario')}>
         <Stats cols={2} rows={[['Ticket Funcionário', m.lanchonete.ticketFuncionario], ['% do faturamento do PDV', m.lanchonete.ticketFuncionarioPct]]} />
         <Note>Consumo interno / benefício dos funcionários — não é receita comercial.</Note>
       </Section>
 
-      <Section n={10} title="Top 20 produtos" icon={ChefHat} comment={s?.topProdutos}>
+      <Section n={10} title="Top 20 produtos" icon={ChefHat} comment={s?.topProdutos} excluded={ex.section('topProdutos')}>
         <Table head={['#', 'Produto', 'Grupo', 'Qtd.', 'Valor', '%']} align={['l', 'l', 'l', 'r', 'r', 'r']}
           rows={m.topProdutos.map((p) => [
             <span key="r" className={cn('grid size-6 place-items-center rounded-full text-[11px] font-bold', p.rank <= 3 ? 'bg-nacao text-white' : 'bg-fundo text-tinta-suave')}>{p.rank}</span>,
@@ -334,28 +351,29 @@ export function ReportView({ month, m, analysis, previous, managerNotes, partner
             p.groupLabel, p.quantidade ?? '—', brl(p.cents), pct(p.ratio)])} />
       </Section>
 
-      <Section n={11} title="CMV" icon={BadgePercent} comment={s?.cmv}>
+      <Section n={11} title="CMV" icon={BadgePercent} comment={s?.cmv} excluded={ex.section('cmv')}>
         <Stats cols={2} rows={[['CMV', m.cmv.valor], ['CMV ÷ faturamento da lanchonete', m.cmv.pct]]} />
-        <Note>Metodologia: {m.cmv.metodo === 'real' ? 'CMV real (estoque inicial + compras − estoque final).' : m.cmv.metodo === 'estimado_compras' ? 'CMV ESTIMADO por compras do mês (sem inventário) — referência gerencial, não contábil.' : 'Dado não informado.'}</Note>
+        {m.estoque && <StockBlock m={m} />}
+        <Note>Metodologia: {m.cmv.metodo === 'ajustado_estoque' ? 'CMV AJUSTADO PELO ESTOQUE (compras − variação do estoque). Estimativa: o estoque cobre só os produtos controlados — produção própria e insumos indiretos ficam fora — e produtos com saldo negativo são ignorados.' : m.cmv.metodo === 'real' ? 'CMV real (estoque inicial + compras − estoque final).' : m.cmv.metodo === 'estimado_compras' ? 'CMV ESTIMADO por compras do mês (sem inventário) — referência gerencial, não contábil.' : 'Dado não informado.'}</Note>
       </Section>
 
-      <Section n={12} title="Reformas e investimentos" icon={Hammer} comment={s?.investimentos}>
+      <Section n={12} title="Reformas e investimentos" icon={Hammer} comment={s?.investimentos} excluded={ex.section('investimentos')}>
         <Stats cols={2} rows={[['Investimentos do mês', m.investimentos.total]]} />
         {m.investimentos.items.length > 0 && <Table head={['Item', 'Classificação', 'Valor']} align={['l', 'l', 'r']} rows={m.investimentos.items.map((i) => [i.label, i.classification ?? '—', brl(i.cents)])} />}
         {m.financiamentos.length > 0 && <Table head={['Financiamentos e aportes', 'Valor']} align={['l', 'r']} rows={m.financiamentos.map((f) => [f.label, f.cents === null ? '—' : brl(f.cents)])} />}
       </Section>
 
-      <Section n={13} title="Payout" icon={Crown} comment={s?.payout}>
+      <Section n={13} title="Payout" icon={Crown} comment={s?.payout} excluded={ex.section('payout')}>
         <Stats rows={[['Distribuição de lucros', m.payout.distribuicao], ['Antecipação', m.payout.antecipacao], ['Retiradas', m.payout.retiradas], ['Payout total', m.payout.total], ['Distribuição ÷ recebimentos', m.payout.distribuicaoPct], ['Payout total ÷ recebimentos', m.payout.totalPct]]} />
         <Note>Distribuição aos sócios — nunca despesa operacional.</Note>
       </Section>
 
-      <Section n={14} title="Recebimentos × Pagamentos" icon={ArrowLeftRight} comment={s?.fluxo}>
+      <Section n={14} title="Recebimentos × Pagamentos" icon={ArrowLeftRight} comment={s?.fluxo} excluded={ex.section('fluxo')}>
         <FlowBar m={m} />
         <Note>Indicadores de fluxo financeiro — não são lucro nem prejuízo.</Note>
       </Section>
 
-      <Section n={15} title="Posição de caixa" icon={Landmark} comment={s?.caixa}>
+      <Section n={15} title="Posição de caixa" icon={Landmark} comment={s?.caixa} excluded={ex.section('caixa')}>
         <Stats cols={2} rows={[['Caixa disponível', m.caixa.disponivel], ['Previsto a receber (fora do caixa)', m.caixa.aReceber]]} />
         <Table head={['Conta', 'Tipo', 'Saldo', '%']} align={['l', 'l', 'r', 'r']} rows={m.caixa.accounts.map((c) => [c.label, c.kind === 'a_receber' ? 'A receber' : 'Disponível', brl(c.cents), c.ratio === null ? '—' : pct(c.ratio)])} />
       </Section>
@@ -363,13 +381,33 @@ export function ReportView({ month, m, analysis, previous, managerNotes, partner
       <Section n={16} title="Pontos positivos" icon={CheckCircle2}><Points items={a?.pontosPositivos} empty={noText} tone="positivo" /></Section>
       <Section n={17} title="Pontos de atenção" icon={AlertTriangle}>
         {checkList}
-        <Points items={extraAttention} empty={a ? (m.checks.length ? '' : 'Sem pontos de atenção.') : noText} tone="atencao" />
+        <Points items={extraAttention} empty={a ? (checks.length ? '' : 'Sem pontos de atenção.') : noText} tone="atencao" />
       </Section>
       <Section n={18} title="Riscos" icon={ShieldAlert}><Points items={a?.riscos} empty={noText} tone="risco" /></Section>
       <Spotlight label="19 · Resumo para os sócios" text={a?.resumoSocios ?? noText} icon={PiggyBank} />
       <Spotlight label="20 · Conclusão executiva" text={a?.conclusao ?? noText} icon={Flag} />
       {footer}
     </>,
+  );
+}
+
+/** Estoque: inicial, final, variação, negativos ignorados e os itens de maior valor. */
+function StockBlock({ m }: { m: Metrics }) {
+  const e = m.estoque!;
+  return (
+    <div className="space-y-2 rounded-xl border border-borda p-3">
+      <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-tinta-suave"><Boxes className="size-3.5 text-nacao" /> Posição de estoque</p>
+      <Stats cols={4} rows={[['Compras do mês', m.lanchonete.compras], ['Estoque inicial', e.inicial], ['Estoque final', e.final], ['Variação do estoque', e.variacao]]} />
+      <Note>
+        {e.inicialFonte === 'mes_anterior' ? 'Estoque inicial = posição do fim do mês anterior. ' : e.inicialFonte === 'documento' ? 'Estoque inicial = posição do início do mês. ' : 'Sem estoque inicial: o CMV ainda não foi ajustado. '}
+        {e.resumoFinal && `${e.resumoFinal.items} produto(s) valorizado(s) no fim do mês`}
+        {e.resumoFinal && e.resumoFinal.negative.count > 0 && ` · ${e.resumoFinal.negative.count} com saldo negativo ignorado(s)`}
+        {e.resumoFinal && e.resumoFinal.noCost > 0 && ` · ${e.resumoFinal.noCost} sem custo`}.
+      </Note>
+      {e.resumoFinal && e.resumoFinal.top.length > 0 && (
+        <Table head={['Maiores itens em estoque', 'Saldo', 'Valor']} align={['l', 'r', 'r']} rows={e.resumoFinal.top.slice(0, 8).map((t) => [t.label, t.quantity === null ? '—' : t.quantity.toLocaleString('pt-BR'), brl(t.cents)])} />
+      )}
+    </div>
   );
 }
 

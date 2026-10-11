@@ -2,6 +2,7 @@ import {
   CMV_PURCHASES_KEY, PAYMENT_METHODS, PAYOUT_KEYS, PRODUCT_GROUPS, SALES_REVENUE_KEY, SERVICES_REVENUE_KEY, TENNIS_PARTNERSHIP_KEY,
   type CategoryDef, type Dataset, type SignedAccountClass,
 } from './taxonomy';
+import { stockSummary, type StockSummary } from './stock';
 
 /**
  * Motor de regras do Relatório Financeiro — determinístico e puro. A IA nunca
@@ -80,7 +81,13 @@ export interface Metrics {
   };
   topProdutos: { rank: number; label: string; group: string; groupLabel: string; vendas: number | null; quantidade: number | null; cents: number; ratio: number | null; interno: boolean }[];
   productGroups: Row[];
-  cmv: { metodo: 'real' | 'estimado_compras' | null; valor: Ind; pct: Ind };
+  cmv: { metodo: 'real' | 'ajustado_estoque' | 'estimado_compras' | null; valor: Ind; pct: Ind };
+  /** Posição de estoque (ausente em versões aprovadas antes do recurso). */
+  estoque?: {
+    final: Ind; inicial: Ind; variacao: Ind;
+    inicialFonte: 'documento' | 'mes_anterior' | null;
+    resumoFinal: StockSummary | null; resumoInicial: StockSummary | null;
+  };
   payout: { distribuicao: Ind; antecipacao: Ind; retiradas: Ind; total: Ind; distribuicaoPct: Ind; totalPct: Ind };
   fluxo: { diferenca: Ind; pagamentosAntesPayout: Ind; geracaoAntesPayout: Ind };
   caixa: { disponivel: Ind; aReceber: Ind; accounts: (Row & { kind: string })[] };
@@ -98,7 +105,10 @@ const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCa
 const BRL = (c: number) => `R$ ${(c / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const PCT = (r: number) => `${(r * 100).toFixed(1).replace('.', ',')}%`;
 
-export function computeMetrics(lines: FinLineData[], categories: CategoryDef[], targets: Targets = DEFAULT_TARGETS, previous?: Metrics | null): Metrics {
+/** Estoque de abertura vindo do mês anterior (posição final dele). */
+export interface MetricsOptions { openingStockCents?: number | null }
+
+export function computeMetrics(lines: FinLineData[], categories: CategoryDef[], targets: Targets = DEFAULT_TARGETS, previous?: Metrics | null, opts: MetricsOptions = {}): Metrics {
   const cat = new Map(categories.map((c) => [c.key, c]));
   const of = (ds: Dataset) => lines.filter((l) => l.dataset === ds);
   const indicator = (key: string) => of('INDICADOR').find((l) => l.key === key) ?? null;
@@ -251,11 +261,29 @@ export function computeMetrics(lines: FinLineData[], categories: CategoryDef[], 
   for (const p of prods) pg.set(p.key ?? 'outros', (pg.get(p.key ?? 'outros') ?? 0) + (p.amountCents ?? 0));
   const productGroups = [...pg.entries()].map(([key, cents]) => ({ key, label: groupLabel(key), cents, ratio: fat.value ? cents / fat.value : null })).sort((a, b) => b.cents - a.cents);
 
-  // ── CMV ────────────────────────────────────────────────────
+  // ── Estoque e CMV ──────────────────────────────────────────
+  // Posição de estoque: produtos com saldo negativo são ignorados; o estoque
+  // cobre só o que é controlado, então o CMV ajustado é estimativa.
+  const stockLines = of('ESTOQUE').map((l) => ({ label: l.label, quantity: l.quantity, amountCents: l.amountCents, moment: l.key === 'inicial' ? 'inicial' : 'final' }));
+  const resumoFinal = stockSummary(stockLines.filter((l) => l.moment === 'final'));
+  const resumoInicial = stockSummary(stockLines.filter((l) => l.moment === 'inicial'));
+  const openingPrev = opts.openingStockCents ?? null;
+  const efStock = resumoFinal ? ind(resumoFinal.valueCents, 'BRL', 'Σ posição de estoque no fim do mês (saldo × custo; negativos ignorados)') : NA('BRL', 'Posição de estoque no fim do mês');
+  const eiStock = resumoInicial ? ind(resumoInicial.valueCents, 'BRL', 'Σ posição de estoque no início do mês (negativos ignorados)')
+    : openingPrev !== null ? ind(openingPrev, 'BRL', 'Estoque inicial = posição final do mês anterior (negativos ignorados)') : NA('BRL', 'Estoque inicial (posição do fim do mês anterior)');
+  const inicialFonte = resumoInicial ? 'documento' as const : openingPrev !== null ? 'mes_anterior' as const : null;
+  const variacao = minus(efStock, eiStock, 'Estoque final − estoque inicial (positivo = comprou mais do que consumiu)');
+  const estoque = (resumoFinal || resumoInicial) ? { final: efStock, inicial: eiStock, variacao, inicialFonte, resumoFinal, resumoInicial } : undefined;
+
   const ei = pdv('estoque_inicial')?.amountCents ?? null;
   const ef = pdv('estoque_final')?.amountCents ?? null;
+  const stockChecks: Check[] = [];
   let cmv: Metrics['cmv'];
-  if (ei !== null && ef !== null && compras.value !== null) {
+  if (compras.value !== null && efStock.value !== null && eiStock.value !== null) {
+    const v = ind(compras.value - (efStock.value - eiStock.value), 'BRL', 'CMV ajustado = compras de insumos − (estoque final − estoque inicial); só produtos controlados no estoque, negativos ignorados', 'estimativa');
+    cmv = { metodo: 'ajustado_estoque', valor: v, pct: ratio(v, fat, 'CMV ajustado pelo estoque ÷ faturamento do PDV') };
+    if (v.value !== null && v.value < 0) stockChecks.push({ level: 'divergencia', key: 'estoque_variacao', message: `O estoque cresceu ${BRL(variacao.value ?? 0)}, mais que as compras do mês (${BRL(compras.value)}): confira as posições de estoque e a categoria das compras.` });
+  } else if (ei !== null && ef !== null && compras.value !== null) {
     const real = ind(ei + compras.value - ef, 'BRL', 'CMV real = estoque inicial + compras − estoque final');
     cmv = { metodo: 'real', valor: real, pct: ratio(real, fat, 'CMV real ÷ faturamento do PDV') };
   } else if (compras.value !== null) {
@@ -264,6 +292,9 @@ export function computeMetrics(lines: FinLineData[], categories: CategoryDef[], 
   } else {
     const imp = fromIndicator('cmv_pct', 'PCT', 'CMV (%)');
     cmv = { metodo: null, valor: NA('BRL', 'CMV'), pct: imp ?? NA('PCT', 'Compras de insumos ÷ faturamento do PDV') };
+  }
+  if (efStock.value !== null && eiStock.value === null) {
+    stockChecks.push({ level: 'atencao', key: 'estoque_inicial', message: 'Há posição de estoque do fim do mês, mas falta o estoque inicial: envie a posição do início do mês (ou a do fim do mês anterior) para o CMV ser ajustado pelo estoque.' });
   }
 
   // ── Payout ─────────────────────────────────────────────────
@@ -315,13 +346,13 @@ export function computeMetrics(lines: FinLineData[], categories: CategoryDef[], 
     pessoalPctServicos: ratio(pessoal, receitaServicos, 'Custo de pessoal ÷ receita de serviços'),
     servicosPorPessoal: receitaServicos.value !== null && pessoal.value ? ind(receitaServicos.value / pessoal.value, 'QTD', 'Receita de serviços ÷ custo de pessoal') : NA('QTD', 'Receita de serviços ÷ custo de pessoal'),
     custoPessoalPorAluno: pessoal.value !== null && alunosTotal.value ? ind(pessoal.value / alunosTotal.value, 'BRL', 'Custo de pessoal ÷ base de alunos') : NA('BRL', 'Custo de pessoal ÷ base de alunos'),
-    tenis, lanchonete, topProdutos, productGroups, cmv, payout,
+    tenis, lanchonete, topProdutos, productGroups, cmv, estoque, payout,
     fluxo: { diferenca, pagamentosAntesPayout, geracaoAntesPayout },
     caixa, alunos: { total: alunosTotal, byModality }, modalidades, investimentos, financiamentos,
     checks: [],
     source: lines.length === 0 ? 'vazio' : of('INDICADOR').length === 0 ? 'detalhado' : of('INDICADOR').length === lines.length ? 'importado' : 'misto',
   };
-  m.checks = [...totalChecks, ...checks(m, targets, previous ?? null, cashLines)];
+  m.checks = [...totalChecks, ...stockChecks, ...checks(m, targets, previous ?? null, cashLines)];
   return m;
 }
 

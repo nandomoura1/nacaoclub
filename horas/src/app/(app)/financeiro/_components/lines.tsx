@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input, Label, Select } from '@/components/ui/input';
 import { parseBRL } from '@/domain/condominio/money';
 import {
-  CASH_KINDS, CLASSIFICATIONS, DATASETS, PAYMENT_METHODS, PDV_SUMMARY_KEYS, PRODUCT_GROUPS, SIGNED_ACCOUNT_CLASSES, SUMMARY_INDICATORS, type Dataset,
+  CASH_KINDS, CLASSIFICATIONS, DATASETS, PAYMENT_METHODS, PDV_SUMMARY_KEYS, PRODUCT_GROUPS, SIGNED_ACCOUNT_CLASSES, STOCK_MOMENTS, SUMMARY_INDICATORS, type Dataset,
 } from '@/domain/financeiro/taxonomy';
 import { brl } from './fmt';
 
@@ -35,20 +35,22 @@ export function keyOptions(ds: Dataset, categories: CategoryOption[]): { key: st
     case 'PDV_PRODUTO': return PRODUCT_GROUPS;
     case 'CAIXA': return [...CASH_KINDS];
     case 'INDICADOR': return SUMMARY_INDICATORS;
+    case 'ESTOQUE': return [...STOCK_MOMENTS];
     default: return null;
   }
 }
 export const keyLabel = (ds: Dataset, key: string | null, categories: CategoryOption[]) =>
   (key && keyOptions(ds, categories)?.find((o) => o.key === key)?.label) || key || null;
 export const datasetLabel = (ds: string) => DATASETS.find((d) => d.id === ds)?.label ?? ds;
-const UNIT_HINT: Partial<Record<Dataset, string>> = { ALUNOS: 'Modalidade', MODALIDADE: 'Modalidade', CAIXA: 'Banco / conta', PDV_PRODUTO: 'Unidade' };
+const UNIT_HINT: Partial<Record<Dataset, string>> = { ALUNOS: 'Modalidade', MODALIDADE: 'Modalidade', CAIXA: 'Banco / conta', PDV_PRODUTO: 'Unidade', ESTOQUE: 'Unidade (UN, KG…)' };
 
 /** Valor da linha como texto: R$ e/ou quantidade (percentuais de indicador em %). */
 export function lineValue(l: Pick<LineDraft, 'dataset' | 'key' | 'amountCents' | 'quantity'>) {
   const unit = l.dataset === 'INDICADOR' ? SUMMARY_INDICATORS.find((s) => s.key === l.key)?.unit : null;
   const parts: string[] = [];
   if (l.amountCents !== null) parts.push(brl(l.amountCents));
-  if (l.quantity !== null) parts.push(unit === 'PCT' ? `${l.quantity.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%` : `${l.quantity.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}${l.dataset === 'ALUNOS' ? ' alunos' : l.amountCents !== null ? ' un.' : ''}`);
+  if (l.quantity !== null) parts.push(unit === 'PCT' ? `${l.quantity.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%` : `${l.quantity.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}${l.dataset === 'ALUNOS' ? ' alunos' : l.amountCents !== null || l.dataset === 'ESTOQUE' ? ' un.' : ''}`);
+  if (l.dataset === 'ESTOQUE' && ((l.quantity ?? 0) < 0 || (l.amountCents ?? 0) < 0)) parts.push('negativo: ignorado');
   return parts.join(' · ') || '—';
 }
 

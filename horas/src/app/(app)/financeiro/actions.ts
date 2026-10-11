@@ -10,7 +10,7 @@ import type { Metrics } from '@/domain/financeiro/metrics';
 import type { Analysis } from '@/server/financeiro/analysis';
 import {
   addFinLine, analyzeHistoricReport, approveFinPeriod, commitHistoricReport, confirmFinLines, createFinPeriod, deleteFinDocument, deleteFinLine,
-  discardHistoricReport, previewMetrics, processFinDocument, runFinAnalysis, saveCategory, saveFinNotes, saveFinTargets, saveReconciliation,
+  discardHistoricReport, previewMetrics, processFinDocument, runFinAnalysis, saveCategory, saveFinNotes, saveFinReportContext, saveFinTargets, saveReconciliation,
   updateFinLine, uploadFinDocument, analyzeFinPackage, commitFinPackage, isFinPackageFile, type FinPackageAnalysis, type HistoricAnalysis,
 } from '@/server/services/fin-service';
 
@@ -31,6 +31,9 @@ export async function createPeriodAction(month: string): Promise<ActionResult<{ 
 }
 export async function saveNotesAction(month: string, values: { managerNotes?: string | null; partnerDecisions?: string | null }): Promise<ActionResult> {
   return runAction(async () => { await saveFinNotes(await getPrincipal(), month, values, await requestMeta()); refresh(month); return undefined; }, 'Observações salvas.');
+}
+export async function saveReportContextAction(month: string, values: { partnerContext: string | null; exclusions: { key: string; reason: string }[] }): Promise<ActionResult> {
+  return runAction(async () => { await saveFinReportContext(await getPrincipal(), month, values, await requestMeta()); refresh(month); return undefined; }, 'Contexto dos sócios salvo.');
 }
 export async function saveReconciliationAction(month: string, key: string, justification: string): Promise<ActionResult> {
   return runAction(async () => { await saveReconciliation(await getPrincipal(), month, key, justification, await requestMeta()); refresh(month); return undefined; }, 'Justificativa salva.');

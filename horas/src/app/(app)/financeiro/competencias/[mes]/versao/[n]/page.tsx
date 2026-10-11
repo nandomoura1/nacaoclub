@@ -34,7 +34,7 @@ export default async function Page({ params, searchParams }: { params: Promise<{
         <PrintButton />
       </div>
       <div>
-        <ReportView month={mes} m={s.metrics} analysis={s.analysis} previous={null} managerNotes={s.managerNotes} partnerDecisions={s.partnerDecisions} mode={mode} version={v.number} />
+        <ReportView month={mes} m={s.metrics} analysis={s.analysis} previous={null} managerNotes={s.managerNotes} partnerDecisions={s.partnerDecisions} mode={mode} version={v.number} adjust={{ partnerContext: s.partnerContext ?? null, exclusions: s.exclusions ?? [] }} />
       </div>
     </div>
   );
