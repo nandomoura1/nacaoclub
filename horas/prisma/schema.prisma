@@ -1637,6 +1637,7 @@ enum MktTaskOrigin {
   IA
   REUNIAO
   ANTECEDENCIA
+  IMPORTACAO
 }
 
 enum MktEventStatus {
@@ -1759,6 +1760,8 @@ model MktTask {
   origin        MktTaskOrigin @default(MANUAL)
   /// Marco de antecedência que originou a tarefa (ex.: "D-7").
   milestone     String?
+  /// Origem externa (ex.: "trello:<id do card>") — evita importar o mesmo card duas vezes.
+  externalRef   String?       @unique @map("external_ref")
   doneAt        DateTime?     @map("done_at")
   createdById   String?       @map("created_by") @db.Uuid
   createdAt     DateTime      @default(now()) @map("created_at")

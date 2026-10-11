@@ -13,6 +13,7 @@ import {
 import {
   createMeeting, decideMinutes, decideRecommendation, decideTaskSuggestion, generateMinutes, refreshMeetingAgenda, refreshRecommendations, saveMeetingNotes, suggestCampaignTasks,
 } from '@/server/services/mkt-ai-service';
+import { importTrello, trelloAlreadyImported, type TrelloImportResult } from '@/server/services/mkt-trello-service';
 
 const refresh = (...paths: string[]) => {
   revalidatePath('/marketing', 'layout');
@@ -119,4 +120,12 @@ export async function decideRecommendationAction(suggestionId: string, index: nu
 // Configurações
 export async function saveAreaOwnerAction(areaId: string, userId: string | null): Promise<ActionResult> {
   return runAction(async () => { await saveAreaOwner(await getPrincipal(), areaId, userId, await requestMeta()); refresh(); return undefined; }, 'Responsável salvo.');
+}
+
+// Importação do Trello
+export async function trelloAlreadyImportedAction(cardIds: string[]): Promise<ActionResult<string[]>> {
+  return runAction(async () => trelloAlreadyImported(await getPrincipal(), cardIds));
+}
+export async function importTrelloAction(input: unknown): Promise<ActionResult<TrelloImportResult>> {
+  return runAction(async () => { const r = await importTrello(await getPrincipal(), input, await requestMeta()); refresh('/marketing/kanban'); return r; });
 }

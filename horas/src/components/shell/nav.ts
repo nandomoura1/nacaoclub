@@ -85,6 +85,7 @@ export const NAV_MARKETING: NavItem[] = [
   { href: '/marketing/trafego', label: 'Tráfego Pago', icon: 'mkt-trafego', permission: 'mkt.view', soon: 'breve' },
   { href: '/marketing/performance', label: 'Performance', icon: 'mkt-performance', permission: 'mkt.view', soon: 'breve' },
   { href: '/marketing/ia', label: 'IA Marketing', icon: 'treinos-ia', permission: 'mkt.view', soon: 'breve' },
+  { href: '/marketing/importar-trello', label: 'Importar do Trello', icon: 'fin-importar', permission: 'mkt.admin' },
   { href: '/marketing/configuracoes', label: 'Configurações', icon: 'cadastros', permission: 'mkt.admin' },
 ];
 

@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Search } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/card';
 import { Input, Select } from '@/components/ui/input';
 import { todayIso } from '@/lib/today';
@@ -28,7 +28,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ c
   const filtered = !!(sp.campanha || sp.area || sp.responsavel || sp.q || sp.tag || sp.atrasadas);
   return (
     <>
-      <PageHeader title="Kanban de Marketing" description="Arraste os cartões entre as colunas. Tarefa com dependência só conclui depois dela." actions={canEdit ? <NewTaskButton options={options} siblings={tasks.map((t) => ({ id: t.id, title: t.title, campaignId: t.campaign?.id ?? null }))} /> : undefined} />
+      <PageHeader title="Kanban de Marketing" description="Arraste os cartões entre as colunas. Tarefa com dependência só conclui depois dela." actions={canEdit ? <div className="flex flex-wrap gap-2">{can(principal, 'mkt.admin') && <Link href="/marketing/importar-trello" className={buttonVariants({ size: 'sm', variant: 'secondary' })}>Importar do Trello</Link>}<NewTaskButton options={options} siblings={tasks.map((t) => ({ id: t.id, title: t.title, campaignId: t.campaign?.id ?? null }))} /></div> : undefined} />
       <form className="mb-4 flex flex-wrap items-center gap-2 text-sm">
         <Select name="campanha" defaultValue={sp.campanha ?? ''} className="h-9 w-auto min-w-40"><option value="">Todas as campanhas</option>{options.campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>
         <Select name="area" defaultValue={sp.area ?? ''} className="h-9 w-auto"><option value="">Todas as áreas</option>{options.areas.map((a) => <option key={a.key} value={a.key}>{a.name}</option>)}</Select>

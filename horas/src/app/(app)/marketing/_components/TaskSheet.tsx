@@ -110,7 +110,7 @@ export function TaskSheet({ taskId, defaults, options, siblings, canEdit, onClos
           <div className="col-span-2"><Label>Tags (separadas por vírgula)</Label><Input value={f.tags} disabled={ro} onChange={(e) => set('tags', e.target.value)} placeholder="reels, kids, urgente" /></div>
         </div>
         {detail && (
-          <p className="text-xs text-tinta-suave">Coluna: <b>{labelOf(TASK_COLUMNS, detail.column)}</b>{detail.origin !== 'MANUAL' ? ` · origem: ${detail.origin === 'IA' ? 'IA' : detail.origin === 'REUNIAO' ? 'reunião' : 'antecedência'}` : ''}{detail.milestone ? ` · ${detail.milestone}` : ''}</p>
+          <p className="text-xs text-tinta-suave">Coluna: <b>{labelOf(TASK_COLUMNS, detail.column)}</b>{detail.origin !== 'MANUAL' ? ` · origem: ${detail.origin === 'IA' ? 'IA' : detail.origin === 'REUNIAO' ? 'reunião' : detail.origin === 'IMPORTACAO' ? 'Trello' : 'antecedência'}` : ''}{detail.milestone ? ` · ${detail.milestone}` : ''}</p>
         )}
 
         {detail && (
