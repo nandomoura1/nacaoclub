@@ -11,7 +11,7 @@ import type { Analysis } from '@/server/financeiro/analysis';
 import { ShieldMark } from '@/components/Logo';
 import { cn } from '@/lib/cn';
 import { ShareBars } from './charts';
-import { ContextAdjustments, type ContextEffect } from './context-adjustments';
+import { adjustmentChange, type ContextEffect } from './context-adjustments';
 import type { ContextPlan } from '@/domain/financeiro/context-adjust';
 import { brl, fmtValue, pct, StatusTag } from './fmt';
 
@@ -217,9 +217,23 @@ export function ReportView({ month, m, analysis, previous, managerNotes, partner
   );
 
   const notes = adjust?.accountNotes ?? [];
-  const context = (managerNotes || partnerDecisions || adjust?.partnerContext || ex.any || notes.length > 0) && (
+  // O contexto dos sócios orienta a IA e os números; no relatório fica só a base de leitura, recolhida.
+  const activeAdj = adjust?.plan?.items.filter((x) => x.active) ?? [];
+  const context = (managerNotes || partnerDecisions || activeAdj.length > 0 || ex.any || notes.length > 0) && (
     <div className="grid gap-3 sm:grid-cols-2 [&>*]:min-w-0">
-      {adjust?.partnerContext && <div className="rounded-xl border border-dashed border-nacao/30 bg-white p-3 text-sm sm:col-span-2"><p className="font-titulo text-[10px] font-bold uppercase tracking-[0.18em] text-nacao">Ponto de vista dos sócios — como moldou este relatório</p><p className="mt-1 whitespace-pre-line leading-relaxed">{adjust.partnerContext}</p>{adjust.plan ? <div className="mt-2"><ContextAdjustments plan={adjust.plan} effects={adjust.effects ?? []} catLabel={adjust.catLabel} /></div> : null}<Note>{adjust.plan?.items.some((x) => x.active) ? 'Os números deste relatório já consideram os ajustes acima; os dados originais continuam guardados na conferência.' : 'Orientou a construção da análise.'}</Note></div>}
+      {activeAdj.length > 0 && (
+        <details className="group rounded-xl border border-dashed border-nacao/30 bg-white p-3 text-sm sm:col-span-2">
+          <summary className="flex cursor-pointer list-none items-center gap-2 text-tinta-suave [&::-webkit-details-marker]:hidden">
+            <span className="font-titulo text-[10px] font-bold uppercase tracking-[0.18em] text-nacao">Base de leitura</span>
+            <span className="flex-1">{activeAdj.length} lançamento{activeAdj.length > 1 ? 's' : ''} tratado{activeAdj.length > 1 ? 's' : ''} à parte para refletir a operação do mês.</span>
+            <span className="text-xs print:hidden">ver <span className="group-open:hidden">detalhes</span><span className="hidden group-open:inline">menos</span></span>
+          </summary>
+          <ul className="mt-2 space-y-0.5 text-xs text-tinta-suave">
+            {activeAdj.map((x) => <li key={x.id}><b className="text-tinta">{x.label}</b> — {adjustmentChange(x, adjust?.catLabel)}</li>)}
+          </ul>
+          <Note>Os dados originais continuam guardados na conferência.</Note>
+        </details>
+      )}
       {notes.length > 0 && <div className="rounded-xl border border-dashed border-nacao/30 bg-white p-3 text-sm sm:col-span-2"><p className="font-titulo text-[10px] font-bold uppercase tracking-[0.18em] text-nacao">Explicações do gestor sobre as contas</p><ul className="mt-1 space-y-0.5">{notes.map((n, i) => <li key={i}><b>{n.label}:</b> {n.note}</li>)}</ul><Note>Contexto — considerado pela análise; não altera os números.</Note></div>}
       {ex.any && <div className="rounded-xl border border-dashed border-tinta-fraca/40 bg-fundo p-3 text-sm sm:col-span-2"><p className="flex items-center gap-1.5 font-titulo text-[10px] font-bold uppercase tracking-[0.18em] text-tinta-suave"><EyeOff className="size-3" /> Desconsiderado neste relatório</p><ul className="mt-1 space-y-0.5">{ex.list.map((e) => <li key={e.key}><b>{e.item.label}:</b> {e.reason}</li>)}</ul><Note>Os números continuam calculados e guardados; só não entram na leitura deste mês.</Note></div>}
       {managerNotes && <div className="rounded-xl border border-dashed border-nacao/30 bg-white p-3 text-sm"><p className="font-titulo text-[10px] font-bold uppercase tracking-[0.18em] text-nacao">Observações do gestor</p><p className="mt-1 whitespace-pre-line leading-relaxed">{managerNotes}</p><Note>Contexto — não é dado financeiro.</Note></div>}
@@ -276,7 +290,7 @@ export function ReportView({ month, m, analysis, previous, managerNotes, partner
           })}
         />
         {top.length > 0 && <Points items={top} empty="" tone="atencao" />}
-        {(adjusted > 0 || ex.any) && <p className="text-xs text-tinta-suave">{adjusted > 0 ? `Números ajustados pelo contexto dos sócios (${adjusted} ajuste${adjusted > 1 ? 's' : ''}). ` : ''}{ex.any ? `Desconsiderado: ${ex.list.map((e) => e.item.label).join(', ')}.` : ''} Detalhes no relatório completo.</p>}
+        {(adjusted > 0 || ex.any) && <p className="text-xs text-tinta-suave">{adjusted > 0 ? `${adjusted} lançamento${adjusted > 1 ? 's' : ''} tratado${adjusted > 1 ? 's' : ''} à parte para refletir a operação do mês. ` : ''}{ex.any ? `Desconsiderado: ${ex.list.map((e) => e.item.label).join(', ')}.` : ''} Detalhes no relatório completo.</p>}
         <Spotlight label="Conclusão" text={a?.conclusao ?? noText} icon={Flag} />
         {footer}
       </>,
