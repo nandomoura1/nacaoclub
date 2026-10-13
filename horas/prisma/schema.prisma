@@ -2036,19 +2036,34 @@ model ProcComment {
   @@map("proc_comments")
 }
 
-/// Envio automático de WhatsApp (agendado): liga/desliga e controle de "já enviado neste período".
-model WaJob {
-  /// LIDERES (segunda), ESCALA_FDS (sexta), GRADE_MENSAL (dia 1).
-  key       String    @id
-  enabled   Boolean   @default(true)
-  /// Período já enviado (ex.: 2026-W42, 2026-10-17, 2026-11): impede envio duplicado.
-  lastPeriod String?  @map("last_period")
-  lastRunAt DateTime? @map("last_run_at")
-  /// Resumo do último envio: { enviados, falhas, semTelefone, … }.
-  lastResult Json?    @map("last_result")
-  updatedAt DateTime  @updatedAt @map("updated_at")
+/// Automação de WhatsApp: quando roda, para quem vai e o modelo do texto. Editável no sistema.
+model WaAutomation {
+  id              String    @id @default(uuid()) @db.Uuid
+  name            String
+  active          Boolean   @default(true)
+  /// DIARIA, SEMANAL, MENSAL
+  frequency       String
+  /// Dias da semana (1 = segunda … 7 = domingo) na frequência semanal.
+  weekdays        Int[]     @default([])
+  /// Dia do mês (1–28) na frequência mensal.
+  monthDay        Int?      @map("month_day")
+  /// Público (ver AUDIENCES): LIDERES_PENDENCIAS, ESCALADOS_FDS, PROFESSORES_GRADE…
+  audience        String
+  /// Filtro do público: { modalityId } | { roleKey } | { numbers: [] }.
+  filter          Json?
+  /// Texto com variáveis: {primeiro_nome}, {demandas}, {escala}, {grade}…
+  template        String
+  /// Pede resposta: "ok" confirma, outro texto vira pedido de ajuste.
+  askConfirmation Boolean   @default(false) @map("ask_confirmation")
+  /// Período já enviado (dia, semana ISO ou mês): impede envio duplicado.
+  lastPeriod      String?   @map("last_period")
+  lastRunAt       DateTime? @map("last_run_at")
+  lastResult      Json?     @map("last_result")
+  createdById     String?   @map("created_by") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  @@map("wa_jobs")
+  @@map("wa_automations")
 }
 
 /// Mensagem recebida no WhatsApp da Nação (webhook da Z-API "Ao receber").
@@ -2074,22 +2089,26 @@ model WaInbound {
 
 /// Pedido de confirmação enviado pelo WhatsApp (ex.: grade do mês) e a resposta.
 model WaConfirmation {
-  id        String    @id @default(uuid()) @db.Uuid
-  /// GRADE
-  kind      String
-  /// Ex.: 2026-11
-  period    String
-  teacherId String    @map("teacher_id") @db.Uuid
-  name      String
+  id           String    @id @default(uuid()) @db.Uuid
+  /// Automação que pediu a confirmação (id) — ou "GRADE" nos registros antigos.
+  kind         String
+  /// Ex.: 2026-11, 2026-W43, 2026-10-24
+  period       String
+  /// Quem: "t:<professor>", "u:<usuário>" ou "n:<número>".
+  recipientKey String    @map("recipient_key")
+  teacherId    String?   @map("teacher_id") @db.Uuid
+  name         String
+  /// O que está sendo confirmado (ex.: "Grade mensal · novembro de 2026").
+  subject      String?
   /// Para onde foi (DDD + 8 últimos dígitos) — em modo teste, o número de teste.
-  phoneKey  String    @map("phone_key")
+  phoneKey     String    @map("phone_key")
   /// PENDENTE, CONFIRMADO, AJUSTE
-  status    String    @default("PENDENTE")
-  reply     String?
-  sentAt    DateTime  @default(now()) @map("sent_at")
-  repliedAt DateTime? @map("replied_at")
+  status       String    @default("PENDENTE")
+  reply        String?
+  sentAt       DateTime  @default(now()) @map("sent_at")
+  repliedAt    DateTime? @map("replied_at")
 
-  @@unique([kind, period, teacherId])
+  @@unique([kind, period, recipientKey])
   @@index([phoneKey, status])
-  @@map("wa_confirmations")
+  @@map("wa_confirmation_requests")
 }

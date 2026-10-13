@@ -32,7 +32,7 @@ async function whoIs(key: string) {
   return { teacherId: teachers.find((t) => phoneKey(t.phone) === key)?.id ?? null, userId: users.find((u) => phoneKey(u.phone) === key)?.id ?? null };
 }
 
-export type InboundOutcome = 'ignorada' | 'duplicada' | 'registrada' | 'CONFIRMOU_GRADE' | 'AJUSTE_GRADE';
+export type InboundOutcome = 'ignorada' | 'duplicada' | 'registrada' | 'CONFIRMOU' | 'AJUSTE';
 
 export async function handleZapiReceived(p: ZapiReceived): Promise<InboundOutcome> {
   if (p.type && p.type !== 'ReceivedCallback') return 'ignorada';
@@ -52,11 +52,12 @@ export async function handleZapiReceived(p: ZapiReceived): Promise<InboundOutcom
   if (pending && text) {
     const ok = isConfirmation(text);
     if (ok || pending.status === 'PENDENTE') {
-      handled = ok ? 'CONFIRMOU_GRADE' : 'AJUSTE_GRADE';
+      handled = ok ? 'CONFIRMOU' : 'AJUSTE';
       const first = pending.name.split(' ')[0];
+      const what = pending.subject ?? `Grade mensal · ${monthName(pending.period)}`;
       ack = ok
-        ? `Obrigado, ${first}! Sua grade de ${monthName(pending.period)} está confirmada ✅`
-        : `Recebido, ${first}! Repassamos o ajuste para a coordenação, que vai falar com você. 💙`;
+        ? `Obrigado, ${first}! Confirmado ✅ _(${what})_`
+        : `Recebido, ${first}! Repassamos para a coordenação, que vai falar com você. 💙`;
     }
   }
 
@@ -65,18 +66,18 @@ export async function handleZapiReceived(p: ZapiReceived): Promise<InboundOutcom
       data: { messageId: p.messageId!, phoneKey: key, toMasked: maskDestination(`55${key}`), senderName: (p.senderName ?? p.chatName ?? null)?.slice(0, 120) ?? null, text, teacherId: who.teacherId, userId: who.userId, handled: handled === 'registrada' ? null : handled },
     });
     if (pending && handled !== 'registrada') {
-      const status = handled === 'CONFIRMOU_GRADE' ? 'CONFIRMADO' : 'AJUSTE';
+      const status = handled === 'CONFIRMOU' ? 'CONFIRMADO' : 'AJUSTE';
       // Ajuste acumula as mensagens; confirmação mantém o que já foi dito antes.
       const reply = status === 'AJUSTE' ? [pending.reply, text].filter(Boolean).join('\n').slice(0, 2000) : pending.reply;
       await tx.waConfirmation.update({ where: { id: pending.id }, data: { status, reply, repliedAt: new Date() } });
       await audit(tx, { actorId: null }, {
         action: 'whatsapp.reply', entityType: 'wa_confirmation', entityId: pending.id, after: { status, periodo: pending.period },
-        summary: `${pending.name} ${status === 'CONFIRMADO' ? 'confirmou' : 'pediu ajuste na'} a grade de ${monthName(pending.period)} pelo WhatsApp`,
+        summary: `${pending.name} ${status === 'CONFIRMADO' ? 'confirmou' : 'pediu ajuste em'} "${pending.subject ?? `Grade mensal · ${monthName(pending.period)}`}" pelo WhatsApp`,
       });
     }
   });
   if (ack) {
-    try { await deliverWhatsApp({ kind: 'GRADE', to: `55${key}`, text: ack, actor: { id: null, name: 'Resposta automática' } }); } catch { /* o registro já foi feito */ }
+    try { await deliverWhatsApp({ kind: 'LIVRE', to: `55${key}`, text: ack, actor: { id: null, name: 'Resposta automática' } }); } catch { /* o registro já foi feito */ }
   }
   return handled;
 }

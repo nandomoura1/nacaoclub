@@ -10,11 +10,7 @@ import { zapiConfig } from '@/server/whatsapp/zapi';
 import { sendWhatsApp, type SendResult } from '@/server/services/whatsapp-service';
 import { chargeDocs } from '@/server/services/condo-period-service';
 import { condoChargesPdf } from '@/server/condominio/pdf';
-import { prisma } from '@/server/db';
-import { audit } from '@/server/audit';
-import { isJobKey } from '@/domain/wa-jobs';
-import { jobRecipients, runWaJob, type JobResult } from '@/server/whatsapp/jobs';
-import { maskDestination, normalizeDestination } from '@/domain/whatsapp';
+import { deleteAutomation, previewAutomation, runAutomation, saveAutomation, setAutomationActive, type RunResult } from '@/server/whatsapp/automations';
 
 /** O usuário pode enviar e a Z-API está configurada? (o botão some quando não). */
 export async function whatsAppAvailableAction(): Promise<{ canSend: boolean; configured: boolean; testMode: boolean }> {
@@ -43,46 +39,35 @@ export async function sendCondoChargeAction(month: string, chargeId: string, to:
   });
 }
 
-// ── Envios automáticos ─────────────────────────────────────
+// ── Automações ─────────────────────────────────────────────
 
-export async function toggleWaJobAction(key: string, enabled: boolean): Promise<ActionResult> {
-  return runAction(async () => {
-    const p = await getPrincipal();
-    assertCan(p, 'whatsapp.admin');
-    if (!isJobKey(key)) throw new AppError('Envio desconhecido.');
-    await prisma.$transaction(async (tx) => {
-      await tx.waJob.upsert({ where: { key }, create: { key, enabled }, update: { enabled } });
-      await audit(tx, { actorId: p.id, ...(await requestMeta()) }, { action: 'whatsapp.job_toggle', entityType: 'wa_job', entityId: null, after: { envio: key, ligado: enabled }, summary: `${p.name} ${enabled ? 'ligou' : 'desligou'} o envio automático ${key}` });
-    });
-    revalidatePath('/admin/whatsapp');
-    return undefined;
-  }, enabled ? 'Envio automático ligado.' : 'Envio automático desligado.');
+const autoRefresh = () => { revalidatePath('/admin/whatsapp'); revalidatePath('/admin/whatsapp/automacoes'); };
+
+export async function saveAutomationAction(id: string | null, values: Record<string, unknown>): Promise<ActionResult<string>> {
+  return runAction(async () => { const r = await saveAutomation(await getPrincipal(), id, values, await requestMeta()); autoRefresh(); return r; }, 'Automação salva.');
+}
+export async function deleteAutomationAction(id: string): Promise<ActionResult> {
+  return runAction(async () => { await deleteAutomation(await getPrincipal(), id, await requestMeta()); autoRefresh(); return undefined; }, 'Automação excluída.');
+}
+export async function toggleAutomationAction(id: string, active: boolean): Promise<ActionResult> {
+  return runAction(async () => { await setAutomationActive(await getPrincipal(), id, active, await requestMeta()); autoRefresh(); return undefined; }, active ? 'Automação ligada.' : 'Automação desligada.');
 }
 
-/** Prévia: quem receberia e o texto, sem enviar nada. */
-export async function previewWaJobAction(key: string): Promise<ActionResult<{ total: number; semTelefone: string[]; amostras: { para: string; nome: string; texto: string }[] }>> {
+/** Prévia: quem receberia hoje e o texto, sem enviar nada (aceita o rascunho do editor). */
+export async function previewAutomationAction(draft: { audience: string; filter: Record<string, unknown> | null; template: string }): Promise<ActionResult<Awaited<ReturnType<typeof previewAutomation>>>> {
   return runAction(async () => {
-    const p = await getPrincipal();
-    assertCan(p, 'whatsapp.admin');
-    if (!isJobKey(key)) throw new AppError('Envio desconhecido.');
-    const list = await jobRecipients(key, todayIso());
-    const ok = list.filter((r) => r.phone && normalizeDestination(r.phone));
-    return {
-      total: list.length,
-      semTelefone: list.filter((r) => !ok.includes(r)).map((r) => r.name),
-      amostras: ok.slice(0, 3).map((r) => ({ para: maskDestination(normalizeDestination(r.phone!)!), nome: r.name, texto: r.text })),
-    };
+    assertCan(await getPrincipal(), 'whatsapp.admin');
+    return previewAutomation({ audience: draft.audience, filter: draft.filter as never, template: draft.template }, todayIso());
   });
 }
 
 /** Enviar agora (fora do dia programado). Marca o período como enviado. */
-export async function runWaJobAction(key: string): Promise<ActionResult<JobResult>> {
+export async function runAutomationAction(id: string): Promise<ActionResult<RunResult>> {
   return runAction(async () => {
     const p = await getPrincipal();
     assertCan(p, 'whatsapp.admin');
-    if (!isJobKey(key)) throw new AppError('Envio desconhecido.');
-    const r = await runWaJob(key, todayIso(), { force: true, actorName: p.name });
-    revalidatePath('/admin/whatsapp');
+    const r = await runAutomation(id, todayIso(), { force: true, actorName: p.name });
+    autoRefresh();
     return r!;
   });
 }

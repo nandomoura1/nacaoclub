@@ -2,16 +2,17 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { CalendarClock, CheckCircle2, CircleAlert, Copy, Eye, Inbox, Play, Send, Smartphone } from 'lucide-react';
+import { CalendarClock, CheckCircle2, CircleAlert, Copy, Inbox, Send, Smartphone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input, Label } from '@/components/ui/input';
 import { WA_KINDS } from '@/domain/whatsapp';
 import { cn } from '@/lib/cn';
 import type { WhatsAppOverview } from '@/server/services/whatsapp-service';
-import { previewWaJobAction, runWaJobAction, sendWhatsAppAction, toggleWaJobAction } from '../../whatsapp/actions';
-import type { ReplyOverview, WaJobView } from '@/server/whatsapp/jobs';
-import { monthName } from '@/domain/wa-jobs';
+import Link from 'next/link';
+import { sendWhatsAppAction } from '../../whatsapp/actions';
+import type { AutomationView, ReplyOverview } from '@/server/whatsapp/automations';
+import { buttonVariants } from '@/components/ui/button';
 
 const ENV = [
   { key: 'ZAPI_INSTANCE_ID', what: 'ID da instância (Z-API → Instâncias Web → ID da instância)', required: true },
@@ -21,7 +22,7 @@ const ENV = [
   { key: 'CRON_SECRET', what: 'Senha do agendador dos envios automáticos (qualquer texto longo)', required: false },
 ];
 
-export function WhatsAppClient({ v, jobs, cronReady, replies, webhookUrl }: { v: WhatsAppOverview; jobs: WaJobView[]; cronReady: boolean; replies: ReplyOverview; webhookUrl: string | null }) {
+export function WhatsAppClient({ v, automations, cronReady, replies, webhookUrl }: { v: WhatsAppOverview; automations: AutomationView[]; cronReady: boolean; replies: ReplyOverview; webhookUrl: string | null }) {
   const router = useRouter();
   const [to, setTo] = useState('');
   const [text, setText] = useState('Teste de integração do Nação ADM com a Z-API. ✅');
@@ -93,8 +94,16 @@ export function WhatsAppClient({ v, jobs, cronReady, replies, webhookUrl }: { v:
         {msg?.ok && <p className="mt-2 text-sm font-semibold text-sucesso">{msg.ok}</p>}
       </Card>
 
-      <AutoJobs jobs={jobs} cronReady={cronReady} configured={v.configured} testMode={!!v.testPhone} />
       <Replies r={replies} webhookUrl={webhookUrl} />
+      <Card className="flex flex-wrap items-center gap-3 p-4">
+        <CalendarClock className="size-5 text-nacao" />
+        <div className="min-w-0 flex-1">
+          <p className="font-bold text-navy">Automações</p>
+          <p className="text-sm text-tinta-suave">{automations.filter((a) => a.active).length} ligada(s) de {automations.length}: {automations.filter((a) => a.active).map((a) => a.name).join(' · ') || 'nenhuma'}</p>
+          {!cronReady && <p className="mt-1 text-xs font-semibold text-atencao">Falta a variável CRON_SECRET na Vercel para elas rodarem sozinhas.</p>}
+        </div>
+        <Link href="/admin/whatsapp/automacoes" className={buttonVariants({ size: 'sm' })}>Criar e editar automações</Link>
+      </Card>
 
       <Card className="overflow-hidden">
         <p className="bg-fundo px-4 py-2 text-sm font-bold text-navy">Últimos envios</p>
@@ -118,79 +127,11 @@ export function WhatsAppClient({ v, jobs, cronReady, replies, webhookUrl }: { v:
   );
 }
 
-type Preview = { total: number; semTelefone: string[]; amostras: { para: string; nome: string; texto: string }[] };
-
-/** Envios automáticos: liga/desliga, prévia (sem enviar) e enviar agora. */
-function AutoJobs({ jobs, cronReady, configured, testMode }: { jobs: WaJobView[]; cronReady: boolean; configured: boolean; testMode: boolean }) {
-  const router = useRouter();
-  const [pending, start] = useTransition();
-  const [busy, setBusy] = useState<string | null>(null);
-  const [preview, setPreview] = useState<{ key: string; p: Preview } | null>(null);
-  const [msg, setMsg] = useState<{ ok?: string; error?: string } | null>(null);
-  const act = (key: string, fn: () => Promise<void>) => { setBusy(key); setMsg(null); start(async () => { await fn(); setBusy(null); router.refresh(); }); };
-  const fmt = (iso: string) => new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
-  return (
-    <Card className="p-4">
-      <h2 className="flex items-center gap-2 font-bold text-navy"><CalendarClock className="size-4 text-nacao" /> Envios automáticos</h2>
-      <p className="mt-1 text-sm text-tinta-suave">Rodam sozinhos às 8h, no dia de cada um. Cada período é enviado uma vez só.{testMode ? ' Em modo teste, cada envio manda só as 3 primeiras mensagens, todas para o número de teste.' : ''}</p>
-      {!cronReady && <p className="mt-2 rounded-lg border border-atencao/40 bg-atencao/5 p-2 text-sm text-atencao"><b>Falta 1 passo:</b> crie a variável <code>CRON_SECRET</code> na Vercel (qualquer senha longa) e faça Redeploy. Sem ela o agendador não roda — os botões abaixo funcionam.</p>}
-      {msg?.error && <p className="mt-2 text-sm font-semibold text-critico">{msg.error}</p>}
-      {msg?.ok && <p className="mt-2 text-sm font-semibold text-sucesso">{msg.ok}</p>}
-      <div className="mt-3 grid gap-3 lg:grid-cols-3 [&>*]:min-w-0">
-        {jobs.map((j) => {
-          const r = j.lastResult;
-          return (
-            <div key={j.key} className={cn('flex flex-col gap-2 rounded-xl border p-3', j.enabled ? 'border-nacao/30' : 'border-borda opacity-80')}>
-              <div className="flex items-start gap-2">
-                <div className="min-w-0 flex-1">
-                  <p className="font-bold text-navy">{j.label}</p>
-                  <p className="text-xs font-semibold text-nacao">{j.when}</p>
-                </div>
-                <label className="flex items-center gap-1.5 text-xs font-semibold">
-                  <input type="checkbox" checked={j.enabled} disabled={pending} onChange={(e) => act(j.key, async () => { const x = await toggleWaJobAction(j.key, e.target.checked); setMsg(x.ok ? { ok: x.message ?? undefined } : { error: x.error }); })} />
-                  {j.enabled ? 'ligado' : 'desligado'}
-                </label>
-              </div>
-              <p className="text-xs text-tinta-suave">{j.detail}</p>
-              <p className="text-xs text-tinta-fraca">
-                {j.lastRunAt ? <>Último: {fmt(j.lastRunAt)}{r ? ` · ${r.enviados} enviada(s)${r.falhas ? `, ${r.falhas} falha(s)` : ''}${r.semTelefone?.length ? `, ${r.semTelefone.length} sem telefone` : ''}${r.limitadoTeste ? `, ${r.limitadoTeste} não enviadas (modo teste)` : ''}${r.erro ? ` · ${r.erro}` : ''}` : ''}</> : 'Ainda não rodou.'}
-              </p>
-              <div className="mt-auto flex flex-wrap gap-1.5">
-                <Button size="sm" variant="secondary" disabled={pending} onClick={() => act(j.key, async () => { const x = await previewWaJobAction(j.key); if (x.ok) setPreview({ key: j.key, p: x.data }); else setMsg({ error: x.error }); })}><Eye /> {busy === j.key && pending ? 'Montando…' : 'Prévia'}</Button>
-                <Button size="sm" variant="ghost" disabled={pending || !configured} onClick={() => { if (confirm(`Enviar agora "${j.label}"?${testMode ? ' (modo teste: até 3 mensagens para o número de teste)' : ''}`)) act(j.key, async () => { const x = await runWaJobAction(j.key); setMsg(x.ok ? { ok: `${x.data.enviados} enviada(s)${x.data.falhas ? `, ${x.data.falhas} falha(s)` : ''}${x.data.semTelefone.length ? ` · sem telefone: ${x.data.semTelefone.join(', ')}` : ''}${x.data.erro ? ` · ${x.data.erro}` : ''}` } : { error: x.error }); }); }}><Play /> Enviar agora</Button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      {preview && (
-        <div className="mt-4 rounded-xl border border-borda bg-fundo p-3">
-          <div className="flex items-center gap-2">
-            <p className="flex-1 text-sm font-bold text-navy">Prévia · {jobs.find((j) => j.key === preview.key)?.label} — {preview.p.total} destinatário(s) hoje</p>
-            <button type="button" className="text-xs font-semibold text-nacao" onClick={() => setPreview(null)}>fechar</button>
-          </div>
-          {preview.p.semTelefone.length > 0 && <p className="mt-1 text-xs text-atencao">Sem WhatsApp cadastrado (não recebem): {preview.p.semTelefone.join(', ')}</p>}
-          {preview.p.amostras.length === 0 && <p className="mt-2 text-sm text-tinta-suave">Ninguém receberia hoje.</p>}
-          <div className="mt-2 grid gap-2 md:grid-cols-3 [&>*]:min-w-0">
-            {preview.p.amostras.map((a, i) => (
-              <div key={i} className="rounded-lg bg-white p-2 text-xs ring-1 ring-borda">
-                <p className="mb-1 font-semibold text-tinta-suave">{a.nome} · {a.para}</p>
-                <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap font-corpo text-tinta">{a.texto}</pre>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </Card>
-  );
-}
-
 const CONF = { CONFIRMADO: { label: 'confirmou', cls: 'bg-sucesso/15 text-sucesso' }, AJUSTE: { label: 'pediu ajuste', cls: 'bg-atencao/15 text-atencao' }, PENDENTE: { label: 'aguardando', cls: 'bg-fundo text-tinta-suave' } } as const;
 
 /** Webhook "Ao receber": endereço para a Z-API, confirmações da grade e últimas mensagens recebidas. */
 function Replies({ r, webhookUrl }: { r: ReplyOverview; webhookUrl: string | null }) {
   const [copied, setCopied] = useState(false);
-  const count = (s: string) => r.confirmations.filter((c) => c.status === s).length;
   return (
     <Card className="p-4">
       <h2 className="flex items-center gap-2 font-bold text-navy"><Inbox className="size-4 text-nacao" /> Respostas recebidas</h2>
@@ -205,19 +146,25 @@ function Replies({ r, webhookUrl }: { r: ReplyOverview; webhookUrl: string | nul
         <p className="mt-1 text-xs text-tinta-suave">{r.lastReceivedAt ? `Última mensagem recebida: ${new Date(r.lastReceivedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}` : 'Nenhuma mensagem recebida ainda — depois de cadastrar, mande um “oi” para o WhatsApp da Nação para testar.'}</p>
       </div>
 
-      <div className="mt-3">
-        <p className="text-sm font-bold text-navy">Grade de {monthName(r.period)} — {count('CONFIRMADO')} confirmaram · {count('AJUSTE')} pediram ajuste · {count('PENDENTE')} aguardando</p>
-        {r.confirmations.length === 0 ? <p className="mt-1 text-sm text-tinta-suave">A grade deste mês ainda não foi enviada pelo sistema.</p> : (
-          <ul className="mt-1 divide-y divide-borda text-sm">
-            {r.confirmations.map((c) => (
-              <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 py-1.5">
-                <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-bold', CONF[c.status as keyof typeof CONF]?.cls)}>{CONF[c.status as keyof typeof CONF]?.label ?? c.status}</span>
-                <span className="font-semibold">{c.name}</span>
-                {c.reply && <span className="min-w-0 flex-1 whitespace-pre-line text-xs text-tinta">“{c.reply}”</span>}
-              </li>
-            ))}
-          </ul>
-        )}
+      <div className="mt-3 space-y-3">
+        {r.groups.length === 0 && <p className="text-sm text-tinta-suave">Nenhuma confirmação pedida nos últimos 35 dias. (Automações com “pedir confirmação” abrem uma aqui a cada envio.)</p>}
+        {r.groups.map((g) => {
+          const count = (st: string) => g.items.filter((c) => c.status === st).length;
+          return (
+            <div key={g.subject}>
+              <p className="text-sm font-bold text-navy">{g.subject} — {count('CONFIRMADO')} confirmaram · {count('AJUSTE')} pediram ajuste · {count('PENDENTE')} aguardando</p>
+              <ul className="mt-1 divide-y divide-borda text-sm">
+                {g.items.map((c) => (
+                  <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 py-1.5">
+                    <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-bold', CONF[c.status as keyof typeof CONF]?.cls)}>{CONF[c.status as keyof typeof CONF]?.label ?? c.status}</span>
+                    <span className="font-semibold">{c.name}</span>
+                    {c.reply && <span className="min-w-0 flex-1 whitespace-pre-line text-xs text-tinta">“{c.reply}”</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
       </div>
 
       {r.inbound.length > 0 && (
@@ -229,7 +176,7 @@ function Replies({ r, webhookUrl }: { r: ReplyOverview; webhookUrl: string | nul
                 <span className="w-32 text-xs text-tinta-suave">{new Date(m.at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
                 <span className="font-semibold">{m.from}</span>
                 <span className="min-w-0 flex-1 truncate text-tinta" title={m.text ?? ''}>{m.text ?? '(sem texto: áudio, imagem…)'}</span>
-                {m.handled && <span className="text-xs font-semibold text-nacao">{m.handled === 'CONFIRMOU_GRADE' ? 'confirmou a grade' : 'ajuste na grade'}</span>}
+                {m.handled && <span className="text-xs font-semibold text-nacao">{m.handled === 'AJUSTE' || m.handled === 'AJUSTE_GRADE' ? 'pediu ajuste' : 'confirmou'}</span>}
               </li>
             ))}
           </ul>
