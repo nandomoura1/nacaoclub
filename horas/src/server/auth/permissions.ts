@@ -54,6 +54,9 @@ export const PERMISSIONS = {
   'fin.admin': 'Financeiro: metas, limites e categorias',
   'whatsapp.send': 'WhatsApp: enviar mensagens pelo sistema (Z-API)',
   'whatsapp.admin': 'WhatsApp: ver a conexão, testar e consultar o registro de envios',
+  'proc.view': 'Gestão de Processos: ver o painel e as demandas dos setores que lidera',
+  'proc.edit': 'Gestão de Processos: atualizar e comentar as demandas dos próprios setores e abrir novas nelas',
+  'proc.admin': 'Gestão de Processos: ver todos os setores, cobrar demandas de qualquer setor e definir setores e líderes',
 } as const;
 
 export type PermissionKey = keyof typeof PERMISSIONS;
@@ -65,7 +68,7 @@ export function isPermissionKey(value: string): value is PermissionKey {
 }
 
 export const SYSTEM_ROLES: Record<
-  'ADMIN' | 'COORDENADOR' | 'CONSULTA' | 'PROFESSOR' | 'MARKETING',
+  'ADMIN' | 'COORDENADOR' | 'CONSULTA' | 'PROFESSOR' | 'MARKETING' | 'LIDER',
   { name: string; description: string; permissions: PermissionKey[] }
 > = {
   ADMIN: {
@@ -108,6 +111,11 @@ export const SYSTEM_ROLES: Record<
     name: 'Marketing',
     description: 'Equipe de marketing e comercial: campanhas, eventos, tarefas, calendário e IA de marketing.',
     permissions: ['mkt.view', 'mkt.edit', 'mkt.ai'],
+  },
+  LIDER: {
+    name: 'Líder de setor',
+    description: 'Acompanha e atualiza as demandas do próprio setor (Gestão de Processos). Combine com o perfil da função.',
+    permissions: ['proc.view', 'proc.edit'],
   },
 };
 

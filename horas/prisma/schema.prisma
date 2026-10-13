@@ -1956,3 +1956,80 @@ model WaMessage {
   @@index([createdAt])
   @@map("wa_messages")
 }
+
+// ── Gestão de Processos ─────────────────────────────────────
+// Rotinas e checklists ficam no Nação Task; aqui é o acompanhamento:
+// setores, líderes e as demandas que a diretoria cobra de cada um.
+
+enum ProcDemandStatus {
+  ABERTA
+  EM_ANDAMENTO
+  AGUARDANDO
+  CONCLUIDA
+  CANCELADA
+}
+
+enum ProcPriority {
+  BAIXA
+  MEDIA
+  ALTA
+  URGENTE
+}
+
+/// Setor da Nação com o líder responsável.
+model ProcSector {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique
+  description String?
+  /// Usuário líder do setor (vê e atualiza as demandas do setor).
+  leaderId    String?  @map("leader_id") @db.Uuid
+  /// Link direto das rotinas deste setor no Nação Task (opcional).
+  taskUrl     String?  @map("task_url")
+  sortOrder   Int      @default(0) @map("sort_order")
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  demands ProcDemand[]
+
+  @@map("proc_sectors")
+}
+
+/// Demanda acompanhada pela gestão (o que se cobra do líder; não é rotina).
+model ProcDemand {
+  id          String           @id @default(uuid()) @db.Uuid
+  sectorId    String           @map("sector_id") @db.Uuid
+  title       String
+  description String?
+  /// Responsável pela entrega (padrão: o líder do setor).
+  ownerId     String?          @map("owner_id") @db.Uuid
+  requesterId String?          @map("requester_id") @db.Uuid
+  dueDate     DateTime?        @map("due_date") @db.Date
+  priority    ProcPriority     @default(MEDIA)
+  status      ProcDemandStatus @default(ABERTA)
+  /// DIRETORIA, REUNIAO, LIDER, ALERTA.
+  origin      String           @default("DIRETORIA")
+  doneAt      DateTime?        @map("done_at")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  sector   ProcSector    @relation(fields: [sectorId], references: [id], onDelete: Restrict)
+  comments ProcComment[]
+
+  @@index([sectorId, status])
+  @@index([ownerId, status])
+  @@map("proc_demands")
+}
+
+model ProcComment {
+  id        String   @id @default(uuid()) @db.Uuid
+  demandId  String   @map("demand_id") @db.Uuid
+  authorId  String?  @map("author_id") @db.Uuid
+  body      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  demand ProcDemand @relation(fields: [demandId], references: [id], onDelete: Cascade)
+
+  @@index([demandId, createdAt])
+  @@map("proc_comments")
+}

@@ -1,10 +1,12 @@
 import type { PermissionKey } from '@/server/auth/permissions';
 import { PROGRAM_MODALITIES } from '@/domain/programming/modalities';
+import { NACAO_TASK_URL } from '@/domain/processos';
 
 export type NavIcon =
   | 'hoje' | 'calendario' | 'pendencias' | 'grade' | 'professores'
   | 'fechamento' | 'relatorios' | 'escalas' | 'treinos' | 'benchmarks' | 'dna' | 'treinos-ia' | 'usuarios' | 'historico' | 'cadastros' | 'condominio' | 'cobrancas' | 'financeiro' | 'fin-historico' | 'fin-importar' | 'documentos' | 'empresas'
-  | 'mkt' | 'mkt-campanhas' | 'mkt-kanban' | 'mkt-eventos' | 'mkt-reuniao' | 'mkt-conteudo' | 'mkt-interna' | 'mkt-canais' | 'mkt-leads' | 'mkt-biblioteca' | 'mkt-trafego' | 'mkt-performance' | 'mkt-memoria' | 'whatsapp';
+  | 'mkt' | 'mkt-campanhas' | 'mkt-kanban' | 'mkt-eventos' | 'mkt-reuniao' | 'mkt-conteudo' | 'mkt-interna' | 'mkt-canais' | 'mkt-leads' | 'mkt-biblioteca' | 'mkt-trafego' | 'mkt-performance' | 'mkt-memoria' | 'whatsapp'
+  | 'processos' | 'proc-demandas' | 'proc-setores' | 'proc-task' | 'proc-reuniao';
 
 export interface NavItem {
   href: string;
@@ -17,6 +19,8 @@ export interface NavItem {
   mobile?: boolean;
   /** Rótulo curto para a barra inferior. */
   short?: string;
+  /** Abre outra ferramenta em nova aba (ex.: Nação Task). */
+  external?: boolean;
   /** Subgrupo dentro da seção (ex.: a modalidade em Treinos); vira um grupo recolhível. */
   group?: string;
 }
@@ -93,6 +97,15 @@ export const NAV_MARKETING: NavItem[] = [
   { href: '/marketing/configuracoes', label: 'Configurações', icon: 'cadastros', permission: 'mkt.admin' },
 ];
 
+/** Gestão de Processos: acompanhamento dos setores. Rotinas e checklists vivem no Nação Task. */
+export const NAV_PROCESSOS: NavItem[] = [
+  { href: '/processos', label: 'Painel dos setores', icon: 'processos', permission: 'proc.view' },
+  { href: '/processos/demandas', label: 'Demandas', icon: 'proc-demandas', permission: 'proc.view' },
+  { href: '/processos/reuniao', label: 'Reunião de líderes', icon: 'proc-reuniao', permission: 'proc.view', soon: 'breve' },
+  { href: '/processos/setores', label: 'Setores e líderes', icon: 'proc-setores', permission: 'proc.admin' },
+  { href: NACAO_TASK_URL, label: 'Nação Task', icon: 'proc-task', permission: 'proc.view', external: true },
+];
+
 export const NAV_ADMIN: NavItem[] = [
   { href: '/admin/empresas', label: 'Empresas', icon: 'empresas', permission: 'company.view' },
   { href: '/admin/cadastros', label: 'Cadastros', icon: 'cadastros', permission: 'admin.catalog' },
@@ -108,5 +121,6 @@ export const NAV_SECTIONS: NavSection[] = [
   { title: 'Condomínio Nação', items: NAV_CONDOMINIO, bar: { label: 'Condomínio', icon: 'condominio', order: 5 } },
   { title: 'Financeiro', items: NAV_FINANCEIRO, bar: { label: 'Financeiro', icon: 'financeiro', order: 3 } },
   { title: 'Marketing', items: NAV_MARKETING, bar: { label: 'Marketing', icon: 'mkt', order: 4 } },
+  { title: 'Gestão de Processos', items: NAV_PROCESSOS, bar: { label: 'Processos', icon: 'processos', order: 6 } },
   { title: 'Administração', items: NAV_ADMIN },
 ];

@@ -16,6 +16,7 @@ import { requirePrincipal } from '@/server/auth/session';
 import { prisma } from '@/server/db';
 import { listOccurrences, periodStartDay } from '@/server/services/period-service';
 import { nacaoAgenda, type AgendaItem } from '@/server/services/agenda-service';
+import { myOpenDemands } from '@/server/services/proc-service';
 
 export const metadata: Metadata = { title: 'Hoje' };
 
@@ -35,6 +36,7 @@ export default async function HojePage({ searchParams }: { searchParams: Promise
   if (!can(principal, 'schedule.view')) {
     if (can(principal, 'hours.own')) redirect('/meu-extrato');
     if (can(principal, 'workout.view')) redirect('/treinos');
+    if (can(principal, 'proc.view') && !can(principal, 'mkt.view')) redirect('/processos');
   }
   const sp = await searchParams;
   const today = todayIso();
@@ -48,6 +50,7 @@ export default async function HojePage({ searchParams }: { searchParams: Promise
     canView && period?.generatedAt ? listOccurrences(principal, { start: day, end: day }) : Promise.resolve([]),
     nacaoAgenda(principal, day),
   ]);
+  const demands = await myOpenDemands(principal, today);
 
   const nowMin = (() => {
     const [h, m] = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Sao_Paulo' }).format(new Date()).split(':').map(Number);
@@ -79,6 +82,7 @@ export default async function HojePage({ searchParams }: { searchParams: Promise
       </div>
 
       {agenda && <Agenda day={day} tomorrow={tomorrow} agenda={agenda} />}
+      {demands && demands.items.length > 0 && <MyDemands d={demands} />}
 
       {pending.length > 0 && (
         <Card className="mb-4 flex items-center gap-3 border-critico/30 bg-critico/5 p-4">
@@ -172,6 +176,31 @@ function Agenda({ day, tomorrow, agenda }: { day: string; tomorrow: boolean; age
           : <p className="py-2 text-sm text-tinta-suave">Nada no cronograma até {formatDateBR(addDays(day, 7))}.</p>}
         {agenda.next.length > 8 && <p className="px-2 text-xs text-tinta-suave">+ {agenda.next.length - 8} no calendário de marketing</p>}
       </div>
+    </Card>
+  );
+}
+
+/** Demandas do líder (ou, para a diretoria, as atrasadas de todos os setores). */
+function MyDemands({ d }: { d: NonNullable<Awaited<ReturnType<typeof myOpenDemands>>> }) {
+  const fmt = (x: string) => `${x.slice(8, 10)}/${x.slice(5, 7)}`;
+  return (
+    <Card className="mb-4 p-4">
+      <div className="mb-1 flex items-center gap-2">
+        <h2 className="flex-1 text-xs font-extrabold uppercase tracking-[0.14em] text-nacao">{d.mode === 'minhas' ? 'Minhas demandas' : 'Demandas atrasadas nos setores'}</h2>
+        <Link href={d.mode === 'minhas' ? '/processos/demandas' : '/processos'} className="text-xs font-semibold text-nacao">{d.total > d.items.length ? `ver todas (${d.total})` : 'abrir'}</Link>
+      </div>
+      <ul className="divide-y divide-borda">
+        {d.items.map((x) => (
+          <li key={x.id}>
+            <Link href="/processos/demandas" className="flex items-center gap-2 py-1.5 text-sm">
+              <span className={cn('size-2 shrink-0 rounded-full', x.late ? 'bg-critico' : x.priority === 'URGENTE' || x.priority === 'ALTA' ? 'bg-atencao' : 'bg-tinta-fraca/40')} />
+              <span className="min-w-0 flex-1 truncate font-semibold text-navy">{x.title}</span>
+              <span className="hidden text-xs text-tinta-suave sm:inline">{x.sector}</span>
+              {x.dueDate && <span className={cn('text-xs tabular-nums', x.late ? 'font-semibold text-critico' : 'text-tinta-suave')}>{fmt(x.dueDate)}</span>}
+            </Link>
+          </li>
+        ))}
+      </ul>
     </Card>
   );
 }

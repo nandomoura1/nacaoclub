@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   BarChart3, CalendarDays, ClipboardCheck, History, LayoutGrid,
   LogOut, Settings2, Sun, TriangleAlert, Users, UserRoundCog, Dumbbell, CalendarClock, Sparkles, Menu, X, Trophy, Dna, ChevronRight, Building2, Receipt, Landmark, LineChart, FileUp, FolderOpen, Briefcase,
-  Megaphone, Flag, Columns3, PartyPopper, MessagesSquare, Clapperboard, Bell, Link2, Target, Library, MousePointerClick, Gauge, Brain, MessageCircle } from 'lucide-react';
+  Megaphone, Flag, Columns3, PartyPopper, MessagesSquare, Clapperboard, Bell, Link2, Target, Library, MousePointerClick, Gauge, Brain, MessageCircle, Workflow, ListTodo, Network, SquareArrowOutUpRight, Users2 } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { cn } from '@/lib/cn';
 import { initials } from '@/lib/format';
@@ -50,6 +50,11 @@ const ICONS: Record<NavIcon, React.ComponentType<{ className?: string }>> = {
   'mkt-performance': Gauge,
   'mkt-memoria': Brain,
   whatsapp: MessageCircle,
+  processos: Workflow,
+  'proc-demandas': ListTodo,
+  'proc-setores': Network,
+  'proc-task': SquareArrowOutUpRight,
+  'proc-reuniao': Users2,
 };
 
 function isActive(pathname: string, href: string) {
@@ -68,6 +73,15 @@ function SideLink({ item, active, nested }: { item: NavItem; active: boolean; ne
         <span className="flex-1">{item.label}</span>
         <span className="rounded bg-white/10 px-1.5 text-[10px] font-semibold">{item.soon}</span>
       </span>
+    );
+  }
+  if (item.external) {
+    return (
+      <a href={item.href} target="_blank" rel="noreferrer" className={cn('flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold text-white/75 transition-colors hover:bg-white/8 hover:text-white', nested && 'py-1.5 pl-9')}>
+        <Icon className="size-4" />
+        <span className="flex-1">{item.label}</span>
+        <span className="text-[10px] text-white/45">↗</span>
+      </a>
     );
   }
   return (
@@ -186,9 +200,11 @@ export function AppShell({
                 return (
                   <Fragment key={item.href}>
                     {showGroup && <p className="col-span-2 px-2 pt-2 text-[11px] font-semibold uppercase tracking-wide text-tinta-fraca">{item.group}</p>}
-                    <Link href={item.href} className={cn('flex items-center gap-2 rounded-xl border px-3 py-2.5 text-[13px] font-semibold leading-tight', item.href === activeHref ? 'border-nacao bg-nacao/5 text-nacao' : 'border-borda text-navy')}>
-                      <Icon className="size-4 shrink-0" /><span className="min-w-0">{item.label}</span>
-                    </Link>
+                    {item.external
+                      ? <a href={item.href} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-xl border border-borda px-3 py-2.5 text-[13px] font-semibold leading-tight text-navy"><Icon className="size-4 shrink-0" /><span className="min-w-0">{item.label} ↗</span></a>
+                      : <Link href={item.href} className={cn('flex items-center gap-2 rounded-xl border px-3 py-2.5 text-[13px] font-semibold leading-tight', item.href === activeHref ? 'border-nacao bg-nacao/5 text-nacao' : 'border-borda text-navy')}>
+                          <Icon className="size-4 shrink-0" /><span className="min-w-0">{item.label}</span>
+                        </Link>}
                   </Fragment>
                 );
               })}

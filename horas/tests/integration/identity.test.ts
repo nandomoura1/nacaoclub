@@ -5,6 +5,7 @@ import { loadPrincipal } from '@/server/auth/principal';
 import { authenticate, changeOwnPassword } from '@/server/services/auth-service';
 import { createUser, resetPassword, updateUser } from '@/server/services/user-service';
 import { syncPermissionCatalog } from '@/server/services/rbac-catalog';
+import { SYSTEM_ROLES } from '@/server/auth/permissions';
 import { AppError, AuthorizationError } from '@/server/errors';
 import { META, ensureCatalog, hasDb, makeArea, makeUser } from './helpers';
 
@@ -41,7 +42,7 @@ describe.skipIf(!hasDb)('E1 · identidade, permissões e auditoria (Postgres rea
       const count = await prisma.permission.count();
       await prisma.$transaction((tx) => syncPermissionCatalog(tx), { timeout: 30_000 });
       expect(await prisma.permission.count()).toBe(count);
-      expect(await prisma.role.count({ where: { isSystem: true } })).toBe(5);
+      expect(await prisma.role.count({ where: { isSystem: true } })).toBe(Object.keys(SYSTEM_ROLES).length);
     });
   });
 
