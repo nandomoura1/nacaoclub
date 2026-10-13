@@ -2050,3 +2050,46 @@ model WaJob {
 
   @@map("wa_jobs")
 }
+
+/// Mensagem recebida no WhatsApp da Nação (webhook da Z-API "Ao receber").
+model WaInbound {
+  id        String   @id @default(uuid()) @db.Uuid
+  /// ID da mensagem na Z-API (evita processar duas vezes).
+  messageId String   @unique @map("message_id")
+  /// DDD + 8 últimos dígitos (para casar com professor/usuário).
+  phoneKey  String   @map("phone_key")
+  toMasked  String   @map("to_masked")
+  senderName String? @map("sender_name")
+  text      String?
+  teacherId String?  @map("teacher_id") @db.Uuid
+  userId    String?  @map("user_id") @db.Uuid
+  /// O que o sistema fez com ela: CONFIRMOU_GRADE, AJUSTE_GRADE ou nada.
+  handled   String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([phoneKey])
+  @@map("wa_inbound")
+}
+
+/// Pedido de confirmação enviado pelo WhatsApp (ex.: grade do mês) e a resposta.
+model WaConfirmation {
+  id        String    @id @default(uuid()) @db.Uuid
+  /// GRADE
+  kind      String
+  /// Ex.: 2026-11
+  period    String
+  teacherId String    @map("teacher_id") @db.Uuid
+  name      String
+  /// Para onde foi (DDD + 8 últimos dígitos) — em modo teste, o número de teste.
+  phoneKey  String    @map("phone_key")
+  /// PENDENTE, CONFIRMADO, AJUSTE
+  status    String    @default("PENDENTE")
+  reply     String?
+  sentAt    DateTime  @default(now()) @map("sent_at")
+  repliedAt DateTime? @map("replied_at")
+
+  @@unique([kind, period, teacherId])
+  @@index([phoneKey, status])
+  @@map("wa_confirmations")
+}

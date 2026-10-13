@@ -6,7 +6,7 @@ import { addDays, fromUtc, toUtc, type IsoDate } from '@/domain/dates';
 import { isLate, OPEN_STATUSES, demandOrder } from '@/domain/processos';
 import { teacherGradeText } from '@/domain/teacher-share';
 import { dutyPersonalMessage, leaderMessage, monthlyGradeMessage, nextSaturday, periodKey, WA_JOBS, type LeaderDemand, type PersonalShift, type WaJobKey } from '@/domain/wa-jobs';
-import { normalizeDestination } from '@/domain/whatsapp';
+import { normalizeDestination, phoneKey } from '@/domain/whatsapp';
 import { teacherShareData } from '@/server/services/teacher-share-service';
 import { deliverWhatsApp } from '@/server/services/whatsapp-service';
 import { zapiConfig } from './zapi';
@@ -24,7 +24,7 @@ const ACTOR = { id: null, name: 'Envio automático' } as const;
 /** O agendador não tem usuário: lê tudo, como a diretoria, sem escrever nada fora do registro de envios. */
 const SYSTEM: Principal = { id: '00000000-0000-0000-0000-000000000000', name: 'Envio automático', email: 'sistema@nacao', roleKeys: ['SISTEMA'], permissions: new Set(PERMISSION_KEYS), areaIds: null, mustChangePassword: false, teacherIds: [] };
 
-export interface Recipient { name: string; phone: string | null; text: string }
+export interface Recipient { name: string; phone: string | null; text: string; teacherId?: string }
 
 const appUrl = () => {
   const host = process.env.APP_URL ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : null);
@@ -86,7 +86,7 @@ async function gradeRecipients(today: IsoDate): Promise<Recipient[]> {
     const d = await teacherShareData(SYSTEM, t.id, today);
     if (!d.slots.length) continue;
     const gradeText = teacherGradeText({ name: d.name, date: today, slots: d.slots, duties: [], groups: [], specific: '' });
-    out.push({ name: d.name, phone: d.phone, text: monthlyGradeMessage({ month: today.slice(0, 7), gradeText }) });
+    out.push({ name: d.name, phone: d.phone, text: monthlyGradeMessage({ month: today.slice(0, 7), gradeText }), teacherId: t.id });
   }
   return out;
 }
@@ -132,6 +132,15 @@ export async function runWaJob(job: WaJobKey, today: IsoDate, opts: { force?: bo
       try {
         const d = await deliverWhatsApp({ kind: KIND[job], to: r.phone!, text: r.text, actor: { id: ACTOR.id, name: opts.actorName ? `${opts.actorName} (envio manual)` : ACTOR.name } });
         if (d.error) result.falhas++; else result.enviados++;
+        // Grade: abre a confirmação (a resposta chega pelo webhook). Em modo teste, o "telefone" é o de teste.
+        const key = phoneKey(cfg.testPhone ?? r.phone);
+        if (!d.error && job === 'GRADE_MENSAL' && r.teacherId && key) {
+          await prisma.waConfirmation.upsert({
+            where: { kind_period_teacherId: { kind: 'GRADE', period, teacherId: r.teacherId } },
+            create: { kind: 'GRADE', period, teacherId: r.teacherId, name: r.name, phoneKey: key },
+            update: { name: r.name, phoneKey: key, status: 'PENDENTE', reply: null, sentAt: new Date(), repliedAt: null },
+          });
+        }
       } catch {
         result.falhas++;
       }
@@ -152,3 +161,22 @@ export async function listWaJobs() {
   });
 }
 export type WaJobView = Awaited<ReturnType<typeof listWaJobs>>[number];
+
+/** Respostas: confirmações do período e as últimas mensagens recebidas. */
+export async function replyOverview(today: IsoDate) {
+  const period = today.slice(0, 7);
+  const [confirmations, inbound, lastIn] = await Promise.all([
+    prisma.waConfirmation.findMany({ where: { kind: 'GRADE', period }, orderBy: [{ status: 'asc' }, { name: 'asc' }] }),
+    prisma.waInbound.findMany({ orderBy: { createdAt: 'desc' }, take: 15 }),
+    prisma.waInbound.findFirst({ orderBy: { createdAt: 'desc' }, select: { createdAt: true } }),
+  ]);
+  const names = new Map((await prisma.teacher.findMany({ where: { id: { in: inbound.map((i) => i.teacherId).filter((x): x is string => !!x) } }, select: { id: true, name: true, displayName: true } })).map((t) => [t.id, t.displayName || t.name]));
+  const users = new Map((await prisma.user.findMany({ where: { id: { in: inbound.map((i) => i.userId).filter((x): x is string => !!x) } }, select: { id: true, name: true } })).map((u) => [u.id, u.name]));
+  return {
+    period,
+    lastReceivedAt: lastIn?.createdAt.toISOString() ?? null,
+    confirmations: confirmations.map((c) => ({ id: c.id, name: c.name, status: c.status, reply: c.reply, sentAt: c.sentAt.toISOString(), repliedAt: c.repliedAt?.toISOString() ?? null })),
+    inbound: inbound.map((i) => ({ id: i.id, at: i.createdAt.toISOString(), from: (i.teacherId && names.get(i.teacherId)) || (i.userId && users.get(i.userId)) || i.senderName || i.toMasked, text: i.text, handled: i.handled })),
+  };
+}
+export type ReplyOverview = Awaited<ReturnType<typeof replyOverview>>;

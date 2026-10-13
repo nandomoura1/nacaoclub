@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { CalendarClock, CheckCircle2, CircleAlert, Eye, Play, Send, Smartphone } from 'lucide-react';
+import { CalendarClock, CheckCircle2, CircleAlert, Copy, Eye, Inbox, Play, Send, Smartphone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input, Label } from '@/components/ui/input';
@@ -10,7 +10,8 @@ import { WA_KINDS } from '@/domain/whatsapp';
 import { cn } from '@/lib/cn';
 import type { WhatsAppOverview } from '@/server/services/whatsapp-service';
 import { previewWaJobAction, runWaJobAction, sendWhatsAppAction, toggleWaJobAction } from '../../whatsapp/actions';
-import type { WaJobView } from '@/server/whatsapp/jobs';
+import type { ReplyOverview, WaJobView } from '@/server/whatsapp/jobs';
+import { monthName } from '@/domain/wa-jobs';
 
 const ENV = [
   { key: 'ZAPI_INSTANCE_ID', what: 'ID da instância (Z-API → Instâncias Web → ID da instância)', required: true },
@@ -20,7 +21,7 @@ const ENV = [
   { key: 'CRON_SECRET', what: 'Senha do agendador dos envios automáticos (qualquer texto longo)', required: false },
 ];
 
-export function WhatsAppClient({ v, jobs, cronReady }: { v: WhatsAppOverview; jobs: WaJobView[]; cronReady: boolean }) {
+export function WhatsAppClient({ v, jobs, cronReady, replies, webhookUrl }: { v: WhatsAppOverview; jobs: WaJobView[]; cronReady: boolean; replies: ReplyOverview; webhookUrl: string | null }) {
   const router = useRouter();
   const [to, setTo] = useState('');
   const [text, setText] = useState('Teste de integração do Nação ADM com a Z-API. ✅');
@@ -93,6 +94,7 @@ export function WhatsAppClient({ v, jobs, cronReady }: { v: WhatsAppOverview; jo
       </Card>
 
       <AutoJobs jobs={jobs} cronReady={cronReady} configured={v.configured} testMode={!!v.testPhone} />
+      <Replies r={replies} webhookUrl={webhookUrl} />
 
       <Card className="overflow-hidden">
         <p className="bg-fundo px-4 py-2 text-sm font-bold text-navy">Últimos envios</p>
@@ -177,6 +179,60 @@ function AutoJobs({ jobs, cronReady, configured, testMode }: { jobs: WaJobView[]
               </div>
             ))}
           </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+const CONF = { CONFIRMADO: { label: 'confirmou', cls: 'bg-sucesso/15 text-sucesso' }, AJUSTE: { label: 'pediu ajuste', cls: 'bg-atencao/15 text-atencao' }, PENDENTE: { label: 'aguardando', cls: 'bg-fundo text-tinta-suave' } } as const;
+
+/** Webhook "Ao receber": endereço para a Z-API, confirmações da grade e últimas mensagens recebidas. */
+function Replies({ r, webhookUrl }: { r: ReplyOverview; webhookUrl: string | null }) {
+  const [copied, setCopied] = useState(false);
+  const count = (s: string) => r.confirmations.filter((c) => c.status === s).length;
+  return (
+    <Card className="p-4">
+      <h2 className="flex items-center gap-2 font-bold text-navy"><Inbox className="size-4 text-nacao" /> Respostas recebidas</h2>
+      <div className="mt-2 rounded-lg bg-fundo p-3 text-sm">
+        <p className="font-semibold text-navy">Endereço do webhook (cole na Z-API → Webhooks → “Ao receber”)</p>
+        {webhookUrl ? (
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <code className="min-w-0 flex-1 break-all rounded bg-white px-2 py-1 text-xs ring-1 ring-borda">{webhookUrl}</code>
+            <Button size="sm" variant="secondary" onClick={() => { void navigator.clipboard.writeText(webhookUrl); setCopied(true); setTimeout(() => setCopied(false), 2000); }}><Copy /> {copied ? 'Copiado!' : 'Copiar'}</Button>
+          </div>
+        ) : <p className="mt-1 text-atencao">Crie a variável <code>CRON_SECRET</code> na Vercel e faça Redeploy: o endereço aparece aqui.</p>}
+        <p className="mt-1 text-xs text-tinta-suave">{r.lastReceivedAt ? `Última mensagem recebida: ${new Date(r.lastReceivedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}` : 'Nenhuma mensagem recebida ainda — depois de cadastrar, mande um “oi” para o WhatsApp da Nação para testar.'}</p>
+      </div>
+
+      <div className="mt-3">
+        <p className="text-sm font-bold text-navy">Grade de {monthName(r.period)} — {count('CONFIRMADO')} confirmaram · {count('AJUSTE')} pediram ajuste · {count('PENDENTE')} aguardando</p>
+        {r.confirmations.length === 0 ? <p className="mt-1 text-sm text-tinta-suave">A grade deste mês ainda não foi enviada pelo sistema.</p> : (
+          <ul className="mt-1 divide-y divide-borda text-sm">
+            {r.confirmations.map((c) => (
+              <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 py-1.5">
+                <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-bold', CONF[c.status as keyof typeof CONF]?.cls)}>{CONF[c.status as keyof typeof CONF]?.label ?? c.status}</span>
+                <span className="font-semibold">{c.name}</span>
+                {c.reply && <span className="min-w-0 flex-1 whitespace-pre-line text-xs text-tinta">“{c.reply}”</span>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {r.inbound.length > 0 && (
+        <div className="mt-3">
+          <p className="text-sm font-bold text-navy">Últimas mensagens recebidas</p>
+          <ul className="mt-1 divide-y divide-borda text-sm">
+            {r.inbound.map((m) => (
+              <li key={m.id} className="flex flex-wrap items-center gap-x-3 py-1.5">
+                <span className="w-32 text-xs text-tinta-suave">{new Date(m.at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                <span className="font-semibold">{m.from}</span>
+                <span className="min-w-0 flex-1 truncate text-tinta" title={m.text ?? ''}>{m.text ?? '(sem texto: áudio, imagem…)'}</span>
+                {m.handled && <span className="text-xs font-semibold text-nacao">{m.handled === 'CONFIRMOU_GRADE' ? 'confirmou a grade' : 'ajuste na grade'}</span>}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </Card>

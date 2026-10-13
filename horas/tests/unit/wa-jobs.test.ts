@@ -36,3 +36,17 @@ describe('envios automáticos (puro)', () => {
     expect(monthlyGradeMessage({ month: '2026-11', gradeText: 'GRADE' })).toMatch(/Grade de novembro de 2026[\s\S]*GRADE[\s\S]*OK/);
   });
 });
+
+import { isConfirmation, phoneKey } from '@/domain/whatsapp';
+describe('respostas do WhatsApp (puro)', () => {
+  it('casa o número com e sem o 9 e com o 55', () => {
+    expect(phoneKey('5561999998888')).toBe('6199998888');
+    expect(phoneKey('556199998888')).toBe('6199998888');
+    expect(phoneKey('(61) 99999-8888')).toBe('6199998888');
+    expect(phoneKey('123')).toBeNull();
+  });
+  it('entende a confirmação', () => {
+    for (const t of ['OK', 'ok!', 'Okk', 'Sim', 'confirmo', 'Confirmado.', 'tudo certo', 'Tá certo', '👍', '✅', 'ok 👍']) expect(isConfirmation(t)).toBe(true);
+    for (const t of ['ok mas sexta não posso', 'não', 'preciso trocar terça', '', 'oi']) expect(isConfirmation(t)).toBe(false);
+  });
+});

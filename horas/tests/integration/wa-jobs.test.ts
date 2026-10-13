@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import { prisma } from '@/server/db';
-import { jobRecipients, runWaJob } from '@/server/whatsapp/jobs';
+import { jobRecipients, replyOverview, runWaJob } from '@/server/whatsapp/jobs';
+import { handleZapiReceived } from '@/server/whatsapp/inbound';
+import { POST } from '@/app/api/webhooks/zapi/route';
 import { ensureCatalog, hasDb, makeArea, makeUser } from './helpers';
 
 /** Envios automáticos contra uma Z-API falsa: destinatários, texto e "uma vez por período". */
@@ -84,5 +86,38 @@ describe.skipIf(!hasDb)('WhatsApp — envios automáticos', () => {
     expect(m).toMatchObject({ manual: true, enviados: 1 });
     expect(sent.every((s) => s.phone === '5561955550000')).toBe(true);
     delete process.env.ZAPI_TEST_PHONE;
+  });
+
+  it('respostas: "ok" confirma (número sem o 9), outra coisa vira ajuste, duplicada e própria são ignoradas; webhook exige token', async () => {
+    const tag = Math.random().toString(36).slice(2, 6);
+    const [g, h] = await Promise.all([
+      prisma.teacher.create({ data: { name: `Gabi ${tag}`, phone: '61 94444-1234' } }),
+      prisma.teacher.create({ data: { name: `Hugo ${tag}`, phone: '61 93333-5678' } }),
+    ]);
+    await prisma.waConfirmation.createMany({ data: [
+      { kind: 'GRADE', period: '2031-03', teacherId: g.id, name: g.name, phoneKey: '6144441234' },
+      { kind: 'GRADE', period: '2031-03', teacherId: h.id, name: h.name, phoneKey: '6133335678' },
+    ] });
+    sent.length = 0;
+    expect(await handleZapiReceived({ type: 'ReceivedCallback', messageId: `a${tag}`, phone: '556144441234', text: { message: 'Ok 👍' } })).toBe('CONFIRMOU_GRADE');
+    expect(sent.at(-1)!.message).toContain('confirmada ✅');
+    expect(await handleZapiReceived({ type: 'ReceivedCallback', messageId: `a${tag}`, phone: '556144441234', text: { message: 'Ok' } })).toBe('duplicada');
+    expect(await handleZapiReceived({ type: 'ReceivedCallback', messageId: `b${tag}`, phone: '5561944441234', fromMe: true, text: { message: 'oi' } })).toBe('ignorada');
+    expect(await handleZapiReceived({ type: 'ReceivedCallback', messageId: `c${tag}`, phone: '5561944441234', text: { message: 'obrigada!' } })).toBe('registrada'); // já confirmou
+
+    expect(await handleZapiReceived({ type: 'ReceivedCallback', messageId: `d${tag}`, phone: '5561933335678', text: { message: 'Terça não posso mais às 7h' } })).toBe('AJUSTE_GRADE');
+    expect(await handleZapiReceived({ type: 'ReceivedCallback', messageId: `e${tag}`, phone: '5561933335678', text: { message: 'resolvido, ok' } })).toBe('registrada'); // não é "ok" puro
+    expect(await handleZapiReceived({ type: 'ReceivedCallback', messageId: `f${tag}`, phone: '5561933335678', text: { message: 'ok' } })).toBe('CONFIRMOU_GRADE');
+    const c = await prisma.waConfirmation.findFirstOrThrow({ where: { teacherId: h.id } });
+    expect([c.status, c.reply]).toEqual(['CONFIRMADO', 'Terça não posso mais às 7h']);
+    const ov = await replyOverview('2031-03-15');
+    expect(ov.confirmations.filter((x) => x.name.endsWith(tag)).map((x) => x.status)).toEqual(['CONFIRMADO', 'CONFIRMADO']);
+    expect(ov.inbound.some((m) => m.from === g.name)).toBe(true);
+
+    process.env.CRON_SECRET = 'segredo-teste';
+    const call = (token: string) => POST(new Request(`http://x/api/webhooks/zapi?token=${token}`, { method: 'POST', body: JSON.stringify({ type: 'ReceivedCallback', messageId: `g${tag}`, phone: '5561999990000', text: { message: 'oi' } }) }));
+    expect((await call('errado')).status).toBe(401);
+    expect(await (await call('segredo-teste')).json()).toMatchObject({ ok: true, result: 'registrada' });
+    delete process.env.CRON_SECRET;
   });
 });

@@ -58,3 +58,22 @@ export function accessMessage(a: { name: string; email: string; password: string
     'No primeiro acesso o sistema pede para você criar uma senha nova. Não compartilhe esta mensagem.',
   ].join('\n');
 }
+
+/**
+ * Chave para casar números: DDD + 8 últimos dígitos. O WhatsApp às vezes
+ * devolve celular sem o 9 (55 61 9999-8888 vs 55 61 99999-8888).
+ */
+export function phoneKey(raw: string | null | undefined): string | null {
+  let d = (raw ?? '').replace(/\D/g, '');
+  if (d.length >= 12 && d.startsWith('55')) d = d.slice(2);
+  if (d.length < 10 || d.length > 11) return null;
+  return `${d.slice(0, 2)}${d.slice(-8)}`;
+}
+
+/** Resposta de confirmação: "ok", "sim", "confirmo", 👍, ✅… */
+export function isConfirmation(text: string | null | undefined): boolean {
+  const t = (text ?? '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  if (!t) return false;
+  if (/^(👍|✅|👌|☑️|✔️)+$/u.test(t.replace(/\s/g, ''))) return true;
+  return /^(ok+|okay|sim|s|confirm(o|ado|ada|ada)?|certo|ta certo|esta certo|tudo certo|tudo ok|perfeito|de acordo|combinado)[\s.!👍✅👌]*$/u.test(t);
+}
