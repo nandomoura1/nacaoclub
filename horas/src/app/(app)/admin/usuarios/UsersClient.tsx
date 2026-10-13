@@ -18,6 +18,7 @@ export interface UserRow {
   id: string;
   name: string;
   email: string;
+  phone: string | null;
   active: boolean;
   mustChangePassword: boolean;
   lastLoginAt: string | null;
@@ -171,6 +172,7 @@ function UserSheet({
   const [form, setForm] = useState<UserFormPayload>({
     name: initial?.name ?? '',
     email: initial?.email ?? '',
+    phone: initial?.phone ?? '',
     roleKeys: initial?.roleKeys ?? ['COORDENADOR'],
     areaIds: initial?.areaIds ?? [],
     active: initial?.active ?? true,
@@ -236,6 +238,11 @@ function UserSheet({
           <div>
             <Label htmlFor="u-email">E-mail</Label>
             <Input id="u-email" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          </div>
+          <div>
+            <Label htmlFor="u-phone">WhatsApp (opcional)</Label>
+            <Input id="u-phone" inputMode="tel" placeholder="61 99999-8888" value={form.phone ?? ''} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+            <p className="mt-1 text-xs text-tinta-suave">Para os avisos automáticos (ex.: lembrete semanal do líder). Professor vinculado usa o telefone do cadastro.</p>
           </div>
 
           <fieldset>

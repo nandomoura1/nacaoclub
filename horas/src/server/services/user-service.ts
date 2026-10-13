@@ -22,6 +22,8 @@ export const userInputSchema = z.object({
   areaIds: z.array(uuid).default([]),
   /** Cadastros de professor desta pessoa (perfil Professor vê o próprio extrato). Pode ter mais de um. */
   teacherIds: z.array(uuid).max(10).default([]),
+  /** WhatsApp para os avisos automáticos (DDD + número). */
+  phone: z.string().trim().max(30).refine((v) => !v || v.replace(/\D/g, '').length >= 10, 'WhatsApp: informe DDD + número.').nullable().optional(),
 });
 export type UserInput = z.input<typeof userInputSchema>;
 
@@ -133,6 +135,7 @@ export async function createUser(
       data: {
         name: data.name,
         email: data.email,
+        phone: data.phone?.trim() || null,
         teachers: { create: teacherIds.map((teacherId) => ({ teacherId })) },
         passwordHash,
         mustChangePassword: true,
@@ -185,7 +188,7 @@ export async function updateUser(
 
     await tx.user.update({
       where: { id: userId },
-      data: { name: data.name, email: data.email, active: data.active },
+      data: { name: data.name, email: data.email, active: data.active, ...(data.phone !== undefined ? { phone: data.phone?.trim() || null } : {}) },
     });
     await tx.userTeacher.deleteMany({ where: { userId } });
     if (teacherIds.length) await tx.userTeacher.createMany({ data: teacherIds.map((teacherId) => ({ userId, teacherId })) });

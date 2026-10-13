@@ -54,6 +54,8 @@ model User {
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")
   createdById        String?   @map("created_by") @db.Uuid
+  /// WhatsApp para os avisos automáticos (ex.: líder de setor). Professor usa o do cadastro.
+  phone              String?
 
   /// Cadastros de professor desta pessoa (perfil Professor: extrato próprio e treinos Personal).
   /// Uma pessoa pode ter mais de um (ex.: um cadastro no CrossFit e outro na Nação Fit).
@@ -2032,4 +2034,19 @@ model ProcComment {
 
   @@index([demandId, createdAt])
   @@map("proc_comments")
+}
+
+/// Envio automático de WhatsApp (agendado): liga/desliga e controle de "já enviado neste período".
+model WaJob {
+  /// LIDERES (segunda), ESCALA_FDS (sexta), GRADE_MENSAL (dia 1).
+  key       String    @id
+  enabled   Boolean   @default(true)
+  /// Período já enviado (ex.: 2026-W42, 2026-10-17, 2026-11): impede envio duplicado.
+  lastPeriod String?  @map("last_period")
+  lastRunAt DateTime? @map("last_run_at")
+  /// Resumo do último envio: { enviados, falhas, semTelefone, … }.
+  lastResult Json?    @map("last_result")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@map("wa_jobs")
 }

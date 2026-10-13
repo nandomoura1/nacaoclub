@@ -2,23 +2,25 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, CircleAlert, Send, Smartphone } from 'lucide-react';
+import { CalendarClock, CheckCircle2, CircleAlert, Eye, Play, Send, Smartphone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input, Label } from '@/components/ui/input';
 import { WA_KINDS } from '@/domain/whatsapp';
 import { cn } from '@/lib/cn';
 import type { WhatsAppOverview } from '@/server/services/whatsapp-service';
-import { sendWhatsAppAction } from '../../whatsapp/actions';
+import { previewWaJobAction, runWaJobAction, sendWhatsAppAction, toggleWaJobAction } from '../../whatsapp/actions';
+import type { WaJobView } from '@/server/whatsapp/jobs';
 
 const ENV = [
   { key: 'ZAPI_INSTANCE_ID', what: 'ID da instância (Z-API → Instâncias Web → ID da instância)', required: true },
   { key: 'ZAPI_INSTANCE_TOKEN', what: 'Token da instância (gere um novo antes de colar)', required: true },
   { key: 'ZAPI_CLIENT_TOKEN', what: 'Token de segurança da conta (Z-API → Segurança), se estiver ativado', required: false },
   { key: 'ZAPI_TEST_PHONE', what: 'Opcional: com ele, TODO envio vai só para este número (modo teste)', required: false },
+  { key: 'CRON_SECRET', what: 'Senha do agendador dos envios automáticos (qualquer texto longo)', required: false },
 ];
 
-export function WhatsAppClient({ v }: { v: WhatsAppOverview }) {
+export function WhatsAppClient({ v, jobs, cronReady }: { v: WhatsAppOverview; jobs: WaJobView[]; cronReady: boolean }) {
   const router = useRouter();
   const [to, setTo] = useState('');
   const [text, setText] = useState('Teste de integração do Nação ADM com a Z-API. ✅');
@@ -90,6 +92,8 @@ export function WhatsAppClient({ v }: { v: WhatsAppOverview }) {
         {msg?.ok && <p className="mt-2 text-sm font-semibold text-sucesso">{msg.ok}</p>}
       </Card>
 
+      <AutoJobs jobs={jobs} cronReady={cronReady} configured={v.configured} testMode={!!v.testPhone} />
+
       <Card className="overflow-hidden">
         <p className="bg-fundo px-4 py-2 text-sm font-bold text-navy">Últimos envios</p>
         {v.messages.length === 0 && <p className="p-4 text-sm text-tinta-suave">Nenhum envio ainda.</p>}
@@ -109,5 +113,72 @@ export function WhatsAppClient({ v }: { v: WhatsAppOverview }) {
         </ul>
       </Card>
     </div>
+  );
+}
+
+type Preview = { total: number; semTelefone: string[]; amostras: { para: string; nome: string; texto: string }[] };
+
+/** Envios automáticos: liga/desliga, prévia (sem enviar) e enviar agora. */
+function AutoJobs({ jobs, cronReady, configured, testMode }: { jobs: WaJobView[]; cronReady: boolean; configured: boolean; testMode: boolean }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{ key: string; p: Preview } | null>(null);
+  const [msg, setMsg] = useState<{ ok?: string; error?: string } | null>(null);
+  const act = (key: string, fn: () => Promise<void>) => { setBusy(key); setMsg(null); start(async () => { await fn(); setBusy(null); router.refresh(); }); };
+  const fmt = (iso: string) => new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+  return (
+    <Card className="p-4">
+      <h2 className="flex items-center gap-2 font-bold text-navy"><CalendarClock className="size-4 text-nacao" /> Envios automáticos</h2>
+      <p className="mt-1 text-sm text-tinta-suave">Rodam sozinhos às 8h, no dia de cada um. Cada período é enviado uma vez só.{testMode ? ' Em modo teste, cada envio manda só as 3 primeiras mensagens, todas para o número de teste.' : ''}</p>
+      {!cronReady && <p className="mt-2 rounded-lg border border-atencao/40 bg-atencao/5 p-2 text-sm text-atencao"><b>Falta 1 passo:</b> crie a variável <code>CRON_SECRET</code> na Vercel (qualquer senha longa) e faça Redeploy. Sem ela o agendador não roda — os botões abaixo funcionam.</p>}
+      {msg?.error && <p className="mt-2 text-sm font-semibold text-critico">{msg.error}</p>}
+      {msg?.ok && <p className="mt-2 text-sm font-semibold text-sucesso">{msg.ok}</p>}
+      <div className="mt-3 grid gap-3 lg:grid-cols-3 [&>*]:min-w-0">
+        {jobs.map((j) => {
+          const r = j.lastResult;
+          return (
+            <div key={j.key} className={cn('flex flex-col gap-2 rounded-xl border p-3', j.enabled ? 'border-nacao/30' : 'border-borda opacity-80')}>
+              <div className="flex items-start gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold text-navy">{j.label}</p>
+                  <p className="text-xs font-semibold text-nacao">{j.when}</p>
+                </div>
+                <label className="flex items-center gap-1.5 text-xs font-semibold">
+                  <input type="checkbox" checked={j.enabled} disabled={pending} onChange={(e) => act(j.key, async () => { const x = await toggleWaJobAction(j.key, e.target.checked); setMsg(x.ok ? { ok: x.message ?? undefined } : { error: x.error }); })} />
+                  {j.enabled ? 'ligado' : 'desligado'}
+                </label>
+              </div>
+              <p className="text-xs text-tinta-suave">{j.detail}</p>
+              <p className="text-xs text-tinta-fraca">
+                {j.lastRunAt ? <>Último: {fmt(j.lastRunAt)}{r ? ` · ${r.enviados} enviada(s)${r.falhas ? `, ${r.falhas} falha(s)` : ''}${r.semTelefone?.length ? `, ${r.semTelefone.length} sem telefone` : ''}${r.limitadoTeste ? `, ${r.limitadoTeste} não enviadas (modo teste)` : ''}${r.erro ? ` · ${r.erro}` : ''}` : ''}</> : 'Ainda não rodou.'}
+              </p>
+              <div className="mt-auto flex flex-wrap gap-1.5">
+                <Button size="sm" variant="secondary" disabled={pending} onClick={() => act(j.key, async () => { const x = await previewWaJobAction(j.key); if (x.ok) setPreview({ key: j.key, p: x.data }); else setMsg({ error: x.error }); })}><Eye /> {busy === j.key && pending ? 'Montando…' : 'Prévia'}</Button>
+                <Button size="sm" variant="ghost" disabled={pending || !configured} onClick={() => { if (confirm(`Enviar agora "${j.label}"?${testMode ? ' (modo teste: até 3 mensagens para o número de teste)' : ''}`)) act(j.key, async () => { const x = await runWaJobAction(j.key); setMsg(x.ok ? { ok: `${x.data.enviados} enviada(s)${x.data.falhas ? `, ${x.data.falhas} falha(s)` : ''}${x.data.semTelefone.length ? ` · sem telefone: ${x.data.semTelefone.join(', ')}` : ''}${x.data.erro ? ` · ${x.data.erro}` : ''}` } : { error: x.error }); }); }}><Play /> Enviar agora</Button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {preview && (
+        <div className="mt-4 rounded-xl border border-borda bg-fundo p-3">
+          <div className="flex items-center gap-2">
+            <p className="flex-1 text-sm font-bold text-navy">Prévia · {jobs.find((j) => j.key === preview.key)?.label} — {preview.p.total} destinatário(s) hoje</p>
+            <button type="button" className="text-xs font-semibold text-nacao" onClick={() => setPreview(null)}>fechar</button>
+          </div>
+          {preview.p.semTelefone.length > 0 && <p className="mt-1 text-xs text-atencao">Sem WhatsApp cadastrado (não recebem): {preview.p.semTelefone.join(', ')}</p>}
+          {preview.p.amostras.length === 0 && <p className="mt-2 text-sm text-tinta-suave">Ninguém receberia hoje.</p>}
+          <div className="mt-2 grid gap-2 md:grid-cols-3 [&>*]:min-w-0">
+            {preview.p.amostras.map((a, i) => (
+              <div key={i} className="rounded-lg bg-white p-2 text-xs ring-1 ring-borda">
+                <p className="mb-1 font-semibold text-tinta-suave">{a.nome} · {a.para}</p>
+                <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap font-corpo text-tinta">{a.texto}</pre>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </Card>
   );
 }

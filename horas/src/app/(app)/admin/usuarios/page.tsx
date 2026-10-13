@@ -22,6 +22,7 @@ export default async function UsuariosPage() {
     id: u.id,
     name: u.name,
     email: u.email,
+    phone: u.phone,
     active: u.active,
     mustChangePassword: u.mustChangePassword,
     lastLoginAt: u.lastLoginAt?.toISOString() ?? null,

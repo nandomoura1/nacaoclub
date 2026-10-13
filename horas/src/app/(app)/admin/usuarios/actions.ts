@@ -9,6 +9,7 @@ export interface UserFormPayload {
   name: string;
   email: string;
   roleKeys: string[];
+  phone?: string | null;
   areaIds: string[];
   active: boolean;
   teacherIds: string[];

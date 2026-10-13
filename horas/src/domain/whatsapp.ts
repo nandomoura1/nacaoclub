@@ -10,6 +10,8 @@ export const WA_KINDS = [
   { id: 'CONDOMINIO', label: 'Cobrança do condomínio' },
   { id: 'TREINO', label: 'Treino' },
   { id: 'RELATORIO', label: 'Relatório' },
+  { id: 'DEMANDAS', label: 'Lembrete de demandas' },
+  { id: 'GRADE', label: 'Grade do professor' },
   { id: 'LIVRE', label: 'Mensagem' },
 ] as const;
 export type WaKind = (typeof WA_KINDS)[number]['id'];

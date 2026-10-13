@@ -29,13 +29,28 @@ export async function sendWhatsApp(principal: Principal | null, input: unknown, 
   if (!r.success) throw new AppError(r.error.issues[0]?.message ?? 'Dados inválidos.');
   const d = r.data;
   if (d.kind === 'ACESSO') assertCan(principal, 'admin.users');
-  const dest = normalizeDestination(d.to);
+  const out = await deliverWhatsApp({ kind: d.kind, to: d.to, text: d.text, hasSecret: d.hasSecret, actor: { id: principal.id, name: principal.name }, meta, pdf });
+  if (out.error) throw new AppError(out.error);
+  return { status: out.status as SendResult['status'], testMode: out.testMode, to: out.to };
+}
+
+export interface Delivery { status: 'SENT' | 'SIMULATED' | 'FAILED'; testMode: boolean; to: string; error: string | null }
+
+/**
+ * Núcleo do envio (sem checar permissão): usado pelos botões e pelos envios
+ * automáticos. Registra a mensagem e audita; nunca lança por falha da Z-API.
+ */
+export async function deliverWhatsApp(input: {
+  kind: string; to: string; text: string; hasSecret?: boolean; actor: { id: string | null; name: string }; meta?: RequestMeta; pdf?: { bytes: Uint8Array; fileName: string };
+}): Promise<Delivery> {
+  const { kind, pdf } = input;
+  const dest = normalizeDestination(input.to);
   if (!dest) throw new AppError('Número inválido. Use DDD + número (ex.: 61 98466-2806) ou o ID do grupo.');
   const cfg = zapiConfig();
   if (!cfg.configured) throw new AppError('WhatsApp ainda não configurado: peça ao administrador para cadastrar a Z-API (Administração → WhatsApp).');
   const target = cfg.testPhone ? (normalizeDestination(cfg.testPhone) ?? dest) : dest;
   const testMode = !!cfg.testPhone;
-  const text = testMode ? `🧪 [TESTE — seria para ${maskDestination(dest)}]\n\n${d.text}` : d.text;
+  const text = testMode ? `🧪 [TESTE — seria para ${maskDestination(dest)}]\n\n${input.text}` : input.text;
 
   let providerId: string | null = null;
   let error: string | null = null;
@@ -45,19 +60,19 @@ export async function sendWhatsApp(principal: Principal | null, input: unknown, 
     error = e instanceof Error ? e.message : 'Falha no envio.';
   }
   const status = error ? 'FAILED' : cfg.fake ? 'SIMULATED' : 'SENT';
+  const label = WA_KINDS.find((k) => k.id === kind)?.label ?? kind;
   await prisma.$transaction(async (tx) => {
     const m = await tx.waMessage.create({
-      data: { kind: d.kind, toMasked: maskDestination(dest), preview: previewOf(d.text, d.hasSecret), hasFile: !!pdf, status, testMode, providerId, error, createdById: principal.id },
+      data: { kind, toMasked: maskDestination(dest), preview: previewOf(input.text, !!input.hasSecret), hasFile: !!pdf, status, testMode, providerId, error, createdById: input.actor.id },
     });
-    await audit(tx, { actorId: principal.id, ...meta }, {
+    await audit(tx, { actorId: input.actor.id, ...(input.meta ?? {}) }, {
       action: error ? 'whatsapp.failed' : 'whatsapp.sent', entityType: 'wa_message', entityId: m.id,
       // Em falha, guarda as credenciais MASCARADAS (4 primeiros…4 últimos) para diagnóstico sem expor segredo.
-      after: { tipo: d.kind, para: m.toMasked, teste: testMode, arquivo: !!pdf, erro: error, ...(error ? { credenciais: { instancia: cfg.hints.id, chaveInstancia: cfg.hints.token, clientToken: cfg.hints.client ? 'definido' : 'não definido' } } : {}) },
-      summary: `${principal.name} ${error ? 'tentou enviar' : 'enviou'} WhatsApp (${WA_KINDS.find((k) => k.id === d.kind)!.label}) para ${m.toMasked}${testMode ? ' — modo teste' : ''}${error ? `: ${error}` : ''}`,
+      after: { tipo: kind, para: m.toMasked, teste: testMode, arquivo: !!pdf, erro: error, ...(error ? { credenciais: { instancia: cfg.hints.id, chaveInstancia: cfg.hints.token, clientToken: cfg.hints.client ? 'definido' : 'não definido' } } : {}) },
+      summary: `${input.actor.name} ${error ? 'tentou enviar' : 'enviou'} WhatsApp (${label}) para ${m.toMasked}${testMode ? ' — modo teste' : ''}${error ? `: ${error}` : ''}`,
     });
   });
-  if (error) throw new AppError(error);
-  return { status: status as SendResult['status'], testMode, to: maskDestination(dest) };
+  return { status, testMode, to: maskDestination(dest), error };
 }
 
 export async function whatsAppOverview(principal: Principal | null) {

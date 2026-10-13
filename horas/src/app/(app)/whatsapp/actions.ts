@@ -3,13 +3,18 @@
 import { revalidatePath } from 'next/cache';
 import { getPrincipal, requestMeta } from '@/server/auth/session';
 import { runAction, type ActionResult } from '@/server/action-result';
-import { can } from '@/server/auth/authz';
+import { assertCan, can } from '@/server/auth/authz';
 import { AppError } from '@/server/errors';
 import { todayIso } from '@/lib/today';
 import { zapiConfig } from '@/server/whatsapp/zapi';
 import { sendWhatsApp, type SendResult } from '@/server/services/whatsapp-service';
 import { chargeDocs } from '@/server/services/condo-period-service';
 import { condoChargesPdf } from '@/server/condominio/pdf';
+import { prisma } from '@/server/db';
+import { audit } from '@/server/audit';
+import { isJobKey } from '@/domain/wa-jobs';
+import { jobRecipients, runWaJob, type JobResult } from '@/server/whatsapp/jobs';
+import { maskDestination, normalizeDestination } from '@/domain/whatsapp';
 
 /** O usuário pode enviar e a Z-API está configurada? (o botão some quando não). */
 export async function whatsAppAvailableAction(): Promise<{ canSend: boolean; configured: boolean; testMode: boolean }> {
@@ -35,5 +40,49 @@ export async function sendCondoChargeAction(month: string, chargeId: string, to:
     const r = await sendWhatsApp(principal, { kind: 'CONDOMINIO', to, text }, await requestMeta(), { bytes: pdf, fileName });
     revalidatePath('/admin/whatsapp');
     return r;
+  });
+}
+
+// ── Envios automáticos ─────────────────────────────────────
+
+export async function toggleWaJobAction(key: string, enabled: boolean): Promise<ActionResult> {
+  return runAction(async () => {
+    const p = await getPrincipal();
+    assertCan(p, 'whatsapp.admin');
+    if (!isJobKey(key)) throw new AppError('Envio desconhecido.');
+    await prisma.$transaction(async (tx) => {
+      await tx.waJob.upsert({ where: { key }, create: { key, enabled }, update: { enabled } });
+      await audit(tx, { actorId: p.id, ...(await requestMeta()) }, { action: 'whatsapp.job_toggle', entityType: 'wa_job', entityId: null, after: { envio: key, ligado: enabled }, summary: `${p.name} ${enabled ? 'ligou' : 'desligou'} o envio automático ${key}` });
+    });
+    revalidatePath('/admin/whatsapp');
+    return undefined;
+  }, enabled ? 'Envio automático ligado.' : 'Envio automático desligado.');
+}
+
+/** Prévia: quem receberia e o texto, sem enviar nada. */
+export async function previewWaJobAction(key: string): Promise<ActionResult<{ total: number; semTelefone: string[]; amostras: { para: string; nome: string; texto: string }[] }>> {
+  return runAction(async () => {
+    const p = await getPrincipal();
+    assertCan(p, 'whatsapp.admin');
+    if (!isJobKey(key)) throw new AppError('Envio desconhecido.');
+    const list = await jobRecipients(key, todayIso());
+    const ok = list.filter((r) => r.phone && normalizeDestination(r.phone));
+    return {
+      total: list.length,
+      semTelefone: list.filter((r) => !ok.includes(r)).map((r) => r.name),
+      amostras: ok.slice(0, 3).map((r) => ({ para: maskDestination(normalizeDestination(r.phone!)!), nome: r.name, texto: r.text })),
+    };
+  });
+}
+
+/** Enviar agora (fora do dia programado). Marca o período como enviado. */
+export async function runWaJobAction(key: string): Promise<ActionResult<JobResult>> {
+  return runAction(async () => {
+    const p = await getPrincipal();
+    assertCan(p, 'whatsapp.admin');
+    if (!isJobKey(key)) throw new AppError('Envio desconhecido.');
+    const r = await runWaJob(key, todayIso(), { force: true, actorName: p.name });
+    revalidatePath('/admin/whatsapp');
+    return r!;
   });
 }
