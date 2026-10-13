@@ -52,7 +52,7 @@ export async function sendWhatsApp(principal: Principal | null, input: unknown, 
     await audit(tx, { actorId: principal.id, ...meta }, {
       action: error ? 'whatsapp.failed' : 'whatsapp.sent', entityType: 'wa_message', entityId: m.id,
       // Em falha, guarda as credenciais MASCARADAS (4 primeiros…4 últimos) para diagnóstico sem expor segredo.
-      after: { tipo: d.kind, para: m.toMasked, teste: testMode, arquivo: !!pdf, erro: error, ...(error ? { credenciais: cfg.hints } : {}) },
+      after: { tipo: d.kind, para: m.toMasked, teste: testMode, arquivo: !!pdf, erro: error, ...(error ? { credenciais: { instancia: cfg.hints.id, chaveInstancia: cfg.hints.token, clientToken: cfg.hints.client ? 'definido' : 'não definido' } } : {}) },
       summary: `${principal.name} ${error ? 'tentou enviar' : 'enviou'} WhatsApp (${WA_KINDS.find((k) => k.id === d.kind)!.label}) para ${m.toMasked}${testMode ? ' — modo teste' : ''}${error ? `: ${error}` : ''}`,
     });
   });

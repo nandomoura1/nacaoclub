@@ -65,7 +65,7 @@ async function call<T>(method: 'GET' | 'POST', path: string, body?: unknown): Pr
   if (!res.ok) {
     const msg = (json as { error?: string; message?: string } | null)?.error ?? (json as { message?: string } | null)?.message ?? text.slice(0, 200);
     if (res.status === 401 || res.status === 403 || /client-token/i.test(String(msg))) throw new AppError(`Z-API recusou as credenciais (${res.status}). Confira o token da instância e o Client-Token de segurança.`);
-    if (res.status === 404 && /instance/i.test(String(msg))) throw new AppError('Z-API não encontrou a instância (404): confira ZAPI_INSTANCE_ID (só o ID, sem aspas nem espaços) e se ele não está trocado com o ZAPI_INSTANCE_TOKEN.');
+    if (res.status === 404 && /instance/i.test(String(msg))) throw new AppError('Z-API não encontrou a instância (404). Causas comuns: o período de teste da instância expirou ou ela foi excluída/recriada (confira no painel da Z-API se está ativa e conectada), ou o ZAPI_INSTANCE_TOKEN não é o desta instância (se gerou token novo, atualize na Vercel e faça Redeploy).');
     if (/token/i.test(String(msg)) && res.status === 400) throw new AppError(`Z-API recusou o token da instância (${res.status}): confira ZAPI_INSTANCE_TOKEN.`);
     throw new AppError(`Z-API respondeu ${res.status}: ${String(msg) || 'erro sem detalhe'}`);
   }
