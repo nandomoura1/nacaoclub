@@ -110,9 +110,12 @@ describe.skipIf(!hasDb)('E2 · cadastros, feriados e professores', () => {
       const consulta = await makeUser('CONSULTA');
       const coord = await makeUser('COORDENADOR');
 
+      // DP / Financeiro vê dado pessoal (contratos, folha); sem a permissão, o dado não sai do servidor.
       const seenByConsulta = (await listTeachers(consulta.principal)).find((t) => t.name === 'Pessoa Privada')!;
-      expect(seenByConsulta.email).toBeNull();
-      expect(seenByConsulta.phone).toBeNull();
+      expect(seenByConsulta.email).toBe('privada@teste.dev');
+      const semDado = { ...consulta.principal, permissions: new Set([...consulta.principal.permissions].filter((k) => k !== 'teacher.view_personal')) };
+      const seenWithout = (await listTeachers(semDado)).find((t) => t.name === 'Pessoa Privada')!;
+      expect([seenWithout.email, seenWithout.phone]).toEqual([null, null]);
       const seenByCoord = (await listTeachers(coord.principal)).find((t) => t.name === 'Pessoa Privada')!;
       expect(seenByCoord.email).toBe('privada@teste.dev');
       await expect(saveTeacher(coord.principal, null, { name: 'X Y' }, META)).rejects.toThrow(AuthorizationError);

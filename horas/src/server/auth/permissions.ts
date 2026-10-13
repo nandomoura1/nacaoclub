@@ -98,9 +98,22 @@ export const SYSTEM_ROLES: Record<
     ],
   },
   CONSULTA: {
-    name: 'Consulta (DP / Financeiro)',
-    description: 'Leitura do fechamento e dos relatórios de todas as áreas.',
-    permissions: ['area.all', 'schedule.view', 'teacher.view', 'payroll.view_hours'],
+    name: 'DP / Financeiro',
+    description: 'Departamento Pessoal e Financeiro com acesso pleno: horas e fechamento, professores e documentos, Relatório Financeiro, Condomínio (competências e boletos) e Empresas. Não administra usuários, grade nem marketing.',
+    permissions: [
+      'area.all',
+      // Gestão de Horas (DP): lançar, corrigir, aprovar, fechar e reabrir.
+      'schedule.view', 'period.generate', 'occurrence.exception', 'leave.manage', 'hours.manual_entry',
+      'teacher.view', 'teacher.edit', 'teacher.view_personal', 'teacher.docs',
+      'payroll.view_hours', 'payroll.approve_area', 'payroll.adjust', 'payroll.admin_review', 'payroll.close', 'payroll.reopen', 'payroll.edit_closed',
+      'finance.view', 'finance.edit_rates', 'import.run',
+      // Relatório Financeiro completo.
+      'fin.view', 'fin.import', 'fin.edit', 'fin.approve', 'fin.export', 'fin.admin',
+      // Condomínio: competências, cadastros, boletos, fechamento e pagamentos.
+      'condo.view', 'condo.edit', 'condo.close', 'condo.payments',
+      // Empresas, histórico, envio de cobranças/acessos e demandas do setor.
+      'company.view', 'company.edit', 'audit.view', 'whatsapp.send', 'proc.view', 'proc.edit',
+    ],
   },
   PROFESSOR: {
     name: 'Professor',

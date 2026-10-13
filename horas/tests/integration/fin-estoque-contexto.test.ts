@@ -66,7 +66,7 @@ describe.skipIf(!hasDb)('Financeiro — estoque e contexto dos sócios', () => {
   });
 
   it('contexto dos sócios: valida motivo, audita, alimenta a análise e congela na versão', async () => {
-    const mkt = await makeUser('CONSULTA', { name: 'Só consulta' });
+    const mkt = await makeUser('MARKETING', { name: 'Sem financeiro' });
     await expect(saveFinReportContext(mkt.principal, M2, { partnerContext: 'x', exclusions: [] }, META)).rejects.toBeInstanceOf(AuthorizationError);
     await expect(saveFinReportContext(admin.principal, M2, { partnerContext: null, exclusions: [{ key: 'cmv', reason: '' }] }, META)).rejects.toThrow(/por que/);
     await expect(saveFinReportContext(admin.principal, M2, { partnerContext: null, exclusions: [{ key: 'inventado', reason: 'abc' }] }, META)).rejects.toThrow();

@@ -57,10 +57,10 @@ describe('matriz de papéis', () => {
       expect(p).not.toContain(k);
     }
   });
-  it('CONSULTA só lê, em todas as áreas', () => {
+  it('DP / Financeiro (CONSULTA): pleno em horas, financeiro, condomínio e empresas; não administra usuários, grade nem marketing', () => {
     const p = SYSTEM_ROLES.CONSULTA.permissions;
-    expect(p).toContain('area.all');
-    expect(p.some((k) => /edit|exception|close|approve|manage|generate/.test(k))).toBe(false);
+    for (const k of ['area.all', 'payroll.close', 'payroll.reopen', 'hours.manual_entry', 'teacher.edit', 'fin.edit', 'fin.approve', 'fin.admin', 'condo.edit', 'condo.close', 'condo.payments', 'company.edit'] as const) expect(p).toContain(k);
+    for (const k of ['admin.users', 'admin.catalog', 'schedule.edit', 'mkt.view', 'workout.edit', 'whatsapp.admin', 'proc.admin', 'hours.own'] as const) expect(p).not.toContain(k);
   });
   it('só referencia permissões do catálogo', () => {
     for (const role of Object.values(SYSTEM_ROLES)) {
