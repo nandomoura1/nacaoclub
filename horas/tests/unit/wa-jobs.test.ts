@@ -35,6 +35,8 @@ describe('respostas do WhatsApp (puro)', () => {
   it('entende a confirmação', () => {
     for (const t of ['OK', 'ok!', 'Okk', 'Sim', 'confirmo', 'Confirmado.', 'tudo certo', 'Tá certo', '👍', '✅', 'ok 👍']) expect(isConfirmation(t)).toBe(true);
     for (const t of ['ok mas sexta não posso', 'não', 'preciso trocar terça', '', 'oi']) expect(isConfirmation(t)).toBe(false);
+    for (const t of ['Ok, ciente', 'Lido 👍', 'recebido, obrigado', 'Ciente!', 'entendido']) expect(isConfirmation(t)).toBe(true);
+    for (const t of ['obrigado', 'valeu', 'ok mas tenho dúvida', 'ciente, mas não vou poder']) expect(isConfirmation(t)).toBe(false);
   });
 });
 

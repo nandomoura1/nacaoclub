@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import { NoticeBoard } from '@/components/notices/NoticeBoard';
+import { noticeBoard } from '@/server/services/mkt-notice-service';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { CalendarClock, CalendarPlus, ShieldCheck, Repeat2, PartyPopper, Flag, CalendarHeart, ChevronRight } from 'lucide-react';
@@ -50,7 +52,7 @@ export default async function HojePage({ searchParams }: { searchParams: Promise
     canView && period?.generatedAt ? listOccurrences(principal, { start: day, end: day }) : Promise.resolve([]),
     nacaoAgenda(principal, day),
   ]);
-  const demands = await myOpenDemands(principal, today);
+  const [demands, notices] = await Promise.all([myOpenDemands(principal, today), noticeBoard(principal, today)]);
 
   const nowMin = (() => {
     const [h, m] = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Sao_Paulo' }).format(new Date()).split(':').map(Number);
@@ -67,6 +69,7 @@ export default async function HojePage({ searchParams }: { searchParams: Promise
         title={`${saudacao()}, ${principal.name.split(' ')[0]}`}
         description={`${WEEKDAYS[weekdayOf(day) - 1]!.long}, ${formatDateBR(day)} · competência ${periodLabel(ref)}`}
       />
+      <NoticeBoard items={notices} />
 
       <div className="mb-4 flex items-center gap-2">
         <nav className="flex rounded-lg bg-white p-1 ring-1 ring-borda">

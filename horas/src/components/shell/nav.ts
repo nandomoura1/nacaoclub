@@ -85,7 +85,7 @@ export const NAV_MARKETING: NavItem[] = [
   { href: '/marketing/reuniao', label: 'Reunião semanal', icon: 'mkt-reuniao', permission: 'mkt.view' },
   { href: '/marketing/memoria', label: 'Memória da Nação', icon: 'mkt-memoria', permission: 'mkt.view' },
   { href: '/marketing/conteudo', label: 'Conteúdo & Social', icon: 'mkt-conteudo', permission: 'mkt.view', soon: 'breve' },
-  { href: '/marketing/interna', label: 'Comunicação Interna', icon: 'mkt-interna', permission: 'mkt.view', soon: 'breve' },
+  { href: '/marketing/interna', label: 'Comunicação Interna', icon: 'mkt-interna', permission: 'mkt.view' },
   { href: '/marketing/canais', label: 'Canais & Links', icon: 'mkt-canais', permission: 'mkt.view' },
   { href: '/marketing/leads', label: 'Leads & Conversão', icon: 'mkt-leads', permission: 'mkt.view' },
   { href: '/marketing/biblioteca', label: 'Biblioteca', icon: 'mkt-biblioteca', permission: 'mkt.view' },

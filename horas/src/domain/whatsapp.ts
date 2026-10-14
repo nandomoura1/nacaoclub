@@ -12,6 +12,7 @@ export const WA_KINDS = [
   { id: 'RELATORIO', label: 'Relatório' },
   { id: 'DEMANDAS', label: 'Lembrete de demandas' },
   { id: 'GRADE', label: 'Grade do professor' },
+  { id: 'COMUNICADO', label: 'Comunicado interno' },
   { id: 'LIVRE', label: 'Mensagem' },
 ] as const;
 export type WaKind = (typeof WA_KINDS)[number]['id'];
@@ -75,5 +76,9 @@ export function isConfirmation(text: string | null | undefined): boolean {
   const t = (text ?? '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   if (!t) return false;
   if (/^(👍|✅|👌|☑️|✔️)+$/u.test(t.replace(/\s/g, ''))) return true;
-  return /^(ok+|okay|sim|s|confirm(o|ado|ada|ada)?|certo|ta certo|esta certo|tudo certo|tudo ok|perfeito|de acordo|combinado)[\s.!👍✅👌]*$/u.test(t);
+  if (/^(ok+|okay|sim|s|confirm(o|ado|ada|ada)?|certo|ta certo|esta certo|tudo certo|tudo ok|perfeito|de acordo|combinado)[\s.!👍✅👌]*$/u.test(t)) return true;
+  // Combinações curtas só de palavras de "ok" ("Ok, ciente", "lido 👍", "recebido, obrigado").
+  const OK = new Set(['ok', 'okk', 'okay', 'sim', 'ciente', 'lido', 'li', 'recebido', 'recebi', 'entendido', 'entendi', 'certo', 'beleza', 'blz', 'combinado', 'confirmado', 'confirmo', 'perfeito', 'obrigado', 'obrigada', 'obg', 'valeu', 'vlw', 'show', 'top', 'tudo', 'e', 'esta', 'ta']);
+  const words = t.replace(/[👍✅👌☑️✔️🙏💙]/gu, ' ').split(/[\s,.;!]+/).filter(Boolean);
+  return words.length > 0 && words.length <= 5 && words.every((w) => OK.has(w)) && words.some((w) => !['obrigado', 'obrigada', 'obg', 'valeu', 'vlw', 'tudo', 'e', 'esta', 'ta'].includes(w));
 }

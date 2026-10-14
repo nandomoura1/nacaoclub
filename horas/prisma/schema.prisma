@@ -2241,3 +2241,46 @@ model MktAdSpend {
   @@index([campaignId])
   @@map("mkt_ad_spends")
 }
+
+/// Comunicado interno: vai por WhatsApp para um público e aparece no mural do app.
+model MktNotice {
+  id              String    @id @default(uuid()) @db.Uuid
+  /// AVISO, CAMPANHA, EVENTO, ROTINA, URGENTE
+  kind            String    @default("AVISO")
+  title           String
+  body            String
+  /// TODOS, LIDERES, PROFESSORES, PERFIL, NUMEROS
+  audience        String    @default("TODOS")
+  filter          Json?
+  campaignId      String?   @map("campaign_id") @db.Uuid
+  sendWhatsApp    Boolean   @default(true) @map("send_whatsapp")
+  askConfirmation Boolean   @default(false) @map("ask_confirmation")
+  pinned          Boolean   @default(false)
+  showUntil       DateTime? @map("show_until") @db.Date
+  /// RASCUNHO ou PUBLICADO
+  status          String    @default("RASCUNHO")
+  publishedAt     DateTime? @map("published_at")
+  publishedById   String?   @map("published_by") @db.Uuid
+  /// Resultado do envio (total, enviados, falhas, sem telefone).
+  sendResult      Json?     @map("send_result")
+  createdById     String?   @map("created_by") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  reads MktNoticeRead[]
+
+  @@index([status, publishedAt])
+  @@map("mkt_notices")
+}
+
+/// "Li" no mural do app.
+model MktNoticeRead {
+  noticeId String   @map("notice_id") @db.Uuid
+  userId   String   @map("user_id") @db.Uuid
+  readAt   DateTime @default(now()) @map("read_at")
+
+  notice MktNotice @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+
+  @@id([noticeId, userId])
+  @@map("mkt_notice_reads")
+}

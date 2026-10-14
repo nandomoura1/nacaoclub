@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import { NoticeBoard } from '@/components/notices/NoticeBoard';
+import { noticeBoard } from '@/server/services/mkt-notice-service';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { AlertTriangle, CheckCircle2, ClipboardList, ExternalLink, ListChecks, Plus, UserRound } from 'lucide-react';
@@ -26,6 +28,7 @@ const fmt = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 
 export default async function Page() {
   const principal = await requirePrincipal();
+  const notices = await noticeBoard(principal, todayIso());
   if (!can(principal, 'proc.view')) redirect('/hoje');
   const today = todayIso();
   const { sectors, totals } = await procPanel(principal, today);
@@ -37,6 +40,7 @@ export default async function Page() {
   return (
     <>
       <PageHeader title="Gestão de Processos" description={admin ? 'Como está cada setor: demandas em aberto, atrasos e entregas do mês. As rotinas e checklists ficam no Nação Task.' : 'Os setores que você lidera: demandas em aberto, atrasos e entregas do mês.'} />
+      <NoticeBoard items={notices} />
 
       {/* Nação Task: onde as rotinas acontecem */}
       <Card className="mb-4 flex flex-wrap items-center gap-3 border-nacao/25 bg-linear-to-r from-navy to-nacao p-4 text-white">
