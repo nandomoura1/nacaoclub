@@ -118,11 +118,13 @@ export default async function Page() {
       unlocks: ['Biblioteca: artes, vídeos e logos organizados por campanha, com aprovação'],
       vars: [
         { key: 'SUPABASE_URL', ok: env('SUPABASE_URL'), what: 'Endereço do projeto Supabase' },
-        { key: 'SUPABASE_SERVICE_ROLE_KEY', ok: env('SUPABASE_SERVICE_ROLE_KEY'), what: 'Chave de serviço (Supabase → Settings → API) — só na Vercel' },
+        { key: 'SUPABASE_SERVICE_ROLE_KEY', ok: env('SUPABASE_SERVICE_ROLE_KEY'), what: 'Chave secreta do Supabase — só na Vercel, nunca no navegador' },
       ],
       steps: [
-        'Me autorize a criar o “bucket” privado marketing no Supabase da Nação (é onde os arquivos ficam).',
-        'Supabase → Project Settings → API: copie “Project URL” e a chave “service_role” → crie as 2 variáveis na Vercel → Redeploy.',
+        'Pasta privada “marketing” já criada no Supabase da Nação (até 50 MB por arquivo). Nada a fazer aqui.',
+        'supabase.com → entre no projeto da Nação → ícone de engrenagem “Project Settings” (menu da esquerda, embaixo) → “API Keys”.',
+        'Copie a chave secreta “service_role” (aba “Legacy API keys” → “Reveal”) ou crie uma “Secret key” nova (aba “API Keys” → “+ New secret key”).',
+        'Vercel → projeto nacao-horas → Settings → Environment Variables: crie SUPABASE_URL = https://frhrxdasgfnzdrthjeoi.supabase.co e SUPABASE_SERVICE_ROLE_KEY = a chave copiada (marque “Sensitive”) → Save → Deployments → ⋯ → Redeploy.',
       ],
     },
   ];

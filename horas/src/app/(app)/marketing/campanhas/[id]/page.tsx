@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Library } from 'lucide-react';
+import { prisma } from '@/server/db';
 import { todayIso } from '@/lib/today';
 import { can } from '@/server/auth/authz';
 import { requirePrincipal } from '@/server/auth/session';
@@ -37,9 +38,17 @@ export default async function Page({ params, searchParams }: { params: Promise<{
   const today = todayIso();
   const v = await getCampaign(principal, id, today).catch((e) => { if (e instanceof NotFoundError) return null; throw e; });
   if (!v) notFound();
+  const assets = await prisma.mktAsset.groupBy({ by: ['status'], where: { campaignId: id, status: { not: 'ARQUIVADO' } }, _count: { _all: true } });
+  const nAssets = assets.reduce((s, a) => s + a._count._all, 0);
+  const nApproved = assets.find((a) => a.status === 'APROVADO')?._count._all ?? 0;
   return (
     <>
-      {back}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {back}
+        <Link href={`/marketing/biblioteca?campanha=${id}`} className="mb-3 inline-flex items-center gap-1 text-sm font-semibold text-nacao hover:underline">
+          <Library className="size-4" /> Criativos: {nAssets === 0 ? 'nenhum ainda' : `${nAssets} (${nApproved} aprovado${nApproved === 1 ? '' : 's'})`} →
+        </Link>
+      </div>
       <CampaignClient v={v} options={options} today={today} perms={{ edit: can(principal, 'mkt.edit'), approve: can(principal, 'mkt.approve'), ai: can(principal, 'mkt.ai') }} />
     </>
   );

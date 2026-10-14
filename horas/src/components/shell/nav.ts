@@ -88,7 +88,7 @@ export const NAV_MARKETING: NavItem[] = [
   { href: '/marketing/interna', label: 'Comunicação Interna', icon: 'mkt-interna', permission: 'mkt.view', soon: 'breve' },
   { href: '/marketing/canais', label: 'Canais & Links', icon: 'mkt-canais', permission: 'mkt.view' },
   { href: '/marketing/leads', label: 'Leads & Conversão', icon: 'mkt-leads', permission: 'mkt.view' },
-  { href: '/marketing/biblioteca', label: 'Biblioteca', icon: 'mkt-biblioteca', permission: 'mkt.view', soon: 'breve' },
+  { href: '/marketing/biblioteca', label: 'Biblioteca', icon: 'mkt-biblioteca', permission: 'mkt.view' },
   { href: '/marketing/trafego', label: 'Tráfego Pago', icon: 'mkt-trafego', permission: 'mkt.view', soon: 'breve' },
   { href: '/marketing/performance', label: 'Performance', icon: 'mkt-performance', permission: 'mkt.view', soon: 'breve' },
   { href: '/marketing/ia', label: 'IA Marketing', icon: 'treinos-ia', permission: 'mkt.view', soon: 'breve' },
