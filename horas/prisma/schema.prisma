@@ -2112,3 +2112,74 @@ model WaConfirmation {
   @@index([phoneKey, status])
   @@map("wa_confirmation_requests")
 }
+
+// ── Marketing: leads e links rastreáveis ────────────────────
+
+/// Lead (interessado): chega pelo site (formulário Wix), WhatsApp, link de campanha ou cadastro manual.
+model MktLead {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String
+  phone       String?
+  email       String?
+  /// Modalidade de interesse (texto livre do formulário ou escolhida).
+  interest    String?
+  modalityId  String?   @map("modality_id") @db.Uuid
+  /// SITE, WHATSAPP, INSTAGRAM, INDICACAO, EVENTO, PRESENCIAL, LINK, OUTRO
+  source      String    @default("OUTRO")
+  /// NOVO, CONTATO, EXPERIMENTAL, NEGOCIACAO, MATRICULADO, PERDIDO
+  stage       String    @default("NOVO")
+  ownerId     String?   @map("owner_id") @db.Uuid
+  campaignId  String?   @map("campaign_id") @db.Uuid
+  linkId      String?   @map("link_id") @db.Uuid
+  utmSource   String?   @map("utm_source")
+  utmMedium   String?   @map("utm_medium")
+  utmCampaign String?   @map("utm_campaign")
+  notes       String?
+  lostReason  String?   @map("lost_reason")
+  /// Dados brutos do formulário (para conferir), sem segredo.
+  raw         Json?
+  /// Chave para não duplicar o mesmo envio do formulário.
+  externalRef String?   @unique @map("external_ref")
+  nextActionAt DateTime? @map("next_action_at") @db.Date
+  convertedAt DateTime? @map("converted_at")
+  createdById String?   @map("created_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@index([stage, createdAt])
+  @@index([phone])
+  @@map("mkt_leads")
+}
+
+/// Link rastreável: /l/<slug> redireciona para o destino com UTM e conta os cliques.
+model MktLink {
+  id          String   @id @default(uuid()) @db.Uuid
+  slug        String   @unique
+  title       String
+  destination String
+  /// Canal: INSTAGRAM, WHATSAPP, GOOGLE, META_ADS, EMAIL, QRCODE, SITE, OUTRO
+  channel     String   @default("OUTRO")
+  utmSource   String?  @map("utm_source")
+  utmMedium   String?  @map("utm_medium")
+  utmCampaign String?  @map("utm_campaign")
+  utmContent  String?  @map("utm_content")
+  campaignId  String?  @map("campaign_id") @db.Uuid
+  active      Boolean  @default(true)
+  clicks      Int      @default(0)
+  lastClickAt DateTime? @map("last_click_at")
+  createdById String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("mkt_links")
+}
+
+/// Cliques por dia (para o gráfico de Performance), sem dado pessoal.
+model MktLinkClickDay {
+  linkId String   @map("link_id") @db.Uuid
+  day    DateTime @db.Date
+  clicks Int      @default(0)
+
+  @@id([linkId, day])
+  @@map("mkt_link_click_days")
+}

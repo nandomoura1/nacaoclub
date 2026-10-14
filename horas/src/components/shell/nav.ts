@@ -86,14 +86,15 @@ export const NAV_MARKETING: NavItem[] = [
   { href: '/marketing/memoria', label: 'Memória da Nação', icon: 'mkt-memoria', permission: 'mkt.view' },
   { href: '/marketing/conteudo', label: 'Conteúdo & Social', icon: 'mkt-conteudo', permission: 'mkt.view', soon: 'breve' },
   { href: '/marketing/interna', label: 'Comunicação Interna', icon: 'mkt-interna', permission: 'mkt.view', soon: 'breve' },
-  { href: '/marketing/canais', label: 'Canais & Links', icon: 'mkt-canais', permission: 'mkt.view', soon: 'breve' },
-  { href: '/marketing/leads', label: 'Leads & Conversão', icon: 'mkt-leads', permission: 'mkt.view', soon: 'breve' },
+  { href: '/marketing/canais', label: 'Canais & Links', icon: 'mkt-canais', permission: 'mkt.view' },
+  { href: '/marketing/leads', label: 'Leads & Conversão', icon: 'mkt-leads', permission: 'mkt.view' },
   { href: '/marketing/biblioteca', label: 'Biblioteca', icon: 'mkt-biblioteca', permission: 'mkt.view', soon: 'breve' },
   { href: '/marketing/trafego', label: 'Tráfego Pago', icon: 'mkt-trafego', permission: 'mkt.view', soon: 'breve' },
   { href: '/marketing/performance', label: 'Performance', icon: 'mkt-performance', permission: 'mkt.view', soon: 'breve' },
   { href: '/marketing/ia', label: 'IA Marketing', icon: 'treinos-ia', permission: 'mkt.view', soon: 'breve' },
   { href: '/marketing/importar-cronograma', label: 'Importar cronograma', icon: 'fin-importar', permission: 'mkt.admin' },
   { href: '/marketing/importar-trello', label: 'Importar do Trello', icon: 'fin-importar', permission: 'mkt.admin' },
+  { href: '/marketing/integracoes', label: 'Integrações', icon: 'proc-task', permission: 'mkt.admin' },
   { href: '/marketing/configuracoes', label: 'Configurações', icon: 'cadastros', permission: 'mkt.admin' },
 ];
 

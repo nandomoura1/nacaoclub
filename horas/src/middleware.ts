@@ -23,5 +23,5 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   // Tudo, menos login, assets e arquivos do Next.
-  matcher: ['/((?!login|primeiro-acesso|api/cron/|api/webhooks/|_next/|icon.png|apple-icon.png|manifest.webmanifest|icons/|brand/|favicon.ico|robots.txt).*)'],
+  matcher: ['/((?!login|primeiro-acesso|api/cron/|api/webhooks/|l/|_next/|icon.png|apple-icon.png|manifest.webmanifest|icons/|brand/|favicon.ico|robots.txt).*)'],
 };
