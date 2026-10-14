@@ -8,6 +8,7 @@ import { MEETING_PROMPT_VERSION, MEETING_SYSTEM, MeetingSchema } from './prompts
 import { RECO_PROMPT_VERSION, RECO_SYSTEM, RecoSchema } from './prompts/recommendations';
 import { SCHEDULE_PROMPT_VERSION, SCHEDULE_SYSTEM, ScheduleSchema } from './prompts/schedule';
 import { MEMORY_PROMPT_VERSION, MEMORY_SYSTEM, MemorySchema } from './prompts/memory';
+import { ANALISE_PROMPT_VERSION, ANALISE_SYSTEM, AnaliseSchema, COPY_PROMPT_VERSION, COPY_SYSTEM, CopySchema, PAUTA_PROMPT_VERSION, PAUTA_SYSTEM, PautaSchema } from './prompts/studio';
 import type Anthropic from '@anthropic-ai/sdk';
 import type { ScheduleItem } from '@/domain/marketing/schedule-import';
 
@@ -112,4 +113,55 @@ export async function draftMemory(blocks: Block[]): Promise<{ titulo: string; ap
   if (isFake()) return { titulo: 'Memória de exemplo', aprendizados: '- Exemplo local (AI_FAKE): Nação Celebration acontece em etapas ao longo do ano.', version: MEMORY_PROMPT_VERSION, model: 'exemplo local' };
   const out = await askModel(MemorySchema, MEMORY_SYSTEM, [...blocks, { type: 'text', text: 'Escreva a memória de marketing deste documento.' }], 6000);
   return { ...out, version: MEMORY_PROMPT_VERSION, model: MKT_MODEL };
+}
+
+// ── IA Marketing (estúdio) ────────────────────────────────
+
+
+export type CopyOut = z.infer<typeof CopySchema>;
+export type PautaOut = z.infer<typeof PautaSchema>;
+export type AnaliseOut = z.infer<typeof AnaliseSchema>;
+
+export interface CopyRequest { formato: string; pilar: string; campanha: CampaignBrief | null; tema: string | null; instrucoes: string | null }
+
+export async function generateCopy(req: CopyRequest, memory: MemoryContext | null): Promise<{ out: CopyOut; version: string; model: string }> {
+  if (isFake()) {
+    const nome = req.campanha?.nome ?? req.tema ?? 'Nação';
+    const social = !['WHATSAPP', 'EMAIL'].includes(req.formato);
+    const roteiro = ['REELS', 'STORIES', 'CARROSSEL'].includes(req.formato) ? ['Cena 1 (0–3s): gancho na tela', 'Cena 2: a comunidade treinando junta', 'Cena 3: CTA com o @ da Nação'] : [];
+    const out: CopyOut = { variacoes: [
+      { titulo: 'Comunidade', texto: `Aqui ninguém treina sozinho. 💙\n${nome}: bora viver isso com a gente?`, roteiro, cta: req.campanha?.cta ?? 'Chama a gente no WhatsApp', hashtags: social ? ['nacaoclub', 'umanacao'] : [], visual: 'Foto da turma comemorando no fim da aula.' },
+      { titulo: 'Direto ao ponto', texto: `${nome} na Nação Club.\n[completar oferta/data]`, roteiro, cta: req.campanha?.cta ?? 'Agende sua aula experimental', hashtags: social ? ['nacaoclub'] : [], visual: 'Arte com a marca e a data.' },
+    ] };
+    return { out, version: COPY_PROMPT_VERSION, model: 'exemplo local' };
+  }
+  const input = { formato: req.formato, pilar: req.pilar, campanha: req.campanha, tema: req.tema, instrucoesDaEquipe: req.instrucoes, memoriaDaNacao: memory?.memoria ?? 'nenhuma' };
+  const out = await askModel(CopySchema, COPY_SYSTEM, `Escreva o conteúdo.\n${JSON.stringify(input, null, 1)}`, 8000);
+  return { out, version: COPY_PROMPT_VERSION, model: MKT_MODEL };
+}
+
+export interface PautaContext { de: string; ate: string; eventos: { nome: string; data: string; fim: string | null }[]; campanhas: { nome: string; tipo: string; inicio: string; fim: string | null; oferta: string | null }[]; temas: { titulo: string; tipo: string; data: string; fim: string | null }[]; foco: string | null }
+
+export async function generatePauta(ctx: PautaContext, memory: MemoryContext | null): Promise<{ out: PautaOut; version: string; model: string }> {
+  if (isFake()) {
+    const day = (n: number) => { const d = new Date(`${ctx.de}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+    const c = ctx.campanhas[0];
+    const out: PautaOut = { ideias: [
+      { data: day(0), formato: 'REELS', pilar: 'COMUNIDADE', titulo: 'Bastidores da aula das 7h', gancho: 'Quem acorda cedo na Nação ganha o dia junto.', porque: 'Conteúdo de comunidade para abrir a semana.', campanha: null },
+      { data: day(2), formato: 'CARROSSEL', pilar: 'AUTORIDADE', titulo: '3 erros no agachamento', gancho: 'Seu joelho agradece o slide 2.', porque: 'Autoridade das modalidades.', campanha: null },
+      { data: day(4), formato: 'STORIES', pilar: c ? 'OFERTA' : 'COMUNIDADE', titulo: c ? `Lembrete: ${c.nome}` : 'Enquete da semana', gancho: c ? 'Últimos dias!' : 'Qual treino você mais curte?', porque: c ? `Campanha ${c.nome} no período.` : 'Engajamento.', campanha: c?.nome ?? null },
+    ], observacao: 'Exemplo local (AI_FAKE).' };
+    return { out, version: PAUTA_PROMPT_VERSION, model: 'exemplo local' };
+  }
+  const out = await askModel(PautaSchema, PAUTA_SYSTEM, `Monte a pauta.\n${JSON.stringify({ ...ctx, memoriaDaNacao: memory?.memoria ?? 'nenhuma', historicoMesmoPeriodoAnoAnterior: memory?.historico ?? [] }, null, 1)}`, 8000);
+  return { out, version: PAUTA_PROMPT_VERSION, model: MKT_MODEL };
+}
+
+export async function analyzePerformance(facts: unknown): Promise<{ out: AnaliseOut; version: string; model: string }> {
+  if (isFake()) {
+    const out: AnaliseOut = { resumo: 'Exemplo local (AI_FAKE): poucos dados no período.', funcionou: ['Links curtos já trazem cliques.'], atencao: ['Leads sem campanha ligada.'], acoes: [{ titulo: 'Ligar os leads às campanhas', porque: 'A tabela de campanhas está vazia.', tarefa: { titulo: 'Revisar origem e campanha dos leads da semana', area: 'COMERCIAL', prazoDias: 2 } }] };
+    return { out, version: ANALISE_PROMPT_VERSION, model: 'exemplo local' };
+  }
+  const out = await askModel(AnaliseSchema, ANALISE_SYSTEM, `Painel de Performance:\n${JSON.stringify(facts, null, 1)}`, 6000);
+  return { out, version: ANALISE_PROMPT_VERSION, model: MKT_MODEL };
 }

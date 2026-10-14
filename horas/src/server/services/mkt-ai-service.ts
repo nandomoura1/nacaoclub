@@ -29,7 +29,7 @@ const PRIORITY_IDS = PRIORITIES.map((p) => p.id) as [string, ...string[]];
 // ── Tarefas sugeridas para a campanha ────────────────────────
 
 /** Contexto enxuto da campanha para a IA (sem dados pessoais). */
-async function campaignBrief(campaignId: string) {
+export async function campaignBrief(campaignId: string) {
   const c = await prisma.mktCampaign.findUnique({ where: { id: campaignId }, include: { event: true, tasks: { select: { title: true } } } });
   if (!c) throw new NotFoundError('Campanha não encontrada.');
   const modality = c.modalityId ? await prisma.modality.findUnique({ where: { id: c.modalityId }, select: { name: true } }) : null;
