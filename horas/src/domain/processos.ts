@@ -81,3 +81,21 @@ export function demandOrder(a: DemandLite & { createdAt?: string }, b: DemandLit
   const pr = (p: string) => ['URGENTE', 'ALTA', 'MEDIA', 'BAIXA'].indexOf(p);
   return rank(a) - rank(b) || pr(a.priority) - pr(b.priority) || (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999') || (b.createdAt ?? '').localeCompare(a.createdAt ?? '');
 }
+
+/** Mensagem de WhatsApp com as pendências de um setor (atrasadas, da semana e demais em aberto). */
+export function sectorPendingMessage(input: { leader: string; sector: string; today: string; url: string; demands: (DemandLite & { title: string })[] }): string {
+  const open = input.demands.filter((d) => isOpen(d.status)).sort((a, b) => demandOrder(a, b, input.today));
+  const soon = addDaysIso(input.today, 7);
+  const dm = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
+  const line = (d: DemandLite & { title: string }) => `• ${d.priority === 'URGENTE' ? '🔴 ' : d.priority === 'ALTA' ? '🟠 ' : ''}${d.title}${d.dueDate ? ` — ${isLate(d, input.today) ? 'venceu' : 'prazo'} ${dm(d.dueDate)}` : ''}${d.status === 'EM_ANDAMENTO' ? ' _(em andamento)_' : d.status === 'AGUARDANDO' ? ' _(aguardando)_' : ''}`;
+  const late = open.filter((d) => isLate(d, input.today));
+  const week = open.filter((d) => !isLate(d, input.today) && d.dueDate && d.dueDate <= soon);
+  const rest = open.filter((d) => !late.includes(d) && !week.includes(d));
+  const out = [`*Oi, ${input.leader.split(' ')[0]}! Pendências do setor ${input.sector}* 📋`];
+  if (!open.length) out.push('', 'Nenhuma demanda em aberto. 👏');
+  if (late.length) out.push('', `*Atrasadas (${late.length})*`, ...late.map(line));
+  if (week.length) out.push('', `*Próximos 7 dias (${week.length})*`, ...week.map(line));
+  if (rest.length) out.push('', `*Demais em aberto (${rest.length})*`, ...rest.map(line));
+  out.push('', `Atualize o andamento em: ${input.url}`, '', '_Muitos esportes, muitas paixões, uma Nação!_ 💙');
+  return out.join('\n');
+}

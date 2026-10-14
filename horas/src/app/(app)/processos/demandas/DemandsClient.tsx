@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { CalendarDays, ChevronDown, MessageSquare, Pencil, Plus, Send, Trash2, UserRound } from 'lucide-react';
+import { CalendarDays, ChevronDown, Columns3, List, MessageSquare, Pencil, Plus, Send, Trash2, UserRound } from 'lucide-react';
+import { DemandsKanban } from './DemandsKanban';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -23,7 +24,7 @@ const PRIO_TONE: Record<string, string> = { URGENTE: 'bg-critico text-white', AL
 
 export function DemandsClient({ today, demands, sectors, openable, people, filter, openNew, admin }: {
   today: string; demands: DemandRow[]; sectors: (Opt & { leaderId: string | null })[]; openable: string[]; people: Opt[];
-  filter: { sector: string; view: string; mine: boolean }; openNew: boolean; admin: boolean;
+  filter: { sector: string; view: string; mine: boolean; kanban: boolean }; openNew: boolean; admin: boolean;
 }) {
   const router = useRouter();
   const sp = useSearchParams();
@@ -44,7 +45,11 @@ export function DemandsClient({ today, demands, sectors, openable, people, filte
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        {(['abertas', 'concluidas', 'todas'] as const).map((v) => (
+        <div className="inline-flex rounded-lg border border-borda bg-white p-0.5">
+          <button type="button" onClick={() => go({ modo: null })} className={cn('inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-sm font-semibold', !filter.kanban ? 'bg-navy text-white' : 'text-tinta-suave')}><List className="size-4" /> Lista</button>
+          <button type="button" onClick={() => go({ modo: 'kanban', ver: null })} className={cn('inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-sm font-semibold', filter.kanban ? 'bg-navy text-white' : 'text-tinta-suave')}><Columns3 className="size-4" /> Kanban</button>
+        </div>
+        {!filter.kanban && (['abertas', 'concluidas', 'todas'] as const).map((v) => (
           <button key={v} type="button" onClick={() => go({ ver: v === 'abertas' ? null : v })} className={cn('rounded-full px-3 py-1 text-sm font-semibold', filter.view === v ? 'bg-nacao text-white' : 'bg-white text-tinta-suave ring-1 ring-borda')}>
             {v === 'abertas' ? 'Em aberto' : v === 'concluidas' ? 'Encerradas' : 'Todas'}
           </button>
@@ -78,7 +83,22 @@ export function DemandsClient({ today, demands, sectors, openable, people, filte
         </Card>
       )}
 
-      {demands.length === 0 ? (
+      {filter.kanban ? (
+        <>
+          {(() => {
+            const d = demands.find((x) => x.id === open);
+            return d ? (
+              <Card className="border-nacao/30">
+                <DemandItem d={d} today={today} admin={admin} expanded onToggle={() => setOpen(null)}
+                  onEdit={() => { setMsg({}); setEdit({ id: d.id, f: { sectorId: d.sectorId, title: d.title, description: d.description ?? '', ownerId: d.ownerId ?? '', dueDate: d.dueDate ?? '', priority: d.priority } }); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                  onStatus={(st) => run(() => setDemandStatusAction(d.id, st))}
+                  onDelete={() => { if (confirm(`Excluir a demanda "${d.title}"?`)) run(() => deleteDemandAction(d.id), () => setOpen(null)); }} pending={pending} />
+              </Card>
+            ) : null;
+          })()}
+          <DemandsKanban demands={demands} onOpen={(id) => setOpen(open === id ? null : id)} />
+        </>
+      ) : demands.length === 0 ? (
         <Card className="p-8 text-center text-sm text-tinta-suave">{filter.view === 'abertas' ? 'Nenhuma demanda em aberto aqui. 👏' : 'Nada por aqui.'}</Card>
       ) : (
         <Card className="divide-y divide-borda">

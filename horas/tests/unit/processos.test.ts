@@ -32,3 +32,20 @@ describe('gestão de processos (puro)', () => {
     expect(list).toEqual(['atrasada', 'urgente', 'media-cedo', 'media-tarde', 'baixa', 'feita']);
   });
 });
+
+import { sectorPendingMessage } from '@/domain/processos';
+describe('mensagem de pendências do setor', () => {
+  it('separa atrasadas, da semana e demais; ignora encerradas', () => {
+    const t = sectorPendingMessage({ leader: 'Ana Souza', sector: 'Lanchonete', today, url: 'https://x', demands: [
+      { title: 'Freezer', ...D({ dueDate: '2026-10-10', priority: 'URGENTE' }) },
+      { title: 'Açaí', ...D({ dueDate: '2026-10-16', status: 'EM_ANDAMENTO' }) },
+      { title: 'Cardápio novo', ...D({}) },
+      { title: 'Feita', ...D({ status: 'CONCLUIDA' }) },
+    ] });
+    expect(t).toContain('Oi, Ana! Pendências do setor Lanchonete');
+    expect(t).toContain('*Atrasadas (1)*\n• 🔴 Freezer — venceu 10/10');
+    expect(t).toContain('*Próximos 7 dias (1)*\n• Açaí — prazo 16/10 _(em andamento)_');
+    expect(t).toContain('*Demais em aberto (1)*\n• Cardápio novo');
+    expect(t).not.toContain('Feita');
+  });
+});

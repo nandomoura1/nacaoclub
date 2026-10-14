@@ -7,7 +7,9 @@ import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
 import { todayIso } from '@/lib/today';
-import { NACAO_TASK_URL, type Health } from '@/domain/processos';
+import { headers } from 'next/headers';
+import { NACAO_TASK_URL, sectorPendingMessage, type Health } from '@/domain/processos';
+import { SendWhatsApp } from '@/components/whatsapp/SendWhatsApp';
 import { can } from '@/server/auth/authz';
 import { requirePrincipal } from '@/server/auth/session';
 import { procPanel } from '@/server/services/proc-service';
@@ -28,6 +30,9 @@ export default async function Page() {
   const today = todayIso();
   const { sectors, totals } = await procPanel(principal, today);
   const admin = can(principal, 'proc.admin');
+  const h = await headers();
+  const host = h.get('x-forwarded-host') ?? h.get('host');
+  const link = host ? `${h.get('x-forwarded-proto') ?? 'https'}://${host}/processos/demandas?minhas=1` : '/processos/demandas';
 
   return (
     <>
@@ -103,6 +108,10 @@ export default async function Page() {
                 <div className="mt-auto flex flex-wrap gap-2 pt-1">
                   <Link href={`/processos/demandas?setor=${s.id}`} className={buttonVariants({ size: 'sm', variant: 'secondary' })}>Demandas</Link>
                   <a href={s.taskUrl ?? NACAO_TASK_URL} target="_blank" rel="noreferrer" className={buttonVariants({ size: 'sm', variant: 'ghost' })}><ExternalLink /> Rotinas no Nação Task</a>
+                  {admin && s.leader && s.stats.open > 0 && (
+                    <SendWhatsApp kind="DEMANDAS" label="Enviar pendências ao líder" variant="primary" defaultTo={s.leaderPhone}
+                      text={sectorPendingMessage({ leader: s.leader, sector: s.name, today, url: link, demands: s.open })} />
+                  )}
                 </div>
               </Card>
             );

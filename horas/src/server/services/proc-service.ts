@@ -48,6 +48,9 @@ export type ProcPerson = Awaited<ReturnType<typeof procPeople>>[number];
 export interface SectorCard {
   id: string; name: string; description: string | null; leaderId: string | null; leader: string | null; taskUrl: string | null; active: boolean;
   stats: SectorStats; top: { id: string; title: string; dueDate: string | null; late: boolean; priority: string }[];
+  /** WhatsApp do líder (cadastro do usuário ou do professor vinculado). */
+  leaderPhone: string | null;
+  open: { title: string; status: string; dueDate: string | null; priority: string; doneAt: null }[];
 }
 
 export async function procPanel(principal: Principal | null, today: string): Promise<{ sectors: SectorCard[]; totals: SectorStats & { sectors: number } }> {
@@ -60,13 +63,16 @@ export async function procPanel(principal: Principal | null, today: string): Pro
     orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
     include: { demands: { where: { OR: [{ status: { in: OPEN_STATUSES } }, { doneAt: { gte: monthStart } }] }, select: { id: true, title: true, status: true, dueDate: true, priority: true, doneAt: true } } },
   });
-  const names = new Map((await prisma.user.findMany({ where: { id: { in: sectors.map((s) => s.leaderId).filter((x): x is string => !!x) } }, select: { id: true, name: true } })).map((u) => [u.id, u.name]));
+  const leaders = new Map((await prisma.user.findMany({ where: { id: { in: sectors.map((s) => s.leaderId).filter((x): x is string => !!x) } }, select: { id: true, name: true, phone: true, teachers: { select: { teacher: { select: { phone: true } } } } } })).map((u) => [u.id, u]));
+  const names = new Map([...leaders].map(([id, u]) => [id, u.name]));
   const lite = (d: (typeof sectors)[number]['demands'][number]) => ({ status: d.status, dueDate: iso(d.dueDate), priority: d.priority, doneAt: d.doneAt?.toISOString() ?? null });
   const cards = sectors.map((s) => ({
     id: s.id, name: s.name, description: s.description, leaderId: s.leaderId, leader: s.leaderId ? names.get(s.leaderId) ?? null : null, taskUrl: s.taskUrl, active: s.active,
     stats: sectorStats(s.demands.map(lite), today),
     top: s.demands.filter((d) => isOpen(d.status)).map((d) => ({ ...lite(d), id: d.id, title: d.title }))
       .sort((a, b) => demandOrder(a, b, today)).slice(0, 3).map((d) => ({ id: d.id, title: d.title, dueDate: d.dueDate, late: isLate(d, today), priority: d.priority })),
+    leaderPhone: (() => { const u = s.leaderId ? leaders.get(s.leaderId) : null; return u ? u.phone ?? u.teachers.map((t) => t.teacher.phone).find(Boolean) ?? null : null; })(),
+    open: s.demands.filter((d) => isOpen(d.status)).map((d) => ({ title: d.title, status: d.status, dueDate: iso(d.dueDate), priority: d.priority, doneAt: null })),
   }));
   const all = sectors.flatMap((s) => s.demands.map(lite));
   return { sectors: cards, totals: { ...sectorStats(all, today), sectors: cards.length } };
