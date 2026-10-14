@@ -2212,3 +2212,32 @@ model MktAsset {
   @@index([campaignId])
   @@map("mkt_assets")
 }
+
+/// Gasto em anúncio num período (lançado à mão ou, no futuro, vindo da API Meta/Google).
+model MktAdSpend {
+  id            String   @id @default(uuid()) @db.Uuid
+  /// META, GOOGLE, TIKTOK, OUTRO
+  platform      String
+  campaignId    String?  @map("campaign_id") @db.Uuid
+  /// Nome da campanha/conjunto na plataforma (para conferir com o Gerenciador).
+  adName        String?  @map("ad_name")
+  periodStart   DateTime @map("period_start") @db.Date
+  periodEnd     DateTime @map("period_end") @db.Date
+  spendCents    Int      @map("spend_cents")
+  impressions   Int?
+  clicks        Int?
+  /// Leads que a plataforma diz ter gerado (o painel usa os leads reais do funil).
+  platformLeads Int?     @map("platform_leads")
+  notes         String?
+  /// MANUAL ou API
+  origin        String   @default("MANUAL")
+  /// Chave da linha importada pela API (evita duplicar).
+  externalRef   String?  @unique @map("external_ref")
+  createdById   String?  @map("created_by") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([periodStart, periodEnd])
+  @@index([campaignId])
+  @@map("mkt_ad_spends")
+}
