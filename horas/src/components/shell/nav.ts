@@ -90,7 +90,7 @@ export const NAV_MARKETING: NavItem[] = [
   { href: '/marketing/leads', label: 'Leads & Conversão', icon: 'mkt-leads', permission: 'mkt.view' },
   { href: '/marketing/biblioteca', label: 'Biblioteca', icon: 'mkt-biblioteca', permission: 'mkt.view' },
   { href: '/marketing/trafego', label: 'Tráfego Pago', icon: 'mkt-trafego', permission: 'mkt.view' },
-  { href: '/marketing/performance', label: 'Performance', icon: 'mkt-performance', permission: 'mkt.view', soon: 'breve' },
+  { href: '/marketing/performance', label: 'Performance', icon: 'mkt-performance', permission: 'mkt.view' },
   { href: '/marketing/ia', label: 'IA Marketing', icon: 'treinos-ia', permission: 'mkt.view', soon: 'breve' },
   { href: '/marketing/importar-cronograma', label: 'Importar cronograma', icon: 'fin-importar', permission: 'mkt.admin' },
   { href: '/marketing/importar-trello', label: 'Importar do Trello', icon: 'fin-importar', permission: 'mkt.admin' },
