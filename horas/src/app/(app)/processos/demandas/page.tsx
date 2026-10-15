@@ -7,10 +7,11 @@ import { requirePrincipal } from '@/server/auth/session';
 import { prisma } from '@/server/db';
 import { listDemands, procPeople } from '@/server/services/proc-service';
 import { DemandsClient } from './DemandsClient';
+import { isoWeek } from '@/domain/proc-meeting';
 
 export const metadata: Metadata = { title: 'Demandas' };
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ setor?: string; ver?: string; minhas?: string; nova?: string; modo?: string }> }) {
+export default async function Page({ searchParams }: { searchParams: Promise<{ setor?: string; ver?: string; minhas?: string; nova?: string; modo?: string; foco?: string }> }) {
   const principal = await requirePrincipal();
   if (!can(principal, 'proc.view')) redirect('/hoje');
   const sp = await searchParams;
@@ -25,7 +26,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
     procPeople(),
   ]);
   const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
-  const demands = kanban ? all.filter((d) => d.status !== 'CANCELADA' && (d.status !== 'CONCLUIDA' || (d.doneAt ?? '') >= since)) : all;
+  const week = isoWeek(today);
+  const shown = kanban ? all.filter((d) => d.status !== 'CANCELADA' && (d.status !== 'CONCLUIDA' || (d.doneAt ?? '') >= since)) : all;
+  // 🎯 Foco da semana: o que os líderes se comprometeram a entregar nesta semana.
+  const demands = sp.foco === '1' ? shown.filter((d) => d.focusWeek === week) : shown;
   // Quem pode abrir demanda em cada setor: diretoria em todos; líder nos seus.
   const openable = sectors.filter((s) => admin || (can(principal, 'proc.edit') && s.leaderId === principal.id));
   return (
@@ -34,7 +38,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
       <DemandsClient
         today={today} demands={demands} sectors={admin ? sectors : sectors.filter((s) => s.leaderId === principal.id || demands.some((d) => d.sectorId === s.id))}
         openable={openable.map((s) => s.id)} people={people.map((p) => ({ id: p.id, name: p.name }))}
-        filter={{ sector: sp.setor ?? '', view, mine: sp.minhas === '1', kanban }} openNew={sp.nova === '1'} admin={admin}
+        filter={{ sector: sp.setor ?? '', view, mine: sp.minhas === '1', kanban, focus: sp.foco === '1' }} week={week} openNew={sp.nova === '1'} admin={admin}
       />
     </>
   );

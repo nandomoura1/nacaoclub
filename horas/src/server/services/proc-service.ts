@@ -18,17 +18,17 @@ import { dt, iso } from './marketing-service';
 
 const isAdmin = (p: Principal) => can(p, 'proc.admin');
 
-async function ledSectorIds(p: Principal) {
+export async function ledSectorIds(p: Principal) {
   return (await prisma.procSector.findMany({ where: { leaderId: p.id }, select: { id: true } })).map((s) => s.id);
 }
 
 /** O que esta pessoa enxerga: tudo (diretoria) ou os setores que lidera + o que é dela. */
-async function demandScope(p: Principal): Promise<Prisma.ProcDemandWhereInput> {
+export async function demandScope(p: Principal): Promise<Prisma.ProcDemandWhereInput> {
   if (isAdmin(p)) return {};
   return { OR: [{ sectorId: { in: await ledSectorIds(p) } }, { ownerId: p.id }] };
 }
 
-async function canWork(p: Principal, d: { sectorId: string; ownerId: string | null }) {
+export async function canWork(p: Principal, d: { sectorId: string; ownerId: string | null }) {
   if (isAdmin(p)) return true;
   if (!can(p, 'proc.edit')) return false;
   return d.ownerId === p.id || (await ledSectorIds(p)).includes(d.sectorId);
@@ -83,6 +83,8 @@ export async function procPanel(principal: Principal | null, today: string): Pro
 export interface DemandRow {
   id: string; title: string; description: string | null; sectorId: string; sector: string; ownerId: string | null; owner: string | null; requester: string | null;
   dueDate: string | null; priority: string; status: string; origin: string; late: boolean; doneAt: string | null; createdAt: string; comments: number; canWork: boolean;
+  /** Semana de foco (🎯) e impedimento atual, combinados na reunião de líderes. */
+  focusWeek: string | null; blocker: string | null;
 }
 
 export async function listDemands(principal: Principal | null, today: string, f: { sectorId?: string; view?: 'abertas' | 'concluidas' | 'todas'; mine?: boolean } = {}): Promise<DemandRow[]> {
@@ -106,7 +108,7 @@ export async function listDemands(principal: Principal | null, today: string, f:
     return {
       id: r.id, title: r.title, description: r.description, sectorId: r.sectorId, sector: r.sector.name, ownerId: r.ownerId, owner: r.ownerId ? names.get(r.ownerId) ?? null : null,
       requester: r.requesterId ? names.get(r.requesterId) ?? null : null, dueDate: d.dueDate, priority: r.priority, status: r.status, origin: r.origin,
-      late: isLate(d, today), doneAt: d.doneAt, createdAt: r.createdAt.toISOString(), comments: r._count.comments,
+      late: isLate(d, today), doneAt: d.doneAt, createdAt: r.createdAt.toISOString(), comments: r._count.comments, focusWeek: r.focusWeek, blocker: r.blocker,
       canWork: !led || (editor && (r.ownerId === principal.id || led.has(r.sectorId))),
     };
   }).sort((a, b) => demandOrder(a, b, today));
@@ -120,6 +122,10 @@ const demandSchema = z.object({
   dueDate: z.string().refine(isIsoDate, 'Prazo inválido.').nullable(),
   priority: z.enum(PRIORITIES.map((p) => p.id) as [string, ...string[]]),
   origin: z.enum(ORIGINS.map((o) => o.id) as [string, ...string[]]).optional(),
+  /** Aberta durante a reunião de líderes. */
+  meetingId: z.string().uuid().optional(),
+  /** Já nasce no foco desta semana (reunião). */
+  focusWeek: z.string().regex(/^\d{4}-W\d{2}$/).optional(),
 });
 
 /** Diretoria abre em qualquer setor; o líder, só nos que lidera. Sem responsável = líder do setor. */
@@ -146,7 +152,7 @@ export async function saveDemand(principal: Principal | null, id: string | null,
       await audit(tx, { actorId: principal.id, ...meta }, { action: 'proc.demand_updated', entityType: 'proc_demand', entityId: id, before, after, summary: `${principal.name} editou a demanda "${after.title}" (${sector.name})` });
       return id;
     }
-    const created = await tx.procDemand.create({ data: { ...data, requesterId: principal.id, origin: d.origin ?? (admin ? 'DIRETORIA' : 'LIDER') } });
+    const created = await tx.procDemand.create({ data: { ...data, requesterId: principal.id, origin: d.meetingId ? 'REUNIAO' : d.origin ?? (admin ? 'DIRETORIA' : 'LIDER'), meetingId: d.meetingId ?? null, focusWeek: d.focusWeek ?? null } });
     await audit(tx, { actorId: principal.id, ...meta }, { action: 'proc.demand_created', entityType: 'proc_demand', entityId: created.id, after: created, summary: `${principal.name} abriu a demanda "${created.title}" para ${sector.name}` });
     return created.id;
   });

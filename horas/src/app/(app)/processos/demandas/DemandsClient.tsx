@@ -22,9 +22,9 @@ const fmt = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`
 const STATUS_TONE: Record<string, 'neutral' | 'blue' | 'amber' | 'green'> = { ABERTA: 'neutral', EM_ANDAMENTO: 'blue', AGUARDANDO: 'amber', CONCLUIDA: 'green', CANCELADA: 'neutral' };
 const PRIO_TONE: Record<string, string> = { URGENTE: 'bg-critico text-white', ALTA: 'bg-atencao/15 text-atencao', MEDIA: 'bg-fundo text-tinta-suave', BAIXA: 'bg-fundo text-tinta-fraca' };
 
-export function DemandsClient({ today, demands, sectors, openable, people, filter, openNew, admin }: {
-  today: string; demands: DemandRow[]; sectors: (Opt & { leaderId: string | null })[]; openable: string[]; people: Opt[];
-  filter: { sector: string; view: string; mine: boolean; kanban: boolean }; openNew: boolean; admin: boolean;
+export function DemandsClient({ today, demands, sectors, openable, people, filter, openNew, admin, week }: {
+  week: string; today: string; demands: DemandRow[]; sectors: (Opt & { leaderId: string | null })[]; openable: string[]; people: Opt[];
+  filter: { sector: string; view: string; mine: boolean; kanban: boolean; focus: boolean }; openNew: boolean; admin: boolean;
 }) {
   const router = useRouter();
   const sp = useSearchParams();
@@ -59,6 +59,7 @@ export function DemandsClient({ today, demands, sectors, openable, people, filte
           {sectors.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </Select>
         <label className="flex items-center gap-1.5 text-sm text-tinta-suave"><input type="checkbox" checked={filter.mine} onChange={(e) => go({ minhas: e.target.checked ? '1' : null })} /> Só as minhas</label>
+        <label className="flex items-center gap-1.5 text-sm text-tinta-suave"><input type="checkbox" checked={filter.focus} onChange={(e) => go({ foco: e.target.checked ? '1' : null })} /> 🎯 Foco da semana</label>
         <span className="flex-1" />
         {late > 0 && <Badge tone="red">{late} atrasada{late > 1 ? 's' : ''}</Badge>}
         {openable.length > 0 && !edit && <Button size="sm" onClick={() => { setMsg({}); setEdit({ id: null, f: empty() }); }}><Plus /> Nova demanda</Button>}
@@ -89,21 +90,21 @@ export function DemandsClient({ today, demands, sectors, openable, people, filte
             const d = demands.find((x) => x.id === open);
             return d ? (
               <Card className="border-nacao/30">
-                <DemandItem d={d} today={today} admin={admin} expanded onToggle={() => setOpen(null)}
+                <DemandItem d={d} today={today} week={week} admin={admin} expanded onToggle={() => setOpen(null)}
                   onEdit={() => { setMsg({}); setEdit({ id: d.id, f: { sectorId: d.sectorId, title: d.title, description: d.description ?? '', ownerId: d.ownerId ?? '', dueDate: d.dueDate ?? '', priority: d.priority } }); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                   onStatus={(st) => run(() => setDemandStatusAction(d.id, st))}
                   onDelete={() => { if (confirm(`Excluir a demanda "${d.title}"?`)) run(() => deleteDemandAction(d.id), () => setOpen(null)); }} pending={pending} />
               </Card>
             ) : null;
           })()}
-          <DemandsKanban demands={demands} onOpen={(id) => setOpen(open === id ? null : id)} />
+          <DemandsKanban demands={demands} week={week} onOpen={(id) => setOpen(open === id ? null : id)} />
         </>
       ) : demands.length === 0 ? (
         <Card className="p-8 text-center text-sm text-tinta-suave">{filter.view === 'abertas' ? 'Nenhuma demanda em aberto aqui. 👏' : 'Nada por aqui.'}</Card>
       ) : (
         <Card className="divide-y divide-borda">
           {demands.map((d) => (
-            <DemandItem key={d.id} d={d} today={today} admin={admin} expanded={open === d.id} onToggle={() => setOpen(open === d.id ? null : d.id)}
+            <DemandItem key={d.id} d={d} today={today} week={week} admin={admin} expanded={open === d.id} onToggle={() => setOpen(open === d.id ? null : d.id)}
               onEdit={() => { setMsg({}); setEdit({ id: d.id, f: { sectorId: d.sectorId, title: d.title, description: d.description ?? '', ownerId: d.ownerId ?? '', dueDate: d.dueDate ?? '', priority: d.priority } }); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
               onStatus={(s) => run(() => setDemandStatusAction(d.id, s))}
               onDelete={() => { if (confirm(`Excluir a demanda "${d.title}"?`)) run(() => deleteDemandAction(d.id)); }} pending={pending} />
@@ -114,8 +115,8 @@ export function DemandsClient({ today, demands, sectors, openable, people, filte
   );
 }
 
-function DemandItem({ d, today, admin, expanded, onToggle, onEdit, onStatus, onDelete, pending }: {
-  d: DemandRow; today: string; admin: boolean; expanded: boolean; onToggle: () => void; onEdit: () => void; onStatus: (s: string) => void; onDelete: () => void; pending: boolean;
+function DemandItem({ d, today, week, admin, expanded, onToggle, onEdit, onStatus, onDelete, pending }: {
+  d: DemandRow; today: string; week: string; admin: boolean; expanded: boolean; onToggle: () => void; onEdit: () => void; onStatus: (s: string) => void; onDelete: () => void; pending: boolean;
 }) {
   const days = d.dueDate ? Math.round((Date.parse(d.dueDate) - Date.parse(today)) / 86_400_000) : null;
   return (
@@ -123,9 +124,11 @@ function DemandItem({ d, today, admin, expanded, onToggle, onEdit, onStatus, onD
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" onClick={onToggle} aria-expanded={expanded} className="flex min-w-0 flex-1 items-center gap-2 text-left">
           <ChevronDown className={cn('size-4 shrink-0 text-tinta-fraca transition-transform', expanded && 'rotate-180')} />
+          {d.focusWeek === week && <span title="Foco da semana" aria-label="Foco da semana">🎯</span>}
           <span className={cn('rounded px-1.5 text-[10px] font-bold uppercase', PRIO_TONE[d.priority])}>{label(PRIORITIES, d.priority)}</span>
           <span className={cn('min-w-0 truncate font-semibold text-navy', d.status === 'CONCLUIDA' && 'text-tinta-suave line-through', d.status === 'CANCELADA' && 'text-tinta-fraca line-through')}>{d.title}</span>
         </button>
+        {d.blocker && <span className="text-xs font-semibold text-critico" title={d.blocker}>⛔ travada</span>}
         <span className="text-xs text-tinta-suave">{d.sector}</span>
         {d.owner && <span className="flex items-center gap-1 text-xs text-tinta-suave"><UserRound className="size-3" />{d.owner}</span>}
         {d.dueDate && (

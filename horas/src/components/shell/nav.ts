@@ -102,7 +102,7 @@ export const NAV_MARKETING: NavItem[] = [
 export const NAV_PROCESSOS: NavItem[] = [
   { href: '/processos', label: 'Painel dos setores', icon: 'processos', permission: 'proc.view' },
   { href: '/processos/demandas', label: 'Demandas', icon: 'proc-demandas', permission: 'proc.view' },
-  { href: '/processos/reuniao', label: 'Reunião de líderes', icon: 'proc-reuniao', permission: 'proc.view', soon: 'breve' },
+  { href: '/processos/reuniao', label: 'Reunião de líderes', icon: 'proc-reuniao', permission: 'proc.view' },
   { href: '/processos/setores', label: 'Setores e líderes', icon: 'proc-setores', permission: 'proc.admin' },
   { href: NACAO_TASK_URL, label: 'Nação Task', icon: 'proc-task', permission: 'proc.view', external: true },
 ];

@@ -3,6 +3,8 @@
 import { revalidatePath } from 'next/cache';
 import { getPrincipal, requestMeta } from '@/server/auth/session';
 import { runAction, type ActionResult } from '@/server/action-result';
+import { todayIso } from '@/lib/today';
+import { closeProcMeeting, quickUpdateDemand, saveMeetingNotes, setDemandBlocker, setDemandFocus, startProcMeeting } from '@/server/services/proc-meeting-service';
 import { addDemandComment, deleteDemand, demandComments, saveDemand, saveSector, setDemandStatus } from '@/server/services/proc-service';
 
 const refresh = () => { revalidatePath('/processos', 'layout'); revalidatePath('/hoje'); };
@@ -24,4 +26,25 @@ export async function addDemandCommentAction(id: string, body: string): Promise<
 }
 export async function saveSectorAction(id: string | null, values: Record<string, unknown>): Promise<ActionResult<string>> {
   return runAction(async () => { const r = await saveSector(await getPrincipal(), id, values, await requestMeta()); refresh(); return r; }, 'Setor salvo.');
+}
+
+// ── Reunião de líderes ──
+
+export async function startProcMeetingAction(kind: string): Promise<ActionResult<string>> {
+  return runAction(async () => { const r = await startProcMeeting(await getPrincipal(), kind, todayIso(), await requestMeta()); refresh(); return r; });
+}
+export async function setDemandFocusAction(id: string, week: string | null): Promise<ActionResult> {
+  return runAction(async () => { await setDemandFocus(await getPrincipal(), id, week, await requestMeta()); refresh(); return undefined; });
+}
+export async function setDemandBlockerAction(id: string, blocker: string | null): Promise<ActionResult> {
+  return runAction(async () => { await setDemandBlocker(await getPrincipal(), id, blocker, await requestMeta()); refresh(); return undefined; });
+}
+export async function quickUpdateDemandAction(id: string, values: { dueDate?: string | null; ownerId?: string | null }): Promise<ActionResult> {
+  return runAction(async () => { await quickUpdateDemand(await getPrincipal(), id, values, await requestMeta()); refresh(); return undefined; });
+}
+export async function saveMeetingNotesAction(id: string, notes: string): Promise<ActionResult> {
+  return runAction(async () => { await saveMeetingNotes(await getPrincipal(), id, notes); return undefined; });
+}
+export async function closeProcMeetingAction(id: string, notes: string | null, notify: boolean): Promise<ActionResult<{ enviados: number; falhas: string[] }>> {
+  return runAction(async () => { const r = await closeProcMeeting(await getPrincipal(), id, notes, notify, todayIso(), await requestMeta()); refresh(); return r; });
 }

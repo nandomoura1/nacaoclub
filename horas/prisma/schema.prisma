@@ -2012,6 +2012,12 @@ model ProcDemand {
   /// DIRETORIA, REUNIAO, LIDER, ALERTA.
   origin      String           @default("DIRETORIA")
   doneAt      DateTime?        @map("done_at")
+  /// Semana em que a demanda é "foco" (compromisso da reunião semanal), ex.: 2026-W42.
+  focusWeek   String?          @map("focus_week")
+  /// Impedimento atual (daily); vazio = sem impedimento.
+  blocker     String?
+  /// Reunião em que a demanda foi aberta (origem REUNIAO).
+  meetingId   String?          @map("meeting_id") @db.Uuid
   createdAt   DateTime         @default(now()) @map("created_at")
   updatedAt   DateTime         @updatedAt @map("updated_at")
 
@@ -2020,7 +2026,30 @@ model ProcDemand {
 
   @@index([sectorId, status])
   @@index([ownerId, status])
+  @@index([focusWeek])
   @@map("proc_demands")
+}
+
+/// Reunião de líderes: semanal (placar, atrasadas, foco da semana) ou daily (15 min).
+model ProcMeeting {
+  id          String    @id @default(uuid()) @db.Uuid
+  /// SEMANAL ou DIARIA
+  kind        String
+  date        DateTime  @db.Date
+  /// Semana ISO (ex.: 2026-W42) — o foco combinado vale para ela.
+  week        String
+  notes       String?
+  /// ABERTA ou ENCERRADA
+  status      String    @default("ABERTA")
+  /// Números no encerramento (concluídas, atrasadas, foco…).
+  summary     Json?
+  createdById String?   @map("created_by") @db.Uuid
+  closedAt    DateTime? @map("closed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@index([date])
+  @@map("proc_meetings")
 }
 
 model ProcComment {

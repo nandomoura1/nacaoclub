@@ -23,8 +23,10 @@ describe.skipIf(!hasDb)('Escalas de fim de semana e feriados', () => {
   it('setores padrão com horários de funcionamento', async () => {
     const d = await loadDuty(admin.principal, '2034-10-07', '2034-10-08');
     expect(d.dates).toEqual(['2034-10-07', '2034-10-08']);
-    expect(d.sectors.map((s) => s.name)).toEqual(['Academia', 'CrossFit e HYROX', 'Aulões', 'Futevôlei', 'Brinquedoteca']);
-    expect(d.sectors[0]!.defaults).toEqual({ SAB: [[420, 1020]], DOM: [[480, 840]], FERIADO: [[480, 840]] });
+    // Só os setores padrão (outros testes criam setores temporários em paralelo).
+    const SEEDED = ['Academia', 'CrossFit e HYROX', 'Aulões', 'Futevôlei', 'Brinquedoteca'];
+    expect(d.sectors.map((s) => s.name).filter((n) => SEEDED.includes(n))).toEqual(SEEDED);
+    expect(d.sectors.find((s) => s.name === 'Academia')!.defaults).toEqual({ SAB: [[420, 1020]], DOM: [[480, 840]], FERIADO: [[480, 840]] });
   });
 
   it('salva a escala e as horas entram como extra de quem trabalhou; salvar de novo substitui', async () => {
@@ -48,7 +50,7 @@ describe.skipIf(!hasDb)('Escalas de fim de semana e feriados', () => {
     expect(report.byTeacher.find((t) => t.teacherId === bia.id)).toMatchObject({ extraMin: 600, totalMin: 600 });
 
     const view = await loadDuty(admin.principal, '2034-10-07', '2034-10-08');
-    expect(view.sectors[0]!.shifts.map((s) => [s.startMin, s.people.length, s.notes])).toEqual([[420, 2, 'Manhã'], [720, 1, null], [480, 0, null]]);
+    expect(view.sectors.find((s) => s.name === 'Academia')!.shifts.map((s) => [s.startMin, s.people.length, s.notes])).toEqual([[420, 2, 'Manhã'], [720, 1, null], [480, 0, null]]);
 
     // A Grade semanal mostra a escala da semana vista (qualquer dia da semana serve).
     const week = await dutyForWeek(admin.principal, '2034-10-04');

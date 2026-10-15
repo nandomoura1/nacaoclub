@@ -17,7 +17,7 @@ const HEAD: Record<string, string> = { ABERTA: 'border-t-tinta-fraca/50', EM_AND
 const fmt = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 
 /** Quadro das demandas: arrastar o cartão muda o status (quem pode trabalhar a demanda). */
-export function DemandsKanban({ demands, onOpen }: { demands: DemandRow[]; onOpen: (id: string) => void }) {
+export function DemandsKanban({ demands, week, onOpen }: { demands: DemandRow[]; week: string; onOpen: (id: string) => void }) {
   const router = useRouter();
   const [items, setItems] = useState(demands);
   const [active, setActive] = useState<DemandRow | null>(null);
@@ -53,12 +53,12 @@ export function DemandsKanban({ demands, onOpen }: { demands: DemandRow[]; onOpe
         <div className="grid auto-cols-[minmax(15rem,1fr)] grid-flow-col gap-3 overflow-x-auto pb-2">
           {COLUMNS.map((c) => {
             const list = items.filter((d) => d.status === c.id);
-            return <Column key={c.id} id={c.id} label={c.label} count={list.length}>{list.map((d) => <DemandCard key={d.id} d={d} onOpen={onOpen} />)}</Column>;
+            return <Column key={c.id} id={c.id} label={c.label} count={list.length}>{list.map((d) => <DemandCard key={d.id} d={d} week={week} onOpen={onOpen} />)}</Column>;
           })}
         </div>
-        <DragOverlay>{active ? <CardBody d={active} dragging /> : null}</DragOverlay>
+        <DragOverlay>{active ? <CardBody d={active} week={week} dragging /> : null}</DragOverlay>
       </DndContext>
-      <p className="text-xs text-tinta-suave">Arraste o cartão para mudar o status. Concluídas mostram as dos últimos 30 dias; canceladas ficam na lista.</p>
+      <p className="text-xs text-tinta-suave">Arraste o cartão para mudar o status. 🎯 = foco da semana (combinado na reunião de líderes) · ⛔ = travada. Concluídas mostram as dos últimos 30 dias; canceladas ficam na lista.</p>
     </>
   );
 }
@@ -73,23 +73,25 @@ function Column({ id, label, count, children }: { id: string; label: string; cou
   );
 }
 
-function DemandCard({ d, onOpen }: { d: DemandRow; onOpen: (id: string) => void }) {
+function DemandCard({ d, week, onOpen }: { d: DemandRow; week: string; onOpen: (id: string) => void }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: d.id, disabled: !d.canWork });
   return (
     <div ref={setNodeRef} {...attributes} {...listeners} onClick={() => onOpen(d.id)} className={cn(isDragging && 'opacity-40', d.canWork ? 'cursor-grab' : 'cursor-pointer')}>
-      <CardBody d={d} />
+      <CardBody d={d} week={week} />
     </div>
   );
 }
 
-function CardBody({ d, dragging }: { d: DemandRow; dragging?: boolean }) {
+function CardBody({ d, week, dragging }: { d: DemandRow; week: string; dragging?: boolean }) {
   return (
     <div className={cn('rounded-lg bg-white p-2.5 text-sm shadow-sm ring-1', d.late ? 'ring-critico/40' : 'ring-borda', dragging && 'rotate-1 shadow-lg')}>
       <div className="flex items-start gap-1.5">
         <span className={cn('mt-0.5 shrink-0 rounded px-1 text-[9px] font-bold uppercase', PRIO_TONE[d.priority])}>{PRIORITIES.find((p) => p.id === d.priority)?.label}</span>
         <p className={cn('min-w-0 flex-1 font-semibold leading-snug text-navy', d.status === 'CONCLUIDA' && 'text-tinta-suave line-through')}>{d.title}</p>
+        {d.focusWeek === week && <span className="shrink-0" title="Foco da semana" aria-label="Foco da semana">🎯</span>}
       </div>
       <p className="mt-1 text-xs text-tinta-suave">{d.sector}</p>
+      {d.blocker && d.status !== 'CONCLUIDA' && <p className="mt-1 rounded bg-critico/10 px-1.5 py-0.5 text-[11px] font-semibold text-critico">⛔ {d.blocker}</p>}
       <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-tinta-suave">
         {d.owner && <span className="inline-flex items-center gap-0.5"><UserRound className="size-3" />{d.owner.split(' ')[0]}</span>}
         {d.dueDate && <span className={cn('inline-flex items-center gap-0.5 tabular-nums', d.late && 'font-semibold text-critico')}><CalendarDays className="size-3" />{fmt(d.dueDate)}{d.late ? ' · atrasada' : ''}</span>}
