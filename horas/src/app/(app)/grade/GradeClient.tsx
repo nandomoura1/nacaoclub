@@ -115,6 +115,7 @@ export function GradeClient(props: Props) {
         {filtered && <Button variant="ghost" size="sm" onClick={() => go({ modalidade: null, professor: null, espaco: null })}>limpar filtros</Button>}
         <div className="flex-1" />
         <a href={`/grade/imprimir?${current}`} target="_blank" rel="noopener" className={buttonVariants({ variant: 'secondary' })}><Printer /> Imprimir esta grade</a>
+        <a href={`/grade/imprimir?${current}&equipe=professores`} target="_blank" rel="noopener" className={buttonVariants({ variant: 'ghost' })} title="Só os professores titulares, com o nº do CREF — sem auxiliares e estagiários">Só professores (CREF)</a>
       </Card>
 
       {/* Mobile: um dia por vez */}
