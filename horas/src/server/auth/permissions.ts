@@ -57,6 +57,9 @@ export const PERMISSIONS = {
   'proc.view': 'Gestão de Processos: ver o painel e as demandas dos setores que lidera',
   'proc.edit': 'Gestão de Processos: atualizar e comentar as demandas dos próprios setores e abrir novas nelas',
   'proc.admin': 'Gestão de Processos: ver todos os setores, cobrar demandas de qualquer setor e definir setores e líderes',
+  'edu.view': 'Universidade Nação: ver materiais e trilhas de capacitação e marcar como concluído',
+  'edu.edit': 'Universidade Nação: publicar e editar materiais e trilhas, ver quem concluiu (diretoria e líderes)',
+  'edu.admin': 'Universidade Nação: editar e excluir qualquer material e trilha',
 } as const;
 
 export type PermissionKey = keyof typeof PERMISSIONS;
@@ -95,6 +98,7 @@ export const SYSTEM_ROLES: Record<
       'workout.personal',
       'duty.edit',
       'whatsapp.send',
+      'edu.view',
     ],
   },
   CONSULTA: {
@@ -113,22 +117,23 @@ export const SYSTEM_ROLES: Record<
       'condo.view', 'condo.edit', 'condo.close', 'condo.payments',
       // Empresas, histórico, envio de cobranças/acessos e demandas do setor.
       'company.view', 'company.edit', 'audit.view', 'whatsapp.send', 'proc.view', 'proc.edit',
+      'edu.view',
     ],
   },
   PROFESSOR: {
     name: 'Professor',
     description: 'Vê o próprio extrato de horas e os treinos; cria treinos de Personal para as próprias aulas.',
-    permissions: ['hours.own', 'workout.view', 'workout.personal'],
+    permissions: ['hours.own', 'workout.view', 'workout.personal', 'edu.view'],
   },
   MARKETING: {
     name: 'Marketing',
     description: 'Equipe de marketing e comercial: campanhas, eventos, tarefas, calendário e IA de marketing.',
-    permissions: ['mkt.view', 'mkt.edit', 'mkt.ai'],
+    permissions: ['mkt.view', 'mkt.edit', 'mkt.ai', 'edu.view'],
   },
   LIDER: {
     name: 'Líder de setor',
-    description: 'Acompanha e atualiza as demandas do próprio setor (Gestão de Processos). Combine com o perfil da função.',
-    permissions: ['proc.view', 'proc.edit'],
+    description: 'Acompanha e atualiza as demandas do próprio setor (Gestão de Processos) e publica materiais de capacitação na Universidade Nação. Combine com o perfil da função.',
+    permissions: ['proc.view', 'proc.edit', 'edu.view', 'edu.edit'],
   },
 };
 

@@ -2313,3 +2313,88 @@ model MktNoticeRead {
   @@id([noticeId, userId])
   @@map("mkt_notice_reads")
 }
+
+// ─────────────────────────────────────────────────────────────
+// Universidade Nação: materiais de capacitação e trilhas
+// ─────────────────────────────────────────────────────────────
+
+/// Material de capacitação: link (Drive, YouTube, Canva, Spotify…) ou arquivo no bucket privado.
+model EduMaterial {
+  id          String    @id @default(uuid()) @db.Uuid
+  title       String
+  description String?
+  /// ESSENCIAL, TECNICA, GESTAO
+  area        String
+  /// Setor ou modalidade (Academia, Recepção, Liderança…), texto livre.
+  category    String?
+  /// LINK, PDF, VIDEO, AUDIO, EBOOK, APRESENTACAO, DOCUMENTO, OUTRO
+  format      String
+  url         String?
+  /// Arquivo no bucket (leitura só por URL assinada).
+  path        String?   @unique
+  fileName    String?   @map("file_name")
+  mime        String?
+  sizeBytes   Int?      @map("size_bytes")
+  /// TODOS, LIDERES, PROFESSORES, PERFIL
+  audience    String    @default("TODOS")
+  roleKey     String?   @map("role_key")
+  required    Boolean   @default(false)
+  version     String?
+  durationMin Int?      @map("duration_min")
+  active      Boolean   @default(true)
+  sortOrder   Int       @default(0) @map("sort_order")
+  createdById String?   @map("created_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  completions EduCompletion[]
+  trackItems  EduTrackItem[]
+
+  @@index([area, active])
+  @@map("edu_materials")
+}
+
+/// "Concluí" de um colaborador num material.
+model EduCompletion {
+  materialId  String   @map("material_id") @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  completedAt DateTime @default(now()) @map("completed_at")
+
+  material EduMaterial @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@id([materialId, userId])
+  @@index([userId])
+  @@map("edu_completions")
+}
+
+/// Trilha de capacitação (ex.: Onboarding do Colaborador Nação): materiais em sequência.
+model EduTrack {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+  /// TODOS, LIDERES, PROFESSORES, PERFIL
+  audience    String   @default("TODOS")
+  roleKey     String?  @map("role_key")
+  active      Boolean  @default(true)
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdById String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  items EduTrackItem[]
+
+  @@map("edu_tracks")
+}
+
+model EduTrackItem {
+  trackId    String @map("track_id") @db.Uuid
+  materialId String @map("material_id") @db.Uuid
+  position   Int    @default(0)
+
+  track    EduTrack    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  material EduMaterial @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@id([trackId, materialId])
+  @@index([trackId, position])
+  @@map("edu_track_items")
+}

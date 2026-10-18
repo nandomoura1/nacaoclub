@@ -6,7 +6,8 @@ export type NavIcon =
   | 'hoje' | 'calendario' | 'pendencias' | 'grade' | 'professores'
   | 'fechamento' | 'relatorios' | 'escalas' | 'treinos' | 'benchmarks' | 'dna' | 'treinos-ia' | 'usuarios' | 'historico' | 'cadastros' | 'condominio' | 'cobrancas' | 'financeiro' | 'fin-historico' | 'fin-importar' | 'documentos' | 'empresas'
   | 'mkt' | 'mkt-campanhas' | 'mkt-kanban' | 'mkt-eventos' | 'mkt-reuniao' | 'mkt-conteudo' | 'mkt-interna' | 'mkt-canais' | 'mkt-leads' | 'mkt-biblioteca' | 'mkt-trafego' | 'mkt-performance' | 'mkt-memoria' | 'whatsapp'
-  | 'wa-auto' | 'processos' | 'proc-demandas' | 'proc-setores' | 'proc-task' | 'proc-reuniao';
+  | 'wa-auto' | 'processos' | 'proc-demandas' | 'proc-setores' | 'proc-task' | 'proc-reuniao'
+  | 'edu' | 'edu-trilhas' | 'edu-painel';
 
 export interface NavItem {
   href: string;
@@ -107,6 +108,13 @@ export const NAV_PROCESSOS: NavItem[] = [
   { href: NACAO_TASK_URL, label: 'Nação Task', icon: 'proc-task', permission: 'proc.view', external: true },
 ];
 
+/** Universidade Nação: capacitação (materiais, trilhas e quem concluiu). */
+export const NAV_UNIVERSIDADE: NavItem[] = [
+  { href: '/universidade', label: 'Biblioteca', icon: 'edu', permission: 'edu.view' },
+  { href: '/universidade/trilhas', label: 'Trilhas', icon: 'edu-trilhas', permission: 'edu.view' },
+  { href: '/universidade/painel', label: 'Quem concluiu', icon: 'edu-painel', permission: 'edu.edit' },
+];
+
 export const NAV_ADMIN: NavItem[] = [
   { href: '/admin/empresas', label: 'Empresas', icon: 'empresas', permission: 'company.view' },
   { href: '/admin/cadastros', label: 'Cadastros', icon: 'cadastros', permission: 'admin.catalog' },
@@ -124,5 +132,6 @@ export const NAV_SECTIONS: NavSection[] = [
   { title: 'Financeiro', items: NAV_FINANCEIRO, bar: { label: 'Financeiro', icon: 'financeiro', order: 3 } },
   { title: 'Marketing', items: NAV_MARKETING, bar: { label: 'Marketing', icon: 'mkt', order: 4 } },
   { title: 'Gestão de Processos', items: NAV_PROCESSOS, bar: { label: 'Processos', icon: 'processos', order: 6 } },
+  { title: 'Universidade Nação', items: NAV_UNIVERSIDADE, bar: { label: 'Universidade', icon: 'edu', order: 7 } },
   { title: 'Administração', items: NAV_ADMIN },
 ];

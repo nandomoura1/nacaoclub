@@ -46,8 +46,8 @@ describe('matriz de papéis', () => {
   it('ADMIN tem todas as permissões, menos o "Meu extrato" (que é do perfil Professor)', () => {
     expect(new Set(SYSTEM_ROLES.ADMIN.permissions)).toEqual(new Set(PERMISSION_KEYS.filter((k) => k !== 'hours.own')));
   });
-  it('PROFESSOR: só o próprio extrato e os treinos (ver + Personal)', () => {
-    expect(new Set(SYSTEM_ROLES.PROFESSOR.permissions)).toEqual(new Set(['hours.own', 'workout.view', 'workout.personal']));
+  it('PROFESSOR: só o próprio extrato, os treinos (ver + Personal) e a Universidade Nação', () => {
+    expect(new Set(SYSTEM_ROLES.PROFESSOR.permissions)).toEqual(new Set(['hours.own', 'workout.view', 'workout.personal', 'edu.view']));
   });
   it('COORDENADOR opera a escala, mas não administra, não fecha e não vê dinheiro', () => {
     const p = SYSTEM_ROLES.COORDENADOR.permissions;

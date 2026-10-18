@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import { NoticeBoard } from '@/components/notices/NoticeBoard';
+import { EduReminder } from '@/components/notices/EduReminder';
+import { eduReminder } from '@/server/services/edu-service';
 import { noticeBoard } from '@/server/services/mkt-notice-service';
 import { redirect } from 'next/navigation';
 import { buttonVariants } from '@/components/ui/button';
@@ -21,7 +23,7 @@ export const metadata: Metadata = { title: 'Meu extrato' };
 /** Perfil Professor: o próprio extrato de horas, competência a competência. */
 export default async function MeuExtratoPage({ searchParams }: { searchParams: Promise<{ competencia?: string; cadastro?: string }> }) {
   const principal = await requirePrincipal();
-  const notices = await noticeBoard(principal, todayIso());
+  const [notices, edu] = await Promise.all([noticeBoard(principal, todayIso()), eduReminder(principal)]);
   if (!can(principal, 'hours.own')) redirect('/hoje');
   const sp = await searchParams;
   const cadastros = await prisma.teacher.findMany({ where: { id: { in: principal.teacherIds } }, orderBy: { name: 'asc' }, select: { id: true, name: true } });
@@ -49,6 +51,7 @@ export default async function MeuExtratoPage({ searchParams }: { searchParams: P
     <>
       <PageHeader title="Meu extrato" description={`${cadastros.length > 1 ? cadastros.map((c) => c.name).join(' + ') : selected.name} · suas aulas, substituições, extras e o total a receber em horas. Domingo e feriado valem o dobro.`} />
       <NoticeBoard items={notices} />
+      <EduReminder r={edu} />
       <form className="mb-4 flex flex-wrap items-center gap-2 print:hidden">
         <Select name="competencia" defaultValue={periodKey(filter.period)} className="w-48" aria-label="Competência">
           {periods.map((p) => <option key={periodKey(p)} value={periodKey(p)}>{periodLabel(p)}</option>)}

@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import { NoticeBoard } from '@/components/notices/NoticeBoard';
+import { EduReminder } from '@/components/notices/EduReminder';
+import { eduReminder } from '@/server/services/edu-service';
 import { noticeBoard } from '@/server/services/mkt-notice-service';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
@@ -52,7 +54,7 @@ export default async function HojePage({ searchParams }: { searchParams: Promise
     canView && period?.generatedAt ? listOccurrences(principal, { start: day, end: day }) : Promise.resolve([]),
     nacaoAgenda(principal, day),
   ]);
-  const [demands, notices] = await Promise.all([myOpenDemands(principal, today), noticeBoard(principal, today)]);
+  const [demands, notices, edu] = await Promise.all([myOpenDemands(principal, today), noticeBoard(principal, today), eduReminder(principal)]);
 
   const nowMin = (() => {
     const [h, m] = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Sao_Paulo' }).format(new Date()).split(':').map(Number);
@@ -70,6 +72,7 @@ export default async function HojePage({ searchParams }: { searchParams: Promise
         description={`${WEEKDAYS[weekdayOf(day) - 1]!.long}, ${formatDateBR(day)} · competência ${periodLabel(ref)}`}
       />
       <NoticeBoard items={notices} />
+      <EduReminder r={edu} />
 
       <div className="mb-4 flex items-center gap-2">
         <nav className="flex rounded-lg bg-white p-1 ring-1 ring-borda">
