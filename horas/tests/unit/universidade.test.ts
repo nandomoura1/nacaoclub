@@ -10,6 +10,7 @@ describe('Universidade Nação — regras puras', () => {
     expect(guessFormat('Onboarding.pptx')).toBe('APRESENTACAO');
     expect(guessFormat('https://www.canva.com/design/xyz/view')).toBe('APRESENTACAO');
     expect(guessFormat('ebook.epub')).toBe('EBOOK');
+    expect(guessFormat('Onboarding Nação.html')).toBe('APRESENTACAO');
     expect(guessFormat('https://nacao.com.br/x')).toBe('LINK');
   });
   it('caminho seguro e embed do YouTube', () => {

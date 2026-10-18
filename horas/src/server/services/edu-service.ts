@@ -49,7 +49,8 @@ export async function eduLibrary(principal: Principal | null) {
     fileName: m.fileName, mime: m.mime, sizeBytes: m.sizeBytes, audience: m.audience, roleKey: m.roleKey, required: m.required,
     version: m.version, durationMin: m.durationMin, active: m.active, sortOrder: m.sortOrder, updatedAt: m.updatedAt.toISOString(),
     createdBy: m.createdById ? users.get(m.createdById) ?? null : null, done: doneSet.has(m.id),
-    fileUrl: m.path ? reads[m.path] ?? null : null, downloadUrl: m.path ? downloads[m.path] ?? null : null,
+    // HTML abre pelo nosso endereço, isolado (sandbox); o resto, direto do armazenamento.
+    fileUrl: m.path ? (m.mime === 'text/html' ? `/universidade/ver/${m.id}` : reads[m.path] ?? null) : null, downloadUrl: m.path ? downloads[m.path] ?? null : null,
     canEdit: admin || (v.editor && m.createdById === principal.id),
   }));
   const ids = new Set(materials.map((m) => m.id));
@@ -110,7 +111,7 @@ async function editable(principal: Principal, id: string) {
 export async function startEduUpload(principal: Principal | null, file: { name: string; size: number }) {
   assertCan(principal, 'edu.edit');
   const mime = eduMime(file.name);
-  if (!mime) throw new AppError('Formato não aceito. Use PDF, PowerPoint, Word, Excel, e-book (EPUB), áudio (MP3, M4A, WAV), vídeo (MP4, MOV) ou imagem.');
+  if (!mime) throw new AppError('Formato não aceito. Use PDF, HTML, PowerPoint, Word, Excel, e-book (EPUB), áudio (MP3, M4A, WAV), vídeo (MP4, MOV) ou imagem.');
   if (file.size <= 0) throw new AppError('Arquivo vazio.');
   if (file.size > EDU_MAX_BYTES) throw new AppError('Arquivo acima de 50 MB. Para áudio/vídeo longos, suba no Drive, YouTube (não listado) ou Spotify e cole o link.');
   const path = eduPath(randomUUID(), file.name);
@@ -247,3 +248,11 @@ export async function eduPanel(principal: Principal | null) {
   };
 }
 export type EduPanel = Awaited<ReturnType<typeof eduPanel>>;
+
+/** Arquivo para abrir no app (ex.: HTML): só quem pode ver o material. */
+export async function eduFileForView(principal: Principal | null, id: string) {
+  assertCan(principal, 'edu.view');
+  const m = await prisma.eduMaterial.findUnique({ where: { id }, select: { path: true, mime: true, fileName: true, audience: true, roleKey: true, active: true } });
+  if (!m?.path || !canSee(m, await viewerOf(principal))) throw new NotFoundError('Material não encontrado.');
+  return { path: m.path, mime: m.mime ?? 'application/octet-stream', fileName: m.fileName ?? 'arquivo' };
+}

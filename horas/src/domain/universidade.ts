@@ -40,6 +40,8 @@ const MIME: Record<string, string> = {
   mp3: 'audio/mpeg', m4a: 'audio/mp4', wav: 'audio/wav', ogg: 'audio/ogg',
   mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm',
   png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', zip: 'application/zip',
+  // Página/apresentação em HTML (ex.: exportada de ferramenta de slides). Abre isolada, ver /universidade/ver.
+  html: 'text/html', htm: 'text/html',
 };
 export const EDU_ACCEPT = Object.keys(MIME).map((e) => `.${e}`).join(',');
 const ext = (name: string) => name.toLowerCase().match(/\.([a-z0-9]{2,5})$/)?.[1] ?? '';
@@ -52,7 +54,7 @@ export function guessFormat(fileNameOrUrl: string): string {
   if (m.startsWith('audio/') || /spotify|soundcloud|anchor\.fm/.test(s)) return 'AUDIO';
   if (m.startsWith('video/') || /youtube|youtu\.be|vimeo/.test(s)) return 'VIDEO';
   if (m === 'application/epub+zip') return 'EBOOK';
-  if (/presentation|powerpoint/.test(m) || /canva\.com|docs\.google\.com\/presentation|gamma\.app/.test(s)) return 'APRESENTACAO';
+  if (m === 'text/html' || /presentation|powerpoint/.test(m) || /canva\.com|docs\.google\.com\/presentation|gamma\.app/.test(s)) return 'APRESENTACAO';
   if (m === 'application/pdf') return 'PDF';
   if (/word|sheet|excel/.test(m) || /docs\.google\.com\/(document|spreadsheets)/.test(s)) return 'DOCUMENTO';
   return /^https?:\/\//.test(s) ? 'LINK' : 'OUTRO';

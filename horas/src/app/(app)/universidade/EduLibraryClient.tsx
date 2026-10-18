@@ -202,7 +202,7 @@ function MaterialForm({ edit, setEdit, roles, storage, pending, onSave, setMsg }
           <Input value={f.url} onChange={(e) => { const v = e.target.value; setEdit({ ...edit, f: { ...f, url: v, format: v && !file && !hadFile ? guessFormat(v) : f.format } }); }} placeholder="https://" />
         </div>
         <div className="sm:col-span-2">
-          <Label>ou arquivo (até 50 MB)</Label>
+          <Label>ou arquivo (até 50 MB · PDF, HTML, PowerPoint, Word, áudio, vídeo…)</Label>
           {storage ? (
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <label className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-borda px-3 py-2 font-semibold text-navy hover:bg-fundo">
