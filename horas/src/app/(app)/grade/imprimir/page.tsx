@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Logo } from '@/components/Logo';
 import { PrintButton } from '@/components/PrintButton';
+import { FitSheet } from '@/components/print/FitSheet';
 import { buttonVariants } from '@/components/ui/button';
 import { WEEKDAYS, formatClock, formatDateBR, isIsoDate } from '@/domain/dates';
 import { printDensity, printLines, type PrintMode, type TeacherInfo } from '@/domain/grade-print';
@@ -19,7 +20,7 @@ import { listGrade } from '@/server/services/schedule-service';
 
 export const metadata: Metadata = { title: 'Imprimir grade' };
 
-type SP = { data?: string; area?: string; modalidade?: string; professor?: string; espaco?: string; auto?: string; equipe?: string };
+type SP = { data?: string; area?: string; modalidade?: string; professor?: string; espaco?: string; auto?: string; equipe?: string; folhas?: string };
 
 /** Tamanhos por densidade: a grade cabe em uma página A4 deitada sempre que possível. */
 const SIZE = {
@@ -33,6 +34,8 @@ export default async function ImprimirGradePage({ searchParams }: { searchParams
   if (!can(principal, 'schedule.view')) redirect('/hoje');
   const sp = await searchParams;
   const mode: PrintMode = sp.equipe === 'professores' ? 'professores' : 'todos';
+  // Padrão: tudo em uma folha, ocupando o papel inteiro. "Várias folhas" para grades enormes.
+  const onePage = sp.folhas !== 'varias';
   const date = sp.data && isIsoDate(sp.data) ? sp.data : todayIso();
   const scoped = principal.areaIds === null ? {} : { id: { in: [...principal.areaIds] } };
   const area = sp.area ? await prisma.coordinationArea.findFirst({ where: { id: sp.area, ...scoped }, select: { id: true, name: true } }) : null;
@@ -63,7 +66,8 @@ export default async function ImprimirGradePage({ searchParams }: { searchParams
   const times = [...new Set(grade.map((g) => g.startMin))].sort((a, b) => a - b);
   const cell = (weekday: number, start: number) => grade.filter((g) => g.weekday === weekday && g.startMin === start);
   const maxPerCell = Math.max(1, ...times.flatMap((t) => days.map((w) => cell(w.n, t).length)));
-  const size = SIZE[printDensity(times.length, maxPerCell)];
+  // Em uma folha o encaixe (zoom) cuida do tamanho; em várias, a densidade reduz a letra.
+  const size = SIZE[onePage ? 'normal' : printDensity(times.length, maxPerCell)];
   const counted = grade.filter((g) => g.activityType.kind !== 'PERSONAL');
   const personMin = teacher
     ? counted.reduce((s, g) => s + g.durationMin, 0)
@@ -75,7 +79,8 @@ export default async function ImprimirGradePage({ searchParams }: { searchParams
     space && `Espaço: ${space.name}`,
   ].filter(Boolean).join(' · ');
   const base = gradeParams({ date, areaId: area?.id ?? null, ...filters });
-  const hrefMode = (m: PrintMode) => { const q = new URLSearchParams(base); q.set('auto', '0'); if (m === 'professores') q.set('equipe', 'professores'); return `/grade/imprimir?${q}`; };
+  const href = (m: PrintMode, one: boolean) => { const q = new URLSearchParams(base); q.set('auto', '0'); if (m === 'professores') q.set('equipe', 'professores'); if (!one) q.set('folhas', 'varias'); return `/grade/imprimir?${q}`; };
+  const hrefMode = (m: PrintMode) => href(m, onePage);
 
   return (
     <div className="print-grade">
@@ -95,8 +100,12 @@ export default async function ImprimirGradePage({ searchParams }: { searchParams
             <Link href={hrefMode('todos')} className={cn('rounded-md px-3 py-1.5', mode === 'todos' ? 'bg-navy text-white' : 'text-tinta-suave')}>Equipe completa</Link>
             <Link href={hrefMode('professores')} className={cn('rounded-md px-3 py-1.5', mode === 'professores' ? 'bg-navy text-white' : 'text-tinta-suave')}>Só professores (com CREF)</Link>
           </div>
+          <div className="inline-flex rounded-lg border border-borda bg-white p-0.5 text-sm font-semibold">
+            <Link href={href(mode, true)} className={cn('rounded-md px-3 py-1.5', onePage ? 'bg-navy text-white' : 'text-tinta-suave')}>Uma folha (ocupa o papel todo)</Link>
+            <Link href={href(mode, false)} className={cn('rounded-md px-3 py-1.5', !onePage ? 'bg-navy text-white' : 'text-tinta-suave')}>Várias folhas</Link>
+          </div>
           <div className="flex-1" />
-          <p className="text-xs text-tinta-fraca">Na janela de impressão: “Paisagem” e “Salvar como PDF” para enviar por WhatsApp.</p>
+          <p className="text-xs text-tinta-fraca">Na impressão: “Paisagem”, margens “Padrão” e escala 100%. “Salvar como PDF” para o WhatsApp.</p>
           <PrintButton auto={sp.auto !== '0'} />
         </div>
         {missingCref.length > 0 && (
@@ -106,6 +115,7 @@ export default async function ImprimirGradePage({ searchParams }: { searchParams
         )}
       </div>
 
+      <FitSheet enabled={onePage}>
       <div className="mb-2 flex items-end justify-between border-b-2 border-navy pb-1.5">
         <div>
           <div className="text-navy"><Logo tone="light" /></div>
@@ -171,6 +181,7 @@ export default async function ImprimirGradePage({ searchParams }: { searchParams
           ? 'Professores responsáveis pelas aulas, com registro no CREF. Duração de 1h quando não indicada.'
           : '* auxiliar ou estagiário. Duração de 1h quando não indicada. Personal não conta horas.'}
       </p>
+      </FitSheet>
     </div>
   );
 }
