@@ -23,7 +23,7 @@ export async function briefingData(principal: Principal | null, id: string) {
   assertCan(principal, 'mkt.view');
   const c = await prisma.mktCampaign.findUnique({
     where: { id },
-    include: { event: true, tasks: { orderBy: [{ dueDate: 'asc' }, { position: 'asc' }], select: { title: true, assigneeId: true, collaboratorIds: true, dueDate: true, column: true } } },
+    include: { event: true, tasks: { orderBy: [{ dueDate: 'asc' }, { position: 'asc' }], select: { title: true, assigneeId: true, collaboratorIds: true, dueDate: true, column: true, boardColumn: { select: { name: true } } } } },
   });
   if (!c) throw new NotFoundError('Campanha não encontrada.');
 
@@ -49,7 +49,10 @@ export async function briefingData(principal: Principal | null, id: string) {
     channels: c.channels, conversionChannel: c.conversionChannel, conversionUrl: c.conversionUrl, goal: c.goal,
     owner: c.ownerId ? name.get(c.ownerId) ?? null : null, leadOwner: c.leadOwnerId ? name.get(c.leadOwnerId) ?? null : null,
     event: c.event ? { name: c.event.name, startDate: iso(c.event.startDate)!, endDate: iso(c.event.endDate), location: c.event.location, registrationUrl: c.event.registrationUrl } : null,
-    tasks: c.tasks.map((t) => ({ title: t.title, assignee: t.assigneeId ? name.get(t.assigneeId) ?? null : null, dueDate: iso(t.dueDate), column: t.column })),
+    tasks: c.tasks.map((t) => ({
+      title: t.title, assignee: t.assigneeId ? name.get(t.assigneeId) ?? null : null, dueDate: iso(t.dueDate), column: t.column, columnName: t.boardColumn?.name ?? null,
+      with: t.collaboratorIds.map((u) => name.get(u)).filter((x): x is string => !!x),
+    })),
   };
   return { input, team, link: appUrl() ? `${appUrl()}/marketing/campanhas/${c.id}` : null };
 }

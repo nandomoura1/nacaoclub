@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { FormMessage } from '@/components/ui/alert';
 import { Input, Label, Select } from '@/components/ui/input';
 import { PRIORITIES, TASK_COLUMNS, labelOf } from '@/domain/marketing/constants';
+import { sortColumns } from '@/domain/marketing/board';
 import { cn } from '@/lib/cn';
 import type { MktOptions } from '@/server/services/marketing-service';
 import type { TaskDetail } from '@/server/services/mkt-task-service';
@@ -16,7 +17,7 @@ import {
   saveTaskAction, setDependenciesAction, toggleCheckItemAction,
 } from '../actions';
 
-export interface TaskDefaults { campaignId?: string | null; column?: string; areaKey?: string | null; dueDate?: string | null; title?: string; milestone?: string | null; origin?: 'MANUAL' | 'ANTECEDENCIA' }
+export interface TaskDefaults { campaignId?: string | null; column?: string; columnId?: string; areaKey?: string | null; dueDate?: string | null; title?: string; milestone?: string | null; origin?: 'MANUAL' | 'ANTECEDENCIA' }
 
 /** Painel de tarefa (criar/editar). Dependências escolhidas entre as tarefas da mesma campanha. */
 export function TaskSheet({ taskId, defaults, options, siblings, canEdit, onClose }: {
@@ -24,9 +25,11 @@ export function TaskSheet({ taskId, defaults, options, siblings, canEdit, onClos
 }) {
   const router = useRouter();
   const [detail, setDetail] = useState<TaskDetail | null>(null);
+  const cols = sortColumns(options.columns);
+  const firstOf = (stage: string) => cols.find((c) => c.stage === stage)?.id ?? cols[0]?.id ?? '';
   const [f, setF] = useState({
-    title: defaults?.title ?? '', description: '', campaignId: defaults?.campaignId ?? '', areaKey: defaults?.areaKey ?? '', assigneeId: '',
-    dueDate: defaults?.dueDate ?? '', priority: 'MEDIA', column: defaults?.column ?? 'BACKLOG', tags: '',
+    title: defaults?.title ?? '', description: '', campaignId: defaults?.campaignId ?? '', areaKey: defaults?.areaKey ?? '', assigneeId: '', collaboratorIds: [] as string[],
+    dueDate: defaults?.dueDate ?? '', priority: 'MEDIA', columnId: defaults?.columnId ?? firstOf(defaults?.column ?? 'BACKLOG'), tags: '',
   });
   const [msg, setMsg] = useState<{ error?: string | null; ok?: string | null }>({});
   const [pending, start] = useTransition();
@@ -39,16 +42,22 @@ export function TaskSheet({ taskId, defaults, options, siblings, canEdit, onClos
     if (!r.ok) return setMsg({ error: r.error });
     const t = r.data;
     setDetail(t);
-    setF({ title: t.title, description: t.description ?? '', campaignId: t.campaignId ?? '', areaKey: t.areaKey ?? '', assigneeId: t.assigneeId ?? '', dueDate: t.dueDate ?? '', priority: t.priority, column: t.column, tags: t.tags.join(', ') });
+    setF({ title: t.title, description: t.description ?? '', campaignId: t.campaignId ?? '', areaKey: t.areaKey ?? '', assigneeId: t.assigneeId ?? '', collaboratorIds: t.collaboratorIds, dueDate: t.dueDate ?? '', priority: t.priority, columnId: '', tags: t.tags.join(', ') });
   };
   useEffect(() => { if (taskId) void load(taskId); }, [taskId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const set = (k: keyof typeof f, v: string) => setF((cur) => {
+  const set = (k: Exclude<keyof typeof f, 'collaboratorIds'>, v: string) => setF((cur) => {
     const next = { ...cur, [k]: v };
-    // Área escolhida e responsável vazio: sugere o responsável padrão da área.
-    if (k === 'areaKey' && !cur.assigneeId) next.assigneeId = options.areas.find((a) => a.key === v)?.defaultUserId ?? '';
+    // Área escolhida e responsável vazio: sugere os responsáveis padrão da área.
+    if (k === 'areaKey' && !cur.assigneeId) {
+      const area = options.areas.find((a) => a.key === v);
+      next.assigneeId = area?.defaultUserId ?? '';
+      if (!cur.collaboratorIds.length) next.collaboratorIds = area?.coOwnerIds ?? [];
+    }
+    if (k === 'assigneeId') next.collaboratorIds = cur.collaboratorIds.filter((u) => u !== v);
     return next;
   });
+  const toggleCo = (id: string) => setF((cur) => ({ ...cur, collaboratorIds: cur.collaboratorIds.includes(id) ? cur.collaboratorIds.filter((u) => u !== id) : [...cur.collaboratorIds, id] }));
   const after = async (p: Promise<{ ok: boolean; error?: string }>) => {
     const r = await p;
     if (!r.ok) return setMsg({ error: r.error });
@@ -59,7 +68,8 @@ export function TaskSheet({ taskId, defaults, options, siblings, canEdit, onClos
     e.preventDefault();
     start(async () => {
       setMsg({});
-      const values = { ...f, tags: f.tags.split(',').map((t) => t.trim()).filter(Boolean) };
+      const { columnId, ...rest } = f;
+      const values = { ...rest, ...(detail ? {} : { columnId }), tags: f.tags.split(',').map((t) => t.trim()).filter(Boolean) };
       const r = await saveTaskAction(detail?.id ?? null, values, detail ? undefined : { origin: defaults?.origin, milestone: defaults?.milestone });
       if (!r.ok) return setMsg({ error: r.error });
       router.refresh();
@@ -97,7 +107,7 @@ export function TaskSheet({ taskId, defaults, options, siblings, canEdit, onClos
               <option value="">—</option>{options.areas.map((a) => <option key={a.key} value={a.key}>{a.name}</option>)}
             </Select>
           </div>
-          <div><Label>Responsável</Label>
+          <div><Label>Responsável principal</Label>
             <Select value={f.assigneeId} disabled={ro} onChange={(e) => set('assigneeId', e.target.value)}>
               <option value="">—</option>{options.people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </Select>
@@ -106,11 +116,20 @@ export function TaskSheet({ taskId, defaults, options, siblings, canEdit, onClos
           <div><Label>Prioridade</Label>
             <Select value={f.priority} disabled={ro} onChange={(e) => set('priority', e.target.value)}>{PRIORITIES.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}</Select>
           </div>
-          {!detail && <div className="col-span-2"><Label>Coluna</Label><Select value={f.column} onChange={(e) => set('column', e.target.value)}>{TASK_COLUMNS.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</Select></div>}
+          <div className="col-span-2"><Label>Corresponsáveis</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {options.people.filter((p) => p.id !== f.assigneeId).map((p) => {
+                const on = f.collaboratorIds.includes(p.id);
+                return <button key={p.id} type="button" disabled={ro} onClick={() => toggleCo(p.id)} aria-pressed={on}
+                  className={cn('rounded-full border px-2.5 py-0.5 text-xs font-semibold', on ? 'border-nacao bg-nacao text-white' : 'border-borda text-tinta-suave hover:border-nacao', ro && 'cursor-default')}>{p.name.split(' ').slice(0, 2).join(' ')}</button>;
+              })}
+            </div>
+          </div>
+          {!detail && <div className="col-span-2"><Label>Coluna</Label><Select value={f.columnId} onChange={(e) => set('columnId', e.target.value)}>{cols.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></div>}
           <div className="col-span-2"><Label>Tags (separadas por vírgula)</Label><Input value={f.tags} disabled={ro} onChange={(e) => set('tags', e.target.value)} placeholder="reels, kids, urgente" /></div>
         </div>
         {detail && (
-          <p className="text-xs text-tinta-suave">Coluna: <b>{labelOf(TASK_COLUMNS, detail.column)}</b>{detail.origin !== 'MANUAL' ? ` · origem: ${detail.origin === 'IA' ? 'IA' : detail.origin === 'REUNIAO' ? 'reunião' : detail.origin === 'IMPORTACAO' ? 'Trello' : 'antecedência'}` : ''}{detail.milestone ? ` · ${detail.milestone}` : ''}</p>
+          <p className="text-xs text-tinta-suave">Coluna: <b>{detail.columnName ?? labelOf(TASK_COLUMNS, detail.column)}</b>{detail.origin !== 'MANUAL' ? ` · origem: ${detail.origin === 'IA' ? 'IA' : detail.origin === 'REUNIAO' ? 'reunião' : detail.origin === 'IMPORTACAO' ? 'Trello' : 'antecedência'}` : ''}{detail.milestone ? ` · ${detail.milestone}` : ''}</p>
         )}
 
         {detail && (

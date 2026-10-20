@@ -5,8 +5,9 @@ import { getPrincipal, requestMeta } from '@/server/auth/session';
 import { runAction, type ActionResult } from '@/server/action-result';
 import { todayIso } from '@/lib/today';
 import {
-  addCampaignComment, deleteCalendarItem, deleteCampaign, deleteEvent, reschedule, saveAreaOwner, saveCalendarItem, saveCampaign, saveEvent, setCampaignStatus,
+  addCampaignComment, deleteCalendarItem, deleteCampaign, deleteEvent, reschedule, saveAreaOwners, saveCalendarItem, saveCampaign, saveEvent, setCampaignStatus,
 } from '@/server/services/marketing-service';
+import { deleteColumn, reorderColumns, saveColumn } from '@/server/services/mkt-board-service';
 import {
   addCheckItem, addTaskComment, addTaskLink, deleteTask, getTask, moveTask, removeCheckItem, removeTaskLink, saveTask, setDependencies, toggleCheckItem, type TaskDetail,
 } from '@/server/services/mkt-task-service';
@@ -120,8 +121,19 @@ export async function decideRecommendationAction(suggestionId: string, index: nu
 }
 
 // Configurações
-export async function saveAreaOwnerAction(areaId: string, userId: string | null): Promise<ActionResult> {
-  return runAction(async () => { await saveAreaOwner(await getPrincipal(), areaId, userId, await requestMeta()); refresh(); return undefined; }, 'Responsável salvo.');
+export async function saveAreaOwnersAction(areaId: string, userId: string | null, coOwnerIds: string[]): Promise<ActionResult> {
+  return runAction(async () => { await saveAreaOwners(await getPrincipal(), areaId, userId, coOwnerIds, await requestMeta()); refresh(); return undefined; }, 'Responsáveis salvos.');
+}
+
+// Colunas do Kanban
+export async function saveColumnAction(id: string | null, values: { name: string; color: string | null; stage: string }): Promise<ActionResult<string>> {
+  return runAction(async () => { const r = await saveColumn(await getPrincipal(), id, values, await requestMeta()); refresh(); return r; }, 'Coluna salva.');
+}
+export async function reorderColumnsAction(ids: string[]): Promise<ActionResult> {
+  return runAction(async () => { await reorderColumns(await getPrincipal(), ids, await requestMeta()); refresh(); return undefined; });
+}
+export async function deleteColumnAction(id: string, moveToId: string | null): Promise<ActionResult> {
+  return runAction(async () => { await deleteColumn(await getPrincipal(), id, moveToId, await requestMeta()); refresh(); return undefined; }, 'Coluna excluída.');
 }
 
 // Importação do Trello

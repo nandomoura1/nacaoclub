@@ -20,7 +20,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ c
   if (!can(principal, 'mkt.view')) redirect('/hoje');
   const sp = await searchParams;
   const uuid = (v?: string) => (v && /^[0-9a-f-]{36}$/i.test(v) ? v : undefined);
-  const [tasks, options] = await Promise.all([
+  const [{ tasks, columns }, options] = await Promise.all([
     board(principal, todayIso(), { campaignId: uuid(sp.campanha), areaKey: sp.area || undefined, assigneeId: uuid(sp.responsavel), q: sp.q?.slice(0, 80) || undefined, tag: sp.tag?.slice(0, 30) || undefined, late: sp.atrasadas === '1' }),
     mktOptions(),
   ]);
@@ -28,7 +28,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ c
   const filtered = !!(sp.campanha || sp.area || sp.responsavel || sp.q || sp.tag || sp.atrasadas);
   return (
     <>
-      <PageHeader title="Kanban de Marketing" description="Arraste os cartões entre as colunas. Tarefa com dependência só conclui depois dela." actions={canEdit ? <div className="flex flex-wrap gap-2">{can(principal, 'mkt.admin') && <Link href="/marketing/importar-trello" className={buttonVariants({ size: 'sm', variant: 'secondary' })}>Importar do Trello</Link>}<NewTaskButton options={options} siblings={tasks.map((t) => ({ id: t.id, title: t.title, campaignId: t.campaign?.id ?? null }))} /></div> : undefined} />
+      <PageHeader title="Kanban de Marketing" description="Arraste os cartões entre as colunas. Tarefa com dependência só conclui depois dela. As colunas se ajustam em Configurações." actions={canEdit ? <div className="flex flex-wrap gap-2">{can(principal, 'mkt.admin') && <Link href="/marketing/importar-trello" className={buttonVariants({ size: 'sm', variant: 'secondary' })}>Importar do Trello</Link>}<NewTaskButton options={options} siblings={tasks.map((t) => ({ id: t.id, title: t.title, campaignId: t.campaign?.id ?? null }))} /></div> : undefined} />
       <form className="mb-4 flex flex-wrap items-center gap-2 text-sm">
         <Select name="campanha" defaultValue={sp.campanha ?? ''} className="h-9 w-auto min-w-40"><option value="">Todas as campanhas</option>{options.campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>
         <Select name="area" defaultValue={sp.area ?? ''} className="h-9 w-auto"><option value="">Todas as áreas</option>{options.areas.map((a) => <option key={a.key} value={a.key}>{a.name}</option>)}</Select>
@@ -39,7 +39,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ c
         <Button type="submit" size="sm" variant="secondary">Filtrar</Button>
         {filtered && <Link href="/marketing/kanban" className="text-xs font-semibold text-nacao">limpar</Link>}
       </form>
-      <KanbanClient tasks={tasks} options={options} canEdit={canEdit} />
+      <KanbanClient tasks={tasks} columns={columns} options={options} canEdit={canEdit} />
     </>
   );
 }

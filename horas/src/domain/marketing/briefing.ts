@@ -6,7 +6,7 @@
 import { weekdayOf, WEEKDAYS, type IsoDate } from '@/domain/dates';
 import { CAMPAIGN_TYPES, CONVERSION_CHANNELS, TASK_COLUMNS, channelLabel, isDone } from './constants';
 
-export interface BriefingTask { title: string; assignee: string | null; dueDate: string | null; column: string }
+export interface BriefingTask { title: string; assignee: string | null; dueDate: string | null; column: string; columnName?: string | null; with?: string[] }
 export interface BriefingInput {
   id: string; name: string; type: string;
   startDate: string; endDate: string | null;
@@ -78,9 +78,10 @@ export function briefingText(c: BriefingInput, opt: BriefingOptions, today: IsoD
       for (const t of ts) {
         const finished = isDone(t.column);
         const late = !finished && t.dueDate && t.dueDate < today;
-        const col = TASK_COLUMNS.find((x) => x.id === t.column)?.label;
+        const col = t.columnName ?? TASK_COLUMNS.find((x) => x.id === t.column)?.label;
         const due = t.dueDate ? ` — até ${dmw(t.dueDate)}` : '';
-        lines.push(`${finished ? '✔️' : late ? '⚠️' : '•'} ${t.title.trim()}${due}${finished ? ' · feito' : late ? ' · *atrasada*' : col ? ` · ${col.toLowerCase()}` : ''}`);
+        const co = t.with?.length ? ` (com ${t.with.join(', ')})` : '';
+        lines.push(`${finished ? '✔️' : late ? '⚠️' : '•'} ${t.title.trim()}${co}${due}${finished ? ' · feito' : late ? ' · *atrasada*' : col ? ` · ${col.toLowerCase()}` : ''}`);
       }
     }
     if (opt.tasks === 'pendentes' && done.length) lines.push('', `✔️ ${done.length} tarefa${done.length === 1 ? '' : 's'} já feita${done.length === 1 ? '' : 's'}.`);

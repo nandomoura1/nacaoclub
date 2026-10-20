@@ -10,7 +10,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { AlertTriangle, CalendarDays, CheckSquare, Lock, Plus } from 'lucide-react';
 import { FormMessage } from '@/components/ui/alert';
 import { Select } from '@/components/ui/input';
-import { TASK_COLUMNS, type TaskColumn } from '@/domain/marketing/constants';
+import type { BoardColumn } from '@/domain/marketing/board';
 import { cn } from '@/lib/cn';
 import type { MktOptions } from '@/server/services/marketing-service';
 import type { BoardTask } from '@/server/services/mkt-task-service';
@@ -37,14 +37,21 @@ function Card({ t, onOpen, dragging }: { t: BoardTask; onOpen?: () => void; drag
         {t.dueDate && <span className={cn('inline-flex items-center gap-0.5', t.overdue && 'font-bold text-critico')}>{t.overdue ? <AlertTriangle className="size-3" /> : <CalendarDays className="size-3" />}{fmtDate(t.dueDate)}</span>}
         {t.checklist.total > 0 && <span className="inline-flex items-center gap-0.5"><CheckSquare className="size-3" />{t.checklist.done}/{t.checklist.total}</span>}
         <span className="flex-1" />
-        {t.assignee && <span className="grid size-6 place-items-center rounded-full bg-navy text-[10px] font-bold text-white" title={t.assignee}>{initials(t.assignee)}</span>}
+        {(t.assignee || t.collaborators.length > 0) && (
+          <span className="flex -space-x-1.5" title={[t.assignee, ...t.collaborators].filter(Boolean).join(', ')}>
+            {[t.assignee, ...t.collaborators].filter((n): n is string => !!n).slice(0, 3).map((n, i) => (
+              <span key={n} className={cn('grid size-6 place-items-center rounded-full text-[10px] font-bold text-white ring-2 ring-white', i === 0 && t.assignee ? 'bg-navy' : 'bg-nacao')}>{initials(n)}</span>
+            ))}
+            {[t.assignee, ...t.collaborators].filter(Boolean).length > 3 && <span className="grid size-6 place-items-center rounded-full bg-fundo text-[10px] font-bold text-navy ring-2 ring-white">+{[t.assignee, ...t.collaborators].filter(Boolean).length - 3}</span>}
+          </span>
+        )}
       </div>
     </div>
   );
 }
 
 function SortableCard({ t, onOpen, disabled }: { t: BoardTask; onOpen: () => void; disabled: boolean }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: t.id, data: { column: t.column }, disabled });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: t.id, data: { column: t.columnId }, disabled });
   return (
     <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className={cn(isDragging && 'opacity-40')} {...attributes} {...listeners}>
       <Card t={t} onOpen={onOpen} />
@@ -52,11 +59,12 @@ function SortableCard({ t, onOpen, disabled }: { t: BoardTask; onOpen: () => voi
   );
 }
 
-function Column({ id, label, tasks, onOpen, onAdd, canEdit }: { id: TaskColumn; label: string; tasks: BoardTask[]; onOpen: (id: string) => void; onAdd: () => void; canEdit: boolean }) {
+function Column({ id, label, color, tasks, onOpen, onAdd, canEdit }: { id: string; label: string; color: string | null; tasks: BoardTask[]; onOpen: (id: string) => void; onAdd: () => void; canEdit: boolean }) {
   const { setNodeRef, isOver } = useDroppable({ id: `col:${id}`, data: { column: id } });
   return (
     <div className={cn('flex w-72 shrink-0 flex-col rounded-2xl bg-fundo/80 p-2 ring-1 ring-borda', isOver && 'ring-2 ring-nacao')}>
       <div className="mb-2 flex items-center gap-2 px-1">
+        {color && <span className="size-2.5 shrink-0 rounded-full" style={{ background: color }} />}
         <p className="flex-1 text-xs font-bold uppercase tracking-wide text-navy">{label}</p>
         <span className="rounded-full bg-white px-2 text-[11px] font-semibold text-tinta-suave">{tasks.length}</span>
         {canEdit && <button type="button" onClick={onAdd} aria-label={`Nova tarefa em ${label}`} className="text-tinta-fraca hover:text-nacao"><Plus className="size-4" /></button>}
@@ -70,7 +78,7 @@ function Column({ id, label, tasks, onOpen, onAdd, canEdit }: { id: TaskColumn; 
   );
 }
 
-export function KanbanClient({ tasks: initial, options, canEdit }: { tasks: BoardTask[]; options: MktOptions; canEdit: boolean }) {
+export function KanbanClient({ tasks: initial, columns, options, canEdit }: { tasks: BoardTask[]; columns: BoardColumn[]; options: MktOptions; canEdit: boolean }) {
   const router = useRouter();
   const [tasks, setTasks] = useState(initial);
   const [syncKey, setSyncKey] = useState(initial);
@@ -80,17 +88,18 @@ export function KanbanClient({ tasks: initial, options, canEdit }: { tasks: Boar
   const [error, setError] = useState<string | null>(null);
   const [, start] = useTransition();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
-  const byCol = useMemo(() => Object.fromEntries(TASK_COLUMNS.map((c) => [c.id, tasks.filter((t) => t.column === c.id).sort((a, b) => a.position - b.position)])) as Record<TaskColumn, BoardTask[]>, [tasks]);
+  const byCol = useMemo(() => Object.fromEntries(columns.map((c) => [c.id, tasks.filter((t) => t.columnId === c.id).sort((a, b) => a.position - b.position)])) as Record<string, BoardTask[]>, [tasks, columns]);
 
-  const move = (id: string, column: TaskColumn, index: number) => {
-    const list = byCol[column].filter((t) => t.id !== id);
+  const move = (id: string, column: string, index: number) => {
+    const stage = columns.find((c) => c.id === column)?.stage;
+    const list = (byCol[column] ?? []).filter((t) => t.id !== id);
     const before = list[index - 1]?.id ?? null;
     const after = list[index]?.id ?? null;
     const prevPos = list[index - 1]?.position ?? null;
     const nextPos = list[index]?.position ?? null;
     const pos = prevPos === null && nextPos === null ? 1000 : prevPos === null ? nextPos! - 1000 : nextPos === null ? prevPos + 1000 : (prevPos + nextPos) / 2;
     const snapshot = tasks;
-    setTasks((cur) => cur.map((t) => (t.id === id ? { ...t, column, position: pos } : t)));
+    setTasks((cur) => cur.map((t) => (t.id === id ? { ...t, columnId: column, column: stage ?? t.column, position: pos } : t)));
     setError(null);
     start(async () => {
       const r = await moveTaskAction(id, column, before, after);
@@ -106,23 +115,23 @@ export function KanbanClient({ tasks: initial, options, canEdit }: { tasks: Boar
     if (!over) return;
     const id = String(a.id);
     const overId = String(over.id);
-    let column: TaskColumn;
+    let column: string;
     let index: number;
     if (overId.startsWith('col:')) {
-      column = overId.slice(4) as TaskColumn;
-      index = byCol[column].filter((t) => t.id !== id).length;
+      column = overId.slice(4);
+      index = (byCol[column] ?? []).filter((t) => t.id !== id).length;
     } else {
       const target = tasks.find((t) => t.id === overId);
       if (!target) return;
-      column = target.column;
-      const list = byCol[column].filter((t) => t.id !== id);
+      column = target.columnId;
+      const list = (byCol[column] ?? []).filter((t) => t.id !== id);
       index = list.findIndex((t) => t.id === overId);
-      const from = byCol[column].findIndex((t) => t.id === id);
-      const to = byCol[column].findIndex((t) => t.id === overId);
+      const from = (byCol[column] ?? []).findIndex((t) => t.id === id);
+      const to = (byCol[column] ?? []).findIndex((t) => t.id === overId);
       if (from >= 0 && from < to) index += 1; // descendo na mesma coluna: entra depois do alvo
     }
     const cur = tasks.find((t) => t.id === id);
-    if (cur && cur.column === column && byCol[column].indexOf(cur) === index) return; // soltou no mesmo lugar
+    if (cur && cur.columnId === column && (byCol[column] ?? []).indexOf(cur) === index) return; // soltou no mesmo lugar
     move(id, column, index);
   };
 
@@ -134,23 +143,23 @@ export function KanbanClient({ tasks: initial, options, canEdit }: { tasks: Boar
       <div className="hidden md:block">
         <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragEnd={onDragEnd}>
           <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-4">
-            {TASK_COLUMNS.map((c) => <Column key={c.id} id={c.id} label={c.label} tasks={byCol[c.id]} canEdit={canEdit} onOpen={(id) => setOpen({ id })} onAdd={() => setOpen({ id: null, defaults: { column: c.id } })} />)}
+            {columns.map((c) => <Column key={c.id} id={c.id} label={c.name} color={c.color} tasks={byCol[c.id]!} canEdit={canEdit} onOpen={(id) => setOpen({ id })} onAdd={() => setOpen({ id: null, defaults: { columnId: c.id } })} />)}
           </div>
           <DragOverlay>{active ? <div className="w-68"><Card t={active} dragging /></div> : null}</DragOverlay>
         </DndContext>
       </div>
       {/* Celular: lista por coluna com "Mover para…" */}
       <div className="space-y-4 md:hidden">
-        {TASK_COLUMNS.filter((c) => byCol[c.id].length).map((c) => (
+        {columns.filter((c) => byCol[c.id]!.length).map((c) => (
           <section key={c.id}>
-            <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-navy">{c.label} <span className="text-tinta-fraca">({byCol[c.id].length})</span></p>
+            <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-navy">{c.name} <span className="text-tinta-fraca">({byCol[c.id]!.length})</span></p>
             <div className="space-y-2">
-              {byCol[c.id].map((t) => (
+              {byCol[c.id]!.map((t) => (
                 <div key={t.id}>
                   <Card t={t} onOpen={() => setOpen({ id: t.id })} />
                   {canEdit && (
-                    <Select aria-label="Mover para" className="mt-1 h-8 text-xs" value={t.column} onChange={(e) => move(t.id, e.target.value as TaskColumn, byCol[e.target.value as TaskColumn].length)}>
-                      {TASK_COLUMNS.map((x) => <option key={x.id} value={x.id}>Mover para: {x.label}</option>)}
+                    <Select aria-label="Mover para" className="mt-1 h-8 text-xs" value={t.columnId} onChange={(e) => move(t.id, e.target.value, byCol[e.target.value]?.length ?? 0)}>
+                      {columns.map((x) => <option key={x.id} value={x.id}>Mover para: {x.name}</option>)}
                     </Select>
                   )}
                 </div>

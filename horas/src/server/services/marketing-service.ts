@@ -9,8 +9,9 @@ import { AppError, NotFoundError } from '@/server/errors';
 import { addDays, isIsoDate } from '@/domain/dates';
 import {
   APPROVAL_STATUSES, CALENDAR_KINDS, CAMPAIGN_STATUSES, CAMPAIGN_TYPES, CHANNELS, CONVERSION_CHANNELS, EVENT_STATUSES, isDone, labelOf,
-  type AreaKey, type CampaignStatus,
+  type AreaKey, type CampaignStatus, type TaskColumn,
 } from '@/domain/marketing/constants';
+import type { BoardColumn } from '@/domain/marketing/board';
 import { commercialGate, milestoneAlerts, readiness, type CampaignFacts, type TaskFacts } from '@/domain/marketing/readiness';
 import { attention, type AgendaCampaign, type AgendaTask } from '@/domain/marketing/agenda';
 import { mondayOf, moveRange, type CalEntry } from '@/domain/marketing/calendar';
@@ -42,6 +43,12 @@ export async function marketingPeople(db: Tx = prisma) {
     select: { id: true, name: true }, orderBy: { name: 'asc' },
   });
 }
+/** Colunas do Kanban, na ordem do quadro. */
+export async function listColumns(db: Tx = prisma): Promise<BoardColumn[]> {
+  const rows = await db.mktBoardColumn.findMany({ orderBy: [{ position: 'asc' }, { name: 'asc' }] });
+  return rows.map((c) => ({ id: c.id, name: c.name, color: c.color, stage: c.stage as TaskColumn, position: c.position }));
+}
+
 export async function listAreas(db: Tx = prisma) {
   return db.mktArea.findMany({ orderBy: { sortOrder: 'asc' } });
 }
@@ -49,13 +56,16 @@ export async function listModalities() {
   return prisma.modality.findMany({ select: { id: true, name: true, color: true }, orderBy: { name: 'asc' } });
 }
 
-export async function saveAreaOwner(principal: Principal | null, areaId: string, userId: string | null, meta: RequestMeta) {
+/** Responsável padrão da área + corresponsáveis (entram nas tarefas novas da área). */
+export async function saveAreaOwners(principal: Principal | null, areaId: string, userId: string | null, coOwnerIds: string[], meta: RequestMeta) {
   assertCan(principal, 'mkt.admin');
+  const co = [...new Set(coOwnerIds)].filter((u) => u !== userId).slice(0, 10);
+  if (co.some((u) => !/^[0-9a-f-]{36}$/i.test(u)) || (userId && !/^[0-9a-f-]{36}$/i.test(userId))) throw new AppError('Pessoa inválida.');
   await prisma.$transaction(async (tx) => {
     const a = await tx.mktArea.findUnique({ where: { id: areaId } });
     if (!a) throw new NotFoundError('Área não encontrada.');
-    await tx.mktArea.update({ where: { id: areaId }, data: { defaultUserId: userId } });
-    await audit(tx, { actorId: principal.id, ...meta }, { action: 'mkt.area_owner', entityType: 'mkt_area', entityId: areaId, before: { responsavel: a.defaultUserId }, after: { responsavel: userId }, summary: `${principal.name} definiu o responsável padrão de ${a.name}` });
+    await tx.mktArea.update({ where: { id: areaId }, data: { defaultUserId: userId, coOwnerIds: co } });
+    await audit(tx, { actorId: principal.id, ...meta }, { action: 'mkt.area_owner', entityType: 'mkt_area', entityId: areaId, before: { responsavel: a.defaultUserId, corresponsaveis: a.coOwnerIds }, after: { responsavel: userId, corresponsaveis: co }, summary: `${principal.name} definiu os responsáveis padrão de ${a.name}` });
   });
 }
 
@@ -180,7 +190,7 @@ export async function getCampaign(principal: Principal | null, id: string, today
     where: { id },
     include: {
       event: true,
-      tasks: { include: { area: true, checklist: { select: { done: true } } }, orderBy: [{ dueDate: 'asc' }, { position: 'asc' }] },
+      tasks: { include: { area: true, boardColumn: { select: { name: true } }, checklist: { select: { done: true } } }, orderBy: [{ dueDate: 'asc' }, { position: 'asc' }] },
       suggestions: { where: { kind: 'TAREFAS_CAMPANHA' }, orderBy: { createdAt: 'desc' }, take: 5 },
     },
   });
@@ -207,7 +217,7 @@ export async function getCampaign(principal: Principal | null, id: string, today
     gate: commercialGate(facts),
     milestones: milestoneAlerts(facts, tasks, today),
     tasks: c.tasks.map((t) => ({
-      id: t.id, title: t.title, column: t.column, dueDate: iso(t.dueDate), priority: t.priority, origin: t.origin,
+      id: t.id, title: t.title, column: t.column, columnName: t.boardColumn?.name ?? null, dueDate: iso(t.dueDate), priority: t.priority, origin: t.origin,
       area: t.area ? { key: t.area.key, name: t.area.name, color: t.area.color } : null,
       assignee: t.assigneeId ? names.get(t.assigneeId) ?? null : null,
       checklist: { total: t.checklist.length, done: t.checklist.filter((x) => x.done).length },
@@ -417,12 +427,12 @@ export interface RecoPayload {
 
 /** Opções dos formulários do Marketing (pessoas, áreas, campanhas, eventos, modalidades). */
 export async function mktOptions() {
-  const [people, areas, campaigns, events, modalities] = await Promise.all([
+  const [people, areas, campaigns, events, modalities, columns] = await Promise.all([
     marketingPeople(), listAreas(),
     prisma.mktCampaign.findMany({ where: { status: { notIn: ['FINALIZADA', 'ANALISE'] } }, select: { id: true, name: true }, orderBy: { startDate: 'asc' } }),
     prisma.mktEvent.findMany({ where: { status: { not: 'CANCELADO' } }, select: { id: true, name: true }, orderBy: { startDate: 'asc' } }),
-    listModalities(),
+    listModalities(), listColumns(),
   ]);
-  return { people, areas: areas.map((a) => ({ id: a.id, key: a.key, name: a.name, color: a.color, defaultUserId: a.defaultUserId, question: a.question })), campaigns, events, modalities };
+  return { people, areas: areas.map((a) => ({ id: a.id, key: a.key, name: a.name, color: a.color, defaultUserId: a.defaultUserId, coOwnerIds: a.coOwnerIds, question: a.question })), campaigns, events, modalities, columns };
 }
 export type MktOptions = Awaited<ReturnType<typeof mktOptions>>;

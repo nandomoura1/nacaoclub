@@ -4,7 +4,7 @@ import { prisma } from '@/server/db';
 import { AuthorizationError } from '@/server/errors';
 import { addDays } from '@/domain/dates';
 import {
-  calendarEntries, commandCenter, getCampaign, listCampaigns, reschedule, saveAreaOwner, saveCampaign, saveEvent, setCampaignStatus,
+  calendarEntries, commandCenter, getCampaign, listCampaigns, reschedule, saveAreaOwners, saveCampaign, saveEvent, setCampaignStatus,
 } from '@/server/services/marketing-service';
 import { board, moveTask, saveTask, setDependencies } from '@/server/services/mkt-task-service';
 import { createMeeting, decideMinutes, decideRecommendation, decideTaskSuggestion, generateMinutes, getMeeting, refreshRecommendations, suggestCampaignTasks } from '@/server/services/mkt-ai-service';
@@ -31,7 +31,7 @@ describe.skipIf(!hasDb)('Marketing Nação — Fase 1', () => {
       await prisma.mktArea.upsert({ where: { key }, create: { key, name: key, color: '#0169E9', sortOrder: i }, update: {} });
     }
     const design = await prisma.mktArea.findUniqueOrThrow({ where: { key: 'DESIGN' } });
-    await saveAreaOwner(admin.principal, design.id, mkt.principal.id, META);
+    await saveAreaOwners(admin.principal, design.id, mkt.principal.id, [], META);
   });
   afterAll(() => { process.env.AI_FAKE = prev; });
 
@@ -66,7 +66,7 @@ describe.skipIf(!hasDb)('Marketing Nação — Fase 1', () => {
     const cal = await calendarEntries(mkt.principal, today, addDays(start, 10));
     expect(cal.filter((e) => e.kind === 'tarefa' && e.campaignId === campaignId)).toHaveLength(20);
     expect(cal.some((e) => e.kind === 'evento' && e.id === eventId)).toBe(true);
-    expect((await board(mkt.principal, today, { campaignId })).length).toBe(20);
+    expect((await board(mkt.principal, today, { campaignId })).tasks.length).toBe(20);
   });
 
   it('aceite em lote é atômico: uma tarefa inválida não grava nenhuma', async () => {
@@ -96,9 +96,10 @@ describe.skipIf(!hasDb)('Marketing Nação — Fase 1', () => {
     const b = await saveTask(mkt.principal, null, { title: `Post ${tag}`, areaKey: 'CONTEUDO', campaignId }, META);
     await setDependencies(mkt.principal, b, [a], META);
     await expect(setDependencies(mkt.principal, a, [b], META)).rejects.toThrow(/circular/);
-    await expect(moveTask(mkt.principal, b, 'EXECUTADO', null, null, META)).rejects.toThrow(/Conclua antes: Arte/);
-    await moveTask(mkt.principal, a, 'EXECUTADO', null, null, META);
-    await moveTask(mkt.principal, b, 'EXECUTADO', null, null, META);
+    const done = (await prisma.mktBoardColumn.findFirstOrThrow({ where: { stage: 'EXECUTADO' }, orderBy: { position: 'asc' } })).id;
+    await expect(moveTask(mkt.principal, b, done, null, null, META)).rejects.toThrow(/Conclua antes: Arte/);
+    await moveTask(mkt.principal, a, done, null, null, META);
+    await moveTask(mkt.principal, b, done, null, null, META);
     expect((await prisma.mktTask.findUniqueOrThrow({ where: { id: b } })).doneAt).not.toBeNull();
     await reschedule(mkt.principal, 'campanha', campaignId, addDays(start, 2), META);
     expect((await getCampaign(mkt.principal, campaignId, today)).data.startDate).toBe(addDays(start, 2));

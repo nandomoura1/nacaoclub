@@ -1681,13 +1681,15 @@ enum MktSuggestionStatus {
 }
 
 model MktArea {
-  id            String  @id @default(uuid()) @db.Uuid
-  key           String  @unique
+  id            String   @id @default(uuid()) @db.Uuid
+  key           String   @unique
   name          String
   color         String
   question      String?
-  defaultUserId String? @map("default_user_id") @db.Uuid
-  sortOrder     Int     @default(0) @map("sort_order")
+  defaultUserId String?  @map("default_user_id") @db.Uuid
+  /// Corresponsáveis padrão: entram como corresponsáveis nas tarefas novas da área.
+  coOwnerIds    String[] @default([]) @map("co_owner_ids") @db.Uuid
+  sortOrder     Int      @default(0) @map("sort_order")
 
   tasks MktTask[]
 
@@ -1763,6 +1765,21 @@ model MktCampaign {
   @@map("mkt_campaigns")
 }
 
+/// Colunas do Kanban de Marketing, editáveis em Configurações. Cada uma
+/// "funciona como" uma etapa fixa (stage) — é ela que conta para prontidão e atrasos.
+model MktBoardColumn {
+  id        String        @id @default(uuid()) @db.Uuid
+  name      String
+  color     String?
+  stage     MktTaskColumn
+  position  Int           @default(0)
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  tasks MktTask[]
+
+  @@map("mkt_board_columns")
+}
+
 model MktTask {
   id              String        @id @default(uuid()) @db.Uuid
   title           String
@@ -1775,6 +1792,8 @@ model MktTask {
   dueDate         DateTime?     @map("due_date") @db.Date
   priority        MktPriority   @default(MEDIA)
   column          MktTaskColumn @default(BACKLOG)
+  /// Coluna do quadro (editável). `column` guarda a etapa que ela representa.
+  columnId        String?       @map("column_id") @db.Uuid
   position        Float         @default(1000)
   tags            String[]      @default([])
   origin          MktTaskOrigin @default(MANUAL)
@@ -1787,15 +1806,17 @@ model MktTask {
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
 
-  campaign  MktCampaign?        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  event     MktEvent?           @relation(fields: [eventId], references: [id], onDelete: SetNull)
-  area      MktArea?            @relation(fields: [areaId], references: [id], onDelete: SetNull)
-  checklist MktTaskCheckItem[]
-  links     MktTaskLink[]
-  dependsOn MktTaskDependency[] @relation("TaskDependsOn")
-  blocking  MktTaskDependency[] @relation("TaskBlocks")
+  campaign    MktCampaign?        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  event       MktEvent?           @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  area        MktArea?            @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  boardColumn MktBoardColumn?     @relation(fields: [columnId], references: [id], onDelete: SetNull)
+  checklist   MktTaskCheckItem[]
+  links       MktTaskLink[]
+  dependsOn   MktTaskDependency[] @relation("TaskDependsOn")
+  blocking    MktTaskDependency[] @relation("TaskBlocks")
 
   @@index([column, position])
+  @@index([columnId])
   @@index([campaignId])
   @@index([dueDate])
   @@map("mkt_tasks")
@@ -2034,33 +2055,33 @@ model ProcDemand {
 /// Reunião de líderes: semanal (placar, atrasadas, foco da semana), daily (15 min)
 /// ou ATA (registro de reunião online/presencial: participantes, pauta e decisões).
 model ProcMeeting {
-  id          String    @id @default(uuid()) @db.Uuid
+  id             String    @id @default(uuid()) @db.Uuid
   /// SEMANAL, DIARIA ou ATA
-  kind        String
+  kind           String
   /// Ata: título/assunto da reunião.
-  title       String?
+  title          String?
   /// Ata: ONLINE ou PRESENCIAL.
-  mode        String?
+  mode           String?
   /// Ata: usuários que participaram.
-  participantIds String[] @default([]) @map("participant_ids") @db.Uuid
+  participantIds String[]  @default([]) @map("participant_ids") @db.Uuid
   /// Ata: convidados de fora do sistema (texto livre).
-  guests      String?
+  guests         String?
   /// Ata: resumo da pauta / o que foi discutido.
-  agenda      String?
+  agenda         String?
   /// Ata: link da gravação ou do documento da reunião.
-  link        String?
-  date        DateTime  @db.Date
+  link           String?
+  date           DateTime  @db.Date
   /// Semana ISO (ex.: 2026-W42) — o foco combinado vale para ela.
-  week        String
-  notes       String?
+  week           String
+  notes          String?
   /// ABERTA ou ENCERRADA
-  status      String    @default("ABERTA")
+  status         String    @default("ABERTA")
   /// Números no encerramento (concluídas, atrasadas, foco…).
-  summary     Json?
-  createdById String?   @map("created_by") @db.Uuid
-  closedAt    DateTime? @map("closed_at")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  summary        Json?
+  createdById    String?   @map("created_by") @db.Uuid
+  closedAt       DateTime? @map("closed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
 
   @@index([date])
   @@map("proc_meetings")
@@ -2111,19 +2132,19 @@ model WaAutomation {
 
 /// Mensagem recebida no WhatsApp da Nação (webhook da Z-API "Ao receber").
 model WaInbound {
-  id        String   @id @default(uuid()) @db.Uuid
+  id         String   @id @default(uuid()) @db.Uuid
   /// ID da mensagem na Z-API (evita processar duas vezes).
-  messageId String   @unique @map("message_id")
+  messageId  String   @unique @map("message_id")
   /// DDD + 8 últimos dígitos (para casar com professor/usuário).
-  phoneKey  String   @map("phone_key")
-  toMasked  String   @map("to_masked")
-  senderName String? @map("sender_name")
-  text      String?
-  teacherId String?  @map("teacher_id") @db.Uuid
-  userId    String?  @map("user_id") @db.Uuid
+  phoneKey   String   @map("phone_key")
+  toMasked   String   @map("to_masked")
+  senderName String?  @map("sender_name")
+  text       String?
+  teacherId  String?  @map("teacher_id") @db.Uuid
+  userId     String?  @map("user_id") @db.Uuid
   /// O que o sistema fez com ela: CONFIRMOU_GRADE, AJUSTE_GRADE ou nada.
-  handled   String?
-  createdAt DateTime @default(now()) @map("created_at")
+  handled    String?
+  createdAt  DateTime @default(now()) @map("created_at")
 
   @@index([createdAt])
   @@index([phoneKey])
@@ -2160,34 +2181,34 @@ model WaConfirmation {
 
 /// Lead (interessado): chega pelo site (formulário Wix), WhatsApp, link de campanha ou cadastro manual.
 model MktLead {
-  id          String    @id @default(uuid()) @db.Uuid
-  name        String
-  phone       String?
-  email       String?
+  id           String    @id @default(uuid()) @db.Uuid
+  name         String
+  phone        String?
+  email        String?
   /// Modalidade de interesse (texto livre do formulário ou escolhida).
-  interest    String?
-  modalityId  String?   @map("modality_id") @db.Uuid
+  interest     String?
+  modalityId   String?   @map("modality_id") @db.Uuid
   /// SITE, WHATSAPP, INSTAGRAM, INDICACAO, EVENTO, PRESENCIAL, LINK, OUTRO
-  source      String    @default("OUTRO")
+  source       String    @default("OUTRO")
   /// NOVO, CONTATO, EXPERIMENTAL, NEGOCIACAO, MATRICULADO, PERDIDO
-  stage       String    @default("NOVO")
-  ownerId     String?   @map("owner_id") @db.Uuid
-  campaignId  String?   @map("campaign_id") @db.Uuid
-  linkId      String?   @map("link_id") @db.Uuid
-  utmSource   String?   @map("utm_source")
-  utmMedium   String?   @map("utm_medium")
-  utmCampaign String?   @map("utm_campaign")
-  notes       String?
-  lostReason  String?   @map("lost_reason")
+  stage        String    @default("NOVO")
+  ownerId      String?   @map("owner_id") @db.Uuid
+  campaignId   String?   @map("campaign_id") @db.Uuid
+  linkId       String?   @map("link_id") @db.Uuid
+  utmSource    String?   @map("utm_source")
+  utmMedium    String?   @map("utm_medium")
+  utmCampaign  String?   @map("utm_campaign")
+  notes        String?
+  lostReason   String?   @map("lost_reason")
   /// Dados brutos do formulário (para conferir), sem segredo.
-  raw         Json?
+  raw          Json?
   /// Chave para não duplicar o mesmo envio do formulário.
-  externalRef String?   @unique @map("external_ref")
+  externalRef  String?   @unique @map("external_ref")
   nextActionAt DateTime? @map("next_action_at") @db.Date
-  convertedAt DateTime? @map("converted_at")
-  createdById String?   @map("created_by") @db.Uuid
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  convertedAt  DateTime? @map("converted_at")
+  createdById  String?   @map("created_by") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
 
   @@index([stage, createdAt])
   @@index([phone])
@@ -2196,23 +2217,23 @@ model MktLead {
 
 /// Link rastreável: /l/<slug> redireciona para o destino com UTM e conta os cliques.
 model MktLink {
-  id          String   @id @default(uuid()) @db.Uuid
-  slug        String   @unique
+  id          String    @id @default(uuid()) @db.Uuid
+  slug        String    @unique
   title       String
   destination String
   /// Canal: INSTAGRAM, WHATSAPP, GOOGLE, META_ADS, EMAIL, QRCODE, SITE, OUTRO
-  channel     String   @default("OUTRO")
-  utmSource   String?  @map("utm_source")
-  utmMedium   String?  @map("utm_medium")
-  utmCampaign String?  @map("utm_campaign")
-  utmContent  String?  @map("utm_content")
-  campaignId  String?  @map("campaign_id") @db.Uuid
-  active      Boolean  @default(true)
-  clicks      Int      @default(0)
+  channel     String    @default("OUTRO")
+  utmSource   String?   @map("utm_source")
+  utmMedium   String?   @map("utm_medium")
+  utmCampaign String?   @map("utm_campaign")
+  utmContent  String?   @map("utm_content")
+  campaignId  String?   @map("campaign_id") @db.Uuid
+  active      Boolean   @default(true)
+  clicks      Int       @default(0)
   lastClickAt DateTime? @map("last_click_at")
-  createdById String?  @map("created_by") @db.Uuid
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdById String?   @map("created_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
   @@map("mkt_links")
 }
@@ -2334,7 +2355,7 @@ model MktNoticeRead {
 
 /// Material de capacitação: link (Drive, YouTube, Canva, Spotify…) ou arquivo no bucket privado.
 model EduMaterial {
-  id          String    @id @default(uuid()) @db.Uuid
+  id          String   @id @default(uuid()) @db.Uuid
   title       String
   description String?
   /// ESSENCIAL, TECNICA, GESTAO
@@ -2345,21 +2366,21 @@ model EduMaterial {
   format      String
   url         String?
   /// Arquivo no bucket (leitura só por URL assinada).
-  path        String?   @unique
-  fileName    String?   @map("file_name")
+  path        String?  @unique
+  fileName    String?  @map("file_name")
   mime        String?
-  sizeBytes   Int?      @map("size_bytes")
+  sizeBytes   Int?     @map("size_bytes")
   /// TODOS, LIDERES, PROFESSORES, PERFIL
-  audience    String    @default("TODOS")
-  roleKey     String?   @map("role_key")
-  required    Boolean   @default(false)
+  audience    String   @default("TODOS")
+  roleKey     String?  @map("role_key")
+  required    Boolean  @default(false)
   version     String?
-  durationMin Int?      @map("duration_min")
-  active      Boolean   @default(true)
-  sortOrder   Int       @default(0) @map("sort_order")
-  createdById String?   @map("created_by") @db.Uuid
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  durationMin Int?     @map("duration_min")
+  active      Boolean  @default(true)
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdById String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   completions EduCompletion[]
   trackItems  EduTrackItem[]

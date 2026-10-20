@@ -190,7 +190,7 @@ function Tasks({ v, today, perms, pending, run, suggestion, onOpen, onNew }: {
                     <span className={cn('min-w-0 flex-1', isDone(t.column) && 'text-tinta-fraca line-through')}>{t.title}</span>
                     <PriorityTag p={t.priority} />
                     {t.origin === 'IA' && <Sparkles className="size-3 text-ciano" aria-label="sugerida pela IA" />}
-                    <Badge>{labelOf(TASK_COLUMNS, t.column)}</Badge>
+                    <Badge>{t.columnName ?? labelOf(TASK_COLUMNS, t.column)}</Badge>
                     <span className={cn('w-12 text-right text-xs tabular-nums', late ? 'font-bold text-critico' : 'text-tinta-suave')}>{fmtDate(t.dueDate)}</span>
                     <span className="w-28 truncate text-right text-xs text-tinta-suave">{t.assignee ?? '—'}</span>
                   </button>

@@ -2,9 +2,10 @@
 
 import { Card } from '@/components/ui/card';
 import { FormMessage } from '@/components/ui/alert';
-import { Select } from '@/components/ui/input';
+import { Label, Select } from '@/components/ui/input';
+import { cn } from '@/lib/cn';
 import type { MktOptions } from '@/server/services/marketing-service';
-import { saveAreaOwnerAction } from '../actions';
+import { saveAreaOwnersAction } from '../actions';
 import { useRun } from '../_components/useRun';
 
 export function AreasClient({ areas, people }: { areas: MktOptions['areas']; people: MktOptions['people'] }) {
@@ -18,10 +19,22 @@ export function AreasClient({ areas, people }: { areas: MktOptions['areas']; peo
           <Card key={a.id} className="p-4">
             <p className="flex items-center gap-2 font-bold text-navy"><span className="size-3 rounded-full" style={{ background: a.color }} />{a.name}</p>
             <p className="mt-0.5 text-xs text-tinta-suave">{a.question}</p>
-            <Select className="mt-3" aria-label={`Responsável por ${a.name}`} disabled={pending} value={a.defaultUserId ?? ''} onChange={(e) => run(() => saveAreaOwnerAction(a.id, e.target.value || null))}>
+            <Label className="mt-3">Responsável principal</Label>
+            <Select aria-label={`Responsável por ${a.name}`} disabled={pending} value={a.defaultUserId ?? ''} onChange={(e) => run(() => saveAreaOwnersAction(a.id, e.target.value || null, a.coOwnerIds.filter((u) => u !== e.target.value)))}>
               <option value="">Sem responsável padrão</option>
               {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </Select>
+            <Label className="mt-3">Corresponsáveis</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {people.filter((p) => p.id !== a.defaultUserId).map((p) => {
+                const on = a.coOwnerIds.includes(p.id);
+                return (
+                  <button key={p.id} type="button" disabled={pending} aria-pressed={on}
+                    onClick={() => run(() => saveAreaOwnersAction(a.id, a.defaultUserId, on ? a.coOwnerIds.filter((u) => u !== p.id) : [...a.coOwnerIds, p.id]))}
+                    className={cn('rounded-full border px-2.5 py-0.5 text-xs font-semibold', on ? 'border-nacao bg-nacao text-white' : 'border-borda text-tinta-suave hover:border-nacao')}>{p.name}</button>
+                );
+              })}
+            </div>
           </Card>
         ))}
       </div>
