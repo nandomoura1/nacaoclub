@@ -7,7 +7,7 @@ import { runAction, type ActionResult } from '@/server/action-result';
 import { deleteNotice, markNoticeRead, noticeReaders, previewNotice, publishNotice, saveNotice, type SendResult } from '@/server/services/mkt-notice-service';
 
 const refresh = () => { revalidatePath('/marketing/interna'); revalidatePath('/hoje'); revalidatePath('/meu-extrato'); };
-type Filter = { modalityId?: string | null; roleKey?: string | null; numbers?: string[] } | null;
+type Filter = { modalityId?: string | null; roleKey?: string | null; numbers?: string[]; userIds?: string[]; roleKeys?: string[] } | null;
 
 export async function saveNoticeAction(id: string | null, values: Record<string, unknown>): Promise<ActionResult<string>> {
   return runAction(async () => { const r = await saveNotice(await getPrincipal(), id, values, await requestMeta()); refresh(); return r; }, 'Comunicado salvo.');

@@ -21,7 +21,7 @@ import { dt, iso } from './marketing-service';
  */
 
 const TEST_LIMIT = 3;
-type Filter = { modalityId?: string | null; roleKey?: string | null; numbers?: string[] } | null;
+type Filter = { modalityId?: string | null; roleKey?: string | null; numbers?: string[]; userIds?: string[]; roleKeys?: string[] } | null;
 const appUrl = () => (process.env.APP_URL ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : '')).replace(/\/$/, '');
 
 /** Toda a equipe: usuários ativos + professores ativos, sem repetir o mesmo telefone. */
@@ -42,7 +42,27 @@ async function everyone(today: IsoDate): Promise<Recipient[]> {
   return out;
 }
 
+/** Pessoas escolhidas (Briefing): usuários marcados + perfis inteiros + grupos/números, sem repetir telefone. */
+async function selection(f: Filter, today: IsoDate): Promise<Recipient[]> {
+  const userIds = f?.userIds ?? [], roleKeys = f?.roleKeys ?? [];
+  const users = userIds.length || roleKeys.length ? await prisma.user.findMany({
+    where: { active: true, OR: [{ id: { in: userIds } }, { roles: { some: { role: { key: { in: roleKeys } } } } }] },
+    orderBy: { name: 'asc' }, select: { id: true, name: true, phone: true, teachers: { select: { teacher: { select: { phone: true } } } } },
+  }) : [];
+  const seen = new Set<string>();
+  const out: Recipient[] = [];
+  const push = (r: Recipient) => {
+    const k = phoneKey(r.phone);
+    if (k) { if (seen.has(k)) return; seen.add(k); }
+    out.push(r);
+  };
+  for (const u of users) push({ key: `u:${u.id}`, name: u.name, phone: u.phone ?? u.teachers.map((t) => t.teacher.phone).find(Boolean) ?? null, vars: baseVars(u.name, today, appUrl()) });
+  for (const n of f?.numbers ?? []) push({ key: `n:${n}`, name: null, phone: n, vars: baseVars(null, today, appUrl()) });
+  return out;
+}
+
 export async function noticeRecipients(audience: string, filter: Filter, today: IsoDate): Promise<Recipient[]> {
+  if (audience === 'SELECAO') return selection(filter, today);
   return audience === 'TODOS' ? everyone(today) : audienceRecipients(audience, filter, today);
 }
 
@@ -78,9 +98,10 @@ export async function listNotices(principal: Principal | null): Promise<NoticeRo
 const schema = z.object({
   kind: z.enum(NOTICE_KINDS.map((k) => k.id) as [string, ...string[]]),
   title: z.string().trim().min(3, 'Dê um título ao comunicado.').max(100),
-  body: z.string().trim().min(5, 'Escreva o comunicado.').max(3000, 'Texto longo demais para o WhatsApp.'),
+  body: z.string().trim().min(5, 'Escreva o comunicado.').max(6000, 'Texto longo demais para o WhatsApp.'),
   audience: z.enum(NOTICE_AUDIENCES.map((a) => a.id) as [string, ...string[]]),
-  filter: z.object({ modalityId: z.string().uuid().nullable().optional(), roleKey: z.string().max(40).nullable().optional(), numbers: z.array(z.string().trim().max(60)).max(50).optional() }).nullable(),
+  filter: z.object({ modalityId: z.string().uuid().nullable().optional(), roleKey: z.string().max(40).nullable().optional(), numbers: z.array(z.string().trim().max(60)).max(50).optional(),
+    userIds: z.array(z.string().uuid()).max(200).optional(), roleKeys: z.array(z.string().max(40)).max(20).optional() }).nullable(),
   campaignId: z.string().uuid().nullable(),
   sendWhatsApp: z.boolean(),
   askConfirmation: z.boolean(),
@@ -95,6 +116,7 @@ export async function saveNotice(principal: Principal | null, id: string | null,
   const d = r.data;
   if (d.audience === 'PERFIL' && !d.filter?.roleKey) throw new AppError('Escolha o perfil.');
   if (d.audience === 'NUMEROS' && !d.filter?.numbers?.length) throw new AppError('Informe pelo menos um grupo ou número.');
+  if (d.audience === 'SELECAO' && !d.filter?.userIds?.length && !d.filter?.roleKeys?.length && !d.filter?.numbers?.length) throw new AppError('Escolha pelo menos uma pessoa, perfil ou grupo.');
   const data = { ...d, filter: (d.filter ?? Prisma.JsonNull) as Prisma.InputJsonValue, showUntil: dt(d.showUntil) };
   return prisma.$transaction(async (tx) => {
     const before = id ? await tx.mktNotice.findUnique({ where: { id } }) : null;

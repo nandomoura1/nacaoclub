@@ -10,6 +10,7 @@ export const NOTICE_AUDIENCES = [
   { id: 'PROFESSORES', label: 'Professores', detail: 'Professores ativos — todos ou de uma modalidade.', filter: 'modality' },
   { id: 'PERFIL', label: 'Um perfil de acesso', detail: 'Ex.: Recepção, Coordenador, Marketing.', filter: 'role' },
   { id: 'NUMEROS', label: 'Grupos ou números', detail: 'IDs de grupo do WhatsApp (ex.: grupo da equipe) ou números, um por linha.', filter: 'numbers' },
+  { id: 'SELECAO', label: 'Pessoas escolhidas', detail: 'Pessoas, perfis e grupos escolhidos no Briefing da campanha.', filter: 'selection' },
 ] as const;
 export type NoticeAudience = (typeof NOTICE_AUDIENCES)[number]['id'];
 

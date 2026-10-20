@@ -14,7 +14,7 @@ import type { NoticeRow } from '@/server/services/mkt-notice-service';
 import { deleteNoticeAction, noticeReadersAction, previewNoticeAction, publishNoticeAction, saveNoticeAction } from '../interna-actions';
 
 type Opt = { id: string; name: string };
-type Form = { kind: string; title: string; body: string; audience: string; modalityId: string; roleKey: string; numbers: string; campaignId: string; sendWhatsApp: boolean; askConfirmation: boolean; pinned: boolean; showUntil: string };
+type Form = { raw?: NoticeRow['filter']; kind: string; title: string; body: string; audience: string; modalityId: string; roleKey: string; numbers: string; campaignId: string; sendWhatsApp: boolean; askConfirmation: boolean; pinned: boolean; showUntil: string };
 type Preview = { total: number; comTelefone: number; semTelefone: string[]; texto: string; teste: number | null };
 const EMPTY: Form = { kind: 'AVISO', title: '', body: 'Oi, {primeiro_nome}! ', audience: 'TODOS', modalityId: '', roleKey: '', numbers: '', campaignId: '', sendWhatsApp: true, askConfirmation: true, pinned: false, showUntil: '' };
 const fmt = (iso: string) => new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' });
@@ -22,7 +22,7 @@ const fmt = (iso: string) => new Date(iso).toLocaleString('pt-BR', { timeZone: '
 const toPayload = (f: Form) => ({
   kind: f.kind, title: f.title, body: f.body, audience: f.audience, campaignId: f.campaignId || null, sendWhatsApp: f.sendWhatsApp, askConfirmation: f.sendWhatsApp && f.askConfirmation,
   pinned: f.pinned, showUntil: f.showUntil || null,
-  filter: f.audience === 'PROFESSORES' ? { modalityId: f.modalityId || null } : f.audience === 'PERFIL' ? { roleKey: f.roleKey || null } : f.audience === 'NUMEROS' ? { numbers: f.numbers.split(/\n|,|;/).map((x) => x.trim()).filter(Boolean) } : null,
+  filter: f.audience === 'PROFESSORES' ? { modalityId: f.modalityId || null } : f.audience === 'PERFIL' ? { roleKey: f.roleKey || null } : f.audience === 'NUMEROS' ? { numbers: f.numbers.split(/\n|,|;/).map((x) => x.trim()).filter(Boolean) } : f.audience === 'SELECAO' ? f.raw ?? null : null,
 });
 
 export function NoticesClient({ notices, modalities, roles, campaigns, draft, whatsapp, perms }: {
@@ -50,7 +50,7 @@ export function NoticesClient({ notices, modalities, roles, campaigns, draft, wh
   };
   const openEdit = (n: NoticeRow) => {
     setMsg({}); setPreview(null);
-    setEdit({ id: n.id, f: { kind: n.kind, title: n.title, body: n.body, audience: n.audience, modalityId: n.filter?.modalityId ?? '', roleKey: n.filter?.roleKey ?? '', numbers: (n.filter?.numbers ?? []).join('\n'), campaignId: n.campaignId ?? '', sendWhatsApp: n.sendWhatsApp, askConfirmation: n.askConfirmation, pinned: n.pinned, showUntil: n.showUntil ?? '' } });
+    setEdit({ id: n.id, f: { raw: n.filter, kind: n.kind, title: n.title, body: n.body, audience: n.audience, modalityId: n.filter?.modalityId ?? '', roleKey: n.filter?.roleKey ?? '', numbers: (n.filter?.numbers ?? []).join('\n'), campaignId: n.campaignId ?? '', sendWhatsApp: n.sendWhatsApp, askConfirmation: n.askConfirmation, pinned: n.pinned, showUntil: n.showUntil ?? '' } });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -133,12 +133,12 @@ function NoticeForm({ edit, setEdit, modalities, roles, campaigns, pending, prev
           <p className="text-xs text-tinta-suave">Use <code>{'{primeiro_nome}'}</code> para chamar cada pessoa pelo nome. *negrito* e _itálico_ funcionam no WhatsApp.</p>
         </div>
         {!published && <>
-          <div><Label>Para quem</Label><Select value={f.audience} onChange={(e) => set('audience', e.target.value)}>{NOTICE_AUDIENCES.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}</Select></div>
+          <div><Label>Para quem</Label><Select value={f.audience} onChange={(e) => set('audience', e.target.value)}>{NOTICE_AUDIENCES.filter((a) => a.id !== 'SELECAO' || f.audience === 'SELECAO').map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}</Select></div>
           <div className="sm:col-span-1 lg:col-span-3">
             {aud.filter === 'modality' && <><Label>Modalidade</Label><Select value={f.modalityId} onChange={(e) => set('modalityId', e.target.value)}><option value="">Todas</option>{modalities.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</Select></>}
             {aud.filter === 'role' && <><Label>Perfil</Label><Select value={f.roleKey} onChange={(e) => set('roleKey', e.target.value)}><option value="">Escolha…</option>{roles.map((r) => <option key={r.key} value={r.key}>{r.name}</option>)}</Select></>}
             {aud.filter === 'numbers' && <><Label>Grupos ou números (um por linha)</Label><textarea value={f.numbers} onChange={(e) => set('numbers', e.target.value)} rows={2} className="w-full rounded-lg border border-borda p-2 text-sm" placeholder="120363000000000000-group" /></>}
-            {!aud.filter && <p className="pt-6 text-xs text-tinta-suave">{aud.detail}</p>}
+            {(!aud.filter || aud.filter === 'selection') && <p className="pt-6 text-xs text-tinta-suave">{aud.detail}</p>}
           </div>
         </>}
         <div className="sm:col-span-2"><Label>Campanha (opcional)</Label><Select value={f.campaignId} onChange={(e) => set('campaignId', e.target.value)}><option value="">—</option>{campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></div>

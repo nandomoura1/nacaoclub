@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { ArrowLeft, Library, Megaphone } from 'lucide-react';
+import { ArrowLeft, ClipboardList, Library, Megaphone } from 'lucide-react';
 import { prisma } from '@/server/db';
 import { todayIso } from '@/lib/today';
 import { can } from '@/server/auth/authz';
@@ -46,6 +46,9 @@ export default async function Page({ params, searchParams }: { params: Promise<{
       <div className="flex flex-wrap items-center justify-between gap-2">
         {back}
         <span className="mb-3 flex flex-wrap gap-4">
+        <Link href={`/marketing/campanhas/${id}/briefing`} className="inline-flex items-center gap-1 text-sm font-semibold text-nacao hover:underline">
+          <ClipboardList className="size-4" /> Briefing no WhatsApp →
+        </Link>
         {can(principal, 'mkt.edit') && (
           <Link href={`/marketing/interna?campanha=${id}`} className="inline-flex items-center gap-1 text-sm font-semibold text-nacao hover:underline">
             <Megaphone className="size-4" /> Comunicar a equipe →
