@@ -37,7 +37,7 @@ export function CommandCenter({ v, options, today, perms }: { v: CommandCenterVi
       <div className="relative overflow-hidden rounded-2xl bg-navy p-5 text-white">
         <div className="pointer-events-none absolute -right-10 -top-16 size-56 rounded-full bg-nacao/40 blur-3xl" />
         <p className="text-xs font-semibold uppercase tracking-widest text-white/60">Marketing Nação</p>
-        <h1 className="mt-1 font-titulo text-2xl font-extrabold">Command Center</h1>
+        <h1 className="mt-1 font-titulo text-2xl font-extrabold">Visão geral do Marketing</h1>
         <p className="mt-1 max-w-xl text-sm text-white/70">Nenhuma campanha começa sem plano. O que precisa de atenção, o que acontece na semana e quão prontas estão as próximas campanhas.</p>
         {perms.edit && (
           <div className="mt-4 flex flex-wrap gap-2">

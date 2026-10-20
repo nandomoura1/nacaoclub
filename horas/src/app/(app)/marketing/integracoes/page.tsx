@@ -13,7 +13,7 @@ import { zapiConfig } from '@/server/whatsapp/zapi';
 import { leadsWebhookToken } from '@/server/services/mkt-leads-service';
 import { CopyField } from './CopyField';
 
-export const metadata: Metadata = { title: 'Integrações do Marketing' };
+export const metadata: Metadata = { title: 'Guia de conexão' };
 export const dynamic = 'force-dynamic';
 
 type Status = 'ok' | 'parcial' | 'falta';
@@ -29,6 +29,10 @@ export default async function Page() {
   const h = await headers();
   const base = `${h.get('x-forwarded-proto') ?? 'https'}://${h.get('x-forwarded-host') ?? h.get('host')}`;
   const token = leadsWebhookToken();
+  const [metaLeads, lastMeta] = await Promise.all([
+    prisma.mktLead.count({ where: { source: 'META_ADS', externalRef: { not: null }, createdAt: { gte: new Date(Date.now() - 30 * 86_400_000) } } }),
+    prisma.mktLead.findFirst({ where: { source: 'META_ADS', externalRef: { not: null } }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } }),
+  ]);
   const [siteLeads, lastSite] = await Promise.all([
     prisma.mktLead.count({ where: { source: { in: ['SITE', 'LINK', 'META_ADS', 'GOOGLE', 'INSTAGRAM'] }, externalRef: { not: null }, createdAt: { gte: new Date(Date.now() - 30 * 86_400_000) } } }),
     prisma.mktLead.findFirst({ where: { externalRef: { not: null } }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } }),
@@ -48,6 +52,21 @@ export default async function Page() {
         'Ação: “Enviar dados via webhook” (ou “Enviar solicitação HTTP”) → método POST → cole o endereço abaixo → corpo JSON com todos os campos.',
         'Ative a automação e envie um teste pelo próprio site: o lead aparece em Leads & Conversão em segundos.',
         'Dica: para campanhas, troque “origem=SITE” por “origem=INSTAGRAM”, “META_ADS” ou “GOOGLE” e acrescente “&campanha=Nome da campanha”.',
+      ],
+    },
+    {
+      key: 'meta-leads', name: 'Meta Lead Ads → Leads (via Make ou Zapier)', status: !token ? 'falta' : lastMeta ? 'ok' : 'parcial',
+      unlocks: ['Leads & Conversão: quem preenche o formulário do anúncio (Facebook/Instagram) entra sozinho no funil, como “Anúncio Meta”'],
+      vars: [{ key: 'CRON_SECRET (ou LEADS_WEBHOOK_TOKEN)', ok: !!token, what: 'Senha que protege o endereço do webhook' }],
+      webhook: token ? `${base}/api/webhooks/leads?token=${token}&origem=META_ADS` : null,
+      extra: lastMeta ? `${metaLeads} lead(s) do Meta nos últimos 30 dias · último em ${lastMeta.createdAt.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' })}` : 'Nenhum lead do Meta recebido ainda.',
+      steps: [
+        'Não precisa do developers.facebook.com: só o login de quem administra a Página da Nação.',
+        'Crie uma conta grátis no make.com (1.000 operações/mês) ou zapier.com (100 tarefas/mês).',
+        'Make: “Create a new scenario” → módulo “Facebook Lead Ads → Watch Leads” → entre com o Facebook → escolha a Página e o formulário do anúncio.',
+        'Adicione o módulo “HTTP → Make a request”: método POST, URL = endereço abaixo, corpo JSON com nome, telefone, e-mail e o nome da campanha (&campanha=… na URL, se quiser).',
+        'Ative o cenário (agendamento “imediato”) e faça um teste com a ferramenta de teste de leads do Meta: o lead aparece em Leads & Conversão.',
+        'Zapier: mesmo caminho — gatilho “Facebook Lead Ads → New Lead” e ação “Webhooks by Zapier → POST”.',
       ],
     },
     {
@@ -132,12 +151,13 @@ export default async function Page() {
 
   return (
     <>
-      <PageHeader title="Integrações do Marketing" description={`O que já está conectado e o passo a passo do que falta. ${ready} de ${list.length} prontas. Senhas e tokens ficam só nas variáveis da Vercel — nunca no sistema.`} />
+      <Link href="/marketing/conexoes" className="mb-3 inline-flex items-center gap-1 text-sm text-tinta-suave hover:text-nacao">← Conexões</Link>
+      <PageHeader title="Guia de conexão" description={`Passo a passo de cada integração. ${ready} de ${list.length} prontas. Senhas e tokens ficam só nas variáveis da Vercel — nunca no sistema.`} />
       <div className="space-y-3">
         {list.map((i) => {
           const s = STATUS[i.status];
           return (
-            <Card key={i.key} className={cn('p-4', i.status === 'ok' && 'border-sucesso/30')}>
+            <Card key={i.key} id={i.key} className={cn('scroll-mt-4 p-4', i.status === 'ok' && 'border-sucesso/30')}>
               <div className="flex flex-wrap items-center gap-2">
                 <s.icon className={cn('size-5', i.status === 'ok' ? 'text-sucesso' : i.status === 'parcial' ? 'text-atencao' : 'text-tinta-fraca')} />
                 <h2 className="flex-1 font-bold text-navy">{i.name}</h2>
@@ -147,11 +167,11 @@ export default async function Page() {
               {i.extra && <p className="mt-1 text-xs text-tinta-suave">{i.extra}</p>}
               {i.webhook !== undefined && (
                 <div className="mt-2">
-                  <p className="text-xs font-semibold text-tinta-suave">Endereço do webhook (cole no Wix)</p>
+                  <p className="text-xs font-semibold text-tinta-suave">Endereço do webhook ({i.key === 'wix' ? 'cole no Wix' : 'cole no Make/Zapier'})</p>
                   {i.webhook ? <CopyField value={i.webhook} /> : <p className="text-sm text-atencao">Crie a variável CRON_SECRET na Vercel e faça Redeploy: o endereço aparece aqui.</p>}
                 </div>
               )}
-              {i.status !== 'ok' || i.key === 'wix' ? (
+              {i.status !== 'ok' || i.webhook !== undefined ? (
                 <details className="mt-2" open={i.status !== 'ok'}>
                   <summary className="cursor-pointer text-sm font-semibold text-navy">Passo a passo</summary>
                   <ol className="mt-1 list-decimal space-y-1 pl-5 text-sm text-tinta">{i.steps.map((st) => <li key={st}>{st}</li>)}</ol>

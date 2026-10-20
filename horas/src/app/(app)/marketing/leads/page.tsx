@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { PageHeader } from '@/components/ui/card';
+import { DataSources } from '../_components/DataSources';
 import { can } from '@/server/auth/authz';
 import { requirePrincipal } from '@/server/auth/session';
 import { prisma } from '@/server/db';
@@ -23,7 +24,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ d
   ]);
   return (
     <>
-      <PageHeader title="Leads & Conversão" description="Quem se interessou pela Nação e em que ponto está: do primeiro contato à matrícula. Formulários do site entram sozinhos (Marketing → Integrações)." />
+      <PageHeader title="Leads & Conversão" description="Quem se interessou pela Nação e em que ponto está: do primeiro contato à matrícula. Formulários do site e dos anúncios entram sozinhos (Marketing → Conexões)." />
+      <DataSources principal={principal} keys={['wix-leads','meta-leads','links']} />
       <LeadsClient data={data} people={people} campaigns={campaigns} filter={{ days, stage: sp.etapa ?? '', source: sp.origem ?? '', q: sp.q ?? '', board: sp.modo !== 'lista' }}
         openNew={sp.novo === '1'} perms={{ edit: can(principal, 'mkt.edit'), del: can(principal, 'mkt.admin') }} />
     </>

@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Pencil, Plug, Plus, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -63,15 +63,6 @@ export function TrafficClient({ panel, campaigns, range, preset, today, apis, pe
         {perms.edit && !edit && <Button className="ml-auto" onClick={openNew}><Plus /> Lançar gasto</Button>}
       </div>
 
-      {(!apis.meta || !apis.google) && (
-        <Card className="flex flex-wrap items-center gap-2 p-3 text-sm">
-          <Plug className="size-4 text-nacao" />
-          <span className="text-tinta-suave">
-            {!apis.meta && !apis.google ? 'Meta e Google Ads ainda não conectados' : !apis.meta ? 'Meta ainda não conectada' : 'Google Ads ainda não conectado'}: lance o gasto à mão (pegue o valor no Gerenciador de Anúncios). Quando conectar, os números entram sozinhos.
-          </span>
-          {perms.admin && <Link href="/marketing/integracoes" className="font-semibold text-nacao">Integrações →</Link>}
-        </Card>
-      )}
 
       {edit && <SpendForm edit={edit} setEdit={setEdit} campaigns={campaigns} pending={pending}
         onSave={(f) => run(() => saveSpendAction(edit.id, { platform: f.platform, campaignId: f.campaignId || null, adName: f.adName || null, start: f.start, end: f.end, spendCents: f.spendCents ?? -1, impressions: num(f.impressions), clicks: num(f.clicks), platformLeads: num(f.platformLeads), notes: f.notes || null }), () => setEdit(null))} />}

@@ -5,7 +5,7 @@ import { NACAO_TASK_URL } from '@/domain/processos';
 export type NavIcon =
   | 'hoje' | 'calendario' | 'pendencias' | 'grade' | 'professores'
   | 'fechamento' | 'relatorios' | 'escalas' | 'treinos' | 'benchmarks' | 'dna' | 'treinos-ia' | 'usuarios' | 'historico' | 'cadastros' | 'condominio' | 'cobrancas' | 'financeiro' | 'fin-historico' | 'fin-importar' | 'documentos' | 'empresas'
-  | 'mkt' | 'mkt-campanhas' | 'mkt-kanban' | 'mkt-eventos' | 'mkt-reuniao' | 'mkt-conteudo' | 'mkt-interna' | 'mkt-canais' | 'mkt-leads' | 'mkt-biblioteca' | 'mkt-trafego' | 'mkt-performance' | 'mkt-memoria' | 'whatsapp'
+  | 'mkt' | 'mkt-campanhas' | 'mkt-kanban' | 'mkt-eventos' | 'mkt-reuniao' | 'mkt-conteudo' | 'mkt-interna' | 'mkt-canais' | 'mkt-leads' | 'mkt-biblioteca' | 'mkt-trafego' | 'mkt-performance' | 'mkt-memoria' | 'mkt-conexoes' | 'whatsapp'
   | 'wa-auto' | 'processos' | 'proc-demandas' | 'proc-setores' | 'proc-task' | 'proc-reuniao'
   | 'edu' | 'edu-trilhas' | 'edu-painel' | 'proc-atas';
 
@@ -76,27 +76,27 @@ export const NAV_FINANCEIRO: NavItem[] = [
   { href: '/financeiro/configuracoes', label: 'Metas e categorias', icon: 'cadastros', permission: 'fin.admin' },
 ];
 
-/** Marketing Nação: planejamento → execução → conversão. Itens "breve" mostram o roadmap (Fases 2–4). */
+/** Marketing Nação: visão geral e conexões no topo; o resto em blocos do fluxo planejar → produzir → divulgar → medir. */
 export const NAV_MARKETING: NavItem[] = [
-  { href: '/marketing', label: 'Command Center', icon: 'mkt', permission: 'mkt.view' },
-  { href: '/marketing/calendario', label: 'Calendário', icon: 'calendario', permission: 'mkt.view' },
-  { href: '/marketing/campanhas', label: 'Campanhas', icon: 'mkt-campanhas', permission: 'mkt.view' },
-  { href: '/marketing/kanban', label: 'Kanban', icon: 'mkt-kanban', permission: 'mkt.view' },
-  { href: '/marketing/eventos', label: 'Eventos', icon: 'mkt-eventos', permission: 'mkt.view' },
-  { href: '/marketing/reuniao', label: 'Reunião semanal', icon: 'mkt-reuniao', permission: 'mkt.view' },
-  { href: '/marketing/memoria', label: 'Memória da Nação', icon: 'mkt-memoria', permission: 'mkt.view' },
-  { href: '/marketing/conteudo', label: 'Conteúdo & Social', icon: 'mkt-conteudo', permission: 'mkt.view', soon: 'breve' },
-  { href: '/marketing/interna', label: 'Comunicação Interna', icon: 'mkt-interna', permission: 'mkt.view' },
-  { href: '/marketing/canais', label: 'Canais & Links', icon: 'mkt-canais', permission: 'mkt.view' },
-  { href: '/marketing/leads', label: 'Leads & Conversão', icon: 'mkt-leads', permission: 'mkt.view' },
-  { href: '/marketing/biblioteca', label: 'Biblioteca', icon: 'mkt-biblioteca', permission: 'mkt.view' },
-  { href: '/marketing/trafego', label: 'Tráfego Pago', icon: 'mkt-trafego', permission: 'mkt.view' },
-  { href: '/marketing/performance', label: 'Performance', icon: 'mkt-performance', permission: 'mkt.view' },
-  { href: '/marketing/ia', label: 'IA Marketing', icon: 'treinos-ia', permission: 'mkt.view' },
-  { href: '/marketing/importar-cronograma', label: 'Importar cronograma', icon: 'fin-importar', permission: 'mkt.admin' },
-  { href: '/marketing/importar-trello', label: 'Importar do Trello', icon: 'fin-importar', permission: 'mkt.admin' },
-  { href: '/marketing/integracoes', label: 'Integrações', icon: 'proc-task', permission: 'mkt.admin' },
-  { href: '/marketing/configuracoes', label: 'Configurações', icon: 'cadastros', permission: 'mkt.admin' },
+  { href: '/marketing', label: 'Visão geral', icon: 'mkt', permission: 'mkt.view' },
+  { href: '/marketing/conexoes', label: 'Conexões', icon: 'mkt-conexoes', permission: 'mkt.view' },
+  { href: '/marketing/campanhas', label: 'Campanhas', icon: 'mkt-campanhas', permission: 'mkt.view', group: 'Planejar' },
+  { href: '/marketing/calendario', label: 'Calendário', icon: 'calendario', permission: 'mkt.view', group: 'Planejar' },
+  { href: '/marketing/eventos', label: 'Eventos', icon: 'mkt-eventos', permission: 'mkt.view', group: 'Planejar' },
+  { href: '/marketing/reuniao', label: 'Reunião semanal', icon: 'mkt-reuniao', permission: 'mkt.view', group: 'Planejar' },
+  { href: '/marketing/memoria', label: 'Memória da Nação', icon: 'mkt-memoria', permission: 'mkt.view', group: 'Planejar' },
+  { href: '/marketing/kanban', label: 'Kanban', icon: 'mkt-kanban', permission: 'mkt.view', group: 'Produzir' },
+  { href: '/marketing/biblioteca', label: 'Biblioteca de criativos', icon: 'mkt-biblioteca', permission: 'mkt.view', group: 'Produzir' },
+  { href: '/marketing/ia', label: 'IA Marketing', icon: 'treinos-ia', permission: 'mkt.view', group: 'Produzir' },
+  { href: '/marketing/interna', label: 'Comunicação Interna', icon: 'mkt-interna', permission: 'mkt.view', group: 'Divulgar' },
+  { href: '/marketing/canais', label: 'Canais & Links', icon: 'mkt-canais', permission: 'mkt.view', group: 'Divulgar' },
+  { href: '/marketing/performance', label: 'Performance', icon: 'mkt-performance', permission: 'mkt.view', group: 'Resultados' },
+  { href: '/marketing/leads', label: 'Leads & Conversão', icon: 'mkt-leads', permission: 'mkt.view', group: 'Resultados' },
+  { href: '/marketing/trafego', label: 'Tráfego Pago', icon: 'mkt-trafego', permission: 'mkt.view', group: 'Resultados' },
+  { href: '/marketing/configuracoes', label: 'Configurações', icon: 'cadastros', permission: 'mkt.admin', group: 'Ajustes' },
+  { href: '/marketing/integracoes', label: 'Guia de conexão', icon: 'mkt-conexoes', permission: 'mkt.admin', group: 'Ajustes' },
+  { href: '/marketing/importar-cronograma', label: 'Importar cronograma', icon: 'fin-importar', permission: 'mkt.admin', group: 'Ajustes' },
+  { href: '/marketing/importar-trello', label: 'Importar do Trello', icon: 'fin-importar', permission: 'mkt.admin', group: 'Ajustes' },
 ];
 
 /** Gestão de Processos: acompanhamento dos setores. Rotinas e checklists vivem no Nação Task. */

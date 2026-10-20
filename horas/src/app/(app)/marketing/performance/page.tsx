@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { PageHeader } from '@/components/ui/card';
+import { DataSources } from '../_components/DataSources';
 import { isIsoDate } from '@/domain/dates';
 import { presetRange } from '@/domain/marketing/traffic';
 import { todayIso } from '@/lib/today';
@@ -26,6 +27,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
   return (
     <>
       <PageHeader title="Performance" description="O marketing em números: cliques, leads, matrículas e investimento — comparados com o período anterior e mês a mês. É o painel da reunião semanal." />
+      <DataSources principal={principal} keys={['meta-ads','gads','ga4','wix-leads','meta-leads','links']} />
       <PerformanceView report={report} preset={preset} />
     </>
   );

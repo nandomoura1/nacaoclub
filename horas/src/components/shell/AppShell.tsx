@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   BarChart3, CalendarDays, ClipboardCheck, History, LayoutGrid,
   LogOut, Settings2, Sun, TriangleAlert, Users, UserRoundCog, Dumbbell, CalendarClock, Sparkles, Menu, X, Trophy, Dna, ChevronRight, Building2, Receipt, Landmark, LineChart, FileUp, FolderOpen, Briefcase,
-  Megaphone, Flag, Columns3, PartyPopper, MessagesSquare, Clapperboard, Bell, Link2, Target, Library, MousePointerClick, Gauge, Brain, MessageCircle, Workflow, ListTodo, Network, SquareArrowOutUpRight, Users2, Bot, GraduationCap, Route, UserCheck, NotebookPen } from 'lucide-react';
+  Megaphone, Flag, Columns3, PartyPopper, MessagesSquare, Clapperboard, Bell, Link2, Target, Library, MousePointerClick, Gauge, Brain, MessageCircle, Workflow, ListTodo, Network, SquareArrowOutUpRight, Users2, Bot, GraduationCap, Route, UserCheck, NotebookPen, Cable } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { cn } from '@/lib/cn';
 import { initials } from '@/lib/format';
@@ -44,6 +44,7 @@ const ICONS: Record<NavIcon, React.ComponentType<{ className?: string }>> = {
   'mkt-conteudo': Clapperboard,
   'mkt-interna': Bell,
   'mkt-canais': Link2,
+  'mkt-conexoes': Cable,
   'mkt-leads': Target,
   'mkt-biblioteca': Library,
   'mkt-trafego': MousePointerClick,

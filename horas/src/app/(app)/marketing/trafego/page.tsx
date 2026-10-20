@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { PageHeader } from '@/components/ui/card';
+import { DataSources } from '../_components/DataSources';
 import { isIsoDate } from '@/domain/dates';
 import { presetRange } from '@/domain/marketing/traffic';
 import { todayIso } from '@/lib/today';
@@ -29,6 +30,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
   return (
     <>
       <PageHeader title="Tráfego Pago" description="Quanto foi investido em anúncios e quanto custou cada lead e cada matrícula — cruzando o gasto com os leads que chegaram de verdade no funil." />
+      <DataSources principal={principal} keys={['meta-ads','gads']} />
       <TrafficClient panel={panel} campaigns={campaigns} range={range} preset={preset} today={today} apis={apis}
         perms={{ edit: can(principal, 'mkt.edit'), del: can(principal, 'mkt.admin'), admin: can(principal, 'mkt.admin') }} />
     </>
