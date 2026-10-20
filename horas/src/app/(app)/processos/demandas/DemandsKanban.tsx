@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { DndContext, DragOverlay, PointerSensor, closestCorners, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core';
+import { DndContext, DragOverlay, MouseSensor, TouchSensor, closestCorners, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core';
 import { CalendarDays, MessageSquare, UserRound } from 'lucide-react';
 import { FormMessage } from '@/components/ui/alert';
 import { DEMAND_STATUSES, PRIORITIES } from '@/domain/processos';
@@ -24,7 +24,9 @@ export function DemandsKanban({ demands, week, onOpen }: { demands: DemandRow[];
   const [error, setError] = useState<string | null>(null);
   const [, start] = useTransition();
   useEffect(() => setItems(demands), [demands]);
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  // Mouse arrasta na hora; no toque (tablet) segura 250 ms para arrastar — senão a tela rola normalmente.
+  const sensors = useSensors(useSensor(MouseSensor, { activationConstraint: { distance: 6 } }), useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }));
+  const [col, setCol] = useState<string>('ABERTA');
 
   const move = (id: string, status: string) => {
     const snapshot = items;
@@ -49,8 +51,37 @@ export function DemandsKanban({ demands, week, onOpen }: { demands: DemandRow[];
   return (
     <>
       <FormMessage error={error} />
+      {/* Celular: uma coluna por vez (abas) e "Mover para…" em cada cartão. */}
+      <div className="md:hidden">
+        <div className="sticky top-0 z-10 -mx-4 flex gap-1 overflow-x-auto bg-fundo px-4 py-2">
+          {COLUMNS.map((c) => {
+            const n = items.filter((d) => d.status === c.id).length;
+            return (
+              <button key={c.id} type="button" onClick={() => setCol(c.id)} className={cn('shrink-0 rounded-full border-t-4 px-3 py-1.5 text-sm font-semibold', HEAD[c.id], col === c.id ? 'bg-navy text-white' : 'bg-white text-tinta-suave ring-1 ring-borda')}>
+                {c.label} <span className="tabular-nums opacity-70">{n}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="mt-2 space-y-2">
+          {items.filter((d) => d.status === col).length === 0 && <p className="rounded-xl bg-white p-4 text-center text-sm text-tinta-suave ring-1 ring-borda">Nada em “{COLUMNS.find((c) => c.id === col)?.label}”.</p>}
+          {items.filter((d) => d.status === col).map((d) => (
+            <div key={d.id}>
+              <button type="button" className="block w-full text-left" onClick={() => onOpen(d.id)}><CardBody d={d} week={week} /></button>
+              {d.canWork && (
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {COLUMNS.filter((c) => c.id !== d.status).map((c) => (
+                    <button key={c.id} type="button" onClick={() => move(d.id, c.id)} className="rounded-lg bg-white px-2.5 py-1.5 text-xs font-semibold text-navy ring-1 ring-borda active:bg-fundo">→ {c.label}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
       <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragEnd={onDragEnd}>
-        <div className="grid auto-cols-[minmax(15rem,1fr)] grid-flow-col gap-3 overflow-x-auto pb-2">
+        <div className="hidden auto-cols-[minmax(15rem,1fr)] grid-flow-col gap-3 overflow-x-auto pb-2 md:grid">
           {COLUMNS.map((c) => {
             const list = items.filter((d) => d.status === c.id);
             return <Column key={c.id} id={c.id} label={c.label} count={list.length}>{list.map((d) => <DemandCard key={d.id} d={d} week={week} onOpen={onOpen} />)}</Column>;
@@ -58,7 +89,7 @@ export function DemandsKanban({ demands, week, onOpen }: { demands: DemandRow[];
         </div>
         <DragOverlay>{active ? <CardBody d={active} week={week} dragging /> : null}</DragOverlay>
       </DndContext>
-      <p className="text-xs text-tinta-suave">Arraste o cartão para mudar o status. 🎯 = foco da semana (combinado na reunião de líderes) · ⛔ = travada. Concluídas mostram as dos últimos 30 dias; canceladas ficam na lista.</p>
+      <p className="text-xs text-tinta-suave"><span className="md:hidden">No celular: toque na aba da coluna e use “→ …” para mover. </span>Arraste o cartão para mudar o status. 🎯 = foco da semana (combinado na reunião de líderes) · ⛔ = travada. Concluídas mostram as dos últimos 30 dias; canceladas ficam na lista.</p>
     </>
   );
 }

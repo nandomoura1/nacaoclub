@@ -12,6 +12,8 @@ import { todayIso } from '@/lib/today';
 import { can } from '@/server/auth/authz';
 import { requirePrincipal } from '@/server/auth/session';
 import { listTeamDocs } from '@/server/services/staff-doc-service';
+import { prisma } from '@/server/db';
+import { addDays } from '@/domain/dates';
 
 export const metadata: Metadata = { title: 'Documentos da equipe' };
 
@@ -44,7 +46,15 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ f
   const principal = await requirePrincipal();
   if (!can(principal, 'teacher.docs')) redirect('/hoje');
   const today = todayIso();
-  const rows = await listTeamDocs(principal, today);
+  const [rows, atestados] = await Promise.all([
+    listTeamDocs(principal, today),
+    // Atestados em curso ou terminados nos últimos 30 dias.
+    prisma.teacherDocument.findMany({
+      where: { kind: 'ATESTADO', validUntil: { gte: new Date(`${addDays(today, -30)}T00:00:00Z`) } },
+      orderBy: { validFrom: 'desc' }, take: 30,
+      select: { id: true, validFrom: true, validUntil: true, notes: true, teacher: { select: { id: true, name: true, displayName: true } } },
+    }),
+  ]);
   const f = (await searchParams).filtro;
   const filter = FILTERS.some((x) => x.key === f) ? f : 'todos';
   const interns = rows.filter((r) => r.intern);
@@ -65,7 +75,28 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ f
 
   return (
     <>
-      <PageHeader title="Documentos da equipe" description="A pasta de cada funcionário: identidade, CREF e contrato de trabalho ou de estágio. O contador avisa antes do contrato de estágio vencer." />
+      <PageHeader title="Documentos da equipe" description="A pasta de cada funcionário: identidade, CREF, contrato de trabalho ou de estágio e atestados. O contador avisa antes do contrato de estágio vencer." />
+      <Card className="mb-4 p-4">
+        <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-tinta-suave"><CalendarX2 className="size-4" /> Atestados recentes</p>
+        {atestados.length === 0 ? (
+          <p className="mt-1 text-sm text-tinta-suave">Nenhum atestado nos últimos 30 dias. Para enviar: abra o colaborador abaixo → Documentos → “Atestado médico”, com o primeiro e o último dia.</p>
+        ) : (
+          <ul className="mt-2 divide-y divide-borda">
+            {atestados.map((a) => {
+              const from = a.validFrom!.toISOString().slice(0, 10), to = a.validUntil!.toISOString().slice(0, 10);
+              const now = from <= today && to >= today;
+              return (
+                <li key={a.id} className="flex flex-wrap items-center gap-2 py-1.5 text-sm">
+                  <Link href={`/professores/${a.teacher.id}?aba=documentos`} className="min-w-0 flex-1 font-semibold text-navy hover:text-nacao">{a.teacher.displayName || a.teacher.name}</Link>
+                  <span className="tabular-nums text-tinta-suave">{formatDateBR(from)} a {formatDateBR(to)}</span>
+                  {now ? <Badge tone="amber">afastado hoje</Badge> : <Badge>encerrado</Badge>}
+                  {a.notes && <span className="w-full text-xs text-tinta-suave">{a.notes}</span>}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Card>
       {expired.length > 0 && (
         <Card className="mb-4 flex items-start gap-3 border-critico/40 bg-critico/5 p-4">
           <CalendarX2 className="mt-0.5 size-5 shrink-0 text-critico" />

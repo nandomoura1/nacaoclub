@@ -85,6 +85,7 @@ export async function uploadTeacherDoc(principal: Principal | null, teacherId: s
   if (file.size === 0) throw new AppError('Arquivo vazio.');
   if (file.size > MAX_STAFF_DOC_BYTES) throw new AppError('O arquivo passa de 6 MB. Envie um PDF/foto menor.');
   if (d.kind === 'CONTRATO_ESTAGIO' && (!d.validFrom || !d.validUntil)) throw new AppError('Contrato de estágio precisa das datas de início e fim (é o que alimenta o contador).');
+  if (d.kind === 'ATESTADO' && (!d.validFrom || !d.validUntil)) throw new AppError('Informe o período do atestado (primeiro e último dia de afastamento).');
   if (d.validFrom && d.validUntil && d.validUntil < d.validFrom) throw new AppError('A data de fim é anterior à de início.');
   const bytes = Buffer.from(await file.arrayBuffer());
   const sha256 = createHash('sha256').update(bytes).digest('hex');

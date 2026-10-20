@@ -1463,6 +1463,7 @@ enum StaffDocKind {
   CREF
   CONTRATO_TRABALHO
   CONTRATO_ESTAGIO
+  ATESTADO
   OUTRO
 }
 
@@ -2030,11 +2031,24 @@ model ProcDemand {
   @@map("proc_demands")
 }
 
-/// Reunião de líderes: semanal (placar, atrasadas, foco da semana) ou daily (15 min).
+/// Reunião de líderes: semanal (placar, atrasadas, foco da semana), daily (15 min)
+/// ou ATA (registro de reunião online/presencial: participantes, pauta e decisões).
 model ProcMeeting {
   id          String    @id @default(uuid()) @db.Uuid
-  /// SEMANAL ou DIARIA
+  /// SEMANAL, DIARIA ou ATA
   kind        String
+  /// Ata: título/assunto da reunião.
+  title       String?
+  /// Ata: ONLINE ou PRESENCIAL.
+  mode        String?
+  /// Ata: usuários que participaram.
+  participantIds String[] @default([]) @map("participant_ids") @db.Uuid
+  /// Ata: convidados de fora do sistema (texto livre).
+  guests      String?
+  /// Ata: resumo da pauta / o que foi discutido.
+  agenda      String?
+  /// Ata: link da gravação ou do documento da reunião.
+  link        String?
   date        DateTime  @db.Date
   /// Semana ISO (ex.: 2026-W42) — o foco combinado vale para ela.
   week        String

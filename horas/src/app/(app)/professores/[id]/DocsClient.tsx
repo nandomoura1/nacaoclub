@@ -80,10 +80,10 @@ export function DocsTab({ v }: { v: TeacherDocsView }) {
           </div>
           {def.number && <div><Label>{def.number} (opcional)</Label><Input value={form.number} onChange={(e) => setForm({ ...form, number: e.target.value })} /></div>}
           {(def.dates === 'range' || def.dates === 'range-required') && (
-            <div><Label>Início{def.dates === 'range-required' ? '' : ' (opcional)'}</Label><Input type="date" value={form.validFrom} onChange={(e) => setForm({ ...form, validFrom: e.target.value })} /></div>
+            <div><Label>{kind === 'ATESTADO' ? 'Primeiro dia' : 'Início'}{def.dates === 'range-required' ? '' : ' (opcional)'}</Label><Input type="date" value={form.validFrom} onChange={(e) => setForm({ ...form, validFrom: e.target.value })} /></div>
           )}
           {def.dates !== 'none' && (
-            <div><Label>{def.dates === 'until' ? 'Validade (opcional)' : def.dates === 'range-required' ? 'Fim do contrato' : 'Fim (opcional)'}</Label><Input type="date" value={form.validUntil} onChange={(e) => setForm({ ...form, validUntil: e.target.value })} /></div>
+            <div><Label>{def.dates === 'until' ? 'Validade (opcional)' : def.dates === 'range-required' ? (kind === 'ATESTADO' ? 'Último dia' : 'Fim do contrato') : 'Fim (opcional)'}</Label><Input type="date" value={form.validUntil} onChange={(e) => setForm({ ...form, validUntil: e.target.value })} /></div>
           )}
           <div className="sm:col-span-2"><Label>Observação (opcional)</Label><Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder={kind === 'CONTRATO_ESTAGIO' ? 'ex.: 1º aditivo' : ''} /></div>
           <div className="sm:col-span-2">

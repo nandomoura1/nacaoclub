@@ -12,14 +12,15 @@ const diffDays = (from: string, to: string) => Math.round((toUtc(to).getTime() -
  * deficiência — o sistema só avisa).
  */
 
-export type StaffDocKind = 'IDENTIDADE' | 'CREF' | 'CONTRATO_TRABALHO' | 'CONTRATO_ESTAGIO' | 'OUTRO';
+export type StaffDocKind = 'IDENTIDADE' | 'CREF' | 'CONTRATO_TRABALHO' | 'CONTRATO_ESTAGIO' | 'ATESTADO' | 'OUTRO';
 
 export const STAFF_DOC_KINDS: { id: StaffDocKind; label: string; hint: string; dates: 'none' | 'until' | 'range' | 'range-required'; number?: string }[] = [
   { id: 'IDENTIDADE', label: 'Identidade', hint: 'RG ou CNH (frente e verso)', dates: 'none', number: 'Nº do documento' },
   { id: 'CREF', label: 'CREF', hint: 'Carteira do CREF', dates: 'until', number: 'Nº do registro' },
   { id: 'CONTRATO_TRABALHO', label: 'Contrato de trabalho', hint: 'CLT, PJ/MEI ou prestação de serviço', dates: 'range' },
   { id: 'CONTRATO_ESTAGIO', label: 'Contrato de estágio', hint: 'Termo de compromisso ou aditivo, com início e fim', dates: 'range-required' },
-  { id: 'OUTRO', label: 'Outros documentos', hint: 'Comprovantes, certificados, atestados…', dates: 'none' },
+  { id: 'ATESTADO', label: 'Atestado médico', hint: 'Atestado ou declaração, com o período de afastamento', dates: 'range-required' },
+  { id: 'OUTRO', label: 'Outros documentos', hint: 'Comprovantes, certificados…', dates: 'none' },
 ];
 export const staffDocLabel = (k: string) => STAFF_DOC_KINDS.find((d) => d.id === k)?.label ?? k;
 

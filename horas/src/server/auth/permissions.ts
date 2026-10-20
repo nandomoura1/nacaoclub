@@ -132,8 +132,8 @@ export const SYSTEM_ROLES: Record<
   },
   LIDER: {
     name: 'Líder de setor',
-    description: 'Acompanha e atualiza as demandas do próprio setor (Gestão de Processos) e publica materiais de capacitação na Universidade Nação. Combine com o perfil da função.',
-    permissions: ['proc.view', 'proc.edit', 'edu.view', 'edu.edit'],
+    description: 'Acompanha e atualiza as demandas do próprio setor (Gestão de Processos), registra atas, publica materiais na Universidade Nação, cadastra colaboradores e cuida dos documentos da equipe (inclusive atestados). Combine com o perfil da função.',
+    permissions: ['proc.view', 'proc.edit', 'edu.view', 'edu.edit', 'teacher.view', 'teacher.edit', 'teacher.docs'],
   },
 };
 

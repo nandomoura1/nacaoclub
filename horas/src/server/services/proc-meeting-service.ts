@@ -27,7 +27,7 @@ export interface MeetingRow { id: string; kind: string; date: string; week: stri
 
 export async function listProcMeetings(principal: Principal | null): Promise<MeetingRow[]> {
   assertCan(principal, 'proc.view');
-  const rows = await prisma.procMeeting.findMany({ orderBy: [{ date: 'desc' }, { createdAt: 'desc' }], take: 40 });
+  const rows = await prisma.procMeeting.findMany({ where: { kind: { not: 'ATA' } }, orderBy: [{ date: 'desc' }, { createdAt: 'desc' }], take: 40 });
   const users = new Map((await prisma.user.findMany({ where: { id: { in: rows.map((r) => r.createdById).filter(Boolean) as string[] } }, select: { id: true, name: true } })).map((u) => [u.id, u.name]));
   return rows.map((r) => ({ id: r.id, kind: r.kind, date: iso(r.date)!, week: r.week, status: r.status, notes: r.notes, summary: r.summary as MeetingRow['summary'], createdBy: r.createdById ? users.get(r.createdById) ?? null : null }));
 }
@@ -176,4 +176,71 @@ export async function closeProcMeeting(principal: Principal | null, id: string, 
 export async function saveMeetingNotes(principal: Principal | null, id: string, notes: string) {
   assertCan(principal, 'proc.admin');
   await prisma.procMeeting.update({ where: { id }, data: { notes: notes.slice(0, 4000) } });
+}
+
+// ── Atas de reunião (online ou presencial) ─────────────────
+
+export interface AtaRow {
+  id: string; date: string; title: string; mode: string | null; participants: { id: string; name: string }[]; guests: string | null;
+  agenda: string | null; decisions: string | null; link: string | null; createdBy: string | null; canEdit: boolean;
+  demands: { id: string; title: string; sector: string; owner: string | null; status: string; dueDate: string | null }[];
+}
+
+export async function listAtas(principal: Principal | null): Promise<AtaRow[]> {
+  assertCan(principal, 'proc.view');
+  const rows = await prisma.procMeeting.findMany({ where: { kind: 'ATA' }, orderBy: [{ date: 'desc' }, { createdAt: 'desc' }], take: 200 });
+  const demands = await prisma.procDemand.findMany({ where: { meetingId: { in: rows.map((r) => r.id) } }, include: { sector: { select: { name: true } } }, orderBy: { createdAt: 'asc' } });
+  const ids = [...new Set([...rows.flatMap((r) => [...r.participantIds, r.createdById]), ...demands.map((d) => d.ownerId)].filter(Boolean) as string[])];
+  const names = new Map((await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })).map((u) => [u.id, u.name]));
+  const admin = can(principal, 'proc.admin');
+  return rows.map((r) => ({
+    id: r.id, date: iso(r.date)!, title: r.title ?? 'Reunião', mode: r.mode, guests: r.guests, agenda: r.agenda, decisions: r.notes, link: r.link,
+    participants: r.participantIds.map((id) => ({ id, name: names.get(id) ?? '—' })),
+    createdBy: r.createdById ? names.get(r.createdById) ?? null : null,
+    canEdit: admin || (can(principal, 'proc.edit') && r.createdById === principal.id),
+    demands: demands.filter((d) => d.meetingId === r.id).map((d) => ({ id: d.id, title: d.title, sector: d.sector.name, owner: d.ownerId ? names.get(d.ownerId) ?? null : null, status: d.status, dueDate: iso(d.dueDate) })),
+  }));
+}
+
+const ataSchema = z.object({
+  date: z.string().refine(isIsoDate, 'Data inválida.'),
+  title: z.string().trim().min(3, 'Dê um título (assunto) à reunião.').max(140),
+  mode: z.enum(['ONLINE', 'PRESENCIAL']),
+  participantIds: z.array(z.string().uuid()).max(60),
+  guests: z.string().trim().max(500).nullable(),
+  agenda: z.string().trim().min(5, 'Escreva o resumo da pauta.').max(8000),
+  decisions: z.string().trim().max(8000).nullable(),
+  link: z.string().trim().max(1000).nullable().refine((v) => !v || /^https:\/\//.test(v), 'O link precisa começar com https://'),
+});
+
+/** Diretoria e líderes registram atas; quem registrou (ou a diretoria) edita. */
+export async function saveAta(principal: Principal | null, id: string | null, input: unknown, meta: RequestMeta) {
+  if (!can(principal, 'proc.admin')) assertCan(principal, 'proc.edit');
+  const r = ataSchema.safeParse(input);
+  if (!r.success) throw new AppError(r.error.issues[0]?.message ?? 'Dados inválidos.');
+  const d = r.data;
+  return prisma.$transaction(async (tx) => {
+    const before = id ? await tx.procMeeting.findUnique({ where: { id } }) : null;
+    if (id && (!before || before.kind !== 'ATA')) throw new NotFoundError('Ata não encontrada.');
+    if (before && !can(principal!, 'proc.admin') && before.createdById !== principal!.id) throw new AuthorizationError('Só quem registrou a ata (ou a diretoria) edita.');
+    const data = {
+      kind: 'ATA', date: dt(d.date)!, week: isoWeek(d.date), title: d.title, mode: d.mode, participantIds: [...new Set(d.participantIds)], guests: d.guests || null,
+      agenda: d.agenda, notes: d.decisions || null, link: d.link || null, status: 'ENCERRADA',
+    };
+    const m = id ? await tx.procMeeting.update({ where: { id }, data }) : await tx.procMeeting.create({ data: { ...data, createdById: principal!.id, closedAt: new Date() } });
+    await audit(tx, { actorId: principal!.id, ...meta }, { action: id ? 'proc.ata_updated' : 'proc.ata_created', entityType: 'proc_meeting', entityId: m.id, before, after: { titulo: m.title, data: d.date, participantes: m.participantIds.length }, summary: `${principal!.name} ${id ? 'editou' : 'registrou'} a ata “${m.title}” (${d.date.split('-').reverse().join('/')})` });
+    return m.id;
+  });
+}
+
+export async function deleteAta(principal: Principal | null, id: string, meta: RequestMeta) {
+  assertCan(principal, 'proc.admin');
+  await prisma.$transaction(async (tx) => {
+    const m = await tx.procMeeting.findUnique({ where: { id } });
+    if (!m || m.kind !== 'ATA') throw new NotFoundError('Ata não encontrada.');
+    // As demandas abertas na ata continuam; só perdem o vínculo.
+    await tx.procDemand.updateMany({ where: { meetingId: id }, data: { meetingId: null } });
+    await tx.procMeeting.delete({ where: { id } });
+    await audit(tx, { actorId: principal.id, ...meta }, { action: 'proc.ata_deleted', entityType: 'proc_meeting', entityId: id, before: m, summary: `${principal.name} excluiu a ata “${m.title}”` });
+  });
 }

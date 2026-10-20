@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { getPrincipal, requestMeta } from '@/server/auth/session';
 import { runAction, type ActionResult } from '@/server/action-result';
 import { todayIso } from '@/lib/today';
-import { closeProcMeeting, quickUpdateDemand, saveMeetingNotes, setDemandBlocker, setDemandFocus, startProcMeeting } from '@/server/services/proc-meeting-service';
+import { closeProcMeeting, deleteAta, quickUpdateDemand, saveAta, saveMeetingNotes, setDemandBlocker, setDemandFocus, startProcMeeting } from '@/server/services/proc-meeting-service';
 import { addDemandComment, deleteDemand, demandComments, saveDemand, saveSector, setDemandStatus } from '@/server/services/proc-service';
 
 const refresh = () => { revalidatePath('/processos', 'layout'); revalidatePath('/hoje'); };
@@ -47,4 +47,10 @@ export async function saveMeetingNotesAction(id: string, notes: string): Promise
 }
 export async function closeProcMeetingAction(id: string, notes: string | null, notify: boolean): Promise<ActionResult<{ enviados: number; falhas: string[] }>> {
   return runAction(async () => { const r = await closeProcMeeting(await getPrincipal(), id, notes, notify, todayIso(), await requestMeta()); refresh(); return r; });
+}
+export async function saveAtaAction(id: string | null, values: Record<string, unknown>): Promise<ActionResult<string>> {
+  return runAction(async () => { const r = await saveAta(await getPrincipal(), id, values, await requestMeta()); refresh(); return r; }, 'Ata salva.');
+}
+export async function deleteAtaAction(id: string): Promise<ActionResult> {
+  return runAction(async () => { await deleteAta(await getPrincipal(), id, await requestMeta()); refresh(); return undefined; }, 'Ata excluída.');
 }
