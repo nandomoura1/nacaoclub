@@ -57,8 +57,11 @@ export default async function FichaPage({ params, searchParams }: {
 
   const canHours = can(principal, 'payroll.view_hours');
   const canDocs = can(principal, 'teacher.docs');
-  const tabs = TABS.filter((t) => (t.key !== 'horas' || canHours) && (t.key !== 'documentos' || canDocs));
-  const tab: Tab = tabs.some((t) => t.key === sp.aba) ? (sp.aba as Tab) : 'aulas';
+  // Cada aba só aparece para quem pode usá-la (grade e ausências leem a grade).
+  const canGrade = can(principal, 'schedule.view');
+  const allowed: Record<Tab, boolean> = { aulas: canGrade, ausencias: canGrade, horas: canHours, documentos: canDocs };
+  const tabs = TABS.filter((t) => allowed[t.key]);
+  const tab: Tab | null = tabs.some((t) => t.key === sp.aba) ? (sp.aba as Tab) : tabs[0]?.key ?? null;
   const today = todayIso();
   const date = sp.data && isIsoDate(sp.data) ? sp.data : today;
   const base = `/professores/${id}`;
@@ -96,6 +99,7 @@ export default async function FichaPage({ params, searchParams }: {
         ))}
       </nav>
 
+      {!tab && <p className="rounded-lg bg-fundo p-4 text-sm text-tinta-suave">Seu perfil vê só o cadastro deste colaborador.</p>}
       {tab === 'aulas' && <AulasSection principal={principal} teacherId={id} teacherName={teacher.displayName || teacher.name} date={date} today={today} />}
       {tab === 'ausencias' && <AusenciasSection principal={principal} teacherId={id} today={today} />}
       {tab === 'documentos' && docs && <DocsTab v={docs} />}
