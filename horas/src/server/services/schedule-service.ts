@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { prisma, type Tx } from '@/server/db';
 import { audit } from '@/server/audit';
-import { assertAreaAccess, assertCan } from '@/server/auth/authz';
+import { assertAreaAccess, assertCan, gradeViewAreaIds } from '@/server/auth/authz';
 import type { Principal } from '@/server/auth/principal';
 import type { RequestMeta } from '@/server/auth/session';
 import { AppError, NotFoundError } from '@/server/errors';
@@ -68,7 +68,8 @@ async function assertModalityInScope(tx: Tx, principal: Principal, modalityId: s
 export async function listGrade(principal: Principal | null, date: IsoDate, areaId?: string | null) {
   assertCan(principal, 'schedule.view');
   const d = toUtc(date);
-  const areaFilter = principal.areaIds === null ? {} : { areaId: { in: [...principal.areaIds] } };
+  const viewIds = gradeViewAreaIds(principal);
+  const areaFilter = viewIds === null ? {} : { areaId: { in: [...viewIds] } };
   const rows = await prisma.scheduleSlotVersion.findMany({
     where: {
       validFrom: { lte: d },

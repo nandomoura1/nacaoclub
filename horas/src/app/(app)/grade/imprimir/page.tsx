@@ -13,7 +13,7 @@ import { filterGrade, gradeParams } from '@/lib/grade-filter';
 import { cn } from '@/lib/cn';
 import { formatDateTime, formatMinutes } from '@/lib/format';
 import { todayIso } from '@/lib/today';
-import { can } from '@/server/auth/authz';
+import { can, gradeViewAreaIds } from '@/server/auth/authz';
 import { requirePrincipal } from '@/server/auth/session';
 import { prisma } from '@/server/db';
 import { listGrade } from '@/server/services/schedule-service';
@@ -37,7 +37,8 @@ export default async function ImprimirGradePage({ searchParams }: { searchParams
   // Padrão: tudo em uma folha, ocupando o papel inteiro. "Várias folhas" para grades enormes.
   const onePage = sp.folhas !== 'varias';
   const date = sp.data && isIsoDate(sp.data) ? sp.data : todayIso();
-  const scoped = principal.areaIds === null ? {} : { id: { in: [...principal.areaIds] } };
+  const viewIds = gradeViewAreaIds(principal);
+  const scoped = viewIds === null ? {} : { id: { in: [...viewIds] } };
   const area = sp.area ? await prisma.coordinationArea.findFirst({ where: { id: sp.area, ...scoped }, select: { id: true, name: true } }) : null;
   const [modality, teacher, space] = await Promise.all([
     sp.modalidade ? prisma.modality.findUnique({ where: { id: sp.modalidade }, select: { id: true, name: true } }) : null,
@@ -73,7 +74,7 @@ export default async function ImprimirGradePage({ searchParams }: { searchParams
     ? counted.reduce((s, g) => s + g.durationMin, 0)
     : counted.reduce((s, g) => s + g.durationMin * g.people.length, 0);
   const subtitle = [
-    area ? `Área: ${area.name}` : principal.areaIds === null ? 'Todas as áreas' : 'Minhas áreas',
+    area ? `Área: ${area.name}` : viewIds === null ? 'Todas as áreas' : 'Minhas áreas',
     modality && `Modalidade: ${modality.name}`,
     teacher && `Professor: ${teacher.name}`,
     space && `Espaço: ${space.name}`,

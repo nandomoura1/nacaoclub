@@ -255,7 +255,9 @@ export function SlotSheet({
   const [history, setHistory] = useState<{ id: string; validFrom: string; validTo: string | null; summary: string; changeReason: string | null }[] | null>(null);
   const [pending, start] = useTransition();
   const set = <K extends keyof typeof v>(k: K, val: (typeof v)[K]) => setV((p) => ({ ...p, [k]: val }));
-  const readOnly = !canEdit;
+  // Aula de outra área (vista com "ver todas as áreas"): só leitura.
+  const otherArea = editing.mode === 'edit' && !modalities.some((m) => m.id === editing.item.modality.id);
+  const readOnly = !canEdit || otherArea;
 
   const payload = () => {
     const startMin = parseClock(v.start);
@@ -316,6 +318,7 @@ export function SlotSheet({
         </>
       )}
     >
+      {otherArea && canEdit && <p className="mb-3 rounded-lg bg-fundo p-2 text-xs text-tinta-suave">Aula de outra área: você vê, mas quem edita é o coordenador ou líder dela.</p>}
       <fieldset disabled={readOnly} className="space-y-5">
         <div>
           <p className="mb-1.5 text-xs font-semibold text-tinta-suave">{editing.mode === 'create' ? 'Dias da semana (cria uma aula por dia)' : 'Dia da semana'}</p>

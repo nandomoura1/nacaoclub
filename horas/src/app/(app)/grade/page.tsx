@@ -6,7 +6,7 @@ import { buttonVariants } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/card';
 import { isIsoDate } from '@/domain/dates';
 import { todayIso } from '@/lib/today';
-import { can } from '@/server/auth/authz';
+import { can, gradeViewAreaIds } from '@/server/auth/authz';
 import { requirePrincipal } from '@/server/auth/session';
 import { prisma } from '@/server/db';
 import { listGrade } from '@/server/services/schedule-service';
@@ -21,7 +21,8 @@ export default async function GradePage({ searchParams }: { searchParams: Promis
   if (!can(principal, 'schedule.view')) redirect('/hoje');
   const sp = await searchParams;
   const date = sp.data && isIsoDate(sp.data) ? sp.data : todayIso();
-  const scoped = principal.areaIds === null ? {} : { id: { in: [...principal.areaIds] } };
+  const viewIds = gradeViewAreaIds(principal);
+  const scoped = viewIds === null ? {} : { id: { in: [...viewIds] } };
 
   const areas = await prisma.coordinationArea.findMany({ where: { deletedAt: null, active: true, ...scoped }, orderBy: { sortOrder: 'asc' }, select: { id: true, name: true, color: true } });
   const areaId = sp.area && areas.some((a) => a.id === sp.area) ? sp.area : null;

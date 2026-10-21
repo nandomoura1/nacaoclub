@@ -23,6 +23,11 @@ export function canAccessArea(principal: Principal, areaId: string): boolean {
   return principal.areaIds === null || principal.areaIds.includes(areaId);
 }
 
+/** Áreas cuja grade a pessoa pode VER (null = todas). Editar segue `areaIds`. */
+export function gradeViewAreaIds(principal: Principal): readonly string[] | null {
+  return principal.areaIds === null || can(principal, 'schedule.view_all') ? null : principal.areaIds;
+}
+
 export function assertAreaAccess(principal: Principal, areaId: string): void {
   if (!canAccessArea(principal, areaId)) {
     throw new AuthorizationError('Esta área não está sob a sua coordenação.');

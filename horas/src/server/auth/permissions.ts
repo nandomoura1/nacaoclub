@@ -9,6 +9,7 @@ export const PERMISSIONS = {
   'area.all': 'Enxerga todas as áreas de coordenação (sem restrição de escopo)',
   'schedule.view': 'Ver a grade semanal',
   'schedule.edit': 'Editar a grade semanal',
+  'schedule.view_all': 'Ver a grade semanal de todas as áreas (editar continua só nas suas)',
   'period.generate': 'Gerar a competência a partir da grade',
   'occurrence.exception': 'Registrar falta, substituição, cancelamento e aula avulsa',
   'leave.manage': 'Registrar férias e afastamentos',
@@ -132,8 +133,8 @@ export const SYSTEM_ROLES: Record<
   },
   LIDER: {
     name: 'Líder de setor',
-    description: 'Acompanha e atualiza as demandas do próprio setor (Gestão de Processos), registra atas, publica materiais na Universidade Nação, cadastra colaboradores, cuida dos documentos da equipe (inclusive atestados) e lança faltas, folgas e afastamentos. Combine com o perfil da função.',
-    permissions: ['proc.view', 'proc.edit', 'edu.view', 'edu.edit', 'teacher.view', 'teacher.edit', 'teacher.docs', 'schedule.view', 'leave.manage'],
+    description: 'Acompanha e atualiza as demandas do próprio setor (Gestão de Processos), registra atas, publica materiais na Universidade Nação, cadastra colaboradores, cuida dos documentos da equipe (inclusive atestados) lança faltas, folgas e afastamentos, monta a grade das próprias áreas e vê a grade de todas. Combine com o perfil da função.',
+    permissions: ['proc.view', 'proc.edit', 'edu.view', 'edu.edit', 'teacher.view', 'teacher.edit', 'teacher.docs', 'schedule.view', 'schedule.view_all', 'schedule.edit', 'occurrence.exception', 'leave.manage'],
   },
 };
 
