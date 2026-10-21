@@ -10,7 +10,7 @@ import { hasDb, makeUser } from './helpers';
 describe.skipIf(!hasDb)('Grade: ver todas as áreas', () => {
   beforeAll(async () => { await prisma.$transaction((tx) => bootstrapStructure(tx, []), { timeout: 60_000 }); });
   it('perfil Líder lança aulas, ausências e vê todas as áreas', async () => {
-    expect(SYSTEM_ROLES.LIDER.permissions).toEqual(expect.arrayContaining(['schedule.view', 'schedule.view_all', 'schedule.edit', 'occurrence.exception', 'leave.manage', 'teacher.edit']));
+    expect(SYSTEM_ROLES.LIDER.permissions).toEqual(expect.arrayContaining(['schedule.view', 'schedule.view_all', 'schedule.edit', 'occurrence.exception', 'leave.manage', 'teacher.edit', 'duty.edit']));
     const lider = await makeUser('LIDER');
     const prof = await makeUser('COORDENADOR');
     expect(gradeViewAreaIds(lider.principal)).toBeNull();

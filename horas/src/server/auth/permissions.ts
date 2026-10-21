@@ -133,8 +133,8 @@ export const SYSTEM_ROLES: Record<
   },
   LIDER: {
     name: 'Líder de setor',
-    description: 'Acompanha e atualiza as demandas do próprio setor (Gestão de Processos), registra atas, publica materiais na Universidade Nação, cadastra colaboradores, cuida dos documentos da equipe (inclusive atestados) lança faltas, folgas e afastamentos, monta a grade das próprias áreas e vê a grade de todas. Combine com o perfil da função.',
-    permissions: ['proc.view', 'proc.edit', 'edu.view', 'edu.edit', 'teacher.view', 'teacher.edit', 'teacher.docs', 'schedule.view', 'schedule.view_all', 'schedule.edit', 'occurrence.exception', 'leave.manage'],
+    description: 'Acompanha e atualiza as demandas do próprio setor (Gestão de Processos), registra atas, publica materiais na Universidade Nação, cadastra colaboradores, cuida dos documentos da equipe (inclusive atestados) lança faltas, folgas e afastamentos, monta a grade e a escala de fim de semana/feriados das próprias áreas e vê a grade de todas. Combine com o perfil da função.',
+    permissions: ['proc.view', 'proc.edit', 'edu.view', 'edu.edit', 'teacher.view', 'teacher.edit', 'teacher.docs', 'schedule.view', 'schedule.view_all', 'schedule.edit', 'occurrence.exception', 'leave.manage', 'duty.edit'],
   },
 };
 
