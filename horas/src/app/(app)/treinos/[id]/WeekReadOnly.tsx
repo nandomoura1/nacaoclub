@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowLeft, FileText, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, FileText, Image as ImageIcon, Tv } from 'lucide-react';
 import { buttonVariants } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { WEEKDAYS, addDays, formatDateBR, weekdayOf } from '@/domain/dates';
@@ -22,7 +22,10 @@ export function WeekReadOnly({ week }: { week: WorkoutWeekView }) {
       <div className="grid gap-3 lg:grid-cols-2">
         {days.map((d) => (
           <Card key={d.date} className="p-4">
-            <p className="text-xs font-bold uppercase tracking-wide text-nacao">{WEEKDAYS[weekdayOf(d.date) - 1]!.long} · {formatDateBR(d.date)}</p>
+            <div className="flex items-center gap-2">
+              <p className="flex-1 text-xs font-bold uppercase tracking-wide text-nacao">{WEEKDAYS[weekdayOf(d.date) - 1]!.long} · {formatDateBR(d.date)}</p>
+              <a href={`/tv/semana/${week.id}?dia=${d.date}`} target="_blank" rel="noopener" className={buttonVariants({ variant: 'ghost', size: 'sm' })}><Tv /> TV</a>
+            </div>
             {d.title && <h2 className="text-lg font-extrabold text-navy">{d.title}</h2>}
             <div className="mt-2 space-y-3">
               {d.blocks.map((b, i) => (

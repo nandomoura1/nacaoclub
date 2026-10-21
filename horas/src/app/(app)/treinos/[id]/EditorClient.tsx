@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowDown, ArrowUp, Copy, Download, FileText, Image as ImageIcon, MessageCircle, Plus, Save, Sparkles, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Copy, Download, FileText, Image as ImageIcon, MessageCircle, Plus, Save, Sparkles, Trash2, Tv, X } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -18,11 +18,12 @@ import type { WorkoutWeekView } from '@/server/services/workout-service';
 import type { BenchmarkView } from '@/server/services/benchmark-service';
 import { benchmarkBlock, matchBenchmark } from '@/domain/benchmarks';
 import { changeWeekModalityAction, deleteWeekAction, organizeWeekAction, saveWeekAction } from '../actions';
+import { pinScreenAction } from '../tv-actions';
 
 const empty = (kind: BlockKind): WorkoutBlockData => ({ kind, title: null, durationMin: null, format: null, timeCapMin: null, content: null, notes: null, coachNotes: null });
 const QUICK: BlockKind[] = ['MOBILIDADE', 'AQUECIMENTO', 'SKILL', 'ESPECIFICO', 'CORE', 'FORCA', 'WOD', 'FUNDAMENTO', 'JOGO'];
 
-export function EditorClient({ week, benchmarks, modalities }: { week: WorkoutWeekView; benchmarks: BenchmarkView[]; modalities: { id: string; name: string }[] }) {
+export function EditorClient({ week, benchmarks, modalities, today, screens }: { week: WorkoutWeekView; benchmarks: BenchmarkView[]; modalities: { id: string; name: string }[]; today: string; screens: { id: string; name: string }[] }) {
   const router = useRouter();
   const [days, setDays] = useState<WorkoutDayData[]>(week.days);
   const [theme, setTheme] = useState(week.theme ?? '');
@@ -177,6 +178,16 @@ export function EditorClient({ week, benchmarks, modalities }: { week: WorkoutWe
               <div className="flex-1" />
               {d.blocks.length > 0 && !dirty && (
                 <a href={`/treinos/${week.id}/arte?dia=${d.date}`} target="_blank" rel="noopener" className={buttonVariants({ variant: 'ghost', size: 'sm' })}><Download /> Arte do dia</a>
+              )}
+              {d.blocks.length > 0 && !dirty && (
+                <a href={`/tv/semana/${week.id}?dia=${d.date}`} target="_blank" rel="noopener" className={buttonVariants({ variant: 'ghost', size: 'sm' })} title="Abrir em tela cheia para a TV"><Tv /> TV</a>
+              )}
+              {d.blocks.length > 0 && !dirty && d.date >= today && screens.length > 0 && (
+                <Select aria-label="Fixar na TV" className="h-8 w-auto text-xs" value="" disabled={pending}
+                  onChange={(e) => { const sid = e.target.value; if (sid) start(async () => { const r = await pinScreenAction(sid, d.date); setMsg(r.ok ? { ok: r.message } : { error: r.error }); }); }}>
+                  <option value="">Fixar na TV…</option>
+                  {screens.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                </Select>
               )}
               {d.blocks.length > 0 && !dirty && (
                 <a href={`/treinos/${week.id}/pdf?tipo=professor&dia=${d.date}`} target="_blank" rel="noopener" className={buttonVariants({ variant: 'ghost', size: 'sm' })}><FileText /> Plano do dia</a>

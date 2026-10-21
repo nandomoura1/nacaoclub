@@ -248,6 +248,7 @@ model Modality {
   occurrences   ClassOccurrence[]
   manualEntries ManualEntry[]
   workoutWeeks  WorkoutWeek[]
+  tvScreens     TvScreen[]
   dutySectors   DutySector[]
 
   @@index([areaId])
@@ -835,6 +836,26 @@ model WorkoutWeek {
 
   @@unique([modalityId, weekStart])
   @@map("workout_weeks")
+}
+
+/// Tela de TV do box: abre por um link secreto (sem login) e mostra sozinha o
+/// treino do dia da modalidade — ou o dia fixado pelo coach.
+model TvScreen {
+  id         String    @id @default(uuid()) @db.Uuid
+  name       String
+  modalityId String    @map("modality_id") @db.Uuid
+  /// Link secreto da TV (/tv/<token>). Trocar o token derruba o link antigo.
+  token      String    @unique
+  /// Dia fixado na tela; vale até passar. Vazio = sempre o treino de hoje.
+  pinnedDate DateTime? @map("pinned_date") @db.Date
+  active     Boolean   @default(true)
+  lastSeenAt DateTime? @map("last_seen_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  modality Modality @relation(fields: [modalityId], references: [id], onDelete: Restrict)
+
+  @@map("tv_screens")
 }
 
 model WorkoutDay {
