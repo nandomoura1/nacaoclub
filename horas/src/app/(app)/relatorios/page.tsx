@@ -41,10 +41,11 @@ const COLS: { key: keyof ReportRow; label: string; title: string }[] = [
   { key: 'substitutionMin', label: 'Substituições', title: 'Aulas de outros que a pessoa cobriu' },
   { key: 'extraMin', label: 'Extras', title: 'Aulas avulsas fora da grade' },
   { key: 'bonusMin', label: 'Dom./feriado', title: 'Adicional: o tempo trabalhado em domingo e feriado vale o dobro' },
-  { key: 'absenceMin', label: 'Ausências', title: 'Faltas, férias, atestados (não entram no total)' },
+  { key: 'paidLeaveMin', label: 'Abonadas', title: 'Atestados, folgas e outras ausências que não descontam: entram no total' },
+  { key: 'absenceMin', label: 'Ausências', title: 'Faltas, férias e ausências que descontam (não entram no total)' },
   { key: 'cancelledMin', label: 'Canceladas', title: 'Aulas canceladas sem pagamento' },
   { key: 'pendingMin', label: 'Aguardando', title: 'Feriado ainda sem decisão' },
-  { key: 'totalMin', label: 'Total', title: 'Dadas + substituições + extras + adicional de domingo/feriado' },
+  { key: 'totalMin', label: 'Total', title: 'Dadas + substituições + extras + abonadas + adicional de domingo/feriado' },
 ];
 
 function HoursCells({ row }: { row: ReportRow }) {

@@ -155,7 +155,7 @@ describe('regras que a planilha não conseguia expressar', () => {
 });
 
 describe('invariante do cálculo (propriedade)', () => {
-  it('previstas = próprias + ausências + canceladas + aguardando, para qualquer combinação', () => {
+  it('previstas = próprias + abonadas + ausências + canceladas + aguardando, para qualquer combinação', () => {
     const statuses = ['PREVISTA', 'SUBSTITUIDA', 'AUSENTE_PENDENTE', 'CANCELADA'] as const;
     let seed = 42;
     const rnd = (n: number) => { seed = (seed * 1103515245 + 12345) % 2 ** 31; return seed % n; };
@@ -166,12 +166,13 @@ describe('invariante do cálculo (propriedade)', () => {
         return {
           id: `o${i}`, date: '2026-09-01', modalityId: `m${rnd(3)}`, status: occStatus, plannedDurationMin: dur, durationMin: dur,
           countsHours: true, cancellationCountsHours: rnd(4) === 0,
-          assignments: [{ plannedTeacherId: `t${rnd(3)}`, executingTeacherId: `t${rnd(4)}`, status: statuses[rnd(4)]!, minutes: dur, absenceReason: 'FALTA' as const }],
+          assignments: [{ plannedTeacherId: `t${rnd(3)}`, executingTeacherId: `t${rnd(4)}`, status: statuses[rnd(4)]!, minutes: dur, absenceReason: 'FALTA' as const, absencePaid: rnd(3) === 0 }],
         };
       });
       for (const t of computeLedger(occ)) {
         const ownFromPlanned = t.ownMin; // sem avulsas neste teste
-        expect(t.plannedMin).toBe(ownFromPlanned + t.absenceMin + t.cancelledMin + t.pendingMin);
+        expect(t.plannedMin).toBe(ownFromPlanned + t.paidLeaveMin + t.absenceMin + t.cancelledMin + t.pendingMin);
+        expect(t.totalMin).toBe(t.ownMin + t.substitutionMin + t.extraMin + t.paidLeaveMin + t.bonusMin);
       }
     }
   });

@@ -3,7 +3,10 @@
  * minutos na conta de alguém (ou em nenhuma, com o motivo registrado).
  *
  * Invariante (testado): para cada professor,
- *   previstas = próprias + ausências + canceladas + aguardando
+ *   previstas = próprias + abonadas + ausências + canceladas + aguardando
+ *
+ * Ausência abonada (atestado/folga, em geral): o tempo previsto entra em
+ * "abonadas" e soma no total; o substituto, se houver, recebe normalmente.
  *
  * Domingo e feriado valem o dobro para quem trabalhou (professor ou
  * estagiário): o tempo trabalhado entra de novo como "adicional" (bonusMin),
@@ -32,6 +35,8 @@ export interface LedgerOccurrence {
     status: AssignmentStatus;
     minutes: number;
     absenceReason: AbsenceReason | null;
+    /** Ausência abonada: o previsto conta para o professor. */
+    absencePaid?: boolean;
   }[];
 }
 
@@ -40,6 +45,8 @@ export interface Bucket {
   ownMin: number;
   substitutionMin: number;
   extraMin: number;
+  /** Ausências abonadas (não descontam): entram no total. */
+  paidLeaveMin: number;
   absenceMin: number;
   cancelledMin: number;
   pendingMin: number;
@@ -55,11 +62,11 @@ export interface TeacherHours extends Bucket {
 }
 
 const emptyBucket = (): Bucket => ({
-  plannedMin: 0, ownMin: 0, substitutionMin: 0, extraMin: 0,
+  plannedMin: 0, ownMin: 0, substitutionMin: 0, extraMin: 0, paidLeaveMin: 0,
   absenceMin: 0, cancelledMin: 0, pendingMin: 0, bonusMin: 0, totalMin: 0, absences: {},
 });
 
-type Field = 'plannedMin' | 'ownMin' | 'substitutionMin' | 'extraMin' | 'absenceMin' | 'cancelledMin' | 'pendingMin' | 'bonusMin';
+type Field = 'plannedMin' | 'ownMin' | 'substitutionMin' | 'extraMin' | 'paidLeaveMin' | 'absenceMin' | 'cancelledMin' | 'pendingMin' | 'bonusMin';
 
 export function computeLedger(occurrences: LedgerOccurrence[]): TeacherHours[] {
   const map = new Map<string, TeacherHours>();
@@ -69,7 +76,7 @@ export function computeLedger(occurrences: LedgerOccurrence[]): TeacherHours[] {
     const m = (t.byModality[modalityId] ??= emptyBucket());
     for (const b of [t, m] as Bucket[]) {
       b[field] += min;
-      if (field === 'ownMin' || field === 'substitutionMin' || field === 'extraMin' || field === 'bonusMin') b.totalMin += min;
+      if (field === 'ownMin' || field === 'substitutionMin' || field === 'extraMin' || field === 'paidLeaveMin' || field === 'bonusMin') b.totalMin += min;
       if (reason) b.absences[reason] = (b.absences[reason] ?? 0) + min;
     }
     map.set(teacherId, t);
@@ -96,6 +103,7 @@ export function computeLedger(occurrences: LedgerOccurrence[]): TeacherHours[] {
 
       if (o.status === 'CANCELADA' || a.status === 'CANCELADA') {
         if (o.cancellationCountsHours) add(planned, o.modalityId, 'ownMin', o.plannedDurationMin);
+        else if (a.status === 'CANCELADA' && a.absencePaid) add(planned, o.modalityId, 'paidLeaveMin', o.plannedDurationMin);
         else add(planned, o.modalityId, 'cancelledMin', o.plannedDurationMin);
         continue;
       }
@@ -110,11 +118,13 @@ export function computeLedger(occurrences: LedgerOccurrence[]): TeacherHours[] {
           worked(planned, 'ownMin', a.minutes);
           break;
         case 'SUBSTITUIDA':
-          add(planned, o.modalityId, 'absenceMin', o.plannedDurationMin, a.absenceReason ?? 'OUTRO');
+          if (a.absencePaid) add(planned, o.modalityId, 'paidLeaveMin', o.plannedDurationMin);
+          else add(planned, o.modalityId, 'absenceMin', o.plannedDurationMin, a.absenceReason ?? 'OUTRO');
           worked(a.executingTeacherId, 'substitutionMin', a.minutes);
           break;
         case 'AUSENTE_PENDENTE':
-          add(planned, o.modalityId, 'absenceMin', o.plannedDurationMin, a.absenceReason ?? 'OUTRO');
+          if (a.absencePaid) add(planned, o.modalityId, 'paidLeaveMin', o.plannedDurationMin);
+          else add(planned, o.modalityId, 'absenceMin', o.plannedDurationMin, a.absenceReason ?? 'OUTRO');
           break;
       }
     }
@@ -125,7 +135,7 @@ export function computeLedger(occurrences: LedgerOccurrence[]): TeacherHours[] {
 export function sumBuckets(rows: Bucket[]): Bucket {
   const t = emptyBucket();
   for (const r of rows) {
-    for (const k of ['plannedMin', 'ownMin', 'substitutionMin', 'extraMin', 'absenceMin', 'cancelledMin', 'pendingMin', 'bonusMin', 'totalMin'] as const) t[k] += r[k];
+    for (const k of ['plannedMin', 'ownMin', 'substitutionMin', 'extraMin', 'paidLeaveMin', 'absenceMin', 'cancelledMin', 'pendingMin', 'bonusMin', 'totalMin'] as const) t[k] += r[k];
   }
   return t;
 }

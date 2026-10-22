@@ -14,7 +14,7 @@ export function HoursStatement({ r, teacherId }: { r: HoursReportResult; teacher
   const me = r.byTeacher[0];
   const cards = me ? [
     ['Previstas', me.plannedMin], ['Dadas', me.ownMin], ['Substituições', me.substitutionMin], ['Extras', me.extraMin], ['Dom./feriado (dobro)', me.bonusMin],
-    ['Ausências', me.absenceMin], ['Canceladas', me.cancelledMin], ['Aguardando', me.pendingMin],
+    ['Abonadas', me.paidLeaveMin], ['Ausências', me.absenceMin], ['Canceladas', me.cancelledMin], ['Aguardando', me.pendingMin],
   ] as const : [];
   return (
     <>
@@ -22,7 +22,7 @@ export function HoursStatement({ r, teacherId }: { r: HoursReportResult; teacher
         <Card className="p-8 text-center text-sm text-tinta-suave">Nenhuma aula nesta competência.</Card>
       ) : (
         <>
-          <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5 lg:grid-cols-9">
+          <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5 lg:grid-cols-10">
             <Card className="col-span-2 bg-navy p-4 text-white sm:col-span-1">
               <p className="tabular text-2xl font-extrabold">{formatMinutes(me.totalMin)}</p>
               <p className="text-xs text-white/70">total a pagar</p>

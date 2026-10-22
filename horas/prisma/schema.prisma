@@ -632,6 +632,8 @@ model ClassAssignment {
   minutes            Int
   status             AssignmentStatus @default(PREVISTA)
   absenceReason      AbsenceReason?   @map("absence_reason")
+  /// Ausência abonada: o tempo previsto conta para o professor mesmo sem dar a aula.
+  absencePaid        Boolean          @default(false) @map("absence_paid")
   createdAt          DateTime         @default(now()) @map("created_at")
   updatedAt          DateTime         @updatedAt @map("updated_at")
 
@@ -713,6 +715,8 @@ model Leave {
   substituteId  String?       @map("substitute_id") @db.Uuid
   /// Substituição só nesta aula da grade (vazio = todas as aulas do professor).
   slotId        String?       @map("slot_id") @db.Uuid
+  /// Desconta das horas do professor? false = abonada (atestado/folga, em geral): as aulas seguem contando para ele.
+  deductsHours  Boolean       @default(true) @map("deducts_hours")
   notes         String?
   createdById   String?       @map("created_by") @db.Uuid
   createdAt     DateTime      @default(now()) @map("created_at")

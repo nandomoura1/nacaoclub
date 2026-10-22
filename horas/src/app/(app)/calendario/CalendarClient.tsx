@@ -136,6 +136,7 @@ function HoursTable({ overview }: { overview: Overview }) {
             <th className="px-3 py-3">Substituições</th>
             <th className="px-3 py-3">Avulsas</th>
             <th className="px-3 py-3" title="Domingo e feriado valem o dobro">Dom./feriado</th>
+            <th className="px-3 py-3" title="Ausências que não descontam">Abonadas</th>
             <th className="px-3 py-3">Ausências</th>
             <th className="px-3 py-3">Canceladas</th>
             <th className="px-3 py-3">Aguardando</th>
@@ -151,6 +152,7 @@ function HoursTable({ overview }: { overview: Overview }) {
               <td className="px-3 py-2.5">{t.substitutionMin ? `+${formatMinutes(t.substitutionMin)}` : cell(0)}</td>
               <td className="px-3 py-2.5">{t.extraMin ? `+${formatMinutes(t.extraMin)}` : cell(0)}</td>
               <td className="px-3 py-2.5">{t.bonusMin ? `+${formatMinutes(t.bonusMin)}` : cell(0)}</td>
+              <td className="px-3 py-2.5">{t.paidLeaveMin ? `+${formatMinutes(t.paidLeaveMin)}` : cell(0)}</td>
               <td className="px-3 py-2.5">{cell(t.absenceMin)}</td>
               <td className="px-3 py-2.5">{cell(t.cancelledMin)}</td>
               <td className={cn('px-3 py-2.5', t.pendingMin > 0 && 'font-semibold text-atencao')}>{cell(t.pendingMin)}</td>

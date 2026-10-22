@@ -10,13 +10,13 @@ import { FormMessage } from '@/components/ui/alert';
 import { Sheet } from '@/components/ui/sheet';
 import { Input, Label, Select } from '@/components/ui/input';
 import { WEEKDAYS, addDays, formatClock, formatDateBR } from '@/domain/dates';
-import { COVERAGE_LABEL, LEAVE_LABEL, type LeaveCoverage, type LeaveType } from '@/domain/leave';
+import { COVERAGE_LABEL, LEAVE_LABEL, defaultDeducts, type LeaveCoverage, type LeaveType } from '@/domain/leave';
 import { cn } from '@/lib/cn';
 import { formatMinutes } from '@/lib/format';
 import type { GradeItem } from '@/server/services/schedule-service';
 import type { LeaveItem } from '@/server/services/leave-service';
 import { RemoveSlotSheet, SlotCard, SlotSheet, type Editing, type SheetProps } from '../../grade/GradeClient';
-import { cancelLeaveAction, previewLeaveAction, removeExtraHoursAction, saveExtraHoursAction, saveLeaveAction } from './actions';
+import { cancelLeaveAction, previewLeaveAction, removeExtraHoursAction, saveExtraHoursAction, saveLeaveAction, setLeaveDeductsAction } from './actions';
 import type { ExtraHoursItem } from '@/server/services/extra-hours-service';
 
 /* ───────────────────────── Aulas fixas ───────────────────────── */
@@ -197,11 +197,12 @@ export function AusenciasTab({ teacherId, leaves, substitutes, canManage, today 
   canManage: boolean; today: string;
 }) {
   const router = useRouter();
-  const [v, setV] = useState({ type: 'FERIAS' as LeaveType, startDate: today, endDate: today, coverage: 'PENDENTE' as LeaveCoverage, substituteId: '', notes: '' });
+  const [v, setV] = useState({ type: 'FERIAS' as LeaveType, startDate: today, endDate: today, coverage: 'PENDENTE' as LeaveCoverage, substituteId: '', notes: '', deductsHours: defaultDeducts('FERIAS') });
   const [preview, setPreview] = useState<Preview | null>(null);
   const [msg, setMsg] = useState<{ error?: string; ok?: string }>({});
   const [pending, start] = useTransition();
-  const set = <K extends keyof typeof v>(k: K, val: (typeof v)[K]) => { setV((p) => ({ ...p, [k]: val })); setPreview(null); };
+  // Trocar o tipo traz o padrão dele (atestado/folga não descontam); dá para mudar depois.
+  const set = <K extends keyof typeof v>(k: K, val: (typeof v)[K]) => { setV((p) => ({ ...p, [k]: val, ...(k === 'type' ? { deductsHours: defaultDeducts(val as LeaveType) } : {}) })); setPreview(null); };
   const payload = () => ({ ...v, endDate: v.type === 'FALTA' ? v.startDate : v.endDate });
 
   return (
@@ -251,7 +252,7 @@ export function AusenciasTab({ teacherId, leaves, substitutes, canManage, today 
                     <input type="radio" name="coverage" className="accent-[#0169E9]" checked={v.coverage === c} onChange={() => set('coverage', c)} />
                     {COVERAGE_LABEL[c]}
                     <span className="text-xs text-tinta-fraca">
-                      {c === 'SUBSTITUIR' ? '— as horas vão para quem cobrir' : c === 'PENDENTE' ? '— define depois, aula a aula' : '— ninguém dá; aula sai das horas'}
+                      {c === 'SUBSTITUIR' ? '— as horas vão para quem cobrir' : c === 'PENDENTE' ? '— define depois, aula a aula' : '— ninguém dá a aula'}
                     </span>
                   </label>
                 ))}
@@ -267,6 +268,17 @@ export function AusenciasTab({ teacherId, leaves, substitutes, canManage, today 
                 </Select>
               </div>
             )}
+            <fieldset>
+              <legend className="mb-1.5 text-xs font-semibold text-tinta-suave">Desconta das horas trabalhadas?</legend>
+              <div className="grid grid-cols-2 gap-1.5">
+                {[{ val: false, label: 'Não desconta', hint: 'abonada: as aulas contam para o professor' }, { val: true, label: 'Desconta', hint: 'as aulas saem das horas dele' }].map((o) => (
+                  <label key={String(o.val)} className={cn('flex cursor-pointer items-start gap-2 rounded-lg border p-2 text-sm', v.deductsHours === o.val ? 'border-nacao bg-nacao/5' : 'border-borda')}>
+                    <input type="radio" name="deducts" className="mt-0.5 accent-[#0169E9]" checked={v.deductsHours === o.val} onChange={() => set('deductsHours', o.val)} />
+                    <span><b className="text-navy">{o.label}</b><span className="block text-xs text-tinta-fraca">{o.hint}</span></span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
             <div>
               <Label htmlFor="l-notes">Observação (opcional)</Label>
               <Input id="l-notes" value={v.notes} maxLength={500} onChange={(e) => set('notes', e.target.value)} placeholder="Ex.: atestado entregue ao DP" />
@@ -274,7 +286,7 @@ export function AusenciasTab({ teacherId, leaves, substitutes, canManage, today 
 
             {preview && (
               <div className="rounded-lg bg-fundo p-3 text-sm">
-                <p className="font-bold text-navy">Afeta {preview.count} aula(s) · {formatMinutes(preview.minutes)}</p>
+                <p className="font-bold text-navy">Afeta {preview.count} aula(s) · {formatMinutes(preview.minutes)} · {v.deductsHours ? 'sai das horas do professor' : 'abonada: continua contando para o professor'}</p>
                 {preview.sample.length > 0 && <p className="mt-1 text-xs text-tinta-suave">{preview.sample.join(' · ')}{preview.count > preview.sample.length ? ' …' : ''}</p>}
                 {preview.note && <p className="mt-1 text-xs text-tinta-suave">{preview.note}</p>}
                 {preview.closed > 0 && <p className="mt-1 text-xs text-atencao">{preview.closed} aula(s) estão em competência fechada e não serão alteradas.</p>}
@@ -299,9 +311,21 @@ export function AusenciasTab({ teacherId, leaves, substitutes, canManage, today 
               <p className="font-semibold text-tinta">
                 {l.slot ? `Substituição · ${l.slot}` : LEAVE_LABEL[l.type]} · {formatDateBR(l.startDate)}{l.endDate !== l.startDate ? ` a ${formatDateBR(l.endDate)}` : ''}
                 {l.cancelled && <Badge tone="neutral" className="ml-2">anulada</Badge>}
+                {!l.cancelled && !l.slot && <Badge tone={l.deductsHours ? 'amber' : 'green'} className="ml-2">{l.deductsHours ? 'desconta' : 'abonada'}</Badge>}
               </p>
               <p className="text-xs text-tinta-suave">{l.slot ? `${LEAVE_LABEL[l.type]} · dá a aula: ${l.substitute}` : `${COVERAGE_LABEL[l.coverage]}${l.substitute ? `: ${l.substitute}` : ''}`} · {l.classes} aula(s){l.notes ? ` · ${l.notes}` : ''}</p>
             </div>
+            {canManage && !l.cancelled && !l.slot && (
+              <Button variant="ghost" size="sm" disabled={pending} title={l.deductsHours ? 'Passar a não descontar (abonar)' : 'Passar a descontar das horas'} onClick={() => {
+                if (!confirm(l.deductsHours ? 'Abonar esta ausência? As aulas voltam a contar nas horas do professor.' : 'Descontar esta ausência das horas do professor?')) return;
+                setMsg({});
+                start(async () => {
+                  const r = await setLeaveDeductsAction(l.id, !l.deductsHours);
+                  setMsg(r.ok ? { ok: `${l.deductsHours ? 'Abonada' : 'Passa a descontar'}: ${r.data.updated} aula(s) ajustada(s)${r.data.closed ? ` · ${r.data.closed} em competência fechada ficaram como estavam` : ''}.` } : { error: r.error });
+                  router.refresh();
+                });
+              }}>{l.deductsHours ? 'Abonar' : 'Descontar'}</Button>
+            )}
             {canManage && !l.cancelled && (
               <Button variant="ghost" size="sm" disabled={pending} onClick={() => {
                 if (!confirm('Anular esta ausência? As aulas voltam ao previsto (fica registrado no histórico).')) return;

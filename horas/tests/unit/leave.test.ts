@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { absenceReasonOf, exceptionTypeOf, isAffectable, leaveEffect, overlaps } from '@/domain/leave';
+import { absenceReasonOf, defaultDeducts, exceptionTypeOf, isAffectable, leaveEffect, overlaps } from '@/domain/leave';
 
 describe('ausências (puro)', () => {
   it('efeito na cadeira do professor conforme a cobertura', () => {
-    expect(leaveEffect({ type: 'FERIAS', coverage: 'SUBSTITUIR', substituteId: 'bia' })).toEqual({ status: 'SUBSTITUIDA', executingTeacherId: 'bia', absenceReason: 'FERIAS' });
-    expect(leaveEffect({ type: 'FALTA', coverage: 'PENDENTE', substituteId: null })).toEqual({ status: 'AUSENTE_PENDENTE', executingTeacherId: null, absenceReason: 'FALTA' });
-    expect(leaveEffect({ type: 'ATESTADO', coverage: 'CANCELAR', substituteId: null })).toEqual({ status: 'CANCELADA', executingTeacherId: null, absenceReason: 'ATESTADO' });
+    expect(leaveEffect({ type: 'FERIAS', coverage: 'SUBSTITUIR', substituteId: 'bia' })).toEqual({ status: 'SUBSTITUIDA', executingTeacherId: 'bia', absenceReason: 'FERIAS', absencePaid: false });
+    expect(leaveEffect({ type: 'FALTA', coverage: 'PENDENTE', substituteId: null })).toEqual({ status: 'AUSENTE_PENDENTE', executingTeacherId: null, absenceReason: 'FALTA', absencePaid: false });
+    expect(leaveEffect({ type: 'ATESTADO', coverage: 'CANCELAR', substituteId: null, deductsHours: false })).toEqual({ status: 'CANCELADA', executingTeacherId: null, absenceReason: 'ATESTADO', absencePaid: true });
+    expect((['FALTA', 'FERIAS', 'AFASTAMENTO', 'ATESTADO', 'FOLGA'] as const).map(defaultDeducts)).toEqual([true, true, true, false, false]);
     expect(absenceReasonOf('AFASTAMENTO')).toBe('OUTRO');
     expect(exceptionTypeOf('FOLGA', 'PENDENTE')).toBe('FOLGA');
     expect(exceptionTypeOf('FOLGA', 'SUBSTITUIR')).toBe('SUBSTITUICAO');

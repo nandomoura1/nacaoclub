@@ -89,7 +89,7 @@ describe.skipIf(!hasDb)('E7 · relatórios de horas', () => {
     const header = 5; // título + 2 linhas de informação + linha em branco
     expect(ws.getCell(header, 1).value).toBe('Professor');
     expect(ws.getCell(header + 1, 1).value).toBe('Ana Relatório');
-    expect(ws.getCell(header, 11).value).toBe('TOTAL (h)'); // depois do adicional de domingo/feriado
-    expect(ws.getCell(header + 1, 11).value).toBeCloseTo(r.byTeacher[0]!.totalMin / 60, 2);
+    expect(ws.getCell(header, 12).value).toBe('TOTAL (h)'); // depois do adicional de domingo/feriado e das abonadas
+    expect(ws.getCell(header + 1, 12).value).toBeCloseTo(r.byTeacher[0]!.totalMin / 60, 2);
   });
 });

@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { getPrincipal, requestMeta } from '@/server/auth/session';
 import { runAction, type ActionResult } from '@/server/action-result';
 import { removeTeacherFromSlot } from '@/server/services/schedule-service';
-import { cancelLeave, previewLeave, saveLeave } from '@/server/services/leave-service';
+import { cancelLeave, previewLeave, saveLeave, setLeaveDeducts } from '@/server/services/leave-service';
 import { saveGuidelines } from '@/server/services/teacher-share-service';
 import { removeExtraHours, saveExtraHours } from '@/server/services/extra-hours-service';
 
@@ -33,6 +33,14 @@ export async function saveLeaveAction(teacherId: string, values: Record<string, 
 export async function cancelLeaveAction(leaveId: string) {
   return runAction(async () => {
     const r = await cancelLeave(await getPrincipal(), leaveId, await requestMeta());
+    refresh();
+    return r;
+  });
+}
+
+export async function setLeaveDeductsAction(leaveId: string, deducts: boolean) {
+  return runAction(async () => {
+    const r = await setLeaveDeducts(await getPrincipal(), leaveId, deducts, await requestMeta());
     refresh();
     return r;
   });

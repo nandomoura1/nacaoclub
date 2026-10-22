@@ -3,7 +3,7 @@ import { prisma } from '@/server/db';
 import { bootstrapStructure } from '@/server/services/bootstrap';
 import { createSlots, listGrade, removeTeacherFromSlot } from '@/server/services/schedule-service';
 import { generatePeriod, periodOverview } from '@/server/services/period-service';
-import { cancelLeave, listLeaves, previewLeave, saveLeave } from '@/server/services/leave-service';
+import { cancelLeave, listLeaves, previewLeave, saveLeave, setLeaveDeducts } from '@/server/services/leave-service';
 import { AppError } from '@/server/errors';
 import { META, hasDb, makeUser } from './helpers';
 
@@ -67,12 +67,34 @@ describe.skipIf(!hasDb)('E5 · ausências lançadas na ficha do professor', () =
   it('falta sem substituto fica pendente; cancelar derruba a aula com "Falta de professor"', async () => {
     const { ana, hours } = await setup(2034, 4); // 26/03 a 25/04/2034; terça 04/04, quinta 06/04
     await saveLeave(admin.principal, ana.id, { type: 'FALTA', startDate: '2034-04-04', endDate: '2034-04-04', coverage: 'PENDENTE' }, META);
-    await saveLeave(admin.principal, ana.id, { type: 'ATESTADO', startDate: '2034-04-06', endDate: '2034-04-06', coverage: 'CANCELAR' }, META);
+    await saveLeave(admin.principal, ana.id, { type: 'ATESTADO', startDate: '2034-04-06', endDate: '2034-04-06', coverage: 'CANCELAR', deductsHours: true }, META);
     const me = (await hours()).find((t) => t.teacherId === ana.id)!;
     expect(me).toMatchObject({ absenceMin: 60, cancelledMin: 60, absences: { FALTA: 60 } });
     const cancelled = await prisma.classOccurrence.findFirstOrThrow({ where: { date: new Date('2034-04-06'), label: { startsWith: `aus-${n}` } }, include: { cancellationReason: true } });
     expect(cancelled).toMatchObject({ status: 'CANCELADA', touched: true });
     expect(cancelled.cancellationReason?.name).toBe('Falta de professor');
+  });
+
+  it('atestado e folga não descontam por padrão (abonadas); dá para trocar depois, e anular devolve', async () => {
+    const { ana, bia, hours } = await setup(2034, 9); // 26/08 a 25/09/2034
+    const atestado = await saveLeave(admin.principal, ana.id, { type: 'ATESTADO', startDate: '2034-09-05', endDate: '2034-09-05', coverage: 'SUBSTITUIR', substituteId: bia.id }, META);
+    await saveLeave(admin.principal, ana.id, { type: 'FOLGA', startDate: '2034-09-07', endDate: '2034-09-07', coverage: 'CANCELAR' }, META);
+    await saveLeave(admin.principal, ana.id, { type: 'FALTA', startDate: '2034-09-12', endDate: '2034-09-12', coverage: 'PENDENTE' }, META);
+    let me = (await hours()).find((t) => t.teacherId === ana.id)!;
+    // Atestado (substituído) e folga (cancelada) contam para a Ana; a falta desconta. A Bia recebe a substituição.
+    expect(me).toMatchObject({ paidLeaveMin: 120, absenceMin: 60, cancelledMin: 0, absences: { FALTA: 60 } });
+    expect(me.totalMin).toBe(me.ownMin + 120);
+    expect((await hours()).find((t) => t.teacherId === bia.id)).toMatchObject({ substitutionMin: 60 });
+    expect((await listLeaves(admin.principal, ana.id)).map((l) => [l.type, l.deductsHours])).toEqual(expect.arrayContaining([['ATESTADO', false], ['FOLGA', false], ['FALTA', true]]));
+
+    expect(await setLeaveDeducts(admin.principal, atestado.id, true, META)).toMatchObject({ updated: 1, closed: 0 });
+    me = (await hours()).find((t) => t.teacherId === ana.id)!;
+    expect(me).toMatchObject({ paidLeaveMin: 60, absenceMin: 120, absences: { FALTA: 60, ATESTADO: 60 } });
+
+    await cancelLeave(admin.principal, atestado.id, META);
+    me = (await hours()).find((t) => t.teacherId === ana.id)!;
+    expect(me).toMatchObject({ paidLeaveMin: 60, absenceMin: 60 });
+    expect(await prisma.classAssignment.count({ where: { plannedTeacherId: ana.id, status: 'PREVISTA', absencePaid: true } })).toBe(0);
   });
 
   it('ausência lançada ANTES de gerar a competência vale quando ela é gerada', async () => {

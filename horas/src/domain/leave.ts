@@ -13,6 +13,13 @@ export const COVERAGE_LABEL: Record<LeaveCoverage, string> = {
   SUBSTITUIR: 'Substituto dá as aulas', PENDENTE: 'Aguardando substituto', CANCELAR: 'Cancelar as aulas',
 };
 
+/**
+ * Desconta das horas? Padrão por tipo: atestado e folga são abonados (as aulas
+ * seguem contando para o professor); falta, férias e afastamento descontam.
+ * Quem lança pode trocar caso a caso.
+ */
+export const defaultDeducts = (t: LeaveType): boolean => !(t === 'ATESTADO' || t === 'FOLGA');
+
 export const absenceReasonOf = (t: LeaveType): AbsenceReason =>
   t === 'AFASTAMENTO' ? 'OUTRO' : t;
 
@@ -24,6 +31,8 @@ export interface AssignmentState {
   status: 'PREVISTA' | 'REALIZADA' | 'SUBSTITUIDA' | 'CANCELADA' | 'AUSENTE_PENDENTE';
   executingTeacherId: string | null;
   absenceReason: AbsenceReason | null;
+  /** Ausência abonada: o tempo previsto conta para o professor. */
+  absencePaid?: boolean;
 }
 
 /**
@@ -54,11 +63,12 @@ export function revertState(
   return { status: before.status ?? 'PREVISTA', executingTeacherId: before.executingTeacherId ?? null, absenceReason: before.absenceReason ?? null };
 }
 
-export function leaveEffect(leave: { type: LeaveType; coverage: LeaveCoverage; substituteId: string | null }): AssignmentState {
+export function leaveEffect(leave: { type: LeaveType; coverage: LeaveCoverage; substituteId: string | null; deductsHours?: boolean }): AssignmentState {
   const absenceReason = absenceReasonOf(leave.type);
-  if (leave.coverage === 'SUBSTITUIR') return { status: 'SUBSTITUIDA', executingTeacherId: leave.substituteId, absenceReason };
-  if (leave.coverage === 'CANCELAR') return { status: 'CANCELADA', executingTeacherId: null, absenceReason };
-  return { status: 'AUSENTE_PENDENTE', executingTeacherId: null, absenceReason };
+  const absencePaid = leave.deductsHours === false;
+  if (leave.coverage === 'SUBSTITUIR') return { status: 'SUBSTITUIDA', executingTeacherId: leave.substituteId, absenceReason, absencePaid };
+  if (leave.coverage === 'CANCELAR') return { status: 'CANCELADA', executingTeacherId: null, absenceReason, absencePaid };
+  return { status: 'AUSENTE_PENDENTE', executingTeacherId: null, absenceReason, absencePaid };
 }
 
 /** Duas ausências ativas do mesmo professor não podem se sobrepor. */

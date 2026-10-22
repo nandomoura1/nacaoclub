@@ -121,7 +121,7 @@ export async function hoursReport(principal: Principal | null, filter: ReportFil
     countsHours: o.activityType.countsHours,
     cancellationCountsHours: o.cancellationReason?.countsTeacherHours ?? false,
     assignments: o.assignments.map((a) => ({
-      plannedTeacherId: a.plannedTeacherId, executingTeacherId: a.executingTeacherId, status: a.status, minutes: a.minutes, absenceReason: a.absenceReason,
+      plannedTeacherId: a.plannedTeacherId, executingTeacherId: a.executingTeacherId, status: a.status, minutes: a.minutes, absenceReason: a.absenceReason, absencePaid: a.absencePaid,
     })),
   }));
   const ledger = computeLedger(ledgerInput);
