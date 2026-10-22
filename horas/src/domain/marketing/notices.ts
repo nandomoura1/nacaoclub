@@ -41,7 +41,7 @@ export function onBoard(n: { publishedAt: string | null; pinned: boolean; showUn
 }
 
 /** Resumo de uma campanha para a equipe saber responder aos alunos. */
-export function campaignNotice(c: { name: string; objective: string | null; audience: string | null; offer: string | null; message: string | null; cta: string | null; startDate: string; endDate: string | null }) {
+export function campaignNotice(c: { name: string; details?: string | null; objective: string | null; audience: string | null; offer: string | null; message: string | null; cta: string | null; startDate: string; endDate: string | null }) {
   const d = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
   const quando = c.endDate && c.endDate !== c.startDate ? `de ${d(c.startDate)} a ${d(c.endDate)}` : `a partir de ${d(c.startDate)}`;
   const lines = [
@@ -51,6 +51,7 @@ export function campaignNotice(c: { name: string; objective: string | null; audi
     c.offer && `🎁 Oferta: ${c.offer}`,
     c.message && `💬 Mensagem: ${c.message}`,
     c.cta && `👉 Se um aluno perguntar: ${c.cta}`,
+    c.details?.trim() && `\n📋 *Como funciona*\n${c.details.trim()}`,
     'Qualquer dúvida, fale com o Marketing.',
   ].filter(Boolean);
   return { title: `Campanha: ${c.name}`, body: lines.join('\n') };

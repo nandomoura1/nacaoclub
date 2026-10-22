@@ -27,7 +27,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ c
     sp.campanha && /^[0-9a-f-]{36}$/i.test(sp.campanha) ? prisma.mktCampaign.findUnique({ where: { id: sp.campanha } }) : null,
   ]);
   const draft = fromCampaign && can(principal, 'mkt.edit') ? {
-    ...campaignNotice({ name: fromCampaign.name, objective: fromCampaign.objective, audience: fromCampaign.audience, offer: fromCampaign.offer, message: fromCampaign.message, cta: fromCampaign.cta, startDate: iso(fromCampaign.startDate)!, endDate: iso(fromCampaign.endDate) }),
+    ...campaignNotice({ name: fromCampaign.name, details: fromCampaign.details, objective: fromCampaign.objective, audience: fromCampaign.audience, offer: fromCampaign.offer, message: fromCampaign.message, cta: fromCampaign.cta, startDate: iso(fromCampaign.startDate)!, endDate: iso(fromCampaign.endDate) }),
     campaignId: fromCampaign.id,
   } : null;
   const cfg = zapiConfig();

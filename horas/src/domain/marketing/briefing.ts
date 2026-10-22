@@ -10,6 +10,7 @@ export interface BriefingTask { title: string; assignee: string | null; dueDate:
 export interface BriefingInput {
   id: string; name: string; type: string;
   startDate: string; endDate: string | null;
+  details?: string | null;
   objective: string | null; audience: string | null; product: string | null; offer: string | null; message: string | null; cta: string | null;
   channels: string[]; conversionChannel: string | null; conversionUrl: string | null; goal: string | null;
   owner: string | null; leadOwner: string | null;
@@ -41,6 +42,7 @@ export function briefingText(c: BriefingInput, opt: BriefingOptions, today: IsoD
     if (clean(c.event.registrationUrl)) when.push(`📝 *Inscrições:* ${clean(c.event.registrationUrl)}`);
   }
   blocks.push(when.join('\n'));
+  if (clean(c.details)) blocks.push(`📋 *COMO FUNCIONA*\n${clean(c.details)}`);
 
   const what = [
     clean(c.objective) && `🎯 *Objetivo:* ${clean(c.objective)}`,

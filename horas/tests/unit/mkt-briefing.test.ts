@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { briefingText, hasCommercial, type BriefingInput } from '@/domain/marketing/briefing';
 
 const base: BriefingInput = {
-  id: 'x', name: 'Aulão de Verão', type: 'EVENTO', startDate: '2026-11-02', endDate: '2026-11-21',
+  id: 'x', name: 'Aulão de Verão', type: 'EVENTO', details: '🔥 HYROX — 7h e 8h · 24 vagas\nCheck-in pelo Tecnofit', startDate: '2026-11-02', endDate: '2026-11-21',
   objective: 'Lotar o aulão', audience: 'Alunos e amigos', product: null, offer: '1ª aula grátis', message: 'Verão é na Nação', cta: 'Chama no WhatsApp',
   channels: ['ig_feed', 'whatsapp'], conversionChannel: 'whatsapp', conversionUrl: null, goal: '150 inscritos',
   owner: 'Ana Souza', leadOwner: 'Bruno Lima',
@@ -21,6 +21,7 @@ describe('Briefing da campanha', () => {
     expect(t).toContain('📋 *BRIEFING — Aulão de Verão*');
     expect(t).toContain('📅 *Campanha:* 02/11 (seg) a 21/11 (sáb)');
     expect(t).toContain('📍 *Local:* Arena');
+    expect(t).toContain('📋 *COMO FUNCIONA*\n🔥 HYROX — 7h e 8h · 24 vagas\nCheck-in pelo Tecnofit');
     expect(t).toContain('📣 *Onde vai aparecer:* Instagram Feed, WhatsApp');
     expect(t).toContain('💼 *PARA O COMERCIAL*');
     expect(t).toContain('• *Onde fecha:* WhatsApp comercial');
@@ -31,6 +32,13 @@ describe('Briefing da campanha', () => {
     expect(t).toContain('⚠️ Reels de chamada — até 18/10 (dom) · *atrasada*');
     expect(t.indexOf('👤 *Carla*')).toBeLessThan(t.indexOf('👤 *Sem responsável definido*'));
     expect(t).toContain('🔗 Detalhes no sistema: https://app/c/x');
+  });
+
+  it('comunicado à equipe leva o "como funciona"', async () => {
+    const { campaignNotice } = await import('@/domain/marketing/notices');
+    const n = campaignNotice({ ...base, details: 'Vagas: 24 por horário' });
+    expect(n.body).toContain('📋 *Como funciona*\nVagas: 24 por horário');
+    expect(campaignNotice({ ...base, details: null }).body).not.toContain('Como funciona');
   });
 
   it('opções: todas as tarefas, sem tarefas, sem Comercial', () => {

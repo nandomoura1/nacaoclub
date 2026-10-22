@@ -17,7 +17,7 @@ type Data = CampaignView['data'];
 const EMPTY: Data = {
   name: '', type: 'EVENTO', objective: null, audience: null, product: null, offer: null, message: null, cta: null, channels: [], conversionChannel: null,
   conversionUrl: null, leadOwnerId: null, measurement: null, goal: null, kpis: null, startDate: '', endDate: null, budgetCents: null, ownerId: null,
-  participantIds: [], modalityId: null, eventId: null, notes: null,
+  participantIds: [], modalityId: null, eventId: null, details: null, notes: null,
 };
 
 /** Briefing da campanha. Campos comerciais aparecem destacados nos tipos que vendem. */
@@ -72,6 +72,15 @@ export function CampaignForm({ id, initial, options, canEdit, defaults }: { id: 
         </div>
       </Card>
 
+      <Card className="p-4">
+        <h2 className="font-bold text-navy">Como funciona</h2>
+        <p className="text-xs text-tinta-suave">Modalidades, horários, número de vagas, regras, o que levar… Vai inteiro no <b>Briefing do WhatsApp</b> e no <b>Comunicar a equipe</b>.</p>
+        <textarea className="mt-3 min-h-40 w-full rounded-lg border border-borda p-2 text-sm" value={d.details ?? ''} disabled={!canEdit} maxLength={4000}
+          placeholder={'ex.:\n🔥 AULÃO HYROX — 7h, 8h, 9h e 10h · 24 vagas por horário\n🏐 FUTEVÔLEI — 9h às 12h · inscrição em dupla\nCheck-in pelo Tecnofit até a véspera'}
+          onChange={(e) => set('details', e.target.value)} />
+        <p className="text-right text-[11px] text-tinta-fraca">{(d.details ?? '').length}/4000 · *negrito* funciona no WhatsApp</p>
+      </Card>
+
       <Card className={cn('p-4', commercial && 'border-nacao/30')}>
         <h2 className="font-bold text-navy">Conversão {commercial && <span className="ml-1 rounded-full bg-nacao/10 px-2 py-0.5 text-[11px] font-semibold text-nacao">obrigatório para ativar</span>}</h2>
         <p className="text-xs text-tinta-suave">Onde o cliente realiza a ação? Quem recebe o lead? Como o resultado será medido?</p>
@@ -98,7 +107,7 @@ export function CampaignForm({ id, initial, options, canEdit, defaults }: { id: 
             </div>
           </div>
         ))}
-        <div className="mt-3">{txt('notes', 'Observações', { area: true, wide: true })}</div>
+        <div className="mt-3">{txt('notes', 'Observações internas (não vão para a equipe)', { area: true, wide: true })}</div>
       </Card>
 
       {canEdit && (

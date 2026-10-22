@@ -45,7 +45,7 @@ export async function briefingData(principal: Principal | null, id: string) {
 
   const input: BriefingInput = {
     id: c.id, name: c.name, type: c.type, startDate: iso(c.startDate)!, endDate: iso(c.endDate),
-    objective: c.objective, audience: c.audience, product: c.product, offer: c.offer, message: c.message, cta: c.cta,
+    details: c.details, objective: c.objective, audience: c.audience, product: c.product, offer: c.offer, message: c.message, cta: c.cta,
     channels: c.channels, conversionChannel: c.conversionChannel, conversionUrl: c.conversionUrl, goal: c.goal,
     owner: c.ownerId ? name.get(c.ownerId) ?? null : null, leadOwner: c.leadOwnerId ? name.get(c.leadOwnerId) ?? null : null,
     event: c.event ? { name: c.event.name, startDate: iso(c.event.startDate)!, endDate: iso(c.event.endDate), location: c.event.location, registrationUrl: c.event.registrationUrl } : null,

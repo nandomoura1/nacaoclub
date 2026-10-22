@@ -97,7 +97,7 @@ const campaignSchema = z.object({
   startDate: isoDate('Informe a data de início.'), endDate: optIso,
   budgetCents: z.number().int().min(0).max(1_000_000_000).nullable().optional().transform((v) => v ?? null),
   ownerId: uuidOrNull, participantIds: z.array(z.string().uuid()).max(20).default([]),
-  modalityId: uuidOrNull, eventId: uuidOrNull, notes: text(2000),
+  modalityId: uuidOrNull, eventId: uuidOrNull, details: text(4000), notes: text(2000),
   status: z.enum(STATUS_IDS).optional(),
 }).refine((c) => !c.endDate || c.endDate >= c.startDate, 'A data final é anterior à inicial.');
 export type CampaignInput = z.input<typeof campaignSchema>;
@@ -208,7 +208,7 @@ export async function getCampaign(principal: Principal | null, id: string, today
       name: c.name, type: c.type, objective: c.objective, audience: c.audience, product: c.product, offer: c.offer, message: c.message, cta: c.cta,
       channels: c.channels, conversionChannel: c.conversionChannel, conversionUrl: c.conversionUrl, leadOwnerId: c.leadOwnerId, measurement: c.measurement,
       goal: c.goal, kpis: c.kpis, startDate: facts.startDate, endDate: facts.endDate, budgetCents: c.budgetCents, ownerId: c.ownerId,
-      participantIds: c.participantIds, modalityId: c.modalityId, eventId: c.eventId, notes: c.notes,
+      participantIds: c.participantIds, modalityId: c.modalityId, eventId: c.eventId, details: c.details, notes: c.notes,
     },
     owner: c.ownerId ? names.get(c.ownerId) ?? null : null,
     leadOwner: c.leadOwnerId ? names.get(c.leadOwnerId) ?? null : null,

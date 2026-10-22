@@ -1769,6 +1769,8 @@ model MktCampaign {
   participantIds    String[]          @default([]) @map("participant_ids") @db.Uuid
   modalityId        String?           @map("modality_id") @db.Uuid
   eventId           String?           @map("event_id") @db.Uuid
+  /// Como funciona (modalidades, vagas, horários, regras): vai no Briefing e no comunicado à equipe.
+  details           String?
   notes             String?
   createdById       String?           @map("created_by") @db.Uuid
   createdAt         DateTime          @default(now()) @map("created_at")
