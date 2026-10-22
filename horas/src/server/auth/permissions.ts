@@ -72,7 +72,7 @@ export function isPermissionKey(value: string): value is PermissionKey {
 }
 
 export const SYSTEM_ROLES: Record<
-  'ADMIN' | 'COORDENADOR' | 'CONSULTA' | 'PROFESSOR' | 'MARKETING' | 'LIDER',
+  'ADMIN' | 'COORDENADOR' | 'CONSULTA' | 'PROFESSOR' | 'MARKETING' | 'LIDER' | 'TREINOS',
   { name: string; description: string; permissions: PermissionKey[] }
 > = {
   ADMIN: {
@@ -131,9 +131,14 @@ export const SYSTEM_ROLES: Record<
     description: 'Equipe de marketing e comercial: campanhas, eventos, tarefas, calendário e IA de marketing.',
     permissions: ['mkt.view', 'mkt.edit', 'mkt.ai', 'edu.view'],
   },
+  TREINOS: {
+    name: 'Programação de treinos',
+    description: 'Cadastra e edita os treinos da semana (com DNA, benchmarks, IA e telas de TV) das modalidades das áreas da pessoa. Combine com o perfil da função (ex.: Líder ou Professor).',
+    permissions: ['workout.view', 'workout.edit', 'workout.personal'],
+  },
   LIDER: {
     name: 'Líder de setor',
-    description: 'Acompanha e atualiza as demandas do próprio setor (Gestão de Processos), registra atas, publica materiais na Universidade Nação, cadastra colaboradores, cuida dos documentos da equipe (inclusive atestados) lança faltas, folgas e afastamentos, monta a grade e a escala de fim de semana/feriados das próprias áreas e vê a grade de todas. Combine com o perfil da função.',
+    description: 'Acompanha e atualiza as demandas do próprio setor (Gestão de Processos), registra atas, publica materiais na Universidade Nação, cadastra colaboradores, cuida dos documentos da equipe (inclusive atestados), lança faltas, folgas e afastamentos, monta a grade e a escala de fim de semana/feriados das próprias áreas e vê a grade de todas. Combine com o perfil da função.',
     permissions: ['proc.view', 'proc.edit', 'edu.view', 'edu.edit', 'teacher.view', 'teacher.edit', 'teacher.docs', 'schedule.view', 'schedule.view_all', 'schedule.edit', 'occurrence.exception', 'leave.manage', 'duty.edit'],
   },
 };
