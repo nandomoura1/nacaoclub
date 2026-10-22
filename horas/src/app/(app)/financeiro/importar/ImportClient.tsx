@@ -1,5 +1,6 @@
 'use client';
 
+import { MAX_UPLOAD_LABEL, prepareUpload, safeUpload } from '@/lib/upload';
 import { useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -42,9 +43,11 @@ export function ImportClient({ periods, approved, categories, canApprove }: {
 
   const upload = (file: File) => start(async () => {
     setMsg({});
+    const prep = await prepareUpload(file);
+    if ('error' in prep) return setMsg({ error: prep.error });
     const fd = new FormData();
-    fd.set('file', file);
-    const r = await analyzeHistoricAction(fd);
+    fd.set('file', prep.file);
+    const r = await safeUpload(() => analyzeHistoricAction(fd));
     if (!r.ok) return setMsg({ error: r.error });
     if (r.data.kind === 'pacote') return setPkg(r.data.data);
     const d = r.data.data;
@@ -79,7 +82,7 @@ export function ImportClient({ periods, approved, categories, canApprove }: {
         <input ref={ref} type="file" accept={ACCEPT} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) upload(f); }} />
         <FileUp className="mx-auto size-8 text-nacao" />
         <p className="mt-2 font-bold text-navy">Envie um relatório financeiro antigo</p>
-        <p className="text-sm text-tinta-suave">Um relatório por arquivo, até 6 MB (a leitura pela IA leva de 30 segundos a 2 minutos).</p>
+        <p className="text-sm text-tinta-suave">Um relatório por arquivo, até {MAX_UPLOAD_LABEL} (a leitura pela IA leva de 30 segundos a 2 minutos).</p>
         <p className="mt-1 text-sm text-tinta-suave">Tem a <b>planilha de pacote histórico</b> (aba MANIFESTO <code className="text-xs">nacao_financeiro_historico</code>)? Envie aqui: ela é lida na hora, sem IA, e traz vários meses de uma vez.</p>
         <Button className="mt-3" disabled={pending} onClick={() => ref.current?.click()}><FileUp /> {pending ? 'Lendo o relatório…' : 'Escolher arquivo'}</Button>
         <div className="mt-2 text-left"><FormMessage error={msg.error} success={msg.ok} /></div>

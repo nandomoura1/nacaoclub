@@ -1,5 +1,6 @@
 'use client';
 
+import { MAX_UPLOAD_LABEL, prepareUpload, safeUpload } from '@/lib/upload';
 import { useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Archive, ArchiveRestore, Download, FileUp, Landmark, Plus, Save, Trash2 } from 'lucide-react';
@@ -130,11 +131,13 @@ export function CompanyDocs({ v, canEdit }: { v: CompanyView; canEdit: boolean }
   const send = () => start(async () => {
     setMsg({});
     if (!file) return setMsg({ error: 'Escolha o arquivo.' });
+    const prep = await prepareUpload(file);
+    if ('error' in prep) return setMsg({ error: prep.error });
     const fd = new FormData();
-    fd.set('file', file);
+    fd.set('file', prep.file);
     fd.set('kind', kind);
     for (const [k, val] of Object.entries(form)) fd.set(k, val);
-    const r = await uploadCompanyDocAction(v.id, fd);
+    const r = await safeUpload(() => uploadCompanyDocAction(v.id, fd));
     if (!r.ok) return setMsg({ error: r.error });
     setMsg({ ok: r.message });
     setFile(null);
@@ -194,7 +197,7 @@ export function CompanyDocs({ v, canEdit }: { v: CompanyView; canEdit: boolean }
             <div><Label>Validade{def.expires ? '' : ' (se houver)'}</Label><Input type="date" value={form.validUntil} onChange={(e) => setForm({ ...form, validUntil: e.target.value })} /></div>
             <div className="sm:col-span-2"><Label>Observação (opcional)</Label><Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
             <div className="sm:col-span-2 lg:col-span-4">
-              <Label>Arquivo (PDF, foto, Word ou Excel, até 6 MB)</Label>
+              <Label>Arquivo (PDF, foto, Word ou Excel, até {MAX_UPLOAD_LABEL})</Label>
               <input ref={fileRef} type="file" accept={ACCEPT} onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-nacao/10 file:px-3 file:py-2 file:font-semibold file:text-nacao" />
             </div>
           </div>

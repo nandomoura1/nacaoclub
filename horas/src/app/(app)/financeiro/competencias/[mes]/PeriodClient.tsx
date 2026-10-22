@@ -1,5 +1,6 @@
 'use client';
 
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL, prepareUpload, safeUpload } from '@/lib/upload';
 import { useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -110,9 +111,16 @@ function DocumentsTab({ p, perms, pending, run, setMsg }: { p: FinPeriodView; pe
     setMsg({});
     const fd = new FormData();
     fd.set('kind', kind);
-    for (const f of files) fd.append('file', f);
+    let total = 0;
+    for (const f of files) {
+      const prep = await prepareUpload(f);
+      if ('error' in prep) { setBusy(null); return setMsg({ error: prep.error }); }
+      total += prep.file.size;
+      fd.append('file', prep.file);
+    }
+    if (total > MAX_UPLOAD_BYTES) { setBusy(null); return setMsg({ error: `Os arquivos somam mais de ${MAX_UPLOAD_LABEL}. Envie em partes.` }); }
     if (notes) fd.set('notes', notes);
-    const r = await uploadDocumentAction(p.month, fd);
+    const r = await safeUpload(() => uploadDocumentAction(p.month, fd));
     setBusy(null);
     const what = files.length > 1 ? `${files.length} prints` : files[0]!.name;
     if (!r.ok) setMsg({ error: r.error });

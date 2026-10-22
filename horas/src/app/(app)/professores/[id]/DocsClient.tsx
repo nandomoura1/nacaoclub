@@ -1,5 +1,6 @@
 'use client';
 
+import { MAX_UPLOAD_LABEL, prepareUpload, safeUpload } from '@/lib/upload';
 import { useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, Download, FileUp, MinusCircle, Trash2, XCircle } from 'lucide-react';
@@ -32,11 +33,13 @@ export function DocsTab({ v }: { v: TeacherDocsView }) {
   const send = () => start(async () => {
     setMsg({});
     if (!file) return setMsg({ error: 'Escolha o arquivo (PDF ou foto).' });
+    const prep = await prepareUpload(file);
+    if ('error' in prep) return setMsg({ error: prep.error });
     const fd = new FormData();
-    fd.set('file', file);
+    fd.set('file', prep.file);
     fd.set('kind', kind);
     for (const [k, val] of Object.entries(form)) fd.set(k, def.dates === 'none' && (k === 'validFrom' || k === 'validUntil') ? '' : val);
-    const r = await uploadTeacherDocAction(v.id, fd);
+    const r = await safeUpload(() => uploadTeacherDocAction(v.id, fd));
     if (!r.ok) return setMsg({ error: r.error });
     setMsg({ ok: r.message });
     setFile(null);
@@ -87,7 +90,7 @@ export function DocsTab({ v }: { v: TeacherDocsView }) {
           )}
           <div className="sm:col-span-2"><Label>Observação (opcional)</Label><Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder={kind === 'CONTRATO_ESTAGIO' ? 'ex.: 1º aditivo' : ''} /></div>
           <div className="sm:col-span-2">
-            <Label>Arquivo (PDF ou foto, até 6 MB)</Label>
+            <Label>Arquivo (PDF ou foto, até {MAX_UPLOAD_LABEL} — fotos grandes são reduzidas sozinhas)</Label>
             <input ref={fileRef} type="file" accept={ACCEPT} onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-nacao/10 file:px-3 file:py-2 file:font-semibold file:text-nacao" />
           </div>
         </div>
