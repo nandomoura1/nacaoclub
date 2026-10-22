@@ -102,9 +102,16 @@ export function KanbanClient({ tasks: initial, columns, options, canEdit }: { ta
     setTasks((cur) => cur.map((t) => (t.id === id ? { ...t, columnId: column, column: stage ?? t.column, position: pos } : t)));
     setError(null);
     start(async () => {
-      const r = await moveTaskAction(id, column, before, after);
-      if (!r.ok) { setTasks(snapshot); setError(r.error); return; }
-      router.refresh();
+      try {
+        const r = await moveTaskAction(id, column, before, after);
+        if (!r.ok) { setTasks(snapshot); setError(r.error); return; }
+        router.refresh();
+      } catch {
+        // Página aberta antes de uma atualização do sistema (ou sem internet): avisa e recarrega.
+        setTasks(snapshot);
+        setError('Não deu para salvar: a página estava desatualizada. Recarregando…');
+        setTimeout(() => window.location.reload(), 1500);
+      }
     });
   };
 

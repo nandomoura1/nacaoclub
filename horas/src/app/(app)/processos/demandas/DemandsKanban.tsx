@@ -33,9 +33,16 @@ export function DemandsKanban({ demands, week, onOpen }: { demands: DemandRow[];
     setItems((cur) => cur.map((d) => (d.id === id ? { ...d, status, late: status === 'CONCLUIDA' ? false : d.late } : d)));
     setError(null);
     start(async () => {
-      const r = await setDemandStatusAction(id, status);
-      if (!r.ok) { setItems(snapshot); setError(r.error ?? 'Não foi possível mover.'); return; }
-      router.refresh();
+      try {
+        const r = await setDemandStatusAction(id, status);
+        if (!r.ok) { setItems(snapshot); setError(r.error ?? 'Não foi possível mover.'); return; }
+        router.refresh();
+      } catch {
+        // Página aberta antes de uma atualização do sistema (ou sem internet): avisa e recarrega.
+        setItems(snapshot);
+        setError('Não deu para salvar: a página estava desatualizada. Recarregando…');
+        setTimeout(() => window.location.reload(), 1500);
+      }
     });
   };
   const onDragStart = (e: DragStartEvent) => setActive(items.find((d) => d.id === e.active.id) ?? null);
