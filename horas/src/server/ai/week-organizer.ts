@@ -40,9 +40,9 @@ export interface OrganizedWeek {
 const toBlock = (b: AiWeek['dias'][number]['blocos'][number]): WorkoutBlockData => ({
   kind: b.tipo,
   title: b.titulo.trim().slice(0, 80) || null,
-  durationMin: b.minutos > 0 ? Math.min(b.minutos, 300) : null,
+  durationMin: b.minutos > 0 ? Math.max(1, Math.min(Math.round(b.minutos), 300)) : null,
   format: b.formato.trim().slice(0, 120) || null,
-  timeCapMin: b.timeCapMin && b.timeCapMin > 0 ? Math.min(b.timeCapMin, 300) : null,
+  timeCapMin: b.timeCapMin && b.timeCapMin > 0 ? Math.max(1, Math.min(Math.round(b.timeCapMin), 300)) : null,
   content: b.conteudo.map((l) => l.trim()).filter(Boolean).join('\n').slice(0, 2000) || null,
   notes: b.notasAluno.trim().slice(0, 300) || null,
   coachNotes: b.orientacoesProfessor.trim().slice(0, 1000) || null,

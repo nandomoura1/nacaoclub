@@ -16,7 +16,15 @@ import { mondayOf, type BlockKind, type WorkoutWeekData } from '@/domain/workout
 
 const KINDS = ['MOBILIDADE', 'AQUECIMENTO', 'SKILL', 'CORE', 'FORCA', 'ESPECIFICO', 'WOD', 'FUNDAMENTO', 'JOGO', 'OUTRO'] as const;
 const optText = (max: number) => z.string().trim().max(max).nullable().optional().transform((v) => v || null);
-const optInt = z.union([z.coerce.number().int().min(1).max(300), z.literal('').transform(() => null), z.null()]).optional().transform((v) => v ?? null);
+// Minutos: aceita "7,5" / 7.5 e arredonda (o editor e a IA podem mandar decimal); 1 a 300.
+const optInt = z.union([
+  z.literal('').transform(() => null),
+  z.null(),
+  z.union([z.number(), z.string().trim().transform((v) => Number(v.replace(',', '.')))])
+    .refine((n) => Number.isFinite(n), 'Duração inválida: use minutos (ex.: 12).')
+    .transform((n) => Math.round(n))
+    .pipe(z.number().int().min(1, 'Duração mínima: 1 minuto.').max(300, 'Duração máxima: 300 minutos.')),
+]).optional().transform((v) => v ?? null);
 
 const blockSchema = z.object({
   kind: z.enum(KINDS),

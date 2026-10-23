@@ -295,7 +295,7 @@ function BlockEditor({ b, onChange, onRemove, onMove }: {
   b: WorkoutBlockData; onChange: (p: Partial<WorkoutBlockData>) => void; onRemove: () => void; onMove: (dir: -1 | 1) => void;
 }) {
   const k = KIND[b.kind];
-  const num = (v: string) => (v === '' ? null : Math.max(1, Math.min(300, Number(v) || 0)) || null);
+  const num = (v: string) => (v === '' ? null : Math.max(1, Math.min(300, Math.round(Number(v.replace(',', '.')) || 0))) || null);
   return (
     <div className={cn('rounded-lg border p-3', k.detailed ? 'border-nacao/30 bg-nacao/[0.03]' : 'border-borda')}>
       <div className="flex flex-wrap items-center gap-2">

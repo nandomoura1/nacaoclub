@@ -44,6 +44,10 @@ describe.skipIf(!hasDb)('Treinos da semana', () => {
 
     await expect(saveWeek(admin.principal, id, { days: [{ date: '2040-10-08', blocks: [] }] }, META)).rejects.toThrow(/não é desta semana/);
     await expect(saveWeek(admin.principal, id, { days: [{ date: '2040-10-01', blocks: [{ kind: 'WOD', durationMin: 900 }] }] }, META)).rejects.toThrow(AppError);
+    // Minutos com decimal (editor ou "Organizar semana" com IA) são arredondados, não travam o salvar.
+    const next7 = await createWeek(admin.principal, { modalityId: crossfit.id, date: '2040-11-05' }, META);
+    await saveWeek(admin.principal, next7, { days: [{ date: '2040-11-05', blocks: [{ kind: 'AQUECIMENTO', durationMin: '7,5' }, { kind: 'WOD', durationMin: 12.4, timeCapMin: 14.6, content: 'Burpees' }] }] }, META);
+    expect((await getWeek(admin.principal, next7)).days.find((d) => d.date === '2040-11-05')!.blocks.map((b) => [b.durationMin, b.timeCapMin])).toEqual([[8, null], [12, 15]]);
 
     // Semana seguinte copiando a anterior: mesmos blocos, datas +7.
     const next = await createWeek(admin.principal, { modalityId: crossfit.id, date: '2040-10-08', copyPrevious: true }, META);
