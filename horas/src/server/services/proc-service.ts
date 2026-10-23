@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
-import { prisma } from '@/server/db';
+import { prisma, type Tx } from '@/server/db';
 import { audit } from '@/server/audit';
 import { assertCan, can } from '@/server/auth/authz';
 import type { Principal } from '@/server/auth/principal';
@@ -18,8 +18,9 @@ import { dt, iso } from './marketing-service';
 
 const isAdmin = (p: Principal) => can(p, 'proc.admin');
 
-export async function ledSectorIds(p: Principal) {
-  return (await prisma.procSector.findMany({ where: { leaderId: p.id }, select: { id: true } })).map((s) => s.id);
+/** Dentro de uma transação, passe o `tx`: buscar por fora pede outra conexão e trava no servidor (pool de 1). */
+export async function ledSectorIds(p: Principal, db: Tx = prisma) {
+  return (await db.procSector.findMany({ where: { leaderId: p.id }, select: { id: true } })).map((s) => s.id);
 }
 
 /** O que esta pessoa enxerga: tudo (diretoria) ou os setores que lidera + o que é dela. */
@@ -28,10 +29,10 @@ export async function demandScope(p: Principal): Promise<Prisma.ProcDemandWhereI
   return { OR: [{ sectorId: { in: await ledSectorIds(p) } }, { ownerId: p.id }] };
 }
 
-export async function canWork(p: Principal, d: { sectorId: string; ownerId: string | null }) {
+export async function canWork(p: Principal, d: { sectorId: string; ownerId: string | null }, db: Tx = prisma) {
   if (isAdmin(p)) return true;
   if (!can(p, 'proc.edit')) return false;
-  return d.ownerId === p.id || (await ledSectorIds(p)).includes(d.sectorId);
+  return d.ownerId === p.id || (await ledSectorIds(p, db)).includes(d.sectorId);
 }
 
 export async function procPeople() {
@@ -147,7 +148,7 @@ export async function saveDemand(principal: Principal | null, id: string | null,
     if (id) {
       const before = await tx.procDemand.findUnique({ where: { id } });
       if (!before) throw new NotFoundError('Demanda não encontrada.');
-      if (!(await canWork(principal, before))) throw new AuthorizationError('Esta demanda não é do seu setor.');
+      if (!(await canWork(principal, before, tx))) throw new AuthorizationError('Esta demanda não é do seu setor.');
       const after = await tx.procDemand.update({ where: { id }, data });
       await audit(tx, { actorId: principal.id, ...meta }, { action: 'proc.demand_updated', entityType: 'proc_demand', entityId: id, before, after, summary: `${principal.name} editou a demanda "${after.title}" (${sector.name})` });
       return id;
@@ -164,7 +165,7 @@ export async function setDemandStatus(principal: Principal | null, id: string, s
   await prisma.$transaction(async (tx) => {
     const d = await tx.procDemand.findUnique({ where: { id }, include: { sector: { select: { name: true } } } });
     if (!d) throw new NotFoundError('Demanda não encontrada.');
-    if (!(await canWork(principal, d))) throw new AuthorizationError('Esta demanda não é do seu setor.');
+    if (!(await canWork(principal, d, tx))) throw new AuthorizationError('Esta demanda não é do seu setor.');
     if (d.status === status) return;
     const doneAt = status === 'CONCLUIDA' ? new Date() : isOpen(status) ? null : d.doneAt;
     await tx.procDemand.update({ where: { id }, data: { status: status as 'ABERTA', doneAt } });
