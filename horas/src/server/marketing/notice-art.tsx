@@ -23,7 +23,7 @@ const fonts = () => [
   { name: 'Montserrat', data: buf(W.montserrat700), weight: 700 as const, style: 'normal' as const },
   { name: 'Montserrat', data: buf(W.montserrat800), weight: 800 as const, style: 'normal' as const },
 ];
-const SHIELD_RATIO = 273 / 351;
+const SHIELD_RATIO = 672 / 864;
 const WORD_RATIO = 600 / 205;
 
 /** Medidas por formato (story é a referência do criativo anexo). */
