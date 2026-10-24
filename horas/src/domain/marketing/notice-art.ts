@@ -10,6 +10,22 @@ export const NOTICE_ART_FORMATS = [
 ] as const;
 export type NoticeArtFormat = (typeof NOTICE_ART_FORMATS)[number]['id'];
 
+/**
+ * Paletas do criativo, nas cores do manual da marca Nação (Cinza Escuro 272828,
+ * Azul Escuro 1C2C3C, Azul Clássico 459EFF, Azul Claro BBE3FF). `bg` = fundo,
+ * `accent` = coluna dos horários/selos/barra, `text` = textos e palavra NAÇÃO,
+ * `bar2` = 2ª parte da barra do topo. "Original" é o criativo de referência.
+ */
+export const NOTICE_ART_THEMES = [
+  { id: 'original', label: 'Original', bg: '#232427', accent: '#3B5BFD', text: '#FFFFFF', bar2: '#D6D6D6' },
+  { id: 'cinza', label: 'Cinza Escuro', bg: '#272828', accent: '#459EFF', text: '#FFFFFF', bar2: '#BBE3FF' },
+  { id: 'azul-escuro', label: 'Azul Escuro', bg: '#1C2C3C', accent: '#459EFF', text: '#FFFFFF', bar2: '#BBE3FF' },
+  { id: 'azul-classico', label: 'Azul Clássico', bg: '#459EFF', accent: '#1C2C3C', text: '#FFFFFF', bar2: '#BBE3FF' },
+  { id: 'azul-claro', label: 'Azul Claro', bg: '#BBE3FF', accent: '#1C2C3C', text: '#1C2C3C', bar2: '#459EFF' },
+] as const;
+export type NoticeArtTheme = (typeof NOTICE_ART_THEMES)[number]['id'];
+export const noticeTheme = (id: string) => NOTICE_ART_THEMES.find((t) => t.id === id) ?? NOTICE_ART_THEMES[0];
+
 /** Uma linha: horário × local; `badge` = selo opcional no canto (ex.: "R$25,00"). */
 export interface NoticeArtRow { time: string; place: string; badge?: string }
 export interface NoticeArtInput {
@@ -25,6 +41,8 @@ export interface NoticeArtInput {
   background: 'nacao' | 'propria' | 'nenhuma';
   /** Quanto a foto aparece sobre o fundo escuro (0 a 0,3; padrão 0,05 = 5%). */
   photoOpacity: number;
+  /** Paleta (cores do manual da marca). */
+  theme: NoticeArtTheme;
 }
 
 export const NOTICE_ART_DEFAULTS: NoticeArtInput = {
@@ -36,6 +54,7 @@ export const NOTICE_ART_DEFAULTS: NoticeArtInput = {
   closing: 'Te esperamos!',
   background: 'nacao',
   photoOpacity: 0.05,
+  theme: 'original',
 };
 
 export const MAX_ROWS = 6;
@@ -66,7 +85,8 @@ export function normalizeNoticeArt(raw: Partial<NoticeArtInput>): { ok: true; va
   const background = raw.background === 'propria' || raw.background === 'nenhuma' ? raw.background : 'nacao';
   const op = Number(raw.photoOpacity);
   const photoOpacity = Number.isFinite(op) ? Math.min(0.3, Math.max(0, op)) : 0.05;
-  return { ok: true, value: { format, titleTop: t(raw.titleTop, 30), titleBottom, subtitle: t(raw.subtitle, 34), rows, closing: t(raw.closing, 30), background, photoOpacity } };
+  const theme = noticeTheme(String(raw.theme ?? '')).id;
+  return { ok: true, value: { theme, format, titleTop: t(raw.titleTop, 30), titleBottom, subtitle: t(raw.subtitle, 34), rows, closing: t(raw.closing, 30), background, photoOpacity } };
 }
 
 /** Tamanho da letra para caber na largura (aprox. Montserrat: ~0,68 da altura por letra maiúscula). */

@@ -6,11 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { FormMessage } from '@/components/ui/alert';
 import { Input, Label } from '@/components/ui/input';
-import { MAX_ROWS, NOTICE_ART_DEFAULTS, NOTICE_ART_FORMATS, subtitleFrom, type NoticeArtFormat, type NoticeArtRow } from '@/domain/marketing/notice-art';
+import { MAX_ROWS, NOTICE_ART_DEFAULTS, NOTICE_ART_FORMATS, NOTICE_ART_THEMES, noticeTheme, subtitleFrom, type NoticeArtFormat, type NoticeArtRow, type NoticeArtTheme } from '@/domain/marketing/notice-art';
 import { prepareUpload } from '@/lib/upload';
 import { cn } from '@/lib/cn';
 
-type Form = { format: NoticeArtFormat; titleTop: string; titleBottom: string; date: string; reason: string; rows: NoticeArtRow[]; closing: string; background: 'nacao' | 'propria' | 'nenhuma'; photoOpacity: number };
+type Form = { format: NoticeArtFormat; titleTop: string; titleBottom: string; date: string; reason: string; rows: NoticeArtRow[]; closing: string; background: 'nacao' | 'propria' | 'nenhuma'; photoOpacity: number; theme: NoticeArtTheme };
 const KEY = 'nacao.criativo-comunicado';
 
 export function NoticeArtClient({ places, today }: { places: string[]; today: string }) {
@@ -40,7 +40,7 @@ export function NoticeArtClient({ places, today }: { places: string[]; today: st
       try {
         const fd = new FormData();
         const background = f.background === 'propria' && !photo ? 'nacao' : f.background;
-        fd.set('data', JSON.stringify({ format: f.format, titleTop: f.titleTop, titleBottom: f.titleBottom, subtitle, rows: f.rows, closing: f.closing, background, photoOpacity: f.photoOpacity }));
+        fd.set('data', JSON.stringify({ format: f.format, titleTop: f.titleTop, titleBottom: f.titleBottom, subtitle, rows: f.rows, closing: f.closing, background, photoOpacity: f.photoOpacity, theme: f.theme }));
         if (photo && background === 'propria') fd.set('photo', photo);
         const res = await fetch('/marketing/criativos/gerar', { method: 'POST', body: fd });
         if (id !== reqId.current) return;
@@ -83,6 +83,21 @@ export function NoticeArtClient({ places, today }: { places: string[]; today: st
               <button key={x.id} type="button" onClick={() => set('format', x.id)}
                 className={cn('rounded-full border px-3 py-1 text-xs font-semibold', f.format === x.id ? 'border-nacao bg-nacao text-white' : 'border-borda text-tinta-suave hover:border-nacao')}>{x.label}</button>
             ))}
+          </div>
+          <div>
+            <Label>Cores (manual da marca)</Label>
+            <div className="flex flex-wrap gap-2">
+              {NOTICE_ART_THEMES.map((t) => (
+                <button key={t.id} type="button" onClick={() => set('theme', t.id)} aria-pressed={f.theme === t.id}
+                  className={cn('inline-flex items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-xs font-semibold', f.theme === t.id ? 'border-nacao ring-2 ring-nacao/30 text-navy' : 'border-borda text-tinta-suave hover:border-nacao')}>
+                  <span className="flex overflow-hidden rounded-full ring-1 ring-black/10">
+                    <span className="size-5" style={{ background: t.bg }} />
+                    <span className="size-5" style={{ background: t.accent }} />
+                  </span>
+                  {t.label}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div><Label>Título — linha 1</Label><Input value={f.titleTop} maxLength={30} onChange={(e) => set('titleTop', e.target.value)} placeholder="Horário de" /></div>
@@ -147,8 +162,8 @@ export function NoticeArtClient({ places, today }: { places: string[]; today: st
       <div className="min-w-0">
         <div className="sticky top-4 space-y-3">
           <FormMessage error={error} />
-          <div className={cn('overflow-hidden rounded-xl bg-[#232427] shadow-sm ring-1 ring-borda', f.format === 'story' ? 'aspect-[9/16]' : 'aspect-[4/5]')}>
-            {img ? <img src={img} alt="Prévia do comunicado" className={cn('h-full w-full object-contain transition-opacity', busy && 'opacity-60')} /> : <div className="grid h-full place-items-center text-sm text-white/60">Gerando prévia…</div>}
+          <div style={{ background: noticeTheme(f.theme).bg }} className={cn('overflow-hidden rounded-xl shadow-sm ring-1 ring-borda', f.format === 'story' ? 'aspect-[9/16]' : 'aspect-[4/5]')}>
+            {img ? <img src={img} alt="Prévia do comunicado" className={cn('h-full w-full object-contain transition-opacity', busy && 'opacity-60')} /> : <div className="grid h-full place-items-center text-sm opacity-60" style={{ color: noticeTheme(f.theme).text }}>Gerando prévia…</div>}
           </div>
           <div className="flex flex-wrap gap-2">
             <a href={img ?? undefined} download={fileName} aria-disabled={!img}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_ROWS, normalizeNoticeArt, splitClosing, subtitleFrom } from '@/domain/marketing/notice-art';
+import { MAX_ROWS, NOTICE_ART_THEMES, normalizeNoticeArt, splitClosing, subtitleFrom } from '@/domain/marketing/notice-art';
 import { renderNoticeArt } from '@/server/marketing/notice-art';
 
 describe('Gerador de comunicados', () => {
@@ -21,6 +21,20 @@ describe('Gerador de comunicados', () => {
     expect(splitClosing('Te esperamos!')).toEqual(['Te', 'esperamos!']);
     expect(splitClosing('Bora!')).toEqual(['', 'Bora!']);
   });
+  it('paleta: só as do manual da marca; desconhecida volta para a original', () => {
+    const base = { titleBottom: 'Funcionamento', rows: [{ time: '8h', place: 'Academia' }] };
+    expect(normalizeNoticeArt({ ...base, theme: 'azul-claro' })).toMatchObject({ ok: true, value: { theme: 'azul-claro' } });
+    expect(normalizeNoticeArt({ ...base, theme: 'rosa' as never })).toMatchObject({ ok: true, value: { theme: 'original' } });
+    expect(NOTICE_ART_THEMES.map((t) => t.bg)).toEqual(expect.arrayContaining(['#272828', '#1C2C3C', '#459EFF', '#BBE3FF']));
+  });
+  it('gera o PNG em todas as paletas', async () => {
+    for (const t of NOTICE_ART_THEMES) {
+      const r = normalizeNoticeArt({ theme: t.id, background: 'nenhuma', titleBottom: 'Funcionamento', rows: [{ time: '8h', place: 'Academia', badge: 'R$25' }] });
+      if (!r.ok) throw new Error(r.error);
+      const png = await renderNoticeArt(r.value, null);
+      expect(png.subarray(1, 4).toString()).toBe('PNG');
+    }
+  }, 60_000);
   it('gera o PNG no tamanho do formato', async () => {
     const r = normalizeNoticeArt({ format: 'feed', titleTop: 'Horário de', titleBottom: 'Funcionamento', subtitle: '25/10 - ELEIÇÕES', closing: 'Te esperamos!', rows: [{ time: '8h - 12h', place: 'Academia' }, { time: '8h - 12h', place: 'Day Use', badge: 'R$25,00' }] });
     if (!r.ok) throw new Error(r.error);
