@@ -21,6 +21,10 @@ export interface NoticeArtInput {
   rows: NoticeArtRow[];
   /** Ex.: "Te esperamos!" — a 1ª palavra sai leve, o resto em negrito. */
   closing: string;
+  /** Foto de fundo: 'nacao' (foto aérea padrão), 'propria' (enviada) ou 'nenhuma'. */
+  background: 'nacao' | 'propria' | 'nenhuma';
+  /** Quanto a foto aparece sobre o fundo escuro (0 a 0,3; padrão 0,05 = 5%). */
+  photoOpacity: number;
 }
 
 export const NOTICE_ART_DEFAULTS: NoticeArtInput = {
@@ -30,6 +34,8 @@ export const NOTICE_ART_DEFAULTS: NoticeArtInput = {
   subtitle: '',
   rows: [{ time: '8h - 12h', place: 'Academia' }],
   closing: 'Te esperamos!',
+  background: 'nacao',
+  photoOpacity: 0.05,
 };
 
 export const MAX_ROWS = 6;
@@ -57,7 +63,10 @@ export function normalizeNoticeArt(raw: Partial<NoticeArtInput>): { ok: true; va
   if (missing) return { ok: false, error: 'Cada linha precisa do horário e do local/modalidade (ex.: "8h - 12h" e "Academia").' };
   const titleBottom = t(raw.titleBottom, 22);
   if (!titleBottom) return { ok: false, error: 'Informe o título (ex.: Funcionamento).' };
-  return { ok: true, value: { format, titleTop: t(raw.titleTop, 30), titleBottom, subtitle: t(raw.subtitle, 34), rows, closing: t(raw.closing, 30) } };
+  const background = raw.background === 'propria' || raw.background === 'nenhuma' ? raw.background : 'nacao';
+  const op = Number(raw.photoOpacity);
+  const photoOpacity = Number.isFinite(op) ? Math.min(0.3, Math.max(0, op)) : 0.05;
+  return { ok: true, value: { format, titleTop: t(raw.titleTop, 30), titleBottom, subtitle: t(raw.subtitle, 34), rows, closing: t(raw.closing, 30), background, photoOpacity } };
 }
 
 /** Tamanho da letra para caber na largura (aprox. Montserrat: ~0,68 da altura por letra maiúscula). */

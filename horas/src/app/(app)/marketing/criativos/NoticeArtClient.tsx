@@ -10,7 +10,7 @@ import { MAX_ROWS, NOTICE_ART_DEFAULTS, NOTICE_ART_FORMATS, subtitleFrom, type N
 import { prepareUpload } from '@/lib/upload';
 import { cn } from '@/lib/cn';
 
-type Form = { format: NoticeArtFormat; titleTop: string; titleBottom: string; date: string; reason: string; rows: NoticeArtRow[]; closing: string };
+type Form = { format: NoticeArtFormat; titleTop: string; titleBottom: string; date: string; reason: string; rows: NoticeArtRow[]; closing: string; background: 'nacao' | 'propria' | 'nenhuma'; photoOpacity: number };
 const KEY = 'nacao.criativo-comunicado';
 
 export function NoticeArtClient({ places, today }: { places: string[]; today: string }) {
@@ -39,8 +39,9 @@ export function NoticeArtClient({ places, today }: { places: string[]; today: st
       setBusy(true);
       try {
         const fd = new FormData();
-        fd.set('data', JSON.stringify({ format: f.format, titleTop: f.titleTop, titleBottom: f.titleBottom, subtitle, rows: f.rows, closing: f.closing }));
-        if (photo) fd.set('photo', photo);
+        const background = f.background === 'propria' && !photo ? 'nacao' : f.background;
+        fd.set('data', JSON.stringify({ format: f.format, titleTop: f.titleTop, titleBottom: f.titleBottom, subtitle, rows: f.rows, closing: f.closing, background, photoOpacity: f.photoOpacity }));
+        if (photo && background === 'propria') fd.set('photo', photo);
         const res = await fetch('/marketing/criativos/gerar', { method: 'POST', body: fd });
         if (id !== reqId.current) return;
         if (!res.ok) { setError(await res.text()); return; }
@@ -70,6 +71,7 @@ export function NoticeArtClient({ places, today }: { places: string[]; today: st
     const p = await prepareUpload(file);
     if ('error' in p) return setError(p.error);
     setPhoto(p.file);
+    set('background', 'propria');
   };
 
   return (
@@ -120,13 +122,24 @@ export function NoticeArtClient({ places, today }: { places: string[]; today: st
         <Card className="grid gap-3 p-4 sm:grid-cols-2">
           <div><Label>Frase final</Label><Input value={f.closing} maxLength={30} onChange={(e) => set('closing', e.target.value)} placeholder="Te esperamos!" /></div>
           <div>
-            <Label>Foto de fundo (opcional)</Label>
-            <div className="flex items-center gap-2">
+            <Label>Fundo</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {([['nacao', 'Foto da Nação'], ['propria', photo ? 'Minha foto' : 'Enviar foto…'], ['nenhuma', 'Sem foto']] as const).map(([id, label]) => (
+                <button key={id} type="button"
+                  onClick={() => (id === 'propria' && !photo ? photoRef.current?.click() : set('background', id))}
+                  className={cn('rounded-full border px-3 py-1 text-xs font-semibold', f.background === id && (id !== 'propria' || photo) ? 'border-nacao bg-nacao text-white' : 'border-borda text-tinta-suave hover:border-nacao')}>{label}</button>
+              ))}
               <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={(e) => pickPhoto(e.target.files?.[0])} />
-              <Button size="sm" variant="secondary" onClick={() => photoRef.current?.click()}><ImagePlus /> {photo ? 'Trocar foto' : 'Escolher foto'}</Button>
-              {photo && <button type="button" onClick={() => { setPhoto(null); if (photoRef.current) photoRef.current.value = ''; }} className="inline-flex items-center gap-1 text-xs text-tinta-suave hover:text-critico"><X className="size-3" /> tirar</button>}
+              {photo && <button type="button" onClick={() => photoRef.current?.click()} className="inline-flex items-center gap-1 text-xs text-tinta-suave hover:text-nacao"><ImagePlus className="size-3" /> trocar</button>}
+              {photo && <button type="button" onClick={() => { setPhoto(null); set('background', 'nacao'); if (photoRef.current) photoRef.current.value = ''; }} className="inline-flex items-center gap-1 text-xs text-tinta-suave hover:text-critico"><X className="size-3" /> tirar</button>}
             </div>
-            <p className="mt-1 text-xs text-tinta-suave">Sem foto, o fundo fica escuro liso. A foto é escurecida para o texto aparecer bem.</p>
+            {f.background !== 'nenhuma' && (
+              <label className="mt-2 flex items-center gap-2 text-xs text-tinta-suave">
+                Intensidade da foto
+                <input type="range" min={0} max={30} step={1} value={Math.round(f.photoOpacity * 100)} onChange={(e) => set('photoOpacity', Number(e.target.value) / 100)} className="flex-1 accent-[#0169E9]" />
+                <b className="w-9 text-right text-navy">{Math.round(f.photoOpacity * 100)}%</b>
+              </label>
+            )}
           </div>
         </Card>
       </div>

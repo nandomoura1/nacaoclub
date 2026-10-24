@@ -38,11 +38,15 @@ function layout(format: NoticeArtInput['format'], rows: number) {
   return { barH: 64, shieldTop: 125, shieldH: 133, titleTop: 400, titleS: 72, titleB: 74, subTop: 588, subS: 46, tableTop: top, rowH, tableX: 87, tableW: 910, timeW: 220, rowFont: Math.min(46, rowH * 0.28), wordH: 76, wordBottom: 150 };
 }
 
-/** Foto de fundo opcional: cobre a tela e escurece (o texto precisa ler bem). */
-async function background(photo: Buffer | null, w: number, h: number): Promise<string | null> {
-  if (!photo) return null;
+/**
+ * Fundo: a foto (padrão = foto aérea da Nação) aparece só `opacity` sobre o
+ * cinza-escuro do criativo — o texto precisa ler bem. Já sai misturada (JPEG).
+ */
+async function background(photo: Buffer | null, opacity: number, w: number, h: number): Promise<string | null> {
+  if (!photo || opacity <= 0) return null;
   try {
-    const img = await sharp(photo).rotate().resize(w, h, { fit: 'cover' }).modulate({ brightness: 0.32, saturation: 0.6 }).jpeg({ quality: 82 }).toBuffer();
+    const veil = await sharp({ create: { width: w, height: h, channels: 4, background: { r: 0x23, g: 0x24, b: 0x27, alpha: 1 - opacity } } }).png().toBuffer();
+    const img = await sharp(photo).rotate().resize(w, h, { fit: 'cover' }).composite([{ input: veil }]).jpeg({ quality: 84 }).toBuffer();
     return `data:image/jpeg;base64,${img.toString('base64')}`;
   } catch {
     return null;
@@ -53,7 +57,8 @@ export async function renderNoticeArt(v: NoticeArtInput, photo: Buffer | null): 
   const f = NOTICE_ART_FORMATS.find((x) => x.id === v.format)!;
   const { width, height } = f;
   const L = layout(v.format, v.rows.length);
-  const bg = await background(photo, width, height);
+  const source = v.background === 'nenhuma' ? null : v.background === 'propria' ? photo : buf(A.fundo);
+  const bg = await background(source, v.photoOpacity, width, height);
   const tableH = L.rowH * v.rows.length;
   // Frase final no meio do espaço entre a tabela e a palavra NAÇÃO.
   const wordTop = height - L.wordBottom - L.wordH;
