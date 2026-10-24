@@ -45,6 +45,7 @@ const ICONS: Record<NavIcon, React.ComponentType<{ className?: string }>> = {
   'mkt-interna': Bell,
   'mkt-canais': Link2,
   'mkt-conexoes': Cable,
+  'mkt-criativo': Sparkles,
   'treinos-tv': Tv,
   'mkt-leads': Target,
   'mkt-biblioteca': Library,

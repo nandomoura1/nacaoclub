@@ -5,7 +5,7 @@ import { NACAO_TASK_URL } from '@/domain/processos';
 export type NavIcon =
   | 'hoje' | 'calendario' | 'pendencias' | 'grade' | 'professores'
   | 'fechamento' | 'relatorios' | 'escalas' | 'treinos' | 'benchmarks' | 'dna' | 'treinos-ia' | 'usuarios' | 'historico' | 'cadastros' | 'condominio' | 'cobrancas' | 'financeiro' | 'fin-historico' | 'fin-importar' | 'documentos' | 'empresas'
-  | 'mkt' | 'mkt-campanhas' | 'mkt-kanban' | 'mkt-eventos' | 'mkt-reuniao' | 'mkt-conteudo' | 'mkt-interna' | 'mkt-canais' | 'mkt-leads' | 'mkt-biblioteca' | 'mkt-trafego' | 'mkt-performance' | 'mkt-memoria' | 'mkt-conexoes' | 'whatsapp'
+  | 'mkt' | 'mkt-campanhas' | 'mkt-kanban' | 'mkt-eventos' | 'mkt-reuniao' | 'mkt-conteudo' | 'mkt-interna' | 'mkt-canais' | 'mkt-leads' | 'mkt-biblioteca' | 'mkt-trafego' | 'mkt-performance' | 'mkt-memoria' | 'mkt-conexoes' | 'mkt-criativo' | 'whatsapp'
   | 'wa-auto' | 'processos' | 'proc-demandas' | 'proc-setores' | 'proc-task' | 'proc-reuniao'
   | 'edu' | 'edu-trilhas' | 'edu-painel' | 'proc-atas' | 'treinos-tv';
 
@@ -88,6 +88,7 @@ export const NAV_MARKETING: NavItem[] = [
   { href: '/marketing/memoria', label: 'Memória da Nação', icon: 'mkt-memoria', permission: 'mkt.view', group: 'Planejar' },
   { href: '/marketing/kanban', label: 'Kanban', icon: 'mkt-kanban', permission: 'mkt.view', group: 'Produzir' },
   { href: '/marketing/biblioteca', label: 'Biblioteca de criativos', icon: 'mkt-biblioteca', permission: 'mkt.view', group: 'Produzir' },
+  { href: '/marketing/criativos', label: 'Gerador de comunicados', icon: 'mkt-criativo', permission: 'mkt.view', group: 'Produzir' },
   { href: '/marketing/ia', label: 'IA Marketing', icon: 'treinos-ia', permission: 'mkt.view', group: 'Produzir' },
   { href: '/marketing/interna', label: 'Comunicação Interna', icon: 'mkt-interna', permission: 'mkt.view', group: 'Divulgar' },
   { href: '/marketing/canais', label: 'Canais & Links', icon: 'mkt-canais', permission: 'mkt.view', group: 'Divulgar' },
