@@ -1,7 +1,7 @@
 import * as React from 'react'; // o renderizador (tsx/vitest) usa JSX clássico
 import { ImageResponse } from 'next/og';
 import sharp from 'sharp';
-import { fitText, noticeTheme, splitClosing, NOTICE_ART_FORMATS, type NoticeArtInput } from '@/domain/marketing/notice-art';
+import { fitText, noticeBackdrop, noticeTheme, splitClosing, NOTICE_ART_FORMATS, type NoticeArtInput } from '@/domain/marketing/notice-art';
 import * as W from '@/server/workouts/assets.generated';
 import * as A from './notice-assets.generated';
 
@@ -57,26 +57,14 @@ async function background(photo: Buffer | null, opacity: number, w: number, h: n
   }
 }
 
-/** Palavra NAÇÃO na cor do tema (o arquivo é branco; recolore pela transparência). */
-async function wordmark(color: string): Promise<string> {
-  if (color.toUpperCase() === WHITE) return A.nacao;
-  const src = buf(A.nacao);
-  const { width = 600, height = 205 } = await sharp(src).metadata();
-  const out = await sharp({ create: { width, height, channels: 4, background: color } }).composite([{ input: src, blend: 'dest-in' }]).png().toBuffer();
-  return out.toString('base64');
-}
-
 export async function renderNoticeArt(v: NoticeArtInput, photo: Buffer | null): Promise<Buffer> {
   const f = NOTICE_ART_FORMATS.find((x) => x.id === v.format)!;
   const { width, height } = f;
   const L = layout(v.format, v.rows.length);
   const source = v.background === 'nenhuma' ? null : v.background === 'propria' ? photo : buf(A.fundo);
   const T = noticeTheme(v.theme);
-  const ACCENT = T.accent, DARK = T.bg, INK = T.text;
-  const bg = await background(source, v.photoOpacity, width, height, T.bg);
-  const word = await wordmark(T.text);
-  // Escudo: no tema original o miolo é transparente; nos do manual, miolo cinza-escuro (fica legível no claro).
-  const shield = T.id === 'original' ? A.escudo : A.escudoSolido;
+  const ACCENT = T.accent, DARK = noticeBackdrop(v.backdrop).color, INK = WHITE;
+  const bg = await background(source, v.photoOpacity, width, height, DARK);
   const tableH = L.rowH * v.rows.length;
   // Frase final no meio do espaço entre a tabela e a palavra NAÇÃO.
   const wordTop = height - L.wordBottom - L.wordH;
@@ -94,7 +82,7 @@ export async function renderNoticeArt(v: NoticeArtInput, photo: Buffer | null): 
         <div style={{ width: Math.round(width * 0.535), height: L.barH, background: ACCENT }} />
         <div style={{ flex: 1, height: L.barH, background: T.bar2 }} />
       </div>
-      <img src={`data:image/png;base64,${shield}`} width={Math.round(L.shieldH * SHIELD_RATIO)} height={L.shieldH}
+      <img src={`data:image/png;base64,${A.escudo}`} width={Math.round(L.shieldH * SHIELD_RATIO)} height={L.shieldH}
         style={{ position: 'absolute', top: L.shieldTop, left: Math.round((width - L.shieldH * SHIELD_RATIO) / 2) }} />
       {/* Título */}
       <div style={{ position: 'absolute', top: L.titleTop, left: 0, width, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -110,7 +98,7 @@ export async function renderNoticeArt(v: NoticeArtInput, photo: Buffer | null): 
       <div style={{ position: 'absolute', top: L.tableTop, left: L.tableX, width: L.tableW, height: tableH, display: 'flex' }}>
         <div style={{ width: L.timeW, height: tableH, background: ACCENT, display: 'flex', flexDirection: 'column' }}>
           {v.rows.map((r, i) => (
-            <div key={i} style={{ height: L.rowH, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: fitText(r.time, L.timeW - 20, L.rowFont, 22, 0.55), fontWeight: 800, color: WHITE }}>{r.time}</div>
+            <div key={i} style={{ height: L.rowH, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: fitText(r.time, L.timeW - 20, L.rowFont, 22, 0.55), fontWeight: 800, color: T.onAccent }}>{r.time}</div>
           ))}
         </div>
         <div style={{ flex: 1, height: tableH, display: 'flex', flexDirection: 'column', borderTop: `${border}px solid ${INK}`, borderRight: `${border}px solid ${INK}`, borderBottom: `${border}px solid ${INK}` }}>
@@ -123,7 +111,7 @@ export async function renderNoticeArt(v: NoticeArtInput, photo: Buffer | null): 
         {/* Selos (ex.: preço), no canto de baixo de cada linha */}
         {v.rows.map((r, i) => r.badge ? (
           <div key={`b${i}`} style={{ position: 'absolute', right: 32, top: L.rowH * (i + 1) - Math.round(L.rowH * 0.22), height: Math.round(L.rowH * 0.38), padding: `0 ${Math.round(L.rowH * 0.18)}px`, borderRadius: 999, background: ACCENT, display: 'flex', alignItems: 'center' }}>
-            <div style={{ fontSize: Math.round(L.rowH * 0.26), fontWeight: 500, color: WHITE, transform: 'skewX(-12deg)' }}>{r.badge}</div>
+            <div style={{ fontSize: Math.round(L.rowH * 0.26), fontWeight: 500, color: T.onAccent, transform: 'skewX(-12deg)' }}>{r.badge}</div>
           </div>
         ) : null)}
       </div>
@@ -134,7 +122,7 @@ export async function renderNoticeArt(v: NoticeArtInput, photo: Buffer | null): 
           <div style={{ fontWeight: 800 }}>{bold}</div>
         </div>
       )}
-      <img src={`data:image/png;base64,${word}`} width={Math.round(L.wordH * WORD_RATIO)} height={L.wordH}
+      <img src={`data:image/png;base64,${A.nacao}`} width={Math.round(L.wordH * WORD_RATIO)} height={L.wordH}
         style={{ position: 'absolute', bottom: L.wordBottom, left: Math.round((width - L.wordH * WORD_RATIO) / 2) }} />
     </div>
   );
