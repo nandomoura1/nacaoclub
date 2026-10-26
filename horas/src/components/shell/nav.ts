@@ -7,7 +7,8 @@ export type NavIcon =
   | 'fechamento' | 'relatorios' | 'escalas' | 'treinos' | 'benchmarks' | 'dna' | 'treinos-ia' | 'usuarios' | 'historico' | 'cadastros' | 'condominio' | 'cobrancas' | 'financeiro' | 'fin-historico' | 'fin-importar' | 'documentos' | 'empresas'
   | 'mkt' | 'mkt-campanhas' | 'mkt-kanban' | 'mkt-eventos' | 'mkt-reuniao' | 'mkt-conteudo' | 'mkt-interna' | 'mkt-canais' | 'mkt-leads' | 'mkt-biblioteca' | 'mkt-trafego' | 'mkt-performance' | 'mkt-memoria' | 'mkt-conexoes' | 'mkt-criativo' | 'whatsapp'
   | 'wa-auto' | 'processos' | 'proc-demandas' | 'proc-setores' | 'proc-task' | 'proc-reuniao'
-  | 'edu' | 'edu-trilhas' | 'edu-painel' | 'proc-atas' | 'treinos-tv';
+  | 'edu' | 'edu-trilhas' | 'edu-painel' | 'proc-atas' | 'treinos-tv'
+  | 'ws' | 'ws-equipes' | 'ws-regras' | 'ws-funcionamento' | 'ws-ausencias' | 'ws-legal';
 
 export interface NavItem {
   href: string;
@@ -118,6 +119,16 @@ export const NAV_UNIVERSIDADE: NavItem[] = [
   { href: '/universidade/painel', label: 'Quem concluiu', icon: 'edu-painel', permission: 'edu.edit' },
 ];
 
+/** Escalas de Trabalho 5x2: organizador mensal das equipes (Recepção, Limpeza, Lanchonete, Cozinha…). */
+export const NAV_ESCALAS: NavItem[] = [
+  { href: '/escalas-trabalho', label: 'Gerar escala', icon: 'ws', permission: 'ws.view' },
+  { href: '/escalas-trabalho/equipes', label: 'Equipes', icon: 'ws-equipes', permission: 'ws.view' },
+  { href: '/escalas-trabalho/pre-requisitos', label: 'Pré-requisitos', icon: 'ws-regras', permission: 'ws.view' },
+  { href: '/escalas-trabalho/funcionamento', label: 'Funcionamento da Nação', icon: 'ws-funcionamento', permission: 'ws.view' },
+  { href: '/escalas-trabalho/ausencias', label: 'Férias e ausências', icon: 'ws-ausencias', permission: 'ws.view' },
+  { href: '/escalas-trabalho/parametros', label: 'Parâmetros legais', icon: 'ws-legal', permission: 'ws.view' },
+];
+
 export const NAV_ADMIN: NavItem[] = [
   { href: '/admin/empresas', label: 'Empresas', icon: 'empresas', permission: 'company.view' },
   { href: '/admin/cadastros', label: 'Cadastros', icon: 'cadastros', permission: 'admin.catalog' },
@@ -134,6 +145,7 @@ export const NAV_SECTIONS: NavSection[] = [
   { title: 'Condomínio Nação', items: NAV_CONDOMINIO, bar: { label: 'Condomínio', icon: 'condominio', order: 5 } },
   { title: 'Financeiro', items: NAV_FINANCEIRO, bar: { label: 'Financeiro', icon: 'financeiro', order: 3 } },
   { title: 'Marketing', items: NAV_MARKETING, bar: { label: 'Marketing', icon: 'mkt', order: 4 } },
+  { title: 'Escalas de Trabalho 5x2', items: NAV_ESCALAS },
   { title: 'Gestão de Processos', items: NAV_PROCESSOS, bar: { label: 'Processos', icon: 'processos', order: 6 } },
   { title: 'Universidade Nação', items: NAV_UNIVERSIDADE, bar: { label: 'Universidade', icon: 'edu', order: 7 } },
   { title: 'Administração', items: NAV_ADMIN },

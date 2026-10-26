@@ -21,7 +21,7 @@ import {
 const MAX_DAYS = 400;
 
 export const leaveSchema = z.object({
-  type: z.enum(['FERIAS', 'ATESTADO', 'AFASTAMENTO', 'FOLGA', 'FALTA']),
+  type: z.enum(['FERIAS', 'ATESTADO', 'AFASTAMENTO', 'FOLGA', 'FALTA', 'INDISPONIVEL']),
   startDate: z.string().refine(isIsoDate, 'Data inicial inválida.'),
   endDate: z.string().refine(isIsoDate, 'Data final inválida.'),
   coverage: z.enum(['PENDENTE', 'CANCELAR', 'SUBSTITUIR']),
@@ -152,7 +152,8 @@ export async function previewLeave(principal: Principal | null, teacherId: strin
   };
 }
 
-export async function saveLeave(principal: Principal | null, teacherId: string, input: unknown, meta: RequestMeta) {
+/** `scopeChecked`: quem chama já conferiu o escopo (ex.: Escalas 5x2, por setor que lidera). */
+export async function saveLeave(principal: Principal | null, teacherId: string, input: unknown, meta: RequestMeta, opts: { scopeChecked?: boolean } = {}) {
   assertCan(principal, 'leave.manage');
   const parsed = leaveSchema.safeParse(input);
   if (!parsed.success) throw new AppError(parsed.error.issues[0]?.message ?? 'Dados inválidos.');
@@ -164,7 +165,9 @@ export async function saveLeave(principal: Principal | null, teacherId: string, 
   if (d.slotId && d.coverage !== 'SUBSTITUIR') throw new AppError('Substituição por aula precisa de um substituto.');
 
   return prisma.$transaction(async (tx) => {
-    const teacher = await assertTeacherInScope(tx, principal, teacherId);
+    const teacher = opts.scopeChecked
+      ? await tx.teacher.findUniqueOrThrow({ where: { id: teacherId }, select: { id: true, name: true } })
+      : await assertTeacherInScope(tx, principal, teacherId);
     let slotLabel: string | null = null;
     if (d.slotId) {
       const v = await tx.scheduleSlotVersion.findFirst({
@@ -203,13 +206,13 @@ export async function saveLeave(principal: Principal | null, teacherId: string, 
 }
 
 /** Anula a ausência: cada aula volta exatamente ao que era antes (registro de reversão). */
-export async function cancelLeave(principal: Principal | null, leaveId: string, meta: RequestMeta) {
+export async function cancelLeave(principal: Principal | null, leaveId: string, meta: RequestMeta, opts: { scopeChecked?: boolean } = {}) {
   assertCan(principal, 'leave.manage');
   return prisma.$transaction(async (tx) => {
     const leave = await tx.leave.findUnique({ where: { id: leaveId }, include: { teacher: { select: { name: true } } } });
     if (!leave) throw new NotFoundError('Ausência não encontrada.');
     if (leave.cancelledAt) throw new AppError('Esta ausência já foi anulada.');
-    await assertTeacherInScope(tx, principal, leave.teacherId);
+    if (!opts.scopeChecked) await assertTeacherInScope(tx, principal, leave.teacherId);
 
     const exceptions = await tx.classException.findMany({
       where: { leaveId, type: { not: 'REVERSAO' } },

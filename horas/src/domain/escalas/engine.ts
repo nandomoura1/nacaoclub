@@ -1,0 +1,268 @@
+import { addDays, weekdayOf, type IsoDate } from '@/domain/dates';
+import { cyclePhase, intersect, type MonthInfo } from './calendar';
+import type { RuleParams } from './rules';
+import type { Absence, Alert, Cell, CellKind, DayPlan, Grid, Member, Post, Rule, Shift3, Window } from './types';
+
+/**
+ * Motor de geração (determinístico). Etapas:
+ * 1. calendário já resolvido (DayPlan por dia, inclusive dias de outro mês na
+ *    1ª e na última semana — a semana é sempre inteira, de segunda a domingo);
+ * 2. ausências, folgas fixas, disponibilidade e revezamentos A/B (fase pela data
+ *    de referência, sem reiniciar no dia 1º);
+ * 3. folgas da semana (5x2 para CLT/FUNAP) onde a cobertura sobra mais;
+ * 4. quem cobre a folga de quem (regra) e cobertura avulsa (MEI/freelancer nos
+ *    dias disponíveis) só para postos descobertos.
+ * Nunca inventa gente: o que não fecha vira alerta na validação.
+ */
+
+export interface EngineInput {
+  month: MonthInfo;
+  days: Map<IsoDate, DayPlan>;
+  members: Member[];
+  posts: Post[];
+  rules: Rule[];
+  absences: Absence[];
+  cycleRef: IsoDate;
+  /** Células já salvas antes do dia 1º (escala do mês anterior): ficam como estão. */
+  prior: Grid;
+}
+
+export const OFF_KINDS: ReadonlySet<CellKind> = new Set(['FOLGA', 'FECHADO', 'FERIAS', 'ATESTADO', 'FALTA', 'AFASTAMENTO', 'INDISPONIVEL']);
+const ABSENCE_KIND: Record<string, CellKind> = { FERIAS: 'FERIAS', ATESTADO: 'ATESTADO', FALTA: 'FALTA', AFASTAMENTO: 'AFASTAMENTO', INDISPONIVEL: 'INDISPONIVEL', FOLGA: 'FOLGA' };
+
+/** Quem entra na geração automática (com horário habitual definido). */
+export const isScheduled = (m: Member) => m.mode === 'FIXO' && m.autoSchedule && !!m.hours.base;
+/** Vínculos com meta de 5 dias por semana (MEI e freelancer seguem a disponibilidade). */
+export const fiveByTwo = (m: Member) => m.bond === 'CLT' || m.bond === 'FUNAP';
+
+export function absenceOn(absences: Absence[], memberId: string, date: IsoDate): Absence | undefined {
+  return absences.find((a) => a.memberId === memberId && a.start <= date && date <= a.end);
+}
+
+export const isRealHoliday = (d: DayPlan) => !!d.holiday && d.holiday.scope !== 'FACULTATIVO';
+
+/** Horário do colaborador no dia (sábado/domingo/feriado têm exceção), recortado ao funcionamento. */
+export function shiftFor(m: Member, d: DayPlan): Shift3 | null {
+  const raw = (isRealHoliday(d) && m.hours.F) || (d.weekday === 6 && m.hours['6']) || (d.weekday === 7 && m.hours['7']) || m.hours.base;
+  if (!raw || !d.open.length) return null;
+  const [s, e, b] = raw;
+  const piece = intersect([[s, e]], d.open)[0];
+  if (!piece) return null;
+  return [piece[0], piece[1], b];
+}
+
+/** Postos do dia (feriado usa os postos marcados "feriado"; sem nenhum, os do dia da semana) + mínimos por regra. */
+export function postsOn(d: DayPlan, posts: Post[], rules: Rule[]): Post[] {
+  if (!d.open.length) return [];
+  const holiday = isRealHoliday(d);
+  const hasHolidayPosts = posts.some((p) => p.weekdays.includes(8));
+  const fromPosts = posts.filter((p) => (holiday && hasHolidayPosts ? p.weekdays.includes(8) : p.weekdays.includes(d.weekday)));
+  const fromRules: Post[] = rules.filter((r) => r.kind === 'MINIMO_PESSOAS').flatMap((r) => {
+    const p = r.params as RuleParams<'MINIMO_PESSOAS'>;
+    if (!p.weekdays.includes(d.weekday)) return [];
+    return [{ id: r.id, name: r.label, kind: null, startMin: p.startMin, endMin: p.endMin, weekdays: p.weekdays, minPeople: p.min, functionName: p.functionName, mandatory: r.mandatory }];
+  });
+  return [...fromPosts, ...fromRules].flatMap((p) => {
+    const w = intersect([[p.startMin, p.endMin]], d.open)[0];
+    return w ? [{ ...p, startMin: w[0], endMin: w[1] }] : [];
+  });
+}
+
+export const hasFunction = (m: Member, fn: string | null) => !fn || [m.functionName, ...m.altFunctions].some((f) => f && f.trim().toLowerCase() === fn.trim().toLowerCase());
+
+/** A célula cobre o posto? Precisa estar lá do início ao fim do posto (abertura: chegar até a hora; fechamento: ficar até o fim). */
+export function covers(cell: Cell | undefined, m: Member, p: Post): boolean {
+  if (!cell || cell.kind !== 'TRABALHO' || cell.startMin == null || cell.endMin == null) return false;
+  return cell.startMin <= p.startMin && cell.endMin >= p.endMin && hasFunction(m, p.functionName);
+}
+
+export function availableOn(m: Member, d: DayPlan): boolean {
+  if (m.availableDays.length && !m.availableDays.includes(d.weekday)) return false;
+  if (d.weekday === 6 && !m.saturday) return false;
+  if (d.weekday === 7 && !m.sunday) return false;
+  if (isRealHoliday(d) && !m.holiday) return false;
+  return true;
+}
+
+interface DayRule { off: string[]; work: { reason: string; mandatory: boolean }[] }
+
+/** Folgas e dias obrigatórios que as regras e o cadastro impõem a cada pessoa num dia. */
+export function dayRules(m: Member, d: DayPlan, rules: Rule[], cycleRef: IsoDate): DayRule {
+  const off: string[] = [];
+  const work: DayRule['work'] = [];
+  if (m.fixedOff.includes(d.weekday)) off.push('folga fixa');
+  if (!availableOn(m, d)) off.push('indisponível neste dia');
+  const phase = cyclePhase(d.date, cycleRef);
+  for (const r of rules) {
+    switch (r.kind) {
+      case 'FOLGA_FIXA': {
+        const p = r.params as RuleParams<'FOLGA_FIXA'>;
+        if (p.memberId === m.id && p.weekdays.includes(d.weekday)) off.push(r.label);
+        break;
+      }
+      case 'TRABALHA_SEMPRE': {
+        const p = r.params as RuleParams<'TRABALHA_SEMPRE'>;
+        if (p.memberId === m.id && p.weekdays.includes(d.weekday)) work.push({ reason: r.label, mandatory: r.mandatory });
+        break;
+      }
+      case 'ALTERNAR_FIM_DE_SEMANA': {
+        const p = r.params as RuleParams<'ALTERNAR_FIM_DE_SEMANA'>;
+        if (!(p.weekdays as number[]).includes(d.weekday)) break;
+        const onDuty = phase === 'A' ? p.groupA : p.groupB;
+        const offDuty = phase === 'A' ? p.groupB : p.groupA;
+        if (onDuty.includes(m.id)) work.push({ reason: `${r.label} (semana ${phase})`, mandatory: r.mandatory });
+        if (offDuty.includes(m.id)) off.push(`${r.label} (semana ${phase})`);
+        break;
+      }
+      case 'ALTERNAR_FOLGA': {
+        const p = r.params as RuleParams<'ALTERNAR_FOLGA'>;
+        const [d1, d2] = p.weekdays;
+        const offA = phase === 'A' ? d1 : d2;
+        const offB = phase === 'A' ? d2 : d1;
+        if (p.memberA === m.id && d.weekday === offA) off.push(`${r.label} (semana ${phase})`);
+        if (p.memberB === m.id && d.weekday === offB) off.push(`${r.label} (semana ${phase})`);
+        break;
+      }
+    }
+  }
+  return { off, work };
+}
+
+/** Na semana em que trabalha o fim de semana com compensação, a meta é 6 dias (média 5x2 na quinzena). */
+export function inCompensatedRotation(m: Member, rules: Rule[]): boolean {
+  return rules.some((r) => r.kind === 'ALTERNAR_FIM_DE_SEMANA' && (r.params as RuleParams<'ALTERNAR_FIM_DE_SEMANA'>).compensate
+    && [...(r.params as RuleParams<'ALTERNAR_FIM_DE_SEMANA'>).groupA, ...(r.params as RuleParams<'ALTERNAR_FIM_DE_SEMANA'>).groupB].includes(m.id));
+}
+
+function compensatedWeek(m: Member, monday: IsoDate, rules: Rule[], cycleRef: IsoDate): boolean {
+  const phase = cyclePhase(monday, cycleRef);
+  return rules.some((r) => {
+    if (r.kind !== 'ALTERNAR_FIM_DE_SEMANA') return false;
+    const p = r.params as RuleParams<'ALTERNAR_FIM_DE_SEMANA'>;
+    return p.compensate && (phase === 'A' ? p.groupA : p.groupB).includes(m.id);
+  });
+}
+
+const workCell = (s: Shift3, note: string | null = null): Cell => ({ kind: 'TRABALHO', startMin: s[0], endMin: s[1], breakMin: s[2], note });
+
+export function generate(input: EngineInput): { grid: Grid; alerts: Alert[] } {
+  const { month, days, members, posts, rules, absences, cycleRef, prior } = input;
+  const grid: Grid = {};
+  const alerts: Alert[] = [];
+  const forcedWork = new Map<string, Set<IsoDate>>();
+  const dates = [...days.keys()].sort();
+  const isPrior = (mid: string, date: IsoDate) => date < month.first && !!prior[mid]?.[date];
+
+  // Etapa 2: o que já está decidido por ausência, calendário, cadastro e regras.
+  for (const m of members) {
+    const row: Record<IsoDate, Cell> = {};
+    const must = new Set<IsoDate>();
+    for (const date of dates) {
+      const d = days.get(date)!;
+      if (isPrior(m.id, date)) { row[date] = prior[m.id]![date]!; continue; }
+      const abs = absenceOn(absences, m.id, date);
+      if (abs) {
+        row[date] = { kind: ABSENCE_KIND[abs.type] ?? 'INDISPONIVEL', note: abs.type === 'FOLGA' ? 'Folga extraordinária' : abs.substituteName ? `Substituto: ${abs.substituteName}` : null };
+        continue;
+      }
+      if (!isScheduled(m)) { row[date] = { kind: 'SEM_GRADE' }; continue; }
+      if (!d.open.length) { row[date] = { kind: 'FECHADO' }; continue; }
+      const r = dayRules(m, d, rules, cycleRef);
+      if (r.off.length) {
+        row[date] = { kind: 'FOLGA', note: r.off[0]! };
+        const clash = r.work.find((w) => w.mandatory) ?? r.work[0];
+        if (clash && date >= month.first && date <= month.last) {
+          alerts.push({ level: clash.mandatory ? 'CONFLITO' : 'AJUSTE', code: 'REGRA_CHOQUE', date, memberId: m.id, message: `${m.name}: "${clash.reason}" pede trabalho, mas é ${r.off[0]} — ficou de folga.` });
+        }
+        continue;
+      }
+      const s = shiftFor(m, d);
+      if (!s) { row[date] = { kind: 'FOLGA', note: 'Horário fora do funcionamento do setor' }; continue; }
+      row[date] = workCell(s);
+      if (r.work.length) must.add(date);
+    }
+    grid[m.id] = row;
+    forcedWork.set(m.id, must);
+  }
+
+  // Etapa 3: folgas da semana (5x2) onde a cobertura sobra mais.
+  const dayPosts = new Map(dates.map((date) => [date, postsOn(days.get(date)!, posts, rules)]));
+  const avoidGroups = rules.filter((r) => r.kind === 'EVITAR_FOLGA_JUNTA').map((r) => r.params as RuleParams<'EVITAR_FOLGA_JUNTA'>);
+  const byId = new Map(members.map((m) => [m.id, m]));
+  const slack = (m: Member, date: IsoDate) => {
+    let min = 99;
+    for (const p of dayPosts.get(date)!) {
+      if (!covers(grid[m.id]![date], m, p)) continue;
+      const n = members.filter((x) => covers(grid[x.id]![date], x, p)).length;
+      min = Math.min(min, n - p.minPeople);
+    }
+    return min;
+  };
+  for (const week of month.weeks) {
+    for (const m of members) {
+      if (!isScheduled(m) || !fiveByTwo(m)) continue;
+      const row = grid[m.id]!;
+      const target = compensatedWeek(m, week.monday, rules, cycleRef) ? 1 : 2;
+      let offs = week.days.filter((d) => row[d]!.kind !== 'TRABALHO').length;
+      while (offs < target) {
+        const cands = week.days.filter((d) => row[d]!.kind === 'TRABALHO' && !isPrior(m.id, d) && !forcedWork.get(m.id)!.has(d));
+        if (!cands.length) break;
+        const score = (d: IsoDate) => {
+          const s = slack(m, d);
+          const wd = weekdayOf(d);
+          const together = avoidGroups.filter((g) => g.memberIds.includes(m.id) && g.weekdays.includes(wd))
+            .reduce((n, g) => n + g.memberIds.filter((o) => o !== m.id && byId.has(o) && grid[o]?.[d]?.kind === 'FOLGA').length, 0);
+          const adjacent = [addDays(d, -1), addDays(d, 1)].some((x) => row[x] && row[x]!.kind !== 'TRABALHO');
+          return (s >= 1 ? 0 : 1000) - Math.min(s, 20) * 10 + together * 50 + (adjacent ? 0 : 3);
+        };
+        const best = cands.reduce((a, b) => (score(b) < score(a) ? b : a));
+        row[best] = { kind: 'FOLGA', note: 'Folga da semana (5x2)' };
+        offs++;
+      }
+    }
+  }
+
+  // Etapa 4a: quem cobre a folga de quem.
+  const monthDates = dates.filter((d) => d >= month.first && d <= month.last);
+  for (const r of rules.filter((x) => x.kind === 'COBRE_FOLGA')) {
+    const p = r.params as RuleParams<'COBRE_FOLGA'>;
+    const cover = byId.get(p.coverId);
+    const covered = byId.get(p.coveredId);
+    if (!cover || !covered) continue;
+    for (const date of monthDates) {
+      const d = days.get(date)!;
+      const c = grid[covered.id]![date]!;
+      if (!d.open.length || c.kind === 'TRABALHO' || c.kind === 'SEM_GRADE' || c.kind === 'FECHADO') continue;
+      // Se já trabalharia no dia, passa a fazer o horário de quem folga (ex.: Caio assume a abertura).
+      if (absenceOn(absences, cover.id, date) || !availableOn(cover, d) || grid[cover.id]![date]!.note?.startsWith('Cobre')) continue;
+      const base = p.startMin != null && p.endMin != null ? ([p.startMin, p.endMin, 0] as Shift3) : shiftFor(covered, d);
+      if (!base) continue;
+      const w = intersect([[base[0], base[1]]], d.open)[0];
+      if (!w) continue;
+      grid[cover.id]![date] = workCell([w[0], w[1], base[2]], `Cobre a folga de ${covered.name}`);
+    }
+  }
+
+  // Etapa 4b: cobertura avulsa (MEI/freelancer nos dias disponíveis) só onde falta gente.
+  const coverCount = new Map<string, number>();
+  for (const date of monthDates) {
+    const d = days.get(date)!;
+    for (const p of dayPosts.get(date)!) {
+      let n = members.filter((x) => covers(grid[x.id]![date], x, p)).length;
+      while (n < p.minPeople) {
+        const pool = members.filter((x) => x.mode === 'COBERTURA' && x.autoSchedule && grid[x.id]![date]!.kind !== 'TRABALHO'
+          && !absenceOn(absences, x.id, date) && availableOn(x, d) && hasFunction(x, p.functionName))
+          .sort((a, b) => (coverCount.get(a.id) ?? 0) - (coverCount.get(b.id) ?? 0) || a.name.localeCompare(b.name, 'pt-BR'));
+        const pick = pool[0];
+        if (!pick) break;
+        const dur = p.endMin - p.startMin;
+        grid[pick.id]![date] = workCell([p.startMin, p.endMin, dur > 360 ? 60 : 0], `Cobertura: ${p.name}`);
+        coverCount.set(pick.id, (coverCount.get(pick.id) ?? 0) + 1);
+        n++;
+      }
+    }
+  }
+  return { grid, alerts };
+}
+
+export const windowOf = (c: Cell): Window | null => (c.kind === 'TRABALHO' && c.startMin != null && c.endMin != null ? [c.startMin, c.endMin] : null);

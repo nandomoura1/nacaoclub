@@ -34,6 +34,8 @@ model AppSettings {
   gymGuidelines     String?   @map("gym_guidelines")
   /// Domingo e feriado valem o dobro a partir desta data (antes dela, nada muda). Vazio = sempre.
   doubleHoursFrom   DateTime? @map("double_hours_from") @db.Date
+  /// Funcionamento geral da Nação (referência para os setores sem horário próprio): { "1": [[360, 1320]], …, "F": […] }.
+  nacaoHours        Json      @default("{}") @map("nacao_hours")
   updatedAt         DateTime  @updatedAt @map("updated_at")
 
   @@map("app_settings")
@@ -406,6 +408,7 @@ model Teacher {
   userLink         UserTeacher?
   personalWorkouts PersonalWorkout[]
   documents        TeacherDocument[]
+  wsMembers        WsMember[]
 
   @@index([active, name])
   @@map("teachers")
@@ -696,6 +699,7 @@ enum LeaveType {
   AFASTAMENTO
   FOLGA
   FALTA
+  INDISPONIVEL
 }
 
 enum LeaveCoverage {
@@ -1739,8 +1743,9 @@ model MktEvent {
   /// Lote de importação (cronograma) que criou o registro — permite desfazer.
   importId        String?        @map("import_id") @db.Uuid
 
-  campaigns MktCampaign[]
-  tasks     MktTask[]
+  campaigns   MktCampaign[]
+  tasks       MktTask[]
+  wsOverrides WsDayOverride[]
 
   @@index([startDate])
   @@index([importId])
@@ -2041,7 +2046,8 @@ model ProcSector {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  demands ProcDemand[]
+  demands   ProcDemand[]
+  wsSectors WsSector[]
 
   @@map("proc_sectors")
 }
@@ -2459,4 +2465,230 @@ model EduTrackItem {
   @@id([trackId, materialId])
   @@index([trackId, position])
   @@map("edu_track_items")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Escalas de Trabalho 5x2 (organizador mensal por setor)
+// ─────────────────────────────────────────────────────────────
+
+/// CLT, FUNAP, MEI ou freelancer: cada vínculo tem regras próprias (5x2 não vale para todos).
+enum WsBond {
+  CLT
+  FUNAP
+  MEI
+  FREELANCER
+}
+
+/// FIXO = entra na escala nos dias dele; COBERTURA = só cobre buracos nos dias disponíveis (MEI/freelancer).
+enum WsMode {
+  FIXO
+  COBERTURA
+}
+
+enum WsScheduleStatus {
+  RASCUNHO
+  APROVADA
+  PUBLICADA
+}
+
+/// Setor que tem escala mensal (Recepção, Limpeza, Lanchonete, Cozinha…).
+model WsSector {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String   @unique
+  /// Setor da Gestão de Processos (o líder dele monta a escala).
+  procSectorId String?  @map("proc_sector_id") @db.Uuid
+  /// Horário habitual: { "1": [[420, 1320]], …, "7": [], "F": [[480, 840]] } (minutos). Sem a chave = usa o da Nação; [] = fechado.
+  hours        Json     @default("{}")
+  /// Segunda-feira de uma semana "A": a fase A/B do revezamento segue daqui, sem reiniciar no dia 1º.
+  cycleRef     DateTime @map("cycle_ref") @db.Date
+  notes        String?
+  sortOrder    Int      @default(0) @map("sort_order")
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  procSector ProcSector?     @relation(fields: [procSectorId], references: [id], onDelete: SetNull)
+  posts      WsPost[]
+  members    WsMember[]
+  rules      WsRule[]
+  overrides  WsDayOverride[]
+  schedules  WsSchedule[]
+
+  @@map("ws_sectors")
+}
+
+/// Posto/turno que precisa de gente (Abertura 06:00–14:00, Fechamento, Almoço…).
+model WsPost {
+  id           String   @id @default(uuid()) @db.Uuid
+  sectorId     String   @map("sector_id") @db.Uuid
+  name         String
+  /// ABERTURA, FECHAMENTO, ALMOCO ou vazio.
+  kind         String?
+  startMin     Int      @map("start_min")
+  endMin       Int      @map("end_min")
+  /// 1 = segunda … 7 = domingo; 8 = feriado.
+  weekdays     Int[]
+  minPeople    Int      @default(1) @map("min_people")
+  /// Só quem tem esta função (principal ou alternativa) cobre o posto.
+  functionName String?  @map("function_name")
+  mandatory    Boolean  @default(true)
+  sortOrder    Int      @default(0) @map("sort_order")
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  sector WsSector @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+
+  @@index([sectorId])
+  @@map("ws_posts")
+}
+
+/// Colaborador na equipe do setor (o cadastro da pessoa é o de sempre: teachers).
+model WsMember {
+  id            String   @id @default(uuid()) @db.Uuid
+  sectorId      String   @map("sector_id") @db.Uuid
+  teacherId     String   @map("teacher_id") @db.Uuid
+  functionName  String?  @map("function_name")
+  altFunctions  String[] @map("alt_functions")
+  bond          WsBond   @default(CLT)
+  mode          WsMode   @default(FIXO)
+  /// { "base": [entrada, saída, intervalo], "6": […], "7": […], "F": […] } em minutos. Sem "base" = horário pendente.
+  hours         Json     @default("{}")
+  /// Carga semanal de referência (minutos): 2400 = 40h.
+  weeklyMin     Int      @default(2400) @map("weekly_min")
+  fixedOff      Int[]    @map("fixed_off")
+  /// Dias em que pode trabalhar (vazio = todos). Para COBERTURA: só nesses dias.
+  availableDays Int[]    @map("available_days")
+  saturday      Boolean  @default(true)
+  sunday        Boolean  @default(true)
+  holiday       Boolean  @default(true)
+  /// false = fica fora da geração automática (ex.: líder sem horário definido).
+  autoSchedule  Boolean  @default(true) @map("auto_schedule")
+  notes         String?
+  sortOrder     Int      @default(0) @map("sort_order")
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  sector  WsSector @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+  teacher Teacher  @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+  cells   WsCell[]
+
+  @@unique([sectorId, teacherId])
+  @@map("ws_members")
+}
+
+/// Pré-requisito do setor. kind + params (ver src/domain/escalas/rules.ts).
+model WsRule {
+  id        String   @id @default(uuid()) @db.Uuid
+  sectorId  String   @map("sector_id") @db.Uuid
+  kind      String
+  label     String
+  params    Json     @default("{}")
+  /// true = obrigatória (sem ela a escala tem conflito); false = preferencial.
+  mandatory Boolean  @default(true)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  sector WsSector @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+
+  @@index([sectorId])
+  @@map("ws_rules")
+}
+
+/// Funcionamento especial numa data: da Nação (sem setor) ou de um setor; e reforço de evento.
+model WsDayOverride {
+  id          String   @id @default(uuid()) @db.Uuid
+  date        DateTime @db.Date
+  sectorId    String?  @map("sector_id") @db.Uuid
+  closed      Boolean  @default(false)
+  /// [[início, fim]] em minutos; vazio = mantém o horário (só reforço/observação).
+  hours       Json?
+  reason      String
+  eventId     String?  @map("event_id") @db.Uuid
+  /// Pessoas a mais pedidas pelo evento (sugestão de reforço; não muda a escala sozinho).
+  extraPeople Int      @default(0) @map("extra_people")
+  createdById String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  sector WsSector? @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+  event  MktEvent? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+
+  @@index([date])
+  @@map("ws_day_overrides")
+}
+
+/// Parâmetros de jornada por vínculo, com vigência — validados pelo Departamento Pessoal.
+model WsLegalParam {
+  id                  String    @id @default(uuid()) @db.Uuid
+  bond                WsBond
+  validFrom           DateTime  @map("valid_from") @db.Date
+  maxDailyMin         Int?      @map("max_daily_min")
+  maxDailyExtraMin    Int?      @map("max_daily_extra_min")
+  maxWeeklyMin        Int?      @map("max_weekly_min")
+  minRestBetweenMin   Int?      @map("min_rest_between_min")
+  maxConsecutiveDays  Int?      @map("max_consecutive_days")
+  /// Folga no domingo pelo menos 1 vez a cada N semanas (vazio = não verifica).
+  sundayOffEveryWeeks Int?      @map("sunday_off_every_weeks")
+  /// Jornada acima disto pede intervalo de `breakLongMin`.
+  breakLongOverMin    Int?      @map("break_long_over_min")
+  breakLongMin        Int?      @map("break_long_min")
+  breakShortOverMin   Int?      @map("break_short_over_min")
+  breakShortMin       Int?      @map("break_short_min")
+  notes               String?
+  /// Vazio = ainda não conferido pelo DP: a escala mostra a pendência.
+  validatedAt         DateTime? @map("validated_at")
+  validatedBy         String?   @map("validated_by")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  @@unique([bond, validFrom])
+  @@map("ws_legal_params")
+}
+
+/// Escala de um setor num mês (rascunho → aprovada → publicada).
+model WsSchedule {
+  id          String           @id @default(uuid()) @db.Uuid
+  sectorId    String           @map("sector_id") @db.Uuid
+  year        Int
+  month       Int
+  status      WsScheduleStatus @default(RASCUNHO)
+  /// Resultado da última análise (indicadores, alertas, classificação).
+  analysis    Json             @default("{}")
+  generatedAt DateTime?        @map("generated_at")
+  approvedAt  DateTime?        @map("approved_at")
+  approvedBy  String?          @map("approved_by") @db.Uuid
+  publishedAt DateTime?        @map("published_at")
+  publishedBy String?          @map("published_by") @db.Uuid
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  sector WsSector @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+  cells  WsCell[]
+
+  @@unique([sectorId, year, month])
+  @@map("ws_schedules")
+}
+
+/// Um dia de um colaborador na escala.
+model WsCell {
+  id         String   @id @default(uuid()) @db.Uuid
+  scheduleId String   @map("schedule_id") @db.Uuid
+  memberId   String   @map("member_id") @db.Uuid
+  date       DateTime @db.Date
+  /// TRABALHO, FOLGA, FECHADO, FERIAS, ATESTADO, FALTA, AFASTAMENTO, INDISPONIVEL
+  kind       String
+  startMin   Int?     @map("start_min")
+  endMin     Int?     @map("end_min")
+  breakMin   Int?     @map("break_min")
+  note       String?
+  /// Editado à mão (a geração respeita? não: gerar de novo só no rascunho e refaz tudo).
+  manual     Boolean  @default(false)
+
+  schedule WsSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  member   WsMember   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([scheduleId, memberId, date])
+  @@index([memberId, date])
+  @@map("ws_cells")
 }

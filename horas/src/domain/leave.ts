@@ -2,12 +2,12 @@
  * Ausência (férias, atestado, folga, falta) — puro. Decide o que acontece com
  * cada "cadeira" do professor nas aulas do período. Testado sem banco.
  */
-export type LeaveType = 'FERIAS' | 'ATESTADO' | 'AFASTAMENTO' | 'FOLGA' | 'FALTA';
+export type LeaveType = 'FERIAS' | 'ATESTADO' | 'AFASTAMENTO' | 'FOLGA' | 'FALTA' | 'INDISPONIVEL';
 export type LeaveCoverage = 'PENDENTE' | 'CANCELAR' | 'SUBSTITUIR';
 export type AbsenceReason = 'FALTA' | 'FERIAS' | 'ATESTADO' | 'FOLGA' | 'OUTRO';
 
 export const LEAVE_LABEL: Record<LeaveType, string> = {
-  FERIAS: 'Férias', ATESTADO: 'Atestado', AFASTAMENTO: 'Afastamento', FOLGA: 'Folga', FALTA: 'Falta',
+  FERIAS: 'Férias', ATESTADO: 'Atestado', AFASTAMENTO: 'Afastamento', FOLGA: 'Folga', FALTA: 'Falta', INDISPONIVEL: 'Indisponível',
 };
 export const COVERAGE_LABEL: Record<LeaveCoverage, string> = {
   SUBSTITUIR: 'Substituto dá as aulas', PENDENTE: 'Aguardando substituto', CANCELAR: 'Cancelar as aulas',
@@ -21,11 +21,11 @@ export const COVERAGE_LABEL: Record<LeaveCoverage, string> = {
 export const defaultDeducts = (t: LeaveType): boolean => !(t === 'ATESTADO' || t === 'FOLGA');
 
 export const absenceReasonOf = (t: LeaveType): AbsenceReason =>
-  t === 'AFASTAMENTO' ? 'OUTRO' : t;
+  t === 'AFASTAMENTO' || t === 'INDISPONIVEL' ? 'OUTRO' : t;
 
 /** Tipo da exceção registrada na aula (a trilha diz "férias", não "outro"). */
 export const exceptionTypeOf = (t: LeaveType, coverage: LeaveCoverage) =>
-  coverage === 'SUBSTITUIR' ? ('SUBSTITUICAO' as const) : t === 'AFASTAMENTO' ? ('OUTRO' as const) : t;
+  coverage === 'SUBSTITUIR' ? ('SUBSTITUICAO' as const) : t === 'AFASTAMENTO' || t === 'INDISPONIVEL' ? ('OUTRO' as const) : t;
 
 export interface AssignmentState {
   status: 'PREVISTA' | 'REALIZADA' | 'SUBSTITUIDA' | 'CANCELADA' | 'AUSENTE_PENDENTE';
