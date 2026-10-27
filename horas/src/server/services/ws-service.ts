@@ -8,6 +8,7 @@ import { AppError, NotFoundError } from '@/server/errors';
 import { addDays, eachDay, formatDateBR, fromUtc, isIsoDate, toUtc, type IsoDate } from '@/domain/dates';
 import { mondayOf, monthInfo, resolveDay, type MonthInfo, type Override } from '@/domain/escalas/calendar';
 import { generate } from '@/domain/escalas/engine';
+import { buildRotation } from '@/domain/escalas/rotation';
 import { describeRule, parseRule, RULE_KINDS, type RuleKind } from '@/domain/escalas/rules';
 import type { Absence, Bond, Cell, CellKind, DayPlan, Grid, HoursMap, LegalParams, Member, MemberHours, Post, Rule } from '@/domain/escalas/types';
 import { validate, type Analysis } from '@/domain/escalas/validate';
@@ -59,7 +60,7 @@ const dayKeys = ['1', '2', '3', '4', '5', '6', '7', 'F'] as const;
 const hoursMapSchema = z.record(z.enum(dayKeys), z.array(win).max(3)).default({});
 const shift3 = z.tuple([min, min, z.number().int().min(0).max(240)]).refine(([s, e]) => e > s, 'Horário do colaborador: a saída precisa ser depois da entrada.');
 const weekSchema = z.array(shift3.nullable()).length(7, 'A grade semanal precisa dos 7 dias.');
-const memberHoursSchema = z.object({ base: shift3.optional(), 6: shift3.optional(), 7: shift3.optional(), F: shift3.optional(), week: z.object({ A: weekSchema, B: weekSchema.optional() }).optional() }).default({});
+const memberHoursSchema = z.object({ base: shift3.optional(), 6: shift3.optional(), 7: shift3.optional(), F: shift3.optional(), week: z.object({ A: weekSchema, B: weekSchema.optional(), cycle: z.array(weekSchema).min(2, 'O rodízio precisa de pelo menos 2 semanas.').max(12, 'Rodízio de no máximo 12 semanas.').optional() }).optional() }).default({});
 const weekdays = z.array(z.number().int().min(1).max(7)).max(7).transform((a) => [...new Set(a)].sort());
 const text = (n: number) => z.string().trim().max(n).optional().nullable().transform((v) => v || null);
 
@@ -252,6 +253,45 @@ export async function removeMember(principal: P | null, sectorId: string, id: st
     if (m._count.cells) await tx.wsMember.update({ where: { id }, data: { active: false } });
     else await tx.wsMember.delete({ where: { id } });
     await audit(tx, ctx(principal, meta), { action: 'ws.member.removed', entityType: 'ws_member', entityId: id, summary: `${principal.name} tirou ${m.teacher.name} da equipe de ${s.name}${m._count.cells ? ' (desativado: já está em escala salva)' : ''}` });
+  });
+}
+
+/**
+ * Monta o rodízio: as pessoas escolhidas (na ordem) começam na grade atual de
+ * cada uma (semana 1 = semana de referência do setor) e avançam uma posição
+ * por semana. `memberIds` vazio desfaz o rodízio de todo o setor (fica a grade da semana 1).
+ */
+export async function setRotation(principal: P | null, sectorId: string, memberIds: string[], meta: RequestMeta) {
+  assertCan(principal, 'ws.edit');
+  const ids = z.array(z.string().uuid()).max(12, 'Rodízio de no máximo 12 pessoas.').parse(memberIds);
+  if (ids.length === 1) throw new AppError('O rodízio precisa de pelo menos 2 pessoas.');
+  if (new Set(ids).size !== ids.length) throw new AppError('A mesma pessoa aparece duas vezes.');
+  return prisma.$transaction(async (tx) => {
+    const s = await assertSector(principal, sectorId, tx);
+    const all = await tx.wsMember.findMany({ where: { sectorId }, include: { teacher: { select: { name: true, displayName: true } } } });
+    const name = (m: (typeof all)[number]) => m.teacher.displayName || m.teacher.name;
+    if (!ids.length) {
+      for (const m of all) {
+        const h = m.hours as MemberHours;
+        if (!h.week?.cycle) continue;
+        await tx.wsMember.update({ where: { id: m.id }, data: { hours: { ...h, week: { A: h.week.cycle[0]! } } } });
+      }
+      await audit(tx, ctx(principal, meta), { action: 'ws.rotation.cleared', entityType: 'ws_sector', entityId: sectorId, summary: `${principal.name} desfez o rodízio do setor ${s.name}` });
+      return;
+    }
+    const chosen = ids.map((id) => {
+      const m = all.find((x) => x.id === id);
+      if (!m) throw new AppError('Alguém escolhido não está na equipe do setor.');
+      const h = m.hours as MemberHours;
+      const pos = h.week?.cycle?.[0] ?? h.week?.A;
+      if (!pos) throw new AppError(`${name(m)} não tem grade semanal fixa: defina a grade dela (posição) antes de montar o rodízio.`);
+      return { m, h, pos };
+    });
+    const cycles = buildRotation(chosen.map((c) => c.pos));
+    for (const [i, c] of chosen.entries()) {
+      await tx.wsMember.update({ where: { id: c.m.id }, data: { hours: { ...c.h, week: { A: cycles[i]![0]!, cycle: cycles[i] } } } });
+    }
+    await audit(tx, ctx(principal, meta), { action: 'ws.rotation.set', entityType: 'ws_sector', entityId: sectorId, after: { ordem: chosen.map((c) => name(c.m)), semanas: ids.length }, summary: `${principal.name} montou o rodízio de ${ids.length} semanas no setor ${s.name}: ${chosen.map((c) => name(c.m)).join(' → ')}` });
   });
 }
 

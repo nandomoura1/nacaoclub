@@ -1,5 +1,5 @@
 import { addDays, weekdayOf, type IsoDate } from '@/domain/dates';
-import { cyclePhase, intersect, type MonthInfo } from './calendar';
+import { cycleIndex, cyclePhase, intersect, type MonthInfo } from './calendar';
 import type { RuleParams } from './rules';
 import type { Absence, Alert, Cell, CellKind, DayPlan, Grid, Member, Post, Rule, Shift3, Window } from './types';
 
@@ -32,11 +32,18 @@ const ABSENCE_KIND: Record<string, CellKind> = { FERIAS: 'FERIAS', ATESTADO: 'AT
 
 /** Quem entra na geração automática (com horário habitual definido). */
 export const isScheduled = (m: Member) => m.mode === 'FIXO' && m.autoSchedule && (!!m.hours.base || !!m.hours.week);
-export const hasPattern = (m: Member) => !!m.hours.week?.A?.length;
+export const hasPattern = (m: Member) => !!m.hours.week?.A?.length || !!m.hours.week?.cycle?.length;
+
+/** Rótulo da semana da grade ("semana A" ou "semana 3/6 do rodízio"). */
+export function patternWeekLabel(m: Member, date: IsoDate, cycleRef: IsoDate): string {
+  const n = m.hours.week?.cycle?.length;
+  return n ? `semana ${cycleIndex(date, cycleRef, n) + 1}/${n} do rodízio` : `semana ${cyclePhase(date, cycleRef)}`;
+}
 
 /** Turno da grade cíclica no dia: undefined = sem grade; null = folga da grade. */
 export function patternShift(m: Member, d: DayPlan, cycleRef: IsoDate): Shift3 | null | undefined {
   const w = m.hours.week;
+  if (w?.cycle?.length) return w.cycle[cycleIndex(d.date, cycleRef, w.cycle.length)]![d.weekday - 1] ?? null;
   if (!w?.A?.length) return undefined;
   const week = cyclePhase(d.date, cycleRef) === 'B' && w.B?.length ? w.B : w.A;
   return week[d.weekday - 1] ?? null;
@@ -186,7 +193,7 @@ export function generate(input: EngineInput): { grid: Grid; alerts: Alert[] } {
         }
         continue;
       }
-      if (patternShift(m, d, cycleRef) === null) { row[date] = { kind: 'FOLGA', note: `Folga da grade (semana ${cyclePhase(date, cycleRef)})` }; continue; }
+      if (patternShift(m, d, cycleRef) === null) { row[date] = { kind: 'FOLGA', note: `Folga da grade (${patternWeekLabel(m, date, cycleRef)})` }; continue; }
       const s = shiftFor(m, d, cycleRef);
       if (!s) { row[date] = { kind: 'FOLGA', note: 'Horário fora do funcionamento do setor' }; continue; }
       row[date] = workCell(s);

@@ -55,6 +55,12 @@ export function monthInfo(year: number, month: number): MonthInfo {
   return { year, month, label: `${MONTHS[month - 1]} de ${year}`, first, last, length, days, weekdayCount, weeks, rangeStart, rangeEnd };
 }
 
+/** Semana do ciclo de N semanas (0 … n−1) pela data de referência — continua entre os meses. */
+export function cycleIndex(date: IsoDate, cycleRef: IsoDate, n: number): number {
+  const weeks = Math.floor(diffDays(mondayOf(cycleRef), mondayOf(date)) / 7);
+  return ((weeks % n) + n) % n;
+}
+
 /** Fase do revezamento A/B pela data de referência — continua de um mês para o outro. */
 export function cyclePhase(date: IsoDate, cycleRef: IsoDate): 'A' | 'B' {
   const weeks = Math.floor(diffDays(mondayOf(cycleRef), mondayOf(date)) / 7);

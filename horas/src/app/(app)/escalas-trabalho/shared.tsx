@@ -1,10 +1,11 @@
 'use client';
 
+import { useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Plus, X } from 'lucide-react';
 import { Input, Label, Select } from '@/components/ui/input';
 import { formatClock, parseClock, WEEKDAYS } from '@/domain/dates';
-import type { DayKey, HoursMap, MemberHours, Shift3, Window, WeekPattern } from '@/domain/escalas/types';
+import type { DayKey, HoursMap, MemberHours, Shift3, Window, WeekCycle, WeekPattern } from '@/domain/escalas/types';
 import { cn } from '@/lib/cn';
 
 export const DAY_KEYS: { key: DayKey; label: string }[] = [...WEEKDAYS.map((w) => ({ key: String(w.n) as DayKey, label: w.long })), { key: 'F', label: 'Feriado' }];
@@ -124,31 +125,45 @@ export function WeekdayPicker({ value, onChange, withHoliday = false }: { value:
   );
 }
 
-/** Grade semanal fixa (semana A e, se marcar, semana B diferente): cada dia é folga ou um turno. */
-export function WeekPatternEditor({ value, onChange }: { value: { A: WeekPattern; B?: WeekPattern }; onChange: (v: { A: WeekPattern; B?: WeekPattern }) => void }) {
-  const table = (key: 'A' | 'B') => {
-    const w = value[key] ?? value.A;
-    const set = (i: number, s: Shift3 | null) => onChange({ ...value, [key]: w.map((x, j) => (j === i ? s : x)) });
+function WeekTable({ week, onChange }: { week: WeekPattern; onChange: (w: WeekPattern) => void }) {
+  const set = (i: number, sh: Shift3 | null) => onChange(week.map((x, j) => (j === i ? sh : x)));
+  return (
+    <div className="divide-y divide-borda rounded-lg border border-borda">
+      {WEEKDAYS.map((d, i) => (
+        <div key={d.n} className="flex flex-wrap items-center gap-2 px-2 py-1.5">
+          <span className="w-9 text-xs font-bold text-navy">{d.short}</span>
+          <Select value={week[i] ? 'on' : 'off'} onChange={(e) => set(i, e.target.value === 'on' ? (week.find(Boolean) ?? [420, 960, 60]) : null)} className="h-8 w-24 text-xs">
+            <option value="off">Folga</option><option value="on">Trabalha</option>
+          </Select>
+          {week[i] && <ShiftInput value={week[i]!} onChange={(v) => set(i, v)} />}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Grade semanal fixa: todas as semanas iguais, revezamento A/B ou rodízio de N semanas. */
+export function WeekPatternEditor({ value, onChange }: { value: WeekCycle; onChange: (v: WeekCycle) => void }) {
+  const [tab, setTab] = useState(0);
+  if (value.cycle?.length) {
+    const n = value.cycle.length;
+    const k = Math.min(tab, n - 1);
     return (
-      <div className="divide-y divide-borda rounded-lg border border-borda">
-        {WEEKDAYS.map((d, i) => (
-          <div key={d.n} className="flex flex-wrap items-center gap-2 px-2 py-1.5">
-            <span className="w-9 text-xs font-bold text-navy">{d.short}</span>
-            <Select value={w[i] ? 'on' : 'off'} onChange={(e) => set(i, e.target.value === 'on' ? (w.find(Boolean) ?? [420, 960, 60]) : null)} className="h-8 w-24 text-xs">
-              <option value="off">Folga</option><option value="on">Trabalha</option>
-            </Select>
-            {w[i] && <ShiftInput value={w[i]!} onChange={(v) => set(i, v)} />}
-          </div>
-        ))}
+      <div className="space-y-2">
+        <p className="text-xs text-tinta-suave">Rodízio de {n} semanas (a semana 1 começa na data de referência do setor). Para refazer a ordem, use “Montar rodízio”.</p>
+        <div className="flex flex-wrap gap-1">
+          {value.cycle.map((_, i) => <button key={i} type="button" onClick={() => setTab(i)} className={cn('rounded-md border px-2.5 py-1 text-xs font-bold', i === k ? 'border-nacao bg-nacao text-white' : 'border-borda text-tinta-suave')}>Semana {i + 1}</button>)}
+        </div>
+        <WeekTable week={value.cycle[k]!} onChange={(w) => { const c = value.cycle!.map((x, i) => (i === k ? w : x)); onChange({ A: c[0]!, cycle: c }); }} />
       </div>
     );
-  };
+  }
   return (
     <div className="space-y-2">
       <p className="text-xs font-semibold text-tinta-suave">{value.B ? 'Semana A' : 'Todas as semanas'}</p>
-      {table('A')}
+      <WeekTable week={value.A} onChange={(w) => onChange({ ...value, A: w })} />
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!value.B} onChange={(e) => onChange(e.target.checked ? { ...value, B: [...value.A] } : { A: value.A })} className="size-4 accent-[#0169E9]" /> Semana B diferente (revezamento A/B)</label>
-      {value.B && <><p className="text-xs font-semibold text-tinta-suave">Semana B</p>{table('B')}</>}
+      {value.B && <><p className="text-xs font-semibold text-tinta-suave">Semana B</p><WeekTable week={value.B} onChange={(w) => onChange({ ...value, B: w })} /></>}
     </div>
   );
 }

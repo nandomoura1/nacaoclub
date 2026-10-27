@@ -23,7 +23,7 @@ export default async function EquipesPage({ searchParams }: { searchParams: Prom
     <>
       {header}
       <Card className="mb-4 p-4"><SectorMonthPicker sectors={sectors} sectorId={q.sectorId} month={q.mes} showMonth={false} /></Card>
-      <TeamClient sectorId={q.sectorId} members={setup.sector.members.map((m) => ({ ...m, name: m.teacher.displayName || m.teacher.name, hours: m.hours as never }))} people={setup.people} canEdit={can(principal, 'ws.edit')} />
+      <TeamClient sectorId={q.sectorId} members={setup.sector.members.map((m) => ({ ...m, name: m.teacher.displayName || m.teacher.name, hours: m.hours as never }))} people={setup.people} canEdit={can(principal, 'ws.edit')} cycleRef={setup.sector.cycleRef.toISOString().slice(0, 10)} />
     </>
   );
 }

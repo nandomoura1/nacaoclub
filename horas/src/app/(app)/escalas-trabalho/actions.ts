@@ -30,3 +30,4 @@ export const editCellAction = async (scheduleId: string, memberId: string, date:
 export const swapCellsAction = async (scheduleId: string, a: { memberId: string; date: string }, b: { memberId: string; date: string }): Promise<ActionResult<Analysis>> => act((p, m) => ws.swapCells(p, scheduleId, a, b, m));
 export const setStatusAction = async (scheduleId: string, status: 'RASCUNHO' | 'APROVADA' | 'PUBLICADA') => act((p, m) => ws.setScheduleStatus(p, scheduleId, status, m));
 export const loadModelsAction = async () => act((p, m) => ws.loadDocumentModels(p, m));
+export const setRotationAction = async (sectorId: string, memberIds: string[]) => act((p, m) => ws.setRotation(p, sectorId, memberIds, m), memberIds.length ? 'Rodízio montado. Gere a escala de novo para aplicar.' : 'Rodízio desfeito.');

@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '@/server/db';
-import { generateSchedule, loadDocumentModels, loadMonth } from '@/server/services/ws-service';
+import { generateSchedule, loadDocumentModels, loadMonth, setRotation } from '@/server/services/ws-service';
 import { cyclePhase } from '@/domain/escalas/calendar';
 import { META, ensureCatalog, hasDb, makeUser } from './helpers';
 
@@ -29,18 +29,43 @@ describe.skipIf(!hasDb)('Modelos iniciais das escalas', () => {
     expect(clt.validatedAt).toBeNull();
   });
 
-  it('Recepção: grade do documento, abertura e fechamento cobertos; domingo do Igor apontado', async () => {
+  it('Recepção: rodízio de 6 posições — folga quinta ⇒ domingo; folga sexta ⇒ sábado; qui+sex ⇒ folga no fim de semana', async () => {
     const v = await view('Recepção');
-    const duda = v.grid[memberId(v, 'Duda')]!;
-    expect([duda['2026-11-03']!.startMin, duda['2026-11-03']!.endMin]).toEqual([H(5), H(13)]);
-    expect([duda['2026-11-06']!.startMin, duda['2026-11-06']!.endMin]).toEqual([H(5), H(14)]);
-    expect(duda['2026-11-07']!.kind).toBe('FOLGA');
-    const igor = v.grid[memberId(v, 'Igor')]!;
-    expect([igor['2026-11-08']!.startMin, igor['2026-11-08']!.breakMin]).toEqual([H(8), 15]);
+    const people = ['Duda', 'Lawana', 'Brenda', 'Manu', 'Débora', 'Igor'].map((n) => memberId(v, n));
+    const k = (id: string, d: string) => v.grid[id]![d]!.kind;
+    for (const w of v.month.weeks.filter((x) => x.days.every((d) => d >= v.month.first && d <= v.month.last))) {
+      const [, , , qui, sex, sab, dom] = w.days as [string, string, string, string, string, string, string];
+      for (const id of people) {
+        if (k(id, qui) === 'FOLGA') { expect(k(id, dom)).toBe('TRABALHO'); expect(k(id, sex)).toBe('TRABALHO'); }
+        if (k(id, sex) === 'FOLGA') expect(k(id, sab)).toBe('TRABALHO');
+        if (k(id, qui) === 'TRABALHO' && k(id, sex) === 'TRABALHO' && k(id, dom) !== 'TRABALHO') expect(k(id, sab)).toBe('FOLGA');
+      }
+      // Toda semana: 1 no domingo, 2 no sábado, 5 na quinta, 4 na sexta (cobertura do documento).
+      expect(people.filter((id) => k(id, dom) === 'TRABALHO').length).toBe(1);
+      expect(people.filter((id) => k(id, sab) === 'TRABALHO').length).toBe(2);
+      expect(people.filter((id) => k(id, qui) === 'TRABALHO').length).toBe(5);
+      expect(people.filter((id) => k(id, sex) === 'TRABALHO').length).toBe(4);
+      // Cada pessoa: 5 dias e 2 folgas por semana.
+      for (const id of people) expect(w.days.filter((d) => k(id, d) === 'TRABALHO').length).toBe(5);
+    }
+    // Domingo gira: pessoas diferentes em domingos seguidos; ninguém mais em todos.
+    const sundays = v.month.days.filter((d) => new Date(`${d}T12:00:00Z`).getUTCDay() === 0);
+    const who = sundays.map((d) => people.find((id) => k(id, d) === 'TRABALHO'));
+    expect(new Set(who).size).toBe(who.length);
+    expect(v.analysis!.alerts.filter((a) => a.level === 'CONFLITO')).toEqual([]);
     expect(v.analysis!.uncovered.filter((u) => !['2026-11-02', '2026-11-15', '2026-11-20', '2026-11-30'].includes(u.date))).toEqual([]);
-    expect(v.analysis!.alerts.some((a) => a.code === 'DOMINGO' && a.memberId === memberId(v, 'Igor'))).toBe(true);
-    const st = v.analysis!.members.find((m) => m.name === 'Duda')!;
-    expect(st.days).toBeGreaterThanOrEqual(19);
+  });
+
+  it('Montar rodízio: desfazer e montar de novo reproduz as posições', async () => {
+    const sid = await sector('Recepção');
+    const before = await prisma.wsMember.findMany({ where: { sectorId: sid }, orderBy: { sortOrder: 'asc' } });
+    await setRotation(admin.principal, sid, [], META);
+    const flat = await prisma.wsMember.findMany({ where: { sectorId: sid }, orderBy: { sortOrder: 'asc' } });
+    expect(flat.every((m) => !(m.hours as { week?: { cycle?: unknown } }).week?.cycle)).toBe(true);
+    await setRotation(admin.principal, sid, flat.map((m) => m.id), META);
+    const after = await prisma.wsMember.findMany({ where: { sectorId: sid }, orderBy: { sortOrder: 'asc' } });
+    expect(after.map((m) => m.hours)).toEqual(before.map((m) => m.hours));
+    await expect(setRotation(admin.principal, sid, [flat[0]!.id], META)).rejects.toThrow(/2 pessoas/);
   });
 
   it('Limpeza: Marcos todo sábado; Junior × Carlos e Lu × Kelly alternam; John fora da geração', async () => {

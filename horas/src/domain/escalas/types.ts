@@ -23,7 +23,13 @@ export type WeekPattern = (Shift3 | null)[];
  * `week` = grade cíclica do setor (semana A e, se diferente, semana B), como
  * nos modelos do documento. Com `week`, a grade define dias e folgas.
  */
-export type MemberHours = { base?: Shift3; week?: { A: WeekPattern; B?: WeekPattern } } & Partial<Record<'6' | '7' | 'F', Shift3>>;
+export type MemberHours = { base?: Shift3; week?: WeekCycle } & Partial<Record<'6' | '7' | 'F', Shift3>>;
+/**
+ * Grade cíclica: A (e B no revezamento quinzenal) ou `cycle` = N semanas em
+ * sequência (rodízio, ex.: Recepção com 6 posições). Com `cycle`, a semana do
+ * ciclo vem da data de referência do setor e A/B são ignorados.
+ */
+export type WeekCycle = { A: WeekPattern; B?: WeekPattern; cycle?: WeekPattern[] };
 
 export type CellKind =
   | 'TRABALHO' | 'FOLGA' | 'FECHADO' | 'SEM_GRADE'

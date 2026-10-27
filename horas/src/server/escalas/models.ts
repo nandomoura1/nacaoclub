@@ -1,4 +1,5 @@
-import type { Bond, HoursMap, Mode, Shift3, WeekPattern } from '@/domain/escalas/types';
+import { buildRotation } from '@/domain/escalas/rotation';
+import type { Bond, HoursMap, Mode, Shift3, WeekCycle, WeekPattern } from '@/domain/escalas/types';
 
 /**
  * Modelos iniciais do documento "Escala de Trabalho 5x2 — Nação Club"
@@ -22,7 +23,7 @@ export interface ModelMember {
   altFunctions?: string[];
   bond: Bond;
   mode?: Mode;
-  week?: { A: WeekPattern; B?: WeekPattern };
+  week?: WeekCycle;
   fixedOff?: number[];
   availableDays?: number[];
   autoSchedule?: boolean;
@@ -36,19 +37,32 @@ const WEEK = [1, 2, 3, 4, 5];
 
 // ─── Recepção ─────────────────────────────────────────────────
 const R = { m1: s(h(5), h(13), 60), m2: s(h(6), h(14), 60), m3: s(h(7), h(15), 60), t1: s(h(13), h(21), 60), t2: s(h(14), h(22), 60) };
+/**
+ * Recepção: 6 posições (a grade do documento) em rodízio semanal. P1–P3 trabalham
+ * qui e sex e folgam o fim de semana; P4–P5 folgam sexta e trabalham sábado; P6
+ * folga quinta e trabalha domingo. Cada semana todos avançam uma posição.
+ */
+export const RECEPCAO_POSITIONS: WeekPattern[] = [
+  wk(R.m1, R.m1, R.m1, R.m1, s(h(5), h(14), 60), OFF, OFF),
+  wk(R.m2, R.m2, R.m2, R.m2, s(h(6), h(15), 60), OFF, OFF),
+  wk(R.m3, R.m3, R.m3, R.m3, s(h(13), h(22), 60), OFF, OFF),
+  wk(R.t1, R.t1, R.t1, R.t1, OFF, s(h(7), h(16), 60), OFF),
+  wk(R.t2, R.t2, R.t2, R.t2, OFF, s(h(8), h(17), 60), OFF),
+  wk(R.t2, R.t2, R.t2, OFF, s(h(13), h(22), 60), OFF, s(h(8), h(14), 15)),
+];
+const RECEPCAO_ORDER: [string, string][] = [['duda', 'Duda'], ['lawana', 'Lawana'], ['brenda', 'Brenda'], ['manu', 'Manu'], ['debora', 'Débora'], ['igor', 'Igor']];
+const RECEPCAO_CYCLES = buildRotation(RECEPCAO_POSITIONS);
+
 const recepcao: SectorModel = {
   name: 'Recepção',
   procSector: 'Recepção e Comercial',
   hours: { 1: [[h(5), h(22)]], 2: [[h(5), h(22)]], 3: [[h(5), h(22)]], 4: [[h(5), h(22)]], 5: [[h(5), h(22)]], 6: [[h(7), h(17)]], 7: [[h(8), h(14)]] },
-  notes: 'Modelo do documento (análise de 21/10/2026). Pendências do documento: horários de almoço, rodízio dos domingos (Igor está em todos) e compatibilidade com contratos/CCT.',
-  members: [
-    { key: 'duda', name: 'Duda (Recepção)', display: 'Duda', functionName: 'Recepção', bond: 'CLT', week: { A: wk(R.m1, R.m1, R.m1, R.m1, s(h(5), h(14), 60), OFF, OFF) } },
-    { key: 'lawana', name: 'Lawana (Recepção)', display: 'Lawana', functionName: 'Recepção', bond: 'CLT', week: { A: wk(R.m2, R.m2, R.m2, R.m2, s(h(6), h(15), 60), OFF, OFF) } },
-    { key: 'brenda', name: 'Brenda (Recepção)', display: 'Brenda', functionName: 'Recepção', bond: 'CLT', week: { A: wk(R.m3, R.m3, R.m3, R.m3, s(h(13), h(22), 60), OFF, OFF) } },
-    { key: 'manu', name: 'Manu (Recepção)', display: 'Manu', functionName: 'Recepção', bond: 'CLT', week: { A: wk(R.t1, R.t1, R.t1, R.t1, OFF, s(h(7), h(16), 60), OFF) } },
-    { key: 'debora', name: 'Débora (Recepção)', display: 'Débora', functionName: 'Recepção', bond: 'CLT', week: { A: wk(R.t2, R.t2, R.t2, R.t2, OFF, s(h(8), h(17), 60), OFF) } },
-    { key: 'igor', name: 'Igor (Recepção)', display: 'Igor', functionName: 'Recepção', bond: 'CLT', week: { A: wk(R.t2, R.t2, R.t2, OFF, s(h(13), h(22), 60), OFF, s(h(8), h(14), 15)) }, notes: 'Domingo 08–14 com 15 min de intervalo. Documento: criar rodízio quinzenal dos domingos.' },
-  ],
+  notes: 'Modelo do documento (análise de 21/10/2026) com rodízio semanal das 6 posições: todos passam por sábado e domingo. Pendências do documento: horários de almoço e compatibilidade com contratos/CCT.',
+  members: RECEPCAO_ORDER.map(([key, display], i) => ({
+    key, name: `${display} (Recepção)`, display, functionName: 'Recepção', bond: 'CLT' as const,
+    week: { A: RECEPCAO_CYCLES[i]![0]!, cycle: RECEPCAO_CYCLES[i] },
+    ...(i === 0 ? { notes: 'Rodízio de 6 posições: quem folga na quinta trabalha domingo; quem folga na sexta trabalha sábado; quem trabalha quinta e sexta folga sábado e domingo.' } : {}),
+  })),
   posts: [
     { name: 'Abertura', kind: 'ABERTURA', start: h(5), end: h(6), weekdays: WEEK, min: 1 },
     { name: 'Fechamento', kind: 'FECHAMENTO', start: h(21), end: h(22), weekdays: WEEK, min: 1 },

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Pencil, Plus, UserMinus } from 'lucide-react';
+import { Pencil, Plus, RefreshCw, UserMinus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -12,7 +12,7 @@ import { Sheet } from '@/components/ui/sheet';
 import { WEEKDAYS } from '@/domain/dates';
 import { BOND_LABEL, hhmm } from '@/domain/escalas/labels';
 import type { Bond, MemberHours, Mode, Shift3 } from '@/domain/escalas/types';
-import { removeMemberAction, saveMemberAction } from '../actions';
+import { removeMemberAction, saveMemberAction, setRotationAction } from '../actions';
 import { MemberHoursEditor, WeekPatternEditor, WeekdayPicker } from '../shared';
 
 export interface TeamMember {
@@ -24,7 +24,8 @@ export interface TeamMember {
 const weekText = (w: (readonly [number, number, number] | null)[]) => w.map((x, i) => `${WEEKDAYS[i]!.short.toLowerCase()} ${x ? `${hhmm(x[0])}–${hhmm(x[1])}` : 'folga'}`).join(' · ');
 const days = (ns: number[]) => ns.map((n) => WEEKDAYS[n - 1]!.short.toLowerCase()).join('/');
 
-export function TeamClient({ sectorId, members, people, canEdit }: { sectorId: string; members: TeamMember[]; people: { id: string; name: string }[]; canEdit: boolean }) {
+export function TeamClient({ sectorId, members, people, canEdit, cycleRef }: { sectorId: string; members: TeamMember[]; people: { id: string; name: string }[]; canEdit: boolean; cycleRef: string }) {
+  const [rotation, setRotation] = useState(false);
   const router = useRouter();
   const [open, setOpen] = useState<TeamMember | 'new' | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +38,12 @@ export function TeamClient({ sectorId, members, people, canEdit }: { sectorId: s
     <>
       <div className="mb-3 flex items-center justify-between">
         <p className="text-sm text-tinta-suave">{members.filter((m) => m.active).length} ativo(s)</p>
-        {canEdit && <Button onClick={() => setOpen('new')}><Plus /> Adicionar colaborador</Button>}
+        {canEdit && (
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={() => setRotation(true)}><RefreshCw /> Montar rodízio</Button>
+            <Button onClick={() => setOpen('new')}><Plus /> Adicionar colaborador</Button>
+          </div>
+        )}
       </div>
       <FormMessage error={error} />
       <div className="grid gap-2 md:grid-cols-2">
@@ -56,7 +62,8 @@ export function TeamClient({ sectorId, members, people, canEdit }: { sectorId: s
               )}
             </div>
             <p className="mt-1 text-xs text-tinta">
-              {m.hours.week ? <span>Grade semanal{m.hours.week.B ? ' A/B' : ''}: {weekText(m.hours.week.A)}{m.hours.week.B ? <> · <b>B:</b> {weekText(m.hours.week.B)}</> : null}</span>
+              {m.hours.week?.cycle ? <span>Rodízio de {m.hours.week.cycle.length} semanas · semana 1: {weekText(m.hours.week.cycle[0]!)}</span>
+                : m.hours.week ? <span>Grade semanal{m.hours.week.B ? ' A/B' : ''}: {weekText(m.hours.week.A)}{m.hours.week.B ? <> · <b>B:</b> {weekText(m.hours.week.B)}</> : null}</span>
                 : m.hours.base ? `${hhmm(m.hours.base[0])}–${hhmm(m.hours.base[1])} (intervalo ${m.hours.base[2]} min)` : m.mode === 'COBERTURA' ? 'Sob demanda (cobre postos descobertos)' : <span className="text-atencao">sem horário habitual</span>}
               {m.hours['6'] && ` · sáb ${hhmm(m.hours['6'][0])}–${hhmm(m.hours['6'][1])}`}
               {m.hours['7'] && ` · dom ${hhmm(m.hours['7'][0])}–${hhmm(m.hours['7'][1])}`}
@@ -73,6 +80,7 @@ export function TeamClient({ sectorId, members, people, canEdit }: { sectorId: s
         ))}
       </div>
       {members.length === 0 && <Card className="p-6 text-center text-sm text-tinta-suave">Nenhum colaborador neste setor ainda.</Card>}
+      {rotation && <RotationSheet sectorId={sectorId} members={members.filter((m) => m.active)} cycleRef={cycleRef} onClose={() => setRotation(false)} onSaved={() => { setRotation(false); router.refresh(); }} />}
       {open && <MemberSheet sectorId={sectorId} member={open === 'new' ? null : open} people={people.filter((p) => !members.some((m) => m.teacherId === p.id))} onClose={() => setOpen(null)} onSaved={() => { setOpen(null); router.refresh(); }} />}
     </>
   );
@@ -153,6 +161,49 @@ function MemberSheet({ sectorId, member, people, onClose, onSaved }: { sectorId:
         {check('saturday', 'Trabalha sábado')}{check('sunday', 'Trabalha domingo')}{check('holiday', 'Trabalha feriado')}{check('autoSchedule', 'Entra na geração automática')}{check('active', 'Ativo')}
       </div>
       <div><Label htmlFor="m-obs">Observações e restrições</Label><Input id="m-obs" value={v.notes} maxLength={500} onChange={(e) => set('notes', e.target.value)} /></div>
+      <FormMessage error={error} />
+    </Sheet>
+  );
+}
+
+/** Rodízio de posições: cada pessoa começa na grade atual (posição) e avança uma posição por semana. */
+function RotationSheet({ sectorId, members, cycleRef, onClose, onSaved }: { sectorId: string; members: TeamMember[]; cycleRef: string; onClose: () => void; onSaved: () => void }) {
+  const eligible = members.filter((m) => m.hours.week);
+  const inRotation = eligible.filter((m) => m.hours.week?.cycle);
+  const [order, setOrder] = useState<string[]>((inRotation.length ? inRotation : eligible).map((m) => m.id));
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const byId = new Map(members.map((m) => [m.id, m]));
+  const pos = (m: TeamMember) => m.hours.week!.cycle?.[0] ?? m.hours.week!.A;
+  const move = (i: number, d: -1 | 1) => { const o = [...order]; const j = i + d; if (j < 0 || j >= o.length) return; [o[i], o[j]] = [o[j]!, o[i]!]; setOrder(o); };
+  const save = (ids: string[]) => start(async () => { const r = await setRotationAction(sectorId, ids); if (!r.ok) setError(r.error); else onSaved(); });
+  return (
+    <Sheet title="Montar rodízio" onClose={onClose} onSubmit={(e) => { e.preventDefault(); save(order); }}
+      footer={<><Button type="submit" disabled={pending || order.length < 2}>{pending ? 'Salvando…' : `Montar rodízio de ${order.length} semanas`}</Button>{inRotation.length > 0 && <Button type="button" variant="ghost" disabled={pending} onClick={() => confirm('Desfazer o rodízio? Cada pessoa fica com a grade da semana 1.') && save([])}>Desfazer rodízio</Button>}</>}>
+      <p className="text-sm text-tinta-suave">A grade atual de cada pessoa vira uma <b>posição</b>. Toda semana cada um avança para a posição de quem está abaixo na lista (o último volta para a primeira). Em {order.length} semanas todos passam por todas as posições, inclusive sábado e domingo.</p>
+      <p className="text-xs text-tinta-suave">Semana 1 = semana de {cycleRef.split('-').reverse().join('/')} (data de referência do setor, em Pré-requisitos). Depois de montar, gere a escala de novo.</p>
+      <ol className="space-y-1">
+        {order.map((id, i) => {
+          const m = byId.get(id)!;
+          return (
+            <li key={id} className="flex items-start gap-2 rounded-lg bg-fundo p-2">
+              <span className="mt-0.5 w-12 shrink-0 text-xs font-bold text-nacao">P{i + 1}</span>
+              <div className="min-w-0 flex-1"><p className="text-sm font-bold text-navy">{m.name}</p><p className="text-[11px] text-tinta-suave">{weekText(pos(m))}</p></div>
+              <div className="flex flex-col">
+                <button type="button" aria-label="Subir" onClick={() => move(i, -1)} className="text-xs text-tinta-fraca hover:text-nacao">▲</button>
+                <button type="button" aria-label="Descer" onClick={() => move(i, 1)} className="text-xs text-tinta-fraca hover:text-nacao">▼</button>
+              </div>
+              <button type="button" aria-label="Tirar do rodízio" onClick={() => setOrder(order.filter((x) => x !== id))} className="text-xs text-tinta-fraca hover:text-critico">✕</button>
+            </li>
+          );
+        })}
+      </ol>
+      {eligible.filter((m) => !order.includes(m.id)).length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {eligible.filter((m) => !order.includes(m.id)).map((m) => <button key={m.id} type="button" onClick={() => setOrder([...order, m.id])} className="rounded-full border border-borda px-2.5 py-1 text-xs font-semibold text-tinta-suave hover:border-nacao">+ {m.name}</button>)}
+        </div>
+      )}
+      {members.length > eligible.length && <p className="text-xs text-tinta-fraca">Só entra quem tem grade semanal fixa.</p>}
       <FormMessage error={error} />
     </Sheet>
   );
