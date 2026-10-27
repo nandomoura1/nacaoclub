@@ -18,12 +18,14 @@ import { dt, iso, listColumns } from './marketing-service';
 
 const COLUMN_IDS = TASK_COLUMNS.map((c) => c.id) as [TaskColumn, ...TaskColumn[]];
 const PRIORITY_IDS = PRIORITIES.map((p) => p.id) as [string, ...string[]];
+export const MAX_TASK_DESCRIPTION = 20_000;
 const opt = (max: number) => z.string().trim().max(max).transform((v) => v || null).nullable().optional().transform((v) => v ?? null);
 const uuidOrNull = z.string().uuid().or(z.literal('')).nullable().optional().transform((v) => v || null);
 
 const taskSchema = z.object({
   title: z.string().trim().min(2, 'Informe o título da tarefa.').max(200),
-  description: opt(4000),
+  /** Briefings longos cabem (o campo no banco é texto livre). */
+  description: opt(MAX_TASK_DESCRIPTION),
   campaignId: uuidOrNull, eventId: uuidOrNull,
   areaKey: z.string().nullable().optional().transform((v) => v || null),
   assigneeId: uuidOrNull,

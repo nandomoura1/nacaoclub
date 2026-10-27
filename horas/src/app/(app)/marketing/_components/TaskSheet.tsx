@@ -93,7 +93,11 @@ export function TaskSheet({ taskId, defaults, options, siblings, canEdit, onClos
       <div className="space-y-3">
         <FormMessage error={msg.error} success={msg.ok} />
         <div><Label>Título</Label><Input value={f.title} disabled={ro} onChange={(e) => set('title', e.target.value)} required /></div>
-        <div><Label>Descrição</Label><textarea className="min-h-20 w-full rounded-lg border border-borda p-2 text-sm" value={f.description} disabled={ro} onChange={(e) => set('description', e.target.value)} /></div>
+        <div>
+          <Label>Descrição</Label>
+          <textarea className="min-h-40 w-full resize-y rounded-lg border border-borda p-2 text-sm" value={f.description} disabled={ro} maxLength={20000} onChange={(e) => set('description', e.target.value)} />
+          <p className="text-right text-[11px] text-tinta-fraca">{f.description.length.toLocaleString('pt-BR')}/20.000</p>
+        </div>
         <div className="grid grid-cols-2 gap-2 [&>*]:min-w-0">
           <div className="col-span-2"><Label>Campanha</Label>
             <Select value={f.campaignId} disabled={ro} onChange={(e) => set('campaignId', e.target.value)}>

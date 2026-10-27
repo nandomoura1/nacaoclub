@@ -94,6 +94,11 @@ describe.skipIf(!hasDb)('Marketing Nação — Fase 1', () => {
   it('kanban: dependência impede concluir; mover e remarcar ficam auditados', async () => {
     const a = await saveTask(mkt.principal, null, { title: `Arte ${tag}`, areaKey: 'DESIGN', campaignId }, META);
     const b = await saveTask(mkt.principal, null, { title: `Post ${tag}`, areaKey: 'CONTEUDO', campaignId }, META);
+    // Descrição longa (briefing): até 20.000 caracteres.
+    const longa = await saveTask(mkt.principal, null, { title: `Briefing ${tag}`, description: 'x'.repeat(15000), campaignId }, META);
+    expect((await prisma.mktTask.findUniqueOrThrow({ where: { id: longa } })).description!.length).toBe(15000);
+    await expect(saveTask(mkt.principal, null, { title: `Longa demais ${tag}`, description: 'x'.repeat(20001) }, META)).rejects.toThrow();
+    await prisma.mktTask.delete({ where: { id: longa } });
     await setDependencies(mkt.principal, b, [a], META);
     await expect(setDependencies(mkt.principal, a, [b], META)).rejects.toThrow(/circular/);
     const done = (await prisma.mktBoardColumn.findFirstOrThrow({ where: { stage: 'EXECUTADO' }, orderBy: { position: 'asc' } })).id;
