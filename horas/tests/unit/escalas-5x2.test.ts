@@ -10,6 +10,8 @@ import { validate } from '@/domain/escalas/validate';
 const H = (h: number, m = 0) => h * 60 + m;
 const ALL: HoursMap = { 1: [[H(6), H(22)]], 2: [[H(6), H(22)]], 3: [[H(6), H(22)]], 4: [[H(6), H(22)]], 5: [[H(6), H(22)]], 6: [[H(7), H(18)]], 7: [[H(8), H(14)]] };
 const CLT: LegalParams = { bond: 'CLT', validFrom: '2020-01-01', maxDailyMin: 480, maxDailyExtraMin: 120, maxWeeklyMin: 2640, minRestBetweenMin: 660, maxConsecutiveDays: 6, sundayOffEveryWeeks: null, breakLongOverMin: 360, breakLongMin: 60, breakShortOverMin: 240, breakShortMin: 15, validated: true };
+/** FUNAP: contrato 6x1, 44h, até 2h de intervalo; sem domingo, interjornada nem intervalo mínimo. */
+const FUNAP: LegalParams = { bond: 'FUNAP', validFrom: '2020-01-01', maxDailyMin: null, maxDailyExtraMin: null, maxWeeklyMin: 2640, minRestBetweenMin: null, maxConsecutiveDays: 6, sundayOffEveryWeeks: null, breakLongOverMin: null, breakLongMin: null, breakShortOverMin: null, breakShortMin: null, maxBreakMin: 120, validated: true };
 let seq = 0;
 const id = () => `00000000-0000-4000-8000-${String(++seq).padStart(12, '0')}`;
 function member(name: string, o: Partial<Member> = {}): Member {
@@ -31,7 +33,7 @@ function run(o: { year: number; month: number; members: Member[]; posts?: Post[]
   const base = { month, days, members: o.members, posts: o.posts ?? [], rules: o.rules ?? [], absences: o.absences ?? [], cycleRef: o.cycleRef ?? '2026-10-05' };
   const g = generate({ ...base, prior: o.prior ?? {} });
   o.edit?.(g.grid);
-  const a = validate({ ...base, grid: g.grid, legal: { CLT, FUNAP: { ...CLT, bond: 'FUNAP' } } });
+  const a = validate({ ...base, grid: g.grid, legal: { CLT, FUNAP } });
   return { month, days, grid: g.grid, engineAlerts: g.alerts, analysis: a };
 }
 const worked = (g: Grid, mid: string, ds: IsoDate[]) => ds.filter((d) => g[mid]![d]!.kind === 'TRABALHO').length;
@@ -222,5 +224,23 @@ describe('motor de geração', () => {
     // Caio (MEI) trabalha só nos dias disponíveis, sem meta de 5 dias.
     expect(r.month.days.filter((d) => r.grid[caio.id]![d]!.kind === 'TRABALHO').every((d) => [2, 3, 5].includes(weekdayOf(d)))).toBe(true);
     expect(addDays('2026-11-03', 0)).toBe('2026-11-03');
+  });
+
+  it('FUNAP 6x1: uma folga por semana; sem domingo, interjornada e intervalo mínimo; intervalo acima de 2h acusa', () => {
+    const f = member('Eliel', { bond: 'FUNAP', hours: { base: [H(7), H(15), 60] } });
+    const r = run({
+      year: 2026, month: 11, members: [f],
+      edit: (g) => {
+        g[f.id]!['2026-11-10'] = { kind: 'TRABALHO', startMin: H(14), endMin: H(22), breakMin: 0 };
+        g[f.id]!['2026-11-11'] = { kind: 'TRABALHO', startMin: H(6), endMin: H(14), breakMin: 0 };
+        g[f.id]!['2026-11-12'] = { kind: 'TRABALHO', startMin: H(7), endMin: H(17), breakMin: 150 };
+      },
+    });
+    for (const w of r.month.weeks.slice(1, 4)) expect(worked(r.grid, f.id, w.days)).toBeGreaterThanOrEqual(6);
+    const codes = r.analysis.alerts.filter((a) => a.memberId === f.id).map((a) => a.code);
+    expect(codes).not.toContain('DOMINGO');
+    expect(codes).not.toContain('INTERJORNADA');
+    expect(codes).not.toContain('INTERVALO');
+    expect(codes).toContain('INTERVALO_MAXIMO');
   });
 });

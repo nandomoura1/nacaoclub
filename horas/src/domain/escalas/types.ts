@@ -125,6 +125,8 @@ export interface LegalParams {
   breakLongMin: number | null;
   breakShortOverMin: number | null;
   breakShortMin: number | null;
+  /** Intervalo máximo por dia (ex.: FUNAP até 2h). */
+  maxBreakMin?: number | null;
   validated: boolean;
 }
 

@@ -158,6 +158,7 @@ export function validate(v: ValidateInput): Analysis {
       else if (L.maxDailyMin != null && net > L.maxDailyMin) push({ level: 'AJUSTE', code: 'HORA_EXTRA', date, memberId: m.id, message: `${br(date)}: ${m.name} com ${hm(net)} (acima de ${hm(L.maxDailyMin)}: hora extra).` });
       if (L.breakLongOverMin != null && L.breakLongMin != null && gross > L.breakLongOverMin && (c.breakMin ?? 0) < L.breakLongMin) push({ level: 'CONFLITO', code: 'INTERVALO', date, memberId: m.id, message: `${br(date)}: ${m.name} com jornada acima de ${hm(L.breakLongOverMin)} pede intervalo de ${hm(L.breakLongMin)}.` });
       else if (L.breakShortOverMin != null && L.breakShortMin != null && gross > L.breakShortOverMin && gross <= (L.breakLongOverMin ?? 1440) && (c.breakMin ?? 0) < L.breakShortMin) push({ level: 'CONFLITO', code: 'INTERVALO', date, memberId: m.id, message: `${br(date)}: ${m.name} pede intervalo de ${L.breakShortMin} min.` });
+      if (L.maxBreakMin != null && (c.breakMin ?? 0) > L.maxBreakMin) push({ level: 'CONFLITO', code: 'INTERVALO_MAXIMO', date, memberId: m.id, message: `${br(date)}: ${m.name} com ${hm(c.breakMin ?? 0)} de intervalo (máximo ${hm(L.maxBreakMin)} no contrato ${m.bond}).` });
       const prev = row[addDays(date, -1)];
       if (L.minRestBetweenMin != null && prev?.kind === 'TRABALHO' && prev.endMin != null) {
         const rest = 1440 - prev.endMin + c.startMin!;

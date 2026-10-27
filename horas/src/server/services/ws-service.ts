@@ -120,6 +120,7 @@ const legalSchema = z.object({
   minRestBetweenMin: min.nullable(), maxConsecutiveDays: z.number().int().min(1).max(31).nullable(),
   sundayOffEveryWeeks: z.number().int().min(1).max(12).nullable(),
   breakLongOverMin: min.nullable(), breakLongMin: min.nullable(), breakShortOverMin: min.nullable(), breakShortMin: min.nullable(),
+  maxBreakMin: min.nullable().default(null),
   notes: text(1000),
   validated: z.boolean().default(false),
 });
@@ -518,7 +519,7 @@ async function context(db: Tx, sectorId: string, year: number, month: number) {
   const legal: Partial<Record<string, LegalParams>> = {};
   for (const r of legalRows) {
     if (legal[r.bond]) continue;
-    legal[r.bond] = { bond: r.bond as Bond, validFrom: fromUtc(r.validFrom), maxDailyMin: r.maxDailyMin, maxDailyExtraMin: r.maxDailyExtraMin, maxWeeklyMin: r.maxWeeklyMin, minRestBetweenMin: r.minRestBetweenMin, maxConsecutiveDays: r.maxConsecutiveDays, sundayOffEveryWeeks: r.sundayOffEveryWeeks, breakLongOverMin: r.breakLongOverMin, breakLongMin: r.breakLongMin, breakShortOverMin: r.breakShortOverMin, breakShortMin: r.breakShortMin, validated: !!r.validatedAt };
+    legal[r.bond] = { bond: r.bond as Bond, validFrom: fromUtc(r.validFrom), maxDailyMin: r.maxDailyMin, maxDailyExtraMin: r.maxDailyExtraMin, maxWeeklyMin: r.maxWeeklyMin, minRestBetweenMin: r.minRestBetweenMin, maxConsecutiveDays: r.maxConsecutiveDays, sundayOffEveryWeeks: r.sundayOffEveryWeeks, breakLongOverMin: r.breakLongOverMin, breakLongMin: r.breakLongMin, breakShortOverMin: r.breakShortOverMin, breakShortMin: r.breakShortMin, maxBreakMin: r.maxBreakMin, validated: !!r.validatedAt };
   }
   const prior: Grid = {};
   for (const c of prevS?.cells ?? []) (prior[c.memberId] ??= {})[fromUtc(c.date)] = toCell(c);
@@ -716,7 +717,7 @@ export async function loadDocumentModels(principal: P | null, meta: RequestMeta)
         const row = await tx.wsMember.create({
           data: {
             sectorId: sector.id, teacherId: t.id, functionName: m.functionName, altFunctions: m.altFunctions ?? [], bond: m.bond, mode: m.mode ?? 'FIXO',
-            hours: m.week ? { week: m.week } : {}, weeklyMin: 2400, fixedOff: m.fixedOff ?? [], availableDays: m.availableDays ?? [],
+            hours: m.week ? { week: m.week } : {}, weeklyMin: m.bond === 'FUNAP' ? 2640 : 2400, fixedOff: m.fixedOff ?? [], availableDays: m.availableDays ?? [],
             autoSchedule: m.autoSchedule ?? true, notes: m.notes ?? null, sortOrder: i,
           },
         });

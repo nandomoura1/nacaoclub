@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '@/server/db';
 import { generateSchedule, loadDocumentModels, loadMonth, setRotation } from '@/server/services/ws-service';
 import { cyclePhase } from '@/domain/escalas/calendar';
@@ -14,12 +14,18 @@ describe.skipIf(!hasDb)('Modelos iniciais das escalas', () => {
   const view = async (name: string) => loadMonth(admin.principal, await sector(name), 2026, 11);
   const memberId = (v: Awaited<ReturnType<typeof view>>, name: string) => v.members.find((m) => m.name === name)!.id;
 
+  const created: string[] = [];
+  // Os feriados criados aqui saem no fim (outros testes usam o mesmo banco).
+  afterAll(async () => { await prisma.holiday.deleteMany({ where: { id: { in: created } } }); });
+
   beforeAll(async () => {
     await ensureCatalog();
     admin = await makeUser('ADMIN');
     await prisma.wsLegalParam.deleteMany({ where: { bond: 'CLT' } });
     for (const h of holidaysOf(2026)) {
-      await prisma.holiday.upsert({ where: { date: new Date(`${h.date}T00:00:00Z`) }, update: {}, create: { date: new Date(`${h.date}T00:00:00Z`), name: h.name, scope: h.scope } });
+      const date = new Date(`${h.date}T00:00:00Z`);
+      if (await prisma.holiday.findUnique({ where: { date } })) continue;
+      created.push((await prisma.holiday.create({ data: { date, name: h.name, scope: h.scope } })).id);
     }
     const r = await loadDocumentModels(admin.principal, META);
     expect(r.created.sort()).toEqual(['Cozinha', 'Lanchonete', 'Limpeza e Manutenção', 'Recepção'].filter((n) => !r.skipped.includes(n)).sort());

@@ -2639,6 +2639,8 @@ model WsLegalParam {
   breakLongMin        Int?      @map("break_long_min")
   breakShortOverMin   Int?      @map("break_short_over_min")
   breakShortMin       Int?      @map("break_short_min")
+  /// Intervalo máximo por dia (ex.: FUNAP até 2h). Vazio = não verifica.
+  maxBreakMin         Int?      @map("max_break_min")
   notes               String?
   /// Vazio = ainda não conferido pelo DP: a escala mostra a pendência.
   validatedAt         DateTime? @map("validated_at")

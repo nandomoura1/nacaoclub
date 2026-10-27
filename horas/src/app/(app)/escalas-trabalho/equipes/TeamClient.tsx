@@ -130,7 +130,7 @@ function MemberSheet({ sectorId, member, people, onClose, onSaved }: { sectorId:
       )}
       <div className="grid grid-cols-2 gap-2">
         <div><Label htmlFor="m-f">Função</Label><Input id="m-f" value={v.functionName} maxLength={60} onChange={(e) => set('functionName', e.target.value)} placeholder="Recepcionista, Cozinheira…" /></div>
-        <div><Label htmlFor="m-b">Vínculo</Label><Select id="m-b" value={v.bond} onChange={(e) => { const b = e.target.value as Bond; setV((p) => ({ ...p, bond: b, mode: b === 'CLT' ? 'FIXO' : p.mode })); }}>{(['CLT', 'FUNAP', 'MEI', 'FREELANCER'] as Bond[]).map((b) => <option key={b} value={b}>{BOND_LABEL[b]}</option>)}</Select></div>
+        <div><Label htmlFor="m-b">Vínculo</Label><Select id="m-b" value={v.bond} onChange={(e) => { const b = e.target.value as Bond; setV((p) => ({ ...p, bond: b, mode: b === 'CLT' ? 'FIXO' : p.mode, weeklyH: !member ? (b === 'FUNAP' ? 44 : 40) : p.weeklyH })); }}>{(['CLT', 'FUNAP', 'MEI', 'FREELANCER'] as Bond[]).map((b) => <option key={b} value={b}>{BOND_LABEL[b]}</option>)}</Select></div>
       </div>
       <div><Label htmlFor="m-a">Funções alternativas (separe por vírgula)</Label><Input id="m-a" value={v.altFunctions} onChange={(e) => set('altFunctions', e.target.value)} placeholder="Ex.: Caixa, Limpeza" /></div>
       {v.bond !== 'CLT' && (

@@ -49,8 +49,10 @@ export function patternShift(m: Member, d: DayPlan, cycleRef: IsoDate): Shift3 |
   const week = cyclePhase(d.date, cycleRef) === 'B' && w.B?.length ? w.B : w.A;
   return week[wd - 1] ?? null;
 }
-/** Vínculos com meta de 5 dias por semana (MEI e freelancer seguem a disponibilidade). */
+/** Vínculos com meta semanal de dias (CLT 5x2, FUNAP 6x1); MEI e freelancer seguem a disponibilidade. */
 export const fiveByTwo = (m: Member) => m.bond === 'CLT' || m.bond === 'FUNAP';
+/** Folgas por semana do vínculo: CLT 2 (5x2), FUNAP 1 (contrato 6x1). */
+export const weeklyOffs = (m: Member) => (m.bond === 'FUNAP' ? 1 : 2);
 
 export function absenceOn(absences: Absence[], memberId: string, date: IsoDate): Absence | undefined {
   return absences.find((a) => a.memberId === memberId && a.start <= date && date <= a.end);
@@ -228,7 +230,7 @@ export function generate(input: EngineInput): { grid: Grid; alerts: Alert[] } {
       // A grade cíclica já define as folgas da semana.
       if (!isScheduled(m) || !fiveByTwo(m) || hasPattern(m)) continue;
       const row = grid[m.id]!;
-      const target = compensatedWeek(m, week.monday, rules, cycleRef) ? 1 : 2;
+      const target = compensatedWeek(m, week.monday, rules, cycleRef) ? 1 : weeklyOffs(m);
       let offs = week.days.filter((d) => row[d]!.kind !== 'TRABALHO').length;
       while (offs < target) {
         const cands = week.days.filter((d) => row[d]!.kind === 'TRABALHO' && !isPrior(m.id, d) && !forcedWork.get(m.id)!.has(d));
