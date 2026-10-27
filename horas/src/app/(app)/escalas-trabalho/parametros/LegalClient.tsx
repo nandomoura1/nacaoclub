@@ -36,7 +36,7 @@ const FIELDS: { key: keyof Row; label: string; unit: 'h' | 'min' | 'dias' | 'sem
 const show = (v: number | null, unit: string) => (v == null ? '—' : unit === 'h' ? fmtHours(v) : `${v} ${unit}`);
 
 /** Sugestão inicial CLT para o DP conferir (não vale como validada até o DP marcar). */
-const CLT_DRAFT = { maxDailyMin: 480, maxDailyExtraMin: 120, maxWeeklyMin: 2640, minRestBetweenMin: 660, maxConsecutiveDays: 6, sundayOffEveryWeeks: 3, breakLongOverMin: 360, breakLongMin: 60, breakShortOverMin: 240, breakShortMin: 15 };
+const CLT_DRAFT = { maxDailyMin: 480, maxDailyExtraMin: 120, maxWeeklyMin: 2400, minRestBetweenMin: 660, maxConsecutiveDays: 6, sundayOffEveryWeeks: 3, breakLongOverMin: 360, breakLongMin: 60, breakShortOverMin: 240, breakShortMin: 15 };
 
 export function LegalClient({ rows, canEdit }: { rows: Row[]; canEdit: boolean }) {
   const [open, setOpen] = useState<Row | 'new' | null>(null);
@@ -93,7 +93,7 @@ function LegalSheet({ row, onClose }: { row: Row | null; onClose: () => void }) 
         <div><Label htmlFor="l-b">Vínculo</Label><Select id="l-b" value={bond} disabled={!!row} onChange={(e) => setBond(e.target.value as Bond)}>{(['CLT', 'FUNAP', 'MEI', 'FREELANCER'] as Bond[]).map((b) => <option key={b} value={b}>{BOND_LABEL[b]}</option>)}</Select></div>
         <div><Label htmlFor="l-v">Vigência a partir de</Label><Input id="l-v" type="date" value={validFrom} onChange={(e) => setValidFrom(e.target.value)} /></div>
       </div>
-      {!row && bond === 'CLT' && <p className="text-xs text-atencao">Valores sugeridos a partir da CLT (8h/dia, 44h/semana, 11h entre jornadas, intervalo de 1h acima de 6h e 15 min acima de 4h, 1 domingo a cada 3 semanas no comércio). Confira com a convenção coletiva antes de marcar como validado.</p>}
+      {!row && bond === 'CLT' && <p className="text-xs text-atencao">Valores sugeridos para a escala da Nação (8h/dia, 40h/semana — a CLT permite até 44h —, 11h entre jornadas, intervalo de 1h acima de 6h e 15 min acima de 4h, 1 domingo a cada 3 semanas no comércio). Confira com a convenção coletiva antes de marcar como validado.</p>}
       <div className="grid grid-cols-2 gap-2">
         {FIELDS.map((f) => (
           <div key={f.key}><Label htmlFor={`l-${f.key}`}>{f.label} ({f.unit})</Label><Input id={`l-${f.key}`} inputMode="decimal" value={vals[f.key]} onChange={(e) => setVals({ ...vals, [f.key]: e.target.value })} placeholder="vazio = não verifica" /></div>
