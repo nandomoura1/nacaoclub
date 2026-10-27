@@ -3,8 +3,9 @@
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  DndContext, DragOverlay, KeyboardSensor, PointerSensor, closestCorners, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent,
+  DndContext, DragOverlay, KeyboardSensor, PointerSensor, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent,
 } from '@dnd-kit/core';
+import { kanbanCollision } from '@/lib/kanban-collision';
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { AlertTriangle, CalendarDays, CheckSquare, Lock, Plus } from 'lucide-react';
@@ -63,7 +64,7 @@ function SortableCard({ t, onOpen, disabled }: { t: BoardTask; onOpen: () => voi
 function Column({ id, label, color, tasks, onOpen, onAdd, canEdit }: { id: string; label: string; color: string | null; tasks: BoardTask[]; onOpen: (id: string) => void; onAdd: () => void; canEdit: boolean }) {
   const { setNodeRef, isOver } = useDroppable({ id: `col:${id}`, data: { column: id } });
   return (
-    <div className={cn('flex w-72 shrink-0 flex-col rounded-2xl bg-fundo/80 p-2 ring-1 ring-borda', isOver && 'ring-2 ring-nacao')}>
+    <div ref={setNodeRef} className={cn('flex w-72 shrink-0 flex-col rounded-2xl bg-fundo/80 p-2 ring-1 ring-borda', isOver && 'ring-2 ring-nacao')}>
       <div className="mb-2 flex items-center gap-2 px-1">
         {color && <span className="size-2.5 shrink-0 rounded-full" style={{ background: color }} />}
         <p className="flex-1 text-xs font-bold uppercase tracking-wide text-navy">{label}</p>
@@ -71,7 +72,7 @@ function Column({ id, label, color, tasks, onOpen, onAdd, canEdit }: { id: strin
         {canEdit && <button type="button" onClick={onAdd} aria-label={`Nova tarefa em ${label}`} className="text-tinta-fraca hover:text-nacao"><Plus className="size-4" /></button>}
       </div>
       <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-        <div ref={setNodeRef} className="flex min-h-24 flex-1 flex-col gap-2">
+        <div className="flex min-h-24 flex-1 flex-col gap-2">
           {tasks.map((t) => <SortableCard key={t.id} t={t} onOpen={() => onOpen(t.id)} disabled={!canEdit} />)}
         </div>
       </SortableContext>
@@ -149,7 +150,7 @@ export function KanbanClient({ tasks: initial, columns, options, canEdit }: { ta
       <FormMessage error={error} />
       {/* Desktop: quadro com arrastar */}
       <div className="hidden md:block">
-        <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragEnd={onDragEnd}>
+        <DndContext sensors={sensors} collisionDetection={kanbanCollision} onDragStart={onDragStart} onDragEnd={onDragEnd}>
           <TopScroll className="-mx-1 px-1 pb-4"><div className="flex gap-3">
             {columns.map((c) => <Column key={c.id} id={c.id} label={c.name} color={c.color} tasks={byCol[c.id]!} canEdit={canEdit} onOpen={(id) => setOpen({ id })} onAdd={() => setOpen({ id: null, defaults: { columnId: c.id } })} />)}
           </div></TopScroll>

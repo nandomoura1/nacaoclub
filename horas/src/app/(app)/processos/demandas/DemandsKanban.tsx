@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { DndContext, DragOverlay, MouseSensor, TouchSensor, closestCorners, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core';
+import { DndContext, DragOverlay, MouseSensor, TouchSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core';
+import { kanbanCollision } from '@/lib/kanban-collision';
 import { CalendarDays, MessageSquare, UserRound } from 'lucide-react';
 import { FormMessage } from '@/components/ui/alert';
 import { DEMAND_STATUSES, PRIORITIES } from '@/domain/processos';
@@ -88,7 +89,7 @@ export function DemandsKanban({ demands, week, onOpen }: { demands: DemandRow[];
         </div>
       </div>
 
-      <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragEnd={onDragEnd}>
+      <DndContext sensors={sensors} collisionDetection={kanbanCollision} onDragStart={onDragStart} onDragEnd={onDragEnd}>
         <div className="hidden md:block"><TopScroll className="pb-2"><div className="grid auto-cols-[minmax(15rem,1fr)] grid-flow-col gap-3">
           {COLUMNS.map((c) => {
             const list = items.filter((d) => d.status === c.id);
