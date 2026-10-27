@@ -2493,19 +2493,23 @@ enum WsScheduleStatus {
 
 /// Setor que tem escala mensal (Recepção, Limpeza, Lanchonete, Cozinha…).
 model WsSector {
-  id           String   @id @default(uuid()) @db.Uuid
-  name         String   @unique
+  id             String   @id @default(uuid()) @db.Uuid
+  name           String   @unique
   /// Setor da Gestão de Processos (o líder dele monta a escala).
-  procSectorId String?  @map("proc_sector_id") @db.Uuid
+  procSectorId   String?  @map("proc_sector_id") @db.Uuid
   /// Horário habitual: { "1": [[420, 1320]], …, "7": [], "F": [[480, 840]] } (minutos). Sem a chave = usa o da Nação; [] = fechado.
-  hours        Json     @default("{}")
+  hours          Json     @default("{}")
   /// Segunda-feira de uma semana "A": a fase A/B do revezamento segue daqui, sem reiniciar no dia 1º.
-  cycleRef     DateTime @map("cycle_ref") @db.Date
-  notes        String?
-  sortOrder    Int      @default(0) @map("sort_order")
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  cycleRef       DateTime @map("cycle_ref") @db.Date
+  /// No feriado o setor funciona como SABADO ou DOMINGO (equipe e postos desse dia, no horário de feriado). Vazio = horário de feriado para todos.
+  holidayMode    String?  @map("holiday_mode")
+  /// true = todo feriado aparece para o gestor confirmar, mesmo com o horário já definido.
+  holidayConfirm Boolean  @default(false) @map("holiday_confirm")
+  notes          String?
+  sortOrder      Int      @default(0) @map("sort_order")
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   procSector ProcSector?     @relation(fields: [procSectorId], references: [id], onDelete: SetNull)
   posts      WsPost[]

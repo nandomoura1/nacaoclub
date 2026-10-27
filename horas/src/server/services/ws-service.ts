@@ -178,10 +178,14 @@ export async function saveSector(principal: P | null, id: string | null, input: 
 /** Horário e ciclo do setor: o líder também ajusta (não cria nem renomeia). */
 export async function saveSectorHours(principal: P | null, sectorId: string, input: unknown, meta: RequestMeta) {
   assertCan(principal, 'ws.edit');
-  const d = parse(z.object({ hours: hoursMapSchema, cycleRef: z.string().refine(isIsoDate, 'Data inválida.'), notes: text(500) }), input);
+  const d = parse(z.object({
+    hours: hoursMapSchema, cycleRef: z.string().refine(isIsoDate, 'Data inválida.'), notes: text(500),
+    holidayMode: z.enum(['SABADO', 'DOMINGO']).nullable().or(z.literal('').transform(() => null)).default(null),
+    holidayConfirm: z.boolean().default(false),
+  }), input);
   return prisma.$transaction(async (tx) => {
     const s = await assertSector(principal, sectorId, tx);
-    await tx.wsSector.update({ where: { id: sectorId }, data: { hours: d.hours, cycleRef: toUtc(mondayOf(d.cycleRef)), notes: d.notes } });
+    await tx.wsSector.update({ where: { id: sectorId }, data: { hours: d.hours, cycleRef: toUtc(mondayOf(d.cycleRef)), notes: d.notes, holidayMode: d.holidayMode, holidayConfirm: d.holidayConfirm } });
     await audit(tx, ctx(principal, meta), { action: 'ws.sector.hours', entityType: 'ws_sector', entityId: sectorId, before: { hours: s.hours, cycleRef: fromUtc(s.cycleRef) }, after: d, summary: `${principal.name} alterou o horário/ciclo do setor ${s.name}` });
   });
 }
@@ -498,7 +502,7 @@ async function context(db: Tx, sectorId: string, year: number, month: number) {
     db.wsSchedule.findUnique({ where: { sectorId_year_month: { sectorId, year: n.y, month: n.m } }, include: { cells: { where: { date: { lte: toUtc(mi.rangeEnd) } } } } }),
   ]);
   const ovs: Override[] = overrides.map((o) => ({ date: fromUtc(o.date), sectorId: o.sectorId, closed: o.closed, hours: (o.hours as [number, number][] | null) ?? null, reason: o.reason, eventName: o.event?.name ?? null, extraPeople: o.extraPeople }));
-  const cal = { sectorId, sectorHours: sector.hours as HoursMap, nacaoHours: (settings?.nacaoHours ?? {}) as HoursMap, holidays: new Map(holidays.map((h) => [fromUtc(h.date), { name: h.name, scope: h.scope }])), overrides: ovs };
+  const cal = { sectorId, sectorHours: sector.hours as HoursMap, nacaoHours: (settings?.nacaoHours ?? {}) as HoursMap, holidays: new Map(holidays.map((h) => [fromUtc(h.date), { name: h.name, scope: h.scope }])), overrides: ovs, holidayMode: sector.holidayMode, holidayConfirm: sector.holidayConfirm };
   const days = new Map<IsoDate, DayPlan>(eachDay(mi.rangeStart, mi.rangeEnd).map((d) => [d, resolveDay(d, cal)]));
   // Ativos + quem já está na escala salva deste mês (mesmo desativado depois).
   const inSchedule = new Set(schedule?.cells.map((c) => c.memberId));
@@ -705,7 +709,7 @@ export async function loadDocumentModels(principal: P | null, meta: RequestMeta)
     await prisma.$transaction(async (tx) => {
       if (await tx.wsSector.findFirst({ where: { name: { equals: model.name, mode: 'insensitive' } } })) { skipped.push(model.name); return; }
       const proc = model.procSector ? await tx.procSector.findFirst({ where: { name: model.procSector }, select: { id: true } }) : null;
-      const sector = await tx.wsSector.create({ data: { name: model.name, procSectorId: proc?.id ?? null, hours: model.hours, cycleRef: toUtc(MODEL_CYCLE_REF), notes: model.notes, sortOrder: DOCUMENT_MODELS.indexOf(model) } });
+      const sector = await tx.wsSector.create({ data: { name: model.name, procSectorId: proc?.id ?? null, hours: model.hours, cycleRef: toUtc(MODEL_CYCLE_REF), notes: model.notes, sortOrder: DOCUMENT_MODELS.indexOf(model), holidayMode: model.holidayMode ?? null, holidayConfirm: model.holidayConfirm ?? false } });
       const ids = new Map<string, string>();
       for (const [i, m] of model.members.entries()) {
         const t = await tx.teacher.findFirst({ where: { name: m.name } }) ?? await tx.teacher.create({ data: { name: m.name, displayName: m.display, createdById: principal.id, notes: `Cadastrado pelo modelo de escala (${model.name}).` } });

@@ -43,10 +43,11 @@ export function patternWeekLabel(m: Member, date: IsoDate, cycleRef: IsoDate): s
 /** Turno da grade cíclica no dia: undefined = sem grade; null = folga da grade. */
 export function patternShift(m: Member, d: DayPlan, cycleRef: IsoDate): Shift3 | null | undefined {
   const w = m.hours.week;
-  if (w?.cycle?.length) return w.cycle[cycleIndex(d.date, cycleRef, w.cycle.length)]![d.weekday - 1] ?? null;
+  const wd = d.asWeekday ?? d.weekday;
+  if (w?.cycle?.length) return w.cycle[cycleIndex(d.date, cycleRef, w.cycle.length)]![wd - 1] ?? null;
   if (!w?.A?.length) return undefined;
   const week = cyclePhase(d.date, cycleRef) === 'B' && w.B?.length ? w.B : w.A;
-  return week[d.weekday - 1] ?? null;
+  return week[wd - 1] ?? null;
 }
 /** Vínculos com meta de 5 dias por semana (MEI e freelancer seguem a disponibilidade). */
 export const fiveByTwo = (m: Member) => m.bond === 'CLT' || m.bond === 'FUNAP';
@@ -60,7 +61,8 @@ export const isRealHoliday = (d: DayPlan) => !!d.holiday && d.holiday.scope !== 
 /** Horário do colaborador no dia (sábado/domingo/feriado têm exceção), recortado ao funcionamento. */
 export function shiftFor(m: Member, d: DayPlan, cycleRef?: IsoDate): Shift3 | null {
   const pat = cycleRef ? patternShift(m, d, cycleRef) : undefined;
-  const raw = (isRealHoliday(d) && m.hours.F) || pat || (pat === undefined && ((d.weekday === 6 && m.hours['6']) || (d.weekday === 7 && m.hours['7']) || m.hours.base));
+  const wd = d.asWeekday ?? d.weekday;
+  const raw = (isRealHoliday(d) && m.hours.F) || pat || (pat === undefined && ((wd === 6 && m.hours['6']) || (wd === 7 && m.hours['7']) || m.hours.base));
   if (!raw || !d.open.length) return null;
   const [s, e, b] = raw;
   const piece = intersect([[s, e]], d.open)[0];
@@ -73,10 +75,12 @@ export function postsOn(d: DayPlan, posts: Post[], rules: Rule[]): Post[] {
   if (!d.open.length) return [];
   const holiday = isRealHoliday(d);
   const hasHolidayPosts = posts.some((p) => p.weekdays.includes(8));
-  const fromPosts = posts.filter((p) => (holiday && hasHolidayPosts ? p.weekdays.includes(8) : p.weekdays.includes(d.weekday)));
+  // Feriado "como sábado/domingo" usa os postos desse dia (sem postos marcados para feriado).
+  const wd = d.asWeekday ?? d.weekday;
+  const fromPosts = posts.filter((p) => (holiday && hasHolidayPosts ? p.weekdays.includes(8) : p.weekdays.includes(wd)));
   const fromRules: Post[] = rules.filter((r) => r.kind === 'MINIMO_PESSOAS').flatMap((r) => {
     const p = r.params as RuleParams<'MINIMO_PESSOAS'>;
-    if (!p.weekdays.includes(d.weekday)) return [];
+    if (!p.weekdays.includes(d.asWeekday ?? d.weekday)) return [];
     return [{ id: r.id, name: r.label, kind: null, startMin: p.startMin, endMin: p.endMin, weekdays: p.weekdays, minPeople: p.min, functionName: p.functionName, mandatory: r.mandatory }];
   });
   return [...fromPosts, ...fromRules].flatMap((p) => {
@@ -193,7 +197,10 @@ export function generate(input: EngineInput): { grid: Grid; alerts: Alert[] } {
         }
         continue;
       }
-      if (patternShift(m, d, cycleRef) === null) { row[date] = { kind: 'FOLGA', note: `Folga da grade (${patternWeekLabel(m, date, cycleRef)})` }; continue; }
+      if (patternShift(m, d, cycleRef) === null) {
+        row[date] = { kind: 'FOLGA', note: d.asWeekday ? `Feriado: ${d.holiday!.name}` : `Folga da grade (${patternWeekLabel(m, date, cycleRef)})` };
+        continue;
+      }
       const s = shiftFor(m, d, cycleRef);
       if (!s) { row[date] = { kind: 'FOLGA', note: 'Horário fora do funcionamento do setor' }; continue; }
       row[date] = workCell(s);

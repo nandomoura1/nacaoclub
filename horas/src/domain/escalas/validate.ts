@@ -256,7 +256,8 @@ export function validate(v: ValidateInput): Analysis {
         }
         case 'EVITAR_FOLGA_JUNTA': {
           const p = r.params as RuleParams<'EVITAR_FOLGA_JUNTA'>;
-          if (!p.weekdays.includes(d.weekday)) break;
+          // Feriado que funciona como sábado/domingo não é "dia útil": folga coletiva é esperada.
+          if (!p.weekdays.includes(d.asWeekday ?? d.weekday)) break;
           const off = p.memberIds.filter((x) => byId.has(x) && cell(x, date)?.kind === 'FOLGA');
           if (off.length > 1) unmet(r, date, `${off.map(name).join(' e ')} de folga no mesmo dia`);
           break;

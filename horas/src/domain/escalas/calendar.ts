@@ -84,6 +84,10 @@ export interface CalendarInput {
   nacaoHours: HoursMap;
   holidays: Map<IsoDate, { name: string; scope: string }>;
   overrides: Override[];
+  /** Feriado funciona como SABADO ou DOMINGO (equipe e postos desse dia). */
+  holidayMode?: string | null;
+  /** Todo feriado pede confirmação do gestor, mesmo com horário definido. */
+  holidayConfirm?: boolean;
 }
 
 const fmt = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
@@ -145,7 +149,10 @@ export function resolveDay(date: IsoDate, c: CalendarInput): DayPlan {
       if (!covers(nacaoEx.hours!, h)) confirm.push(`O setor funciona ${windowsLabel(h)}, mas a Nação funciona ${windowsLabel(nacaoEx.hours!)} (${nacaoEx.reason}). Confirme o horário do setor nesta data.`);
     }
   } else if (isHoliday && c.sectorHours.F) {
-    open = c.sectorHours.F; source = 'SETOR_FERIADO'; notes.push(`Feriado (${holiday!.name}): horário de feriado do setor`);
+    open = c.sectorHours.F; source = 'SETOR_FERIADO';
+    const como = c.holidayMode === 'SABADO' ? ' (funciona como sábado)' : c.holidayMode === 'DOMINGO' ? ' (funciona como domingo)' : '';
+    notes.push(`Feriado (${holiday!.name}): ${windowsLabel(open)}${como}`);
+    if (c.holidayConfirm) confirm.push(`Feriado (${holiday!.name}): pré-definido ${windowsLabel(open)}${como}. Confirme o funcionamento e a equipe.`);
   } else if (isHoliday && c.nacaoHours.F) {
     const h = habitual()?.open ?? c.nacaoHours.F;
     open = intersect(h, c.nacaoHours.F); source = 'NACAO_FERIADO'; notes.push(`Feriado (${holiday!.name}): horário de feriado da Nação`);
@@ -155,5 +162,8 @@ export function resolveDay(date: IsoDate, c: CalendarInput): DayPlan {
     else { open = []; source = 'SEM_HORARIO'; confirm.push(`Sem horário cadastrado para ${WEEKDAYS[weekday - 1]!.long.toLowerCase()} (nem do setor nem da Nação).`); }
     if (isHoliday) confirm.push(`Feriado (${holiday!.name}) sem horário de feriado cadastrado: usando o horário habitual — confirme se o setor abre.`);
   }
-  return { date, weekday, holiday, open, source: source!, notes, confirm, events };
+  // Só em feriado de segunda a sexta: no sábado/domingo o fim de semana já tem a equipe dele.
+  const asWeekday = isHoliday && weekday <= 5 && open.length && (source! === 'SETOR_FERIADO' || source! === 'NACAO_FERIADO')
+    ? (c.holidayMode === 'SABADO' ? 6 : c.holidayMode === 'DOMINGO' ? 7 : null) : null;
+  return { date, weekday, holiday, asWeekday, open, source: source!, notes, confirm, events };
 }

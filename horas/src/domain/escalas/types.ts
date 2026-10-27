@@ -99,6 +99,8 @@ export interface DayPlan {
   date: IsoDate;
   weekday: number;
   holiday: { name: string; scope: string } | null;
+  /** Feriado que funciona como sábado (6) ou domingo (7): equipe, turnos e postos desse dia. */
+  asWeekday?: 6 | 7 | null;
   /** Janelas abertas do setor. Vazio = fechado. */
   open: Window[];
   /** De onde veio o horário (para mostrar na tela). */

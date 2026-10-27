@@ -82,13 +82,15 @@ function SectorSheet({ sector, procSectors, onClose }: { sector: SectorRow | nul
   );
 }
 
-export function SetupClient({ sectorId, hours, cycleRef, notes, posts, rules, members, kinds, canEdit }: {
-  sectorId: string; hours: HoursMap; cycleRef: string; notes: string | null; posts: PostRow[]; rules: RuleRow[]; members: Opt[];
+export function SetupClient({ sectorId, hours, cycleRef, notes, holidayMode, holidayConfirm, posts, rules, members, kinds, canEdit }: {
+  sectorId: string; hours: HoursMap; cycleRef: string; notes: string | null; holidayMode: string | null; holidayConfirm: boolean; posts: PostRow[]; rules: RuleRow[]; members: Opt[];
   kinds: { value: string; label: string; help: string }[]; canEdit: boolean;
 }) {
   const { pending, error, run } = useAct();
   const [h, setH] = useState(hours);
   const [cycle, setCycle] = useState(cycleRef);
+  const [hMode, setHMode] = useState(holidayMode ?? '');
+  const [hConfirm, setHConfirm] = useState(holidayConfirm);
   const [post, setPost] = useState<PostRow | 'new' | null>(null);
   const [rule, setRule] = useState<RuleRow | 'new' | null>(null);
   return (
@@ -97,9 +99,24 @@ export function SetupClient({ sectorId, hours, cycleRef, notes, posts, rules, me
         <h2 className="mb-1 font-bold text-navy">Horário habitual do setor</h2>
         <p className="mb-3 text-xs text-tinta-suave">Prioridade na geração: exceção do setor na data → funcionamento especial da Nação na data → este horário (e o de feriado) → horário geral da Nação.</p>
         <HoursMapEditor value={h} onChange={setH} />
+        <div className="mt-3 rounded-lg bg-fundo p-3">
+          <p className="mb-2 text-sm font-bold text-navy">Feriados</p>
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <Label htmlFor="h-mode">No feriado, a equipe trabalha como</Label>
+              <Select id="h-mode" value={hMode} onChange={(e) => setHMode(e.target.value)} className="w-64">
+                <option value="">Todos, no horário de feriado</option>
+                <option value="SABADO">No sábado (equipe e postos de sábado)</option>
+                <option value="DOMINGO">No domingo (equipe e postos de domingo)</option>
+              </Select>
+            </div>
+            <label className="mb-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={hConfirm} onChange={(e) => setHConfirm(e.target.checked)} className="size-4 accent-[#0169E9]" /> Sempre pedir confirmação nos feriados</label>
+          </div>
+          <p className="mt-1 text-xs text-tinta-suave">O horário do feriado é a linha “Feriado” acima. Ex.: Recepção = como domingo, 08–14, uma pessoa; Lanchonete e Cozinha = como sábado, 07–17.</p>
+        </div>
         <div className="mt-3 flex flex-wrap items-end gap-3">
           <div><Label htmlFor="cy">Início de uma semana A (ciclo A/B)</Label><Input id="cy" type="date" value={cycle} onChange={(e) => setCycle(e.target.value)} className="w-44" /></div>
-          {canEdit && <Button disabled={pending} onClick={() => run(() => saveSectorHoursAction(sectorId, { hours: h, cycleRef: cycle, notes }))}>Salvar horário e ciclo</Button>}
+          {canEdit && <Button disabled={pending} onClick={() => run(() => saveSectorHoursAction(sectorId, { hours: h, cycleRef: cycle, notes, holidayMode: hMode || null, holidayConfirm: hConfirm }))}>Salvar horário, feriados e ciclo</Button>}
         </div>
       </Card>
 
