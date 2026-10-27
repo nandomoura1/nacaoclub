@@ -13,6 +13,7 @@ import { cn } from '@/lib/cn';
 import { formatMinutes } from '@/lib/format';
 import type { OccurrenceItem, periodOverview } from '@/server/services/period-service';
 import { decideHolidayAction, generatePeriodAction } from './actions';
+import { TopScroll } from '@/components/ui/top-scroll';
 
 type Overview = Awaited<ReturnType<typeof periodOverview>>;
 
@@ -123,7 +124,7 @@ function HoursTable({ overview }: { overview: Overview }) {
   const rows = overview.teachers.filter((t) => t.name.toLowerCase().includes(q.trim().toLowerCase()));
   const cell = (m: number) => (m ? formatMinutes(m) : <span className="text-tinta-fraca">—</span>);
   return (
-    <Card className="overflow-x-auto">
+    <Card><TopScroll>
       <div className="border-b border-borda p-3">
         <input className="h-9 w-full rounded-lg border border-borda px-3 text-sm sm:w-64" placeholder="Filtrar professor" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
@@ -164,7 +165,7 @@ function HoursTable({ overview }: { overview: Overview }) {
           )}
         </tbody>
       </table>
-    </Card>
+    </TopScroll></Card>
   );
 }
 

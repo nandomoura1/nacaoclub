@@ -17,6 +17,7 @@ import { deleteCalendarItemAction, rescheduleAction, saveCalendarItemAction } fr
 import { TaskSheet } from '../_components/TaskSheet';
 import { fmtDate } from '../_components/ui';
 import { useRun } from '../_components/useRun';
+import { TopScroll } from '@/components/ui/top-scroll';
 
 export type CalView = 'mes' | 'semana' | 'ano';
 const WEEKDAYS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
@@ -166,7 +167,7 @@ export function CalendarClient({ view, anchor, today, entries, options, filters,
       )}
 
       {view === 'mes' && (
-        <div className="overflow-x-auto">
+        <TopScroll>
           <div className="grid min-w-[44rem] grid-cols-7 overflow-hidden rounded-2xl border border-borda bg-borda [gap:1px]">
             {WEEKDAYS.map((w) => <div key={w} className="bg-fundo px-2 py-1 text-center text-[11px] font-bold uppercase text-tinta-suave">{w}</div>)}
             {monthGrid(anchor.slice(0, 7)).flat().map((day) => {
@@ -186,7 +187,7 @@ export function CalendarClient({ view, anchor, today, entries, options, filters,
               );
             })}
           </div>
-        </div>
+        </TopScroll>
       )}
 
       {view === 'semana' && (

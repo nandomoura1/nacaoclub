@@ -19,6 +19,7 @@ import { prisma } from '@/server/db';
 import { periodStartDay } from '@/server/services/period-service';
 import { filterToParams, hoursReport, parseReportFilter } from '@/server/services/report-service';
 import { PrintButton } from '@/components/PrintButton';
+import { TopScroll } from '@/components/ui/top-scroll';
 
 export const metadata: Metadata = { title: 'Relatórios' };
 
@@ -169,7 +170,7 @@ export default async function RelatoriosPage({ searchParams }: { searchParams: P
         ))}
       </nav>
 
-      <Card className="overflow-x-auto print:overflow-visible print:border-0 print:shadow-none">
+      <Card className="print:border-0 print:shadow-none"><TopScroll className="print:overflow-visible">
         {view === 'professor' && (
           <table className="w-full text-sm">
             <thead className="border-b border-borda bg-fundo"><tr><th className={th}>Professor</th><th className={th}>Modalidades</th>{COLS.map((c) => <th key={c.key} className={cn(th, 'text-right')} title={c.title}>{c.label}</th>)}</tr></thead>
@@ -247,7 +248,7 @@ export default async function RelatoriosPage({ searchParams }: { searchParams: P
         {((view === 'aulas' && r.detail.length === 0) || (view !== 'aulas' && r.byTeacher.length === 0)) && (
           <p className="p-8 text-center text-sm text-tinta-suave">Nenhuma aula no período com esses filtros.</p>
         )}
-      </Card>
+      </TopScroll></Card>
       {view === 'aulas' && r.counts.detalheCortado && <p className="mt-2 text-xs text-atencao">Mostrando as primeiras 3.000 de {r.counts.detalhe} aulas. Filtre por professor ou modalidade, ou baixe o Excel.</p>}
       <p className="mt-3 text-xs text-tinta-fraca">
         Total = dadas + substituições + extras. Ausências, canceladas e aguardando não entram no total. Aulas do tipo Personal não contam horas.

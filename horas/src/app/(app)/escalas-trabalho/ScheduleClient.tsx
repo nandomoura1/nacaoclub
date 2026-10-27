@@ -17,6 +17,7 @@ import { CLASSIFICATION_LABEL } from '@/domain/escalas/validate';
 import { cn } from '@/lib/cn';
 import type { MonthView } from '@/server/services/ws-service';
 import { editCellAction, generateAction, setStatusAction, swapCellsAction } from './actions';
+import { TopScroll } from '@/components/ui/top-scroll';
 
 const KINDS: CellKind[] = ['TRABALHO', 'FOLGA', 'FERIAS', 'ATESTADO', 'FALTA', 'AFASTAMENTO', 'INDISPONIVEL', 'FECHADO', 'SEM_GRADE'];
 const LEVEL_TONE = { CONFLITO: 'red', AJUSTE: 'amber', INFO: 'neutral' } as const;
@@ -142,7 +143,7 @@ export function ScheduleClient({ view }: { view: MonthView }) {
             <span className="rounded bg-nacao/10 px-1.5 py-0.5 font-semibold text-nacao">feriado/evento</span>
           </div>
         </div>
-        <div className="overflow-x-auto">
+        <TopScroll>
           <table className="w-full border-collapse text-[11px]">
             <thead>
               <tr>
@@ -208,7 +209,7 @@ export function ScheduleClient({ view }: { view: MonthView }) {
               </tr>
             </tbody>
           </table>
-        </div>
+        </TopScroll>
       </Card>
 
       {/* Alertas e sugestões */}

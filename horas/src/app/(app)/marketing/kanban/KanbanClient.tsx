@@ -17,6 +17,7 @@ import type { BoardTask } from '@/server/services/mkt-task-service';
 import { moveTaskAction } from '../actions';
 import { TaskSheet, type TaskDefaults } from '../_components/TaskSheet';
 import { AreaChip, PriorityTag, fmtDate } from '../_components/ui';
+import { TopScroll } from '@/components/ui/top-scroll';
 
 const initials = (n: string | null) => (n ? n.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase() : '');
 
@@ -149,9 +150,9 @@ export function KanbanClient({ tasks: initial, columns, options, canEdit }: { ta
       {/* Desktop: quadro com arrastar */}
       <div className="hidden md:block">
         <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragEnd={onDragEnd}>
-          <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-4">
+          <TopScroll className="-mx-1 px-1 pb-4"><div className="flex gap-3">
             {columns.map((c) => <Column key={c.id} id={c.id} label={c.name} color={c.color} tasks={byCol[c.id]!} canEdit={canEdit} onOpen={(id) => setOpen({ id })} onAdd={() => setOpen({ id: null, defaults: { columnId: c.id } })} />)}
-          </div>
+          </div></TopScroll>
           <DragOverlay>{active ? <div className="w-68"><Card t={active} dragging /></div> : null}</DragOverlay>
         </DndContext>
       </div>

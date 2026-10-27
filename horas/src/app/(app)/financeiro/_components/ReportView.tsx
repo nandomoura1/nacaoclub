@@ -14,6 +14,7 @@ import { ShareBars } from './charts';
 import { adjustmentChange, type ContextEffect } from './context-adjustments';
 import type { ContextPlan } from '@/domain/financeiro/context-adjust';
 import { brl, fmtValue, pct, StatusTag } from './fmt';
+import { TopScroll } from '@/components/ui/top-scroll';
 
 /**
  * Relatório Financeiro (20 seções) na identidade da Nação Club: capa navy com
@@ -90,12 +91,12 @@ function Stats({ rows, cols = 3 }: { rows: [string, Ind][]; cols?: 2 | 3 | 4 }) 
 function Table({ head, rows, align }: { head: string[]; rows: ReactNode[][]; align?: ('l' | 'r')[] }) {
   if (!rows.length) return <p className="text-sm italic text-tinta-fraca">Dado não informado</p>;
   return (
-    <div className="overflow-x-auto rounded-xl border border-borda">
+    <div className="rounded-xl border border-borda"><TopScroll>
       <table className="w-full text-sm">
         <thead><tr className="bg-navy text-left text-[11px] uppercase tracking-wide text-white">{head.map((h, i) => <th key={h} className={cn('px-3 py-2 font-semibold', align?.[i] === 'r' && 'text-right')}>{h}</th>)}</tr></thead>
         <tbody>{rows.map((r, i) => <tr key={i} className="border-t border-borda/70 even:bg-fundo/70">{r.map((c, j) => <td key={j} className={cn('px-3 py-1.5', align?.[j] === 'r' && 'text-right tabular-nums')}>{c}</td>)}</tr>)}</tbody>
       </table>
-    </div>
+    </TopScroll></div>
   );
 }
 

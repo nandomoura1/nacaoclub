@@ -9,6 +9,7 @@ import { DEMAND_STATUSES, PRIORITIES } from '@/domain/processos';
 import { cn } from '@/lib/cn';
 import type { DemandRow } from '@/server/services/proc-service';
 import { setDemandStatusAction } from '../actions';
+import { TopScroll } from '@/components/ui/top-scroll';
 
 /** Colunas do quadro: os status em aberto + concluídas (canceladas ficam só na lista). */
 const COLUMNS = DEMAND_STATUSES.filter((s) => s.id !== 'CANCELADA');
@@ -88,12 +89,12 @@ export function DemandsKanban({ demands, week, onOpen }: { demands: DemandRow[];
       </div>
 
       <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragEnd={onDragEnd}>
-        <div className="hidden auto-cols-[minmax(15rem,1fr)] grid-flow-col gap-3 overflow-x-auto pb-2 md:grid">
+        <div className="hidden md:block"><TopScroll className="pb-2"><div className="grid auto-cols-[minmax(15rem,1fr)] grid-flow-col gap-3">
           {COLUMNS.map((c) => {
             const list = items.filter((d) => d.status === c.id);
             return <Column key={c.id} id={c.id} label={c.label} count={list.length}>{list.map((d) => <DemandCard key={d.id} d={d} week={week} onOpen={onOpen} />)}</Column>;
           })}
-        </div>
+        </div></TopScroll></div>
         <DragOverlay>{active ? <CardBody d={active} week={week} dragging /> : null}</DragOverlay>
       </DndContext>
       <p className="text-xs text-tinta-suave"><span className="md:hidden">No celular: toque na aba da coluna e use “→ …” para mover. </span>Arraste o cartão para mudar o status. 🎯 = foco da semana (combinado na reunião de líderes) · ⛔ = travada. Concluídas mostram as dos últimos 30 dias; canceladas ficam na lista.</p>

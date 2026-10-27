@@ -3,6 +3,7 @@ import { formatDateBR } from '@/domain/dates';
 import { cn } from '@/lib/cn';
 import { formatMinutes } from '@/lib/format';
 import type { HoursReportResult } from '@/server/services/report-service';
+import { TopScroll } from '@/components/ui/top-scroll';
 
 const STATUS: Record<string, string> = {
   PREVISTA: 'dada', REALIZADA: 'dada', SUBSTITUIDA: 'substituída', CANCELADA: 'cancelada',
@@ -34,7 +35,7 @@ export function HoursStatement({ r, teacherId }: { r: HoursReportResult; teacher
               </Card>
             ))}
           </div>
-          <Card className="overflow-x-auto">
+          <Card><TopScroll>
             <table className="w-full text-sm">
               <thead className="border-b border-borda bg-fundo text-left text-[11px] font-bold uppercase tracking-wide text-tinta-suave">
                 <tr><th className="px-2 py-2">Data</th><th className="px-2 py-2">Hora</th><th className="px-2 py-2">Aula</th><th className="px-2 py-2">Situação</th></tr>
@@ -59,7 +60,7 @@ export function HoursStatement({ r, teacherId }: { r: HoursReportResult; teacher
                 })}
               </tbody>
             </table>
-          </Card>
+          </TopScroll></Card>
         </>
       )}
       {me && me.bonusMin > 0 && (
