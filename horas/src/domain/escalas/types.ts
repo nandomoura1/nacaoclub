@@ -16,8 +16,14 @@ export type DayKey = '1' | '2' | '3' | '4' | '5' | '6' | '7' | 'F';
 export type HoursMap = Partial<Record<DayKey, Window[]>>;
 /** [entrada, saída, intervalo] em minutos. */
 export type Shift3 = [number, number, number];
-/** Horário do colaborador: `base` + exceções de sábado, domingo e feriado. */
-export type MemberHours = { base?: Shift3 } & Partial<Record<'6' | '7' | 'F', Shift3>>;
+/** Semana-modelo: 7 posições (segunda … domingo); null = folga. */
+export type WeekPattern = (Shift3 | null)[];
+/**
+ * Horário do colaborador: `base` + exceções de sábado, domingo e feriado; ou
+ * `week` = grade cíclica do setor (semana A e, se diferente, semana B), como
+ * nos modelos do documento. Com `week`, a grade define dias e folgas.
+ */
+export type MemberHours = { base?: Shift3; week?: { A: WeekPattern; B?: WeekPattern } } & Partial<Record<'6' | '7' | 'F', Shift3>>;
 
 export type CellKind =
   | 'TRABALHO' | 'FOLGA' | 'FECHADO' | 'SEM_GRADE'

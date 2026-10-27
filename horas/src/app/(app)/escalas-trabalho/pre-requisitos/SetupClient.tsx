@@ -13,7 +13,7 @@ import { formatClock, parseClock, WEEKDAYS } from '@/domain/dates';
 import { POST_KIND_LABEL, hhmm } from '@/domain/escalas/labels';
 import type { HoursMap } from '@/domain/escalas/types';
 import { cn } from '@/lib/cn';
-import { deletePostAction, deleteRuleAction, savePostAction, saveRuleAction, saveSectorAction, saveSectorHoursAction } from '../actions';
+import { deletePostAction, deleteRuleAction, loadModelsAction, savePostAction, saveRuleAction, saveSectorAction, saveSectorHoursAction } from '../actions';
 import { HoursMapEditor, WeekdayPicker } from '../shared';
 
 type PostRow = { id: string; name: string; kind: string | null; startMin: number; endMin: number; weekdays: number[]; minPeople: number; functionName: string | null; mandatory: boolean; sortOrder: number; active: boolean };
@@ -35,12 +35,18 @@ function useAct() {
 /** Diretoria/DP: criar setor, renomear, ligar ao setor da Gestão de Processos (o líder dele monta a escala). */
 export function SectorAdmin({ sectors, procSectors }: { sectors: SectorRow[]; procSectors: Opt[] }) {
   const [open, setOpen] = useState<SectorRow | 'new' | null>(null);
+  const { pending, error, run } = useAct();
+  const missing = ['Recepção', 'Limpeza e Manutenção', 'Lanchonete', 'Cozinha'].filter((n) => !sectors.some((s) => s.name.toLowerCase() === n.toLowerCase()));
   return (
     <Card className="mb-4 p-4">
-      <div className="mb-2 flex items-center justify-between">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-bold text-navy">Setores com escala</h2>
-        <Button size="sm" onClick={() => setOpen('new')}><Plus /> Novo setor</Button>
+        <div className="flex gap-2">
+          {missing.length > 0 && <Button size="sm" variant="secondary" disabled={pending} onClick={() => confirm(`Carregar do documento "Escala de Trabalho 5x2": ${missing.join(', ')} (equipe, grade semanal A/B, postos e regras)? Tudo fica editável.`) && run(() => loadModelsAction())}>{pending ? 'Carregando…' : 'Carregar modelos do documento'}</Button>}
+          <Button size="sm" onClick={() => setOpen('new')}><Plus /> Novo setor</Button>
+        </div>
       </div>
+      <FormMessage error={error} />
       <div className="flex flex-wrap gap-2">
         {sectors.map((s) => (
           <button key={s.id} type="button" onClick={() => setOpen(s)} className={cn('rounded-full border px-3 py-1 text-xs font-semibold', s.active ? 'border-borda text-navy hover:border-nacao' : 'border-dashed border-borda text-tinta-fraca')}>

@@ -47,7 +47,7 @@ export default async function EscalasTrabalhoPage({ searchParams }: { searchPara
   const absences = v.absences.filter((x) => x.start <= m.last && x.end >= m.first);
   const nameOf = new Map(v.members.map((x) => [x.id, x.name]));
   const active = v.members.filter((x) => x.active);
-  const pend = active.filter((x) => x.mode === 'FIXO' && x.autoSchedule && !x.hours.base);
+  const pend = active.filter((x) => x.mode === 'FIXO' && x.autoSchedule && !x.hours.base && !x.hours.week);
   const legalBonds = [...new Set(active.map((x) => x.bond))].filter((b) => b === 'CLT' || b === 'FUNAP');
 
   return (
@@ -92,7 +92,7 @@ export default async function EscalasTrabalhoPage({ searchParams }: { searchPara
                 <li key={x.id} className="flex flex-wrap items-baseline gap-x-2">
                   <b className="text-navy">{x.name}</b>
                   <span className="text-xs text-tinta-suave">{[x.functionName, BOND_LABEL[x.bond], x.mode === 'COBERTURA' ? 'cobertura' : null, !x.autoSchedule ? 'fora da geração' : null].filter(Boolean).join(' · ')}</span>
-                  <span className="text-xs text-tinta-fraca">{x.hours.base ? `${hhmm(x.hours.base[0])}–${hhmm(x.hours.base[1])}` : 'sem horário'}{x.fixedOff.length ? ` · folga ${x.fixedOff.map((n) => WEEKDAYS[n - 1]!.short.toLowerCase()).join('/')}` : ''}{x.availableDays.length ? ` · disponível ${x.availableDays.map((n) => WEEKDAYS[n - 1]!.short.toLowerCase()).join('/')}` : ''}</span>
+                  <span className="text-xs text-tinta-fraca">{x.hours.week ? `grade semanal${x.hours.week.B ? ' A/B' : ''}` : x.hours.base ? `${hhmm(x.hours.base[0])}–${hhmm(x.hours.base[1])}` : x.mode === 'COBERTURA' ? 'sob demanda' : 'sem horário'}{x.fixedOff.length ? ` · folga ${x.fixedOff.map((n) => WEEKDAYS[n - 1]!.short.toLowerCase()).join('/')}` : ''}{x.availableDays.length ? ` · disponível ${x.availableDays.map((n) => WEEKDAYS[n - 1]!.short.toLowerCase()).join('/')}` : ''}</span>
                 </li>
               ))}
             </ul>

@@ -31,7 +31,16 @@ export const OFF_KINDS: ReadonlySet<CellKind> = new Set(['FOLGA', 'FECHADO', 'FE
 const ABSENCE_KIND: Record<string, CellKind> = { FERIAS: 'FERIAS', ATESTADO: 'ATESTADO', FALTA: 'FALTA', AFASTAMENTO: 'AFASTAMENTO', INDISPONIVEL: 'INDISPONIVEL', FOLGA: 'FOLGA' };
 
 /** Quem entra na geração automática (com horário habitual definido). */
-export const isScheduled = (m: Member) => m.mode === 'FIXO' && m.autoSchedule && !!m.hours.base;
+export const isScheduled = (m: Member) => m.mode === 'FIXO' && m.autoSchedule && (!!m.hours.base || !!m.hours.week);
+export const hasPattern = (m: Member) => !!m.hours.week?.A?.length;
+
+/** Turno da grade cíclica no dia: undefined = sem grade; null = folga da grade. */
+export function patternShift(m: Member, d: DayPlan, cycleRef: IsoDate): Shift3 | null | undefined {
+  const w = m.hours.week;
+  if (!w?.A?.length) return undefined;
+  const week = cyclePhase(d.date, cycleRef) === 'B' && w.B?.length ? w.B : w.A;
+  return week[d.weekday - 1] ?? null;
+}
 /** Vínculos com meta de 5 dias por semana (MEI e freelancer seguem a disponibilidade). */
 export const fiveByTwo = (m: Member) => m.bond === 'CLT' || m.bond === 'FUNAP';
 
@@ -42,8 +51,9 @@ export function absenceOn(absences: Absence[], memberId: string, date: IsoDate):
 export const isRealHoliday = (d: DayPlan) => !!d.holiday && d.holiday.scope !== 'FACULTATIVO';
 
 /** Horário do colaborador no dia (sábado/domingo/feriado têm exceção), recortado ao funcionamento. */
-export function shiftFor(m: Member, d: DayPlan): Shift3 | null {
-  const raw = (isRealHoliday(d) && m.hours.F) || (d.weekday === 6 && m.hours['6']) || (d.weekday === 7 && m.hours['7']) || m.hours.base;
+export function shiftFor(m: Member, d: DayPlan, cycleRef?: IsoDate): Shift3 | null {
+  const pat = cycleRef ? patternShift(m, d, cycleRef) : undefined;
+  const raw = (isRealHoliday(d) && m.hours.F) || pat || (pat === undefined && ((d.weekday === 6 && m.hours['6']) || (d.weekday === 7 && m.hours['7']) || m.hours.base));
   if (!raw || !d.open.length) return null;
   const [s, e, b] = raw;
   const piece = intersect([[s, e]], d.open)[0];
@@ -176,7 +186,8 @@ export function generate(input: EngineInput): { grid: Grid; alerts: Alert[] } {
         }
         continue;
       }
-      const s = shiftFor(m, d);
+      if (patternShift(m, d, cycleRef) === null) { row[date] = { kind: 'FOLGA', note: `Folga da grade (semana ${cyclePhase(date, cycleRef)})` }; continue; }
+      const s = shiftFor(m, d, cycleRef);
       if (!s) { row[date] = { kind: 'FOLGA', note: 'Horário fora do funcionamento do setor' }; continue; }
       row[date] = workCell(s);
       if (r.work.length) must.add(date);
@@ -200,7 +211,8 @@ export function generate(input: EngineInput): { grid: Grid; alerts: Alert[] } {
   };
   for (const week of month.weeks) {
     for (const m of members) {
-      if (!isScheduled(m) || !fiveByTwo(m)) continue;
+      // A grade cíclica já define as folgas da semana.
+      if (!isScheduled(m) || !fiveByTwo(m) || hasPattern(m)) continue;
       const row = grid[m.id]!;
       const target = compensatedWeek(m, week.monday, rules, cycleRef) ? 1 : 2;
       let offs = week.days.filter((d) => row[d]!.kind !== 'TRABALHO').length;
@@ -235,7 +247,7 @@ export function generate(input: EngineInput): { grid: Grid; alerts: Alert[] } {
       if (!d.open.length || c.kind === 'TRABALHO' || c.kind === 'SEM_GRADE' || c.kind === 'FECHADO') continue;
       // Se já trabalharia no dia, passa a fazer o horário de quem folga (ex.: Caio assume a abertura).
       if (absenceOn(absences, cover.id, date) || !availableOn(cover, d) || grid[cover.id]![date]!.note?.startsWith('Cobre')) continue;
-      const base = p.startMin != null && p.endMin != null ? ([p.startMin, p.endMin, 0] as Shift3) : shiftFor(covered, d);
+      const base = p.startMin != null && p.endMin != null ? ([p.startMin, p.endMin, 0] as Shift3) : shiftFor({ ...covered, hours: { ...covered.hours, week: undefined } }, d);
       if (!base) continue;
       const w = intersect([[base[0], base[1]]], d.open)[0];
       if (!w) continue;

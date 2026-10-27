@@ -12,6 +12,7 @@ import { describeRule, parseRule, RULE_KINDS, type RuleKind } from '@/domain/esc
 import type { Absence, Bond, Cell, CellKind, DayPlan, Grid, HoursMap, LegalParams, Member, MemberHours, Post, Rule } from '@/domain/escalas/types';
 import { validate, type Analysis } from '@/domain/escalas/validate';
 import { cancelLeave, saveLeave } from './leave-service';
+import { DOCUMENT_MODELS, MODEL_CYCLE_REF } from '@/server/escalas/models';
 
 /**
  * Escalas de Trabalho 5x2: organizador mensal por setor, ligado ao cadastro de
@@ -57,7 +58,8 @@ const win = z.tuple([min, min]).refine(([s, e]) => e > s, 'Horário: o fim preci
 const dayKeys = ['1', '2', '3', '4', '5', '6', '7', 'F'] as const;
 const hoursMapSchema = z.record(z.enum(dayKeys), z.array(win).max(3)).default({});
 const shift3 = z.tuple([min, min, z.number().int().min(0).max(240)]).refine(([s, e]) => e > s, 'Horário do colaborador: a saída precisa ser depois da entrada.');
-const memberHoursSchema = z.object({ base: shift3.optional(), 6: shift3.optional(), 7: shift3.optional(), F: shift3.optional() }).default({});
+const weekSchema = z.array(shift3.nullable()).length(7, 'A grade semanal precisa dos 7 dias.');
+const memberHoursSchema = z.object({ base: shift3.optional(), 6: shift3.optional(), 7: shift3.optional(), F: shift3.optional(), week: z.object({ A: weekSchema, B: weekSchema.optional() }).optional() }).default({});
 const weekdays = z.array(z.number().int().min(1).max(7)).max(7).transform((a) => [...new Set(a)].sort());
 const text = (n: number) => z.string().trim().max(n).optional().nullable().transform((v) => v || null);
 
@@ -211,7 +213,7 @@ export async function saveMember(principal: P | null, sectorId: string, id: stri
   assertCan(principal, 'ws.edit');
   const d = parse(memberSchema, input);
   if (!id && !d.teacherId && !d.newName) throw new AppError('Escolha a pessoa no cadastro ou informe o nome para cadastrar.');
-  if (d.mode === 'FIXO' && d.autoSchedule && d.active && !d.hours.base) throw new AppError('Informe o horário habitual (entrada, saída e intervalo) ou desmarque "entra na geração automática".');
+  if (d.mode === 'FIXO' && d.autoSchedule && d.active && !d.hours.base && !d.hours.week) throw new AppError('Informe o horário habitual (ou a grade semanal) ou desmarque "entra na geração automática".');
   if (d.mode === 'COBERTURA' && d.bond === 'CLT') throw new AppError('CLT entra como "fixo" na escala; "cobertura" é para MEI e freelancer.');
   const off = new Set(d.fixedOff);
   if (d.availableDays.some((x) => off.has(x))) throw new AppError('Um dia não pode ser de folga fixa e disponível ao mesmo tempo.');
@@ -546,7 +548,7 @@ export async function generateSchedule(principal: P | null, sectorId: string, ye
     const s = await assertSector(principal, sectorId, tx);
     const c = await context(tx, sectorId, year, month);
     if (c.schedule && c.schedule.status !== 'RASCUNHO') throw new AppError('A escala deste mês já foi aprovada/publicada. Reabra para edição antes de gerar de novo.');
-    if (!c.members.some((m) => m.mode === 'FIXO' && m.autoSchedule && m.hours.base)) throw new AppError('Nenhum colaborador com horário habitual na equipe: cadastre a equipe antes de gerar.');
+    if (!c.members.some((m) => m.mode === 'FIXO' && m.autoSchedule && (m.hours.base || m.hours.week))) throw new AppError('Nenhum colaborador com horário habitual na equipe: cadastre a equipe antes de gerar.');
     const out = generate({ month: c.mi, days: c.days, members: c.members, posts: c.posts, rules: c.rules, absences: c.absences, cycleRef: c.cycleRef, prior: c.prior });
     const sched = c.schedule ?? await tx.wsSchedule.create({ data: { sectorId, year, month } });
     await tx.wsCell.deleteMany({ where: { scheduleId: sched.id } });
@@ -648,6 +650,57 @@ export async function scheduleById(principal: P | null, id: string) {
   const s = await prisma.wsSchedule.findUnique({ where: { id }, select: { sectorId: true, year: true, month: true } });
   if (!s) throw new NotFoundError('Escala não encontrada.');
   return loadMonth(principal, s.sectorId, s.year, s.month);
+}
+
+/**
+ * Carrega os 4 setores do documento (equipe, grade semanal A/B, postos e regras).
+ * Idempotente: setor que já existe (pelo nome) é pulado. Cria as pessoas no
+ * cadastro com o setor no nome (há homônimos, ex.: duas Déboras).
+ */
+export async function loadDocumentModels(principal: P | null, meta: RequestMeta) {
+  assertCan(principal, 'ws.admin');
+  const created: string[] = [];
+  const skipped: string[] = [];
+  for (const model of DOCUMENT_MODELS) {
+    await prisma.$transaction(async (tx) => {
+      if (await tx.wsSector.findFirst({ where: { name: { equals: model.name, mode: 'insensitive' } } })) { skipped.push(model.name); return; }
+      const proc = model.procSector ? await tx.procSector.findFirst({ where: { name: model.procSector }, select: { id: true } }) : null;
+      const sector = await tx.wsSector.create({ data: { name: model.name, procSectorId: proc?.id ?? null, hours: model.hours, cycleRef: toUtc(MODEL_CYCLE_REF), notes: model.notes, sortOrder: DOCUMENT_MODELS.indexOf(model) } });
+      const ids = new Map<string, string>();
+      for (const [i, m] of model.members.entries()) {
+        const t = await tx.teacher.findFirst({ where: { name: m.name } }) ?? await tx.teacher.create({ data: { name: m.name, displayName: m.display, createdById: principal.id, notes: `Cadastrado pelo modelo de escala (${model.name}).` } });
+        const row = await tx.wsMember.create({
+          data: {
+            sectorId: sector.id, teacherId: t.id, functionName: m.functionName, altFunctions: m.altFunctions ?? [], bond: m.bond, mode: m.mode ?? 'FIXO',
+            hours: m.week ? { week: m.week } : {}, weeklyMin: 2400, fixedOff: m.fixedOff ?? [], availableDays: m.availableDays ?? [],
+            autoSchedule: m.autoSchedule ?? true, notes: m.notes ?? null, sortOrder: i,
+          },
+        });
+        ids.set(`@${m.key}`, row.id);
+      }
+      for (const [i, p] of model.posts.entries()) {
+        await tx.wsPost.create({ data: { sectorId: sector.id, name: p.name, kind: p.kind, startMin: p.start, endMin: p.end, weekdays: p.weekdays, minPeople: p.min, functionName: p.functionName ?? null, mandatory: p.mandatory ?? true, sortOrder: i } });
+      }
+      const nameOf = new Map(model.members.map((m) => [ids.get(`@${m.key}`)!, m.display]));
+      for (const r of model.rules) {
+        const params = JSON.parse(JSON.stringify(r.params).replace(/"@[a-z]+"/g, (k) => JSON.stringify(ids.get(k.slice(1, -1)) ?? k)));
+        const ok = parseRule(r.kind, params);
+        if (!ok.ok) throw new AppError(`Modelo ${model.name}: ${ok.error}`);
+        await tx.wsRule.create({ data: { sectorId: sector.id, kind: r.kind, label: r.label ?? describeRule(r.kind, ok.params, (x) => nameOf.get(x) ?? '—'), params: ok.params as object, mandatory: r.mandatory } });
+      }
+      await audit(tx, ctx(principal, meta), { action: 'ws.model.loaded', entityType: 'ws_sector', entityId: sector.id, after: { setor: model.name, pessoas: model.members.length, postos: model.posts.length, regras: model.rules.length }, summary: `${principal.name} carregou o modelo de escala ${model.name} (documento Escala de Trabalho 5x2)` });
+      created.push(model.name);
+    }, { timeout: 60_000, maxWait: 10_000 });
+  }
+  // Parâmetros CLT de partida (escala de 40h), para o DP conferir e validar.
+  if (!(await prisma.wsLegalParam.findFirst({ where: { bond: 'CLT' } }))) {
+    await saveLegal(principal, null, {
+      bond: 'CLT', validFrom: '2026-01-01', maxDailyMin: 480, maxDailyExtraMin: 120, maxWeeklyMin: 2400, minRestBetweenMin: 660, maxConsecutiveDays: 6,
+      sundayOffEveryWeeks: 3, breakLongOverMin: 360, breakLongMin: 60, breakShortOverMin: 240, breakShortMin: 15, validated: false,
+      notes: 'Escala da Nação: 40h semanais e 8h efetivas por dia. Documento cita a EC 141/2026 (transição para 42h em 15/12/2026 e 40h em dez/2027, dois repousos semanais). Domingo: CLT art. 386 prevê descanso dominical quinzenal para mulheres; comércio: 1 domingo a cada 3 semanas. DP: conferir com contratos e CCT antes de validar.',
+    }, meta);
+  }
+  return { created, skipped };
 }
 
 export const RULE_KIND_OPTIONS = (Object.keys(RULE_KINDS) as RuleKind[]).map((k) => ({ value: k, label: RULE_KINDS[k].label, help: RULE_KINDS[k].help }));

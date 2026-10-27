@@ -92,7 +92,7 @@ export function validate(v: ValidateInput): Analysis {
 
   // Pendências de cadastro.
   for (const m of members) {
-    if (m.mode === 'FIXO' && m.autoSchedule && !m.hours.base) push({ level: 'AJUSTE', code: 'SEM_HORARIO', memberId: m.id, message: `${m.name}: horário habitual não cadastrado — fica fora da geração.` });
+    if (m.mode === 'FIXO' && m.autoSchedule && !m.hours.base && !m.hours.week) push({ level: 'AJUSTE', code: 'SEM_HORARIO', memberId: m.id, message: `${m.name}: horário habitual não cadastrado — fica fora da geração.` });
     if (!m.autoSchedule) push({ level: 'INFO', code: 'FORA_DA_GERACAO', memberId: m.id, message: `${m.name}: fora da geração automática (sem grade definida).` });
   }
   const bonds = new Set(members.filter((m) => isScheduled(m) || m.mode === 'COBERTURA').map((m) => m.bond));

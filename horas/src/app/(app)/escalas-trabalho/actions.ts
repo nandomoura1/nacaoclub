@@ -29,3 +29,4 @@ export const generateAction = async (sectorId: string, year: number, month: numb
 export const editCellAction = async (scheduleId: string, memberId: string, date: string, input: unknown): Promise<ActionResult<Analysis>> => act((p, m) => ws.editCell(p, scheduleId, memberId, date, input, m));
 export const swapCellsAction = async (scheduleId: string, a: { memberId: string; date: string }, b: { memberId: string; date: string }): Promise<ActionResult<Analysis>> => act((p, m) => ws.swapCells(p, scheduleId, a, b, m));
 export const setStatusAction = async (scheduleId: string, status: 'RASCUNHO' | 'APROVADA' | 'PUBLICADA') => act((p, m) => ws.setScheduleStatus(p, scheduleId, status, m));
+export const loadModelsAction = async () => act((p, m) => ws.loadDocumentModels(p, m));

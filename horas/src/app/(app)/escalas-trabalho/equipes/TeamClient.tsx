@@ -11,9 +11,9 @@ import { Input, Label, Select } from '@/components/ui/input';
 import { Sheet } from '@/components/ui/sheet';
 import { WEEKDAYS } from '@/domain/dates';
 import { BOND_LABEL, hhmm } from '@/domain/escalas/labels';
-import type { Bond, MemberHours, Mode } from '@/domain/escalas/types';
+import type { Bond, MemberHours, Mode, Shift3 } from '@/domain/escalas/types';
 import { removeMemberAction, saveMemberAction } from '../actions';
-import { MemberHoursEditor, WeekdayPicker } from '../shared';
+import { MemberHoursEditor, WeekPatternEditor, WeekdayPicker } from '../shared';
 
 export interface TeamMember {
   id: string; teacherId: string; name: string; functionName: string | null; altFunctions: string[]; bond: Bond; mode: Mode; hours: MemberHours;
@@ -21,6 +21,7 @@ export interface TeamMember {
   notes: string | null; sortOrder: number; active: boolean;
 }
 
+const weekText = (w: (readonly [number, number, number] | null)[]) => w.map((x, i) => `${WEEKDAYS[i]!.short.toLowerCase()} ${x ? `${hhmm(x[0])}–${hhmm(x[1])}` : 'folga'}`).join(' · ');
 const days = (ns: number[]) => ns.map((n) => WEEKDAYS[n - 1]!.short.toLowerCase()).join('/');
 
 export function TeamClient({ sectorId, members, people, canEdit }: { sectorId: string; members: TeamMember[]; people: { id: string; name: string }[]; canEdit: boolean }) {
@@ -55,7 +56,8 @@ export function TeamClient({ sectorId, members, people, canEdit }: { sectorId: s
               )}
             </div>
             <p className="mt-1 text-xs text-tinta">
-              {m.hours.base ? `${hhmm(m.hours.base[0])}–${hhmm(m.hours.base[1])} (intervalo ${m.hours.base[2]} min)` : <span className="text-atencao">sem horário habitual</span>}
+              {m.hours.week ? <span>Grade semanal{m.hours.week.B ? ' A/B' : ''}: {weekText(m.hours.week.A)}{m.hours.week.B ? <> · <b>B:</b> {weekText(m.hours.week.B)}</> : null}</span>
+                : m.hours.base ? `${hhmm(m.hours.base[0])}–${hhmm(m.hours.base[1])} (intervalo ${m.hours.base[2]} min)` : m.mode === 'COBERTURA' ? 'Sob demanda (cobre postos descobertos)' : <span className="text-atencao">sem horário habitual</span>}
               {m.hours['6'] && ` · sáb ${hhmm(m.hours['6'][0])}–${hhmm(m.hours['6'][1])}`}
               {m.hours['7'] && ` · dom ${hhmm(m.hours['7'][0])}–${hhmm(m.hours['7'][1])}`}
               {` · ${m.weeklyMin / 60}h/semana`}
@@ -133,7 +135,14 @@ function MemberSheet({ sectorId, member, people, onClose, onSaved }: { sectorId:
           <p className="mt-1 text-xs text-tinta-suave">MEI e freelancer não seguem 5x2 nem regras CLT: o sistema respeita só a disponibilidade.</p>
         </div>
       )}
-      <div><Label>Horário</Label><MemberHoursEditor value={v.hours} onChange={(h) => set('hours', h)} /></div>
+      <div>
+        <Label>Horário</Label>
+        <div className="mb-2 inline-flex rounded-lg border border-borda p-0.5 text-xs font-semibold">
+          <button type="button" onClick={() => set('hours', { ...v.hours, week: undefined })} className={!v.hours.week ? 'rounded-md bg-navy px-3 py-1 text-white' : 'px-3 py-1 text-tinta-suave'}>Habitual (o sistema distribui as folgas)</button>
+          <button type="button" onClick={() => set('hours', { ...v.hours, week: v.hours.week ?? { A: [1, 2, 3, 4, 5, 6, 7].map((d): Shift3 | null => (d <= 5 ? v.hours.base ?? [420, 960, 60] : null)) } })} className={v.hours.week ? 'rounded-md bg-navy px-3 py-1 text-white' : 'px-3 py-1 text-tinta-suave'}>Grade semanal fixa</button>
+        </div>
+        {v.hours.week ? <WeekPatternEditor value={v.hours.week} onChange={(w) => set('hours', { ...v.hours, week: w })} /> : <MemberHoursEditor value={v.hours} onChange={(h) => set('hours', h)} />}
+      </div>
       <div className="grid grid-cols-2 gap-2">
         <div><Label htmlFor="m-w">Carga semanal de referência (h)</Label><Input id="m-w" type="number" min={0} max={73} step={0.5} value={v.weeklyH} onChange={(e) => set('weeklyH', Number(e.target.value) || 0)} /></div>
         <div><Label htmlFor="m-o">Ordem na grade</Label><Input id="m-o" type="number" min={0} max={999} value={v.sortOrder} onChange={(e) => set('sortOrder', Number(e.target.value) || 0)} /></div>
