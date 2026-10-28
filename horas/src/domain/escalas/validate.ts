@@ -1,6 +1,6 @@
 import { addDays, formatClock, formatDateBR, weekdayOf, type IsoDate } from '@/domain/dates';
 import { cyclePhase, type MonthInfo } from './calendar';
-import { absenceOn, availableOn, covers, fiveByTwo, hasFunction, inCompensatedRotation, isRealHoliday, isScheduled, OFF_KINDS, postsOn } from './engine';
+import { absenceOn, availableOn, covers, fiveByTwo, hasFunction, inCompensatedRotation, isRealHoliday, isScheduled, OFF_KINDS, postsOn, worksHolidayAsUsual } from './engine';
 import type { RuleParams } from './rules';
 import type { Absence, Alert, Cell, DayPlan, Grid, LegalParams, Member, Post, Rule } from './types';
 
@@ -157,7 +157,7 @@ export function validate(v: ValidateInput): Analysis {
       if (!d.open.length) push({ level: 'CONFLITO', code: 'DIA_FECHADO', date, memberId: m.id, message: `${br(date)}: ${m.name} escalado(a) com o setor fechado.` });
       if (!availableOn(m, d)) push({ level: 'CONFLITO', code: 'INDISPONIVEL', date, memberId: m.id, message: `${br(date)}: ${m.name} não está disponível neste dia (cadastro).` });
       if (m.fixedOff.includes(d.weekday)) push({ level: 'CONFLITO', code: 'FOLGA_FIXA', date, memberId: m.id, message: `${br(date)}: ${m.name} trabalha no dia da folga fixa.` });
-      if (clt && isRealHoliday(d)) push({ level: 'INFO', code: 'FERIADO', date, memberId: m.id, message: `${br(date)} (${d.holiday!.name}): ${m.name} trabalha no feriado — pagar em dobro ou dar folga compensatória.` });
+      if (clt && isRealHoliday(d) && !worksHolidayAsUsual(m)) push({ level: 'INFO', code: 'FERIADO', date, memberId: m.id, message: `${br(date)} (${d.holiday!.name}): ${m.name} trabalha no feriado — pagar em dobro ou dar folga compensatória.` });
       if (!L || !clt) continue;
       const gross = c.endMin! - c.startMin!;
       const net = workedMin(c);
@@ -209,7 +209,7 @@ export function validate(v: ValidateInput): Analysis {
     const paidAbsence = month.days.filter((d) => PAID_ABSENCE.has(row[d]?.kind ?? '')).length;
     const minutes = month.days.reduce((s, d) => s + workedMin(row[d]), 0);
     // Feriado em dia útil é descanso remunerado: sai da referência; quem trabalha nele ganha crédito no banco.
-    const holidaysOff = month.days.filter((d) => isRealHoliday(days.get(d)!) && weekdayOf(d) <= 5 && !PAID_ABSENCE.has(row[d]?.kind ?? '')).length;
+    const holidaysOff = worksHolidayAsUsual(m) ? 0 : month.days.filter((d) => isRealHoliday(days.get(d)!) && weekdayOf(d) <= 5 && !PAID_ABSENCE.has(row[d]?.kind ?? '')).length;
     const perDay = m.weeklyMin / (m.bond === 'FUNAP' ? 6 : 5);
     const expectedMin = clt && isScheduled(m) ? Math.max(0, Math.round(m.weeklyMin * (month.length - paidAbsence) / 7 - holidaysOff * perDay)) : null;
     const carryMin = expectedMin == null ? null : Math.round(v.bankCarry?.[m.id] ?? 0);

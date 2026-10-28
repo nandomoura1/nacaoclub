@@ -109,8 +109,11 @@ describe.skipIf(!hasDb)('Modelos iniciais das escalas', () => {
       expect(v.days.find((d) => d.date === '2026-11-02')!.open).toEqual([[H(7), H(17)]]);
       expect(v.analysis!.alerts.filter((a) => a.code === 'CALENDARIO')).toEqual([]);
       const sab = '2026-11-07'; // sábado da mesma semana
+      const seg = '2026-11-09'; // segunda seguinte
       for (const m of v.members.filter((x) => x.mode === 'FIXO' && x.autoSchedule)) {
-        expect(v.grid[m.id]!['2026-11-02']!.kind === 'TRABALHO').toBe(v.grid[m.id]![sab]!.kind === 'TRABALHO');
+        // FUNAP trabalha o feriado como dia normal (segunda); os demais seguem o sábado.
+        const ref = m.bond === 'FUNAP' ? seg : sab;
+        expect(v.grid[m.id]!['2026-11-02']!.kind === 'TRABALHO').toBe(v.grid[m.id]![ref]!.kind === 'TRABALHO');
       }
       expect(v.analysis!.uncovered).toEqual([]);
     }

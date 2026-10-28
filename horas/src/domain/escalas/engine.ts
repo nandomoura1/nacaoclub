@@ -51,7 +51,7 @@ export function patternWeekLabel(m: Member, date: IsoDate, cycleRef: IsoDate): s
 /** Turno da grade cíclica no dia: undefined = sem grade; null = folga da grade. */
 export function patternShift(m: Member, d: DayPlan, cycleRef: IsoDate): Shift3 | null | undefined {
   const w = m.hours.week;
-  const wd = d.asWeekday ?? d.weekday;
+  const wd = dayAs(m, d);
   if (w?.cycle?.length) return w.cycle[cycleIndex(d.date, cycleRef, w.cycle.length)]![wd - 1] ?? null;
   if (!w?.A?.length) return undefined;
   const week = cyclePhase(d.date, cycleRef) === 'B' && w.B?.length ? w.B : w.A;
@@ -68,11 +68,16 @@ export function absenceOn(absences: Absence[], memberId: string, date: IsoDate):
 
 export const isRealHoliday = (d: DayPlan) => !!d.holiday && d.holiday.scope !== 'FACULTATIVO';
 
+/** FUNAP (6x1) trabalha o feriado como dia normal: só folga nos dias fixos. */
+export const worksHolidayAsUsual = (m: Member) => m.bond === 'FUNAP';
+/** Dia da semana que vale para a pessoa (feriado "como sábado/domingo" não vale para quem trabalha o feriado normalmente). */
+const dayAs = (m: Member, d: DayPlan) => (worksHolidayAsUsual(m) ? d.weekday : d.asWeekday ?? d.weekday);
+
 /** Horário do colaborador no dia (sábado/domingo/feriado têm exceção), recortado ao funcionamento. */
 export function shiftFor(m: Member, d: DayPlan, cycleRef?: IsoDate): Shift3 | null {
   const pat = cycleRef ? patternShift(m, d, cycleRef) : undefined;
-  const wd = d.asWeekday ?? d.weekday;
-  const raw = (isRealHoliday(d) && m.hours.F) || pat || (pat === undefined && ((wd === 6 && m.hours['6']) || (wd === 7 && m.hours['7']) || m.hours.base));
+  const wd = dayAs(m, d);
+  const raw = (isRealHoliday(d) && !worksHolidayAsUsual(m) && m.hours.F) || pat || (pat === undefined && ((wd === 6 && m.hours['6']) || (wd === 7 && m.hours['7']) || m.hours.base));
   if (!raw || !d.open.length) return null;
   const [s, e, b] = raw;
   const piece = intersect([[s, e]], d.open)[0];
@@ -111,7 +116,7 @@ export function availableOn(m: Member, d: DayPlan): boolean {
   if (m.availableDays.length && !m.availableDays.includes(d.weekday)) return false;
   if (d.weekday === 6 && !m.saturday) return false;
   if (d.weekday === 7 && !m.sunday) return false;
-  if (isRealHoliday(d) && !m.holiday) return false;
+  if (isRealHoliday(d) && !m.holiday && !worksHolidayAsUsual(m)) return false;
   return true;
 }
 
@@ -208,7 +213,7 @@ export function generate(input: EngineInput): { grid: Grid; alerts: Alert[] } {
         continue;
       }
       if (patternShift(m, d, cycleRef) === null) {
-        row[date] = { kind: 'FOLGA', note: d.asWeekday ? `Feriado: ${d.holiday!.name}` : `Folga da grade (${patternWeekLabel(m, date, cycleRef)})` };
+        row[date] = { kind: 'FOLGA', note: d.asWeekday && !worksHolidayAsUsual(m) ? `Feriado: ${d.holiday!.name}` : `Folga da grade (${patternWeekLabel(m, date, cycleRef)})` };
         continue;
       }
       const s = shiftFor(m, d, cycleRef);
@@ -233,7 +238,8 @@ export function generate(input: EngineInput): { grid: Grid; alerts: Alert[] } {
     for (const date of dates.filter((d) => d >= month.first && d <= month.last)) {
       const d = days.get(date)!;
       if (!isRealHoliday(d) || !d.open.length || (!d.asWeekday && !staff)) continue;
-      const holders = members.filter((m) => grid[m.id]![date]!.kind === 'TRABALHO');
+      // FUNAP fica fora do rodízio: trabalha o feriado no horário de sempre.
+      const holders = members.filter((m) => !worksHolidayAsUsual(m) && grid[m.id]![date]!.kind === 'TRABALHO');
       const n = staff ?? holders.length;
       if (!n) continue;
       const window = d.open[0]!;
@@ -241,7 +247,7 @@ export function generate(input: EngineInput): { grid: Grid; alerts: Alert[] } {
       const templates: Cell[] = d.asWeekday && holders.length
         ? holders.map((m) => grid[m.id]![date]!)
         : [{ kind: 'TRABALHO', startMin: window[0], endMin: window[1], breakMin: gross > 360 ? 60 : gross > 240 ? 15 : 0 }];
-      const eligible = members.filter((m) => isScheduled(m) && !absenceOn(absences, m.id, date) && availableOn(m, d) && grid[m.id]![date]!.kind !== 'FECHADO');
+      const eligible = members.filter((m) => !worksHolidayAsUsual(m) && isScheduled(m) && !absenceOn(absences, m.id, date) && availableOn(m, d) && grid[m.id]![date]!.kind !== 'FECHADO');
       const rank = (a: Member, b: Member) => (input.holidayRotate ? count.get(a.id)! - count.get(b.id)! || last.get(a.id)!.localeCompare(last.get(b.id)!) : 0)
         || Number(holders.includes(b)) - Number(holders.includes(a)) || order.get(a.id)! - order.get(b.id)!;
       const chosen = [...eligible].sort(rank).slice(0, n);

@@ -170,7 +170,8 @@ export function resolveDay(date: IsoDate, c: CalendarInput): DayPlan {
     notes.push('Funcionamento confirmado pelo gestor');
     confirm.length = 0;
   }
-  const asWeekday = isHoliday && weekday <= 5 && open.length && (source! === 'SETOR_FERIADO' || source! === 'NACAO_FERIADO')
+  // Exceção de horário num feriado (ex.: fecha mais cedo) continua sendo feriado "como sábado/domingo".
+  const asWeekday = isHoliday && weekday <= 5 && open.length && (source! === 'SETOR_FERIADO' || source! === 'NACAO_FERIADO' || source! === 'SETOR_EXCECAO' || source! === 'NACAO_EXCECAO')
     ? (c.holidayMode === 'SABADO' ? 6 : c.holidayMode === 'DOMINGO' ? 7 : null) : null;
   return { date, weekday, holiday, asWeekday, open, source: source!, notes, confirm, events };
 }

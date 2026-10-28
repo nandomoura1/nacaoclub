@@ -245,6 +245,31 @@ describe('motor de geração', () => {
     expect(codes).toContain('INTERVALO_MAXIMO');
   });
 
+  it('FUNAP trabalha o feriado como dia normal: fica fora do rodízio e só folga no dia fixo', () => {
+    const f = member('Eliel', { bond: 'FUNAP', fixedOff: [7], holiday: false, hours: { week: { A: [[H(6), H(14), 60], [H(6), H(14), 60], [H(6), H(14), 60], [H(6), H(14), 60], [H(6), H(14), 60], [H(6), H(12), 0], null] } } });
+    const c = member('Ana', { hours: { base: [H(7), H(15, 20), 60], F: [H(7), H(17), 60] } });
+    const hours: HoursMap = { ...ALL, F: [[H(7), H(17)]] };
+    const r = run({ year: 2026, month: 11, members: [f, c], hours, holidayMode: 'SABADO', staff: 1, holidayRotate: true, holidays: [['2026-11-20', 'Consciência Negra']] });
+    // Sexta-feira feriado: Eliel faz o horário de sexta (recortado ao funcionamento), não o de sábado.
+    expect(r.grid[f.id]!['2026-11-20']).toMatchObject({ kind: 'TRABALHO', startMin: H(7), endMin: H(14) });
+    expect(r.grid[c.id]!['2026-11-20']!.kind).toBe('TRABALHO'); // a vaga do feriado (1 pessoa) é do CLT
+    expect(r.month.days.filter((d) => r.grid[f.id]![d]!.kind !== 'TRABALHO').every((d) => weekdayOf(d) === 7)).toBe(true);
+    expect(r.analysis.alerts.some((a) => a.memberId === f.id && a.code === 'FERIADO')).toBe(false);
+  });
+
+  it('feriado com horário ajustado (fecha mais cedo) continua funcionando como sábado', () => {
+    const c = member('Ana', { hours: { week: { A: [[H(7), H(15), 60], [H(7), H(15), 60], [H(7), H(15), 60], [H(7), H(15), 60], [H(7), H(15), 60], [H(8), H(16), 60], null] } } });
+    const hours: HoursMap = { ...ALL, F: [[H(7), H(17)]] };
+    const r = run({
+      year: 2026, month: 11, members: [c], hours, holidayMode: 'SABADO', holidays: [['2026-11-20', 'Consciência Negra']],
+      overrides: [{ date: '2026-11-20', sectorId: null, closed: false, hours: [[H(8), H(14)]], reason: 'Fecha mais cedo', eventName: null, extraPeople: 0, confirmed: false }],
+    });
+    const d = r.days.get('2026-11-20')!;
+    expect(d.open).toEqual([[H(8), H(14)]]);
+    expect(d.asWeekday).toBe(6);
+    expect(r.grid[c.id]!['2026-11-20']).toMatchObject({ kind: 'TRABALHO', startMin: H(8), endMin: H(14) });
+  });
+
   it('folga do banco de horas: justifica a regra, conta à parte e sai do saldo', () => {
     const m = member('Marcos', { hours: { base: [H(7), H(15, 20), 60] } });
     const rules = [rule('TRABALHA_SEMPRE', { memberId: m.id, weekdays: [6] })];
