@@ -32,3 +32,6 @@ export const setStatusAction = async (scheduleId: string, status: 'RASCUNHO' | '
 export const loadModelsAction = async () => act((p, m) => ws.loadDocumentModels(p, m));
 export const setRotationAction = async (sectorId: string, memberIds: string[]) => act((p, m) => ws.setRotation(p, sectorId, memberIds, m), memberIds.length ? 'Rodízio montado. Gere a escala de novo para aplicar.' : 'Rodízio desfeito.');
 export const confirmDayAction = async (sectorId: string, date: string) => act((p, m) => ws.confirmDay(p, sectorId, date, m), 'Funcionamento confirmado.');
+export const wsWhatsAppStatusAction = async () => ws.wsWhatsAppStatus();
+export const sendMemberScheduleAction = async (scheduleId: string, memberId: string, input: { to: string; text: string }) => act((p, m) => ws.sendMemberSchedule(p, scheduleId, memberId, input, m));
+export const sendTeamSchedulesAction = async (scheduleId: string) => act((p, m) => ws.sendTeamSchedules(p, scheduleId, m));

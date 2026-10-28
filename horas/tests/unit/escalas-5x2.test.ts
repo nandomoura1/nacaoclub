@@ -5,6 +5,7 @@ import { generate } from '@/domain/escalas/engine';
 import { parseRule } from '@/domain/escalas/rules';
 import type { Absence, Grid, HoursMap, LegalParams, Member, Post, Rule } from '@/domain/escalas/types';
 import { validate } from '@/domain/escalas/validate';
+import { memberScheduleText } from '@/domain/escalas/whatsapp';
 
 // Dados de TESTE (horários inventados só para exercitar o motor).
 const H = (h: number, m = 0) => h * 60 + m;
@@ -283,5 +284,20 @@ describe('motor de geração', () => {
     const st = r.analysis.members[0]!;
     expect(st.carryMin).toBe(300);
     expect(st.totalBankMin).toBe(300 + st.balanceMin!);
+  });
+
+  it('mensagem de WhatsApp: semana a semana, feriado marcado e resumo', () => {
+    const m = member('Ana Souza', { fixedOff: [7] });
+    const r = run({ year: 2026, month: 11, members: [m], holidays: [['2026-11-02', 'Finados']] });
+    const days = [...r.days.values()].filter((d) => d.date >= r.month.first && d.date <= r.month.last);
+    const st = r.analysis.members[0]!;
+    const t = memberScheduleText({ sector: 'Cozinha', monthLabel: r.month.label, status: 'RASCUNHO', name: m.name, days, cells: r.grid[m.id]!, minutes: st.minutes, workDays: st.days, offs: st.offs });
+    expect(t).toMatch(/Sua escala — Novembro de 2026/);
+    expect(t).toMatch(/Prévia/);
+    expect(t).toMatch(/Olá, Ana!/);
+    expect(t).toMatch(/Seg 02\/11 \(Finados\)/);
+    expect(t).toMatch(/Dom 01\/11 — Folga/);
+    expect(t.match(/\*Semana /g)!.length).toBe(6);
+    expect(t.length).toBeLessThan(4000);
   });
 });

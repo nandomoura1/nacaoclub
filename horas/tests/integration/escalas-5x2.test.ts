@@ -3,6 +3,7 @@ import { prisma } from '@/server/db';
 import { AuthorizationError } from '@/server/errors';
 import { saveSector as saveProcSector } from '@/server/services/proc-service';
 import {
+  sendMemberSchedule, sendTeamSchedules,
   cancelAbsence, editCell, generateSchedule, listSectors, loadMonth, saveAbsence, saveLegal, saveMember, saveOverride, savePost, saveRule, saveSector,
   setScheduleStatus, swapCells,
 } from '@/server/services/ws-service';
@@ -107,5 +108,28 @@ describe.skipIf(!hasDb)('Escalas de Trabalho 5x2', () => {
     const v = await loadMonth(lider.principal, sector, 2026, 11);
     expect(v.analysis!.alerts.some((a) => a.code === 'EVENTO' && a.date === '2026-11-07')).toBe(true);
     expect(await prisma.wsCell.count({ where: { schedule: { sectorId: sector, year: 2026, month: 11 }, note: { contains: 'Celebration' } } })).toBe(0);
+  });
+
+  it('WhatsApp: escala do mês da pessoa (individual e para a equipe), só no setor que lidera', async () => {
+    const old = { fake: process.env.ZAPI_FAKE, test: process.env.ZAPI_TEST_PHONE };
+    process.env.ZAPI_FAKE = '1';
+    delete process.env.ZAPI_TEST_PHONE;
+    try {
+      const sch = (await loadMonth(lider.principal, sector, 2026, 11)).schedule!;
+      const fia = await prisma.wsMember.findUniqueOrThrow({ where: { id: members[0]! }, select: { teacherId: true } });
+      await prisma.teacher.update({ where: { id: fia.teacherId }, data: { phone: '61 99999-0001' } });
+      await expect(sendMemberSchedule(outro.principal, sch.id, members[0]!, { to: '', text: 'Escala teste do mês' }, META)).rejects.toThrow(/lidera/);
+      const r = await sendMemberSchedule(lider.principal, sch.id, members[0]!, { to: '', text: '📅 Sua escala — Novembro' }, META);
+      expect(r.status).toBe('SIMULATED');
+      await expect(sendMemberSchedule(lider.principal, sch.id, members[1]!, { to: '', text: '📅 Sua escala — Novembro' }, META)).rejects.toThrow(/telefone/);
+      const team = await sendTeamSchedules(lider.principal, sch.id, META);
+      expect(team.sent).toEqual([`Fia ${tag}`]);
+      expect(team.noPhone.length).toBe(3);
+      const last = await prisma.waMessage.findFirstOrThrow({ where: { kind: 'ESCALA' }, orderBy: { createdAt: 'desc' } });
+      expect(last.preview).toMatch(/Sua escala — Novembro de 2026/);
+    } finally {
+      if (old.fake === undefined) delete process.env.ZAPI_FAKE; else process.env.ZAPI_FAKE = old.fake;
+      if (old.test !== undefined) process.env.ZAPI_TEST_PHONE = old.test;
+    }
   });
 });

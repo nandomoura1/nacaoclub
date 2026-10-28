@@ -13,6 +13,9 @@ import { describeRule, parseRule, RULE_KINDS, type RuleKind } from '@/domain/esc
 import type { Absence, Bond, Cell, CellKind, DayPlan, Grid, HoursMap, LegalParams, Member, MemberHours, Post, Rule } from '@/domain/escalas/types';
 import { validate, type Analysis } from '@/domain/escalas/validate';
 import { cancelLeave, saveLeave } from './leave-service';
+import { deliverWhatsApp } from './whatsapp-service';
+import { zapiConfig } from '@/server/whatsapp/zapi';
+import { memberScheduleText } from '@/domain/escalas/whatsapp';
 import { DOCUMENT_MODELS, MODEL_CYCLE_REF } from '@/server/escalas/models';
 
 /**
@@ -508,7 +511,7 @@ async function context(db: Tx, sectorId: string, year: number, month: number) {
     db.appSettings.findUnique({ where: { id: 1 }, select: { nacaoHours: true } }),
     db.holiday.findMany({ where: { date: { gte: toUtc(mi.rangeStart), lte: toUtc(mi.rangeEnd) } } }),
     db.wsDayOverride.findMany({ where: { date: { gte: toUtc(mi.rangeStart), lte: toUtc(mi.rangeEnd) }, OR: [{ sectorId: null }, { sectorId }] }, include: { event: { select: { name: true } } } }),
-    db.wsMember.findMany({ where: { sectorId }, orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }], include: { teacher: { select: { name: true, displayName: true } } } }),
+    db.wsMember.findMany({ where: { sectorId }, orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }], include: { teacher: { select: { name: true, displayName: true, phone: true } } } }),
     db.wsPost.findMany({ where: { sectorId, active: true }, orderBy: [{ sortOrder: 'asc' }, { startMin: 'asc' }] }),
     db.wsRule.findMany({ where: { sectorId, active: true }, orderBy: { createdAt: 'asc' } }),
     db.wsSchedule.findUnique({ where: { sectorId_year_month: { sectorId, year, month } }, include: { cells: true } }),
@@ -580,7 +583,7 @@ export interface MonthView {
   month: MonthInfo;
   sector: { id: string; name: string; cycleRef: IsoDate };
   days: DayPlan[];
-  members: (Member & { teacherId: string; active: boolean })[];
+  members: (Member & { teacherId: string; active: boolean; hasPhone: boolean })[];
   posts: Post[];
   rules: (Rule & { description: string })[];
   absences: Absence[];
@@ -601,7 +604,8 @@ export async function loadMonth(principal: P | null, sectorId: string, year: num
     month: c.mi,
     sector: { id: c.sector.id, name: c.sector.name, cycleRef: c.cycleRef },
     days: [...c.days.values()],
-    members: c.members.map((m) => ({ ...m, teacherId: c.membersDb.find((x) => x.id === m.id)!.teacherId, active: c.membersDb.find((x) => x.id === m.id)!.active })),
+    // O telefone não vai para a tela (dado pessoal): só se existe no cadastro.
+    members: c.members.map((m) => { const db = c.membersDb.find((x) => x.id === m.id)!; return { ...m, teacherId: db.teacherId, active: db.active, hasPhone: !!db.teacher.phone }; }),
     posts: c.posts,
     rules: c.rules.map((r) => ({ ...r, description: describeRule(r.kind, r.params, (id) => nameOf.get(id) ?? '—') })),
     absences: c.absences,
@@ -714,6 +718,57 @@ export async function setScheduleStatus(principal: P | null, scheduleId: string,
     const mi = monthInfo(sch.year, sch.month);
     await audit(tx, ctx(principal, meta), { action: `ws.schedule.${status.toLowerCase()}`, entityType: 'ws_schedule', entityId: scheduleId, before: { status: sch.status }, after: { status }, summary: `${principal.name} ${label} a escala de ${sch.sector.name} — ${mi.label}` });
   }, { timeout: 60_000, maxWait: 10_000 });
+}
+
+// ─── WhatsApp: escala do mês para cada pessoa ─────────────────
+
+export function wsWhatsAppStatus() {
+  const c = zapiConfig();
+  return { configured: c.configured, testMode: !!c.testPhone };
+}
+
+function messageFor(v: MonthView, memberId: string) {
+  const m = v.members.find((x) => x.id === memberId);
+  if (!m) throw new NotFoundError('Colaborador não encontrado na escala.');
+  const st = v.analysis?.members.find((x) => x.memberId === memberId);
+  const monthDays = v.days.filter((d) => d.date >= v.month.first && d.date <= v.month.last);
+  return memberScheduleText({
+    sector: v.sector.name, monthLabel: v.month.label, status: v.schedule!.status, name: m.name, days: monthDays,
+    cells: Object.fromEntries(monthDays.map((d) => [d.date, v.grid[m.id]?.[d.date]])), minutes: st?.minutes ?? 0, workDays: st?.days ?? 0, offs: st?.offs ?? 0,
+  });
+}
+
+/** Envia a escala do mês de uma pessoa (texto editado na tela; destino vazio = telefone do cadastro). */
+export async function sendMemberSchedule(principal: P | null, scheduleId: string, memberId: string, input: unknown, meta: RequestMeta) {
+  assertCan(principal, 'ws.edit');
+  const d = parse(z.object({ to: text(60), text: z.string().trim().min(10, 'A mensagem está vazia.').max(4000, 'Mensagem longa demais para o WhatsApp.') }), input);
+  const v = await scheduleById(principal, scheduleId);
+  const m = await prisma.wsMember.findFirst({ where: { id: memberId, sectorId: v.sector.id }, include: { teacher: { select: { phone: true, name: true } } } });
+  if (!m) throw new NotFoundError('Colaborador não encontrado na equipe.');
+  const to = d.to ?? m.teacher.phone;
+  if (!to) throw new AppError(`${m.teacher.name} não tem telefone no cadastro: informe o número.`);
+  const r = await deliverWhatsApp({ kind: 'ESCALA', to, text: d.text, actor: { id: principal.id, name: principal.name }, meta });
+  if (r.error) throw new AppError(r.error);
+  return { status: r.status, testMode: r.testMode, to: r.to };
+}
+
+/** Envia a escala individual para toda a equipe (quem tem telefone e está na escala do mês). */
+export async function sendTeamSchedules(principal: P | null, scheduleId: string, meta: RequestMeta) {
+  assertCan(principal, 'ws.edit');
+  const v = await scheduleById(principal, scheduleId);
+  const rows = await prisma.wsMember.findMany({ where: { sectorId: v.sector.id, active: true }, include: { teacher: { select: { phone: true, name: true, displayName: true } } }, orderBy: { sortOrder: 'asc' } });
+  const sent: string[] = [];
+  const noPhone: string[] = [];
+  const failed: string[] = [];
+  for (const m of rows) {
+    const name = m.teacher.displayName || m.teacher.name;
+    const cells = v.grid[m.id] ?? {};
+    if (!v.month.days.some((d) => cells[d]?.kind === 'TRABALHO')) continue; // fora da escala do mês (ex.: sem grade)
+    if (!m.teacher.phone) { noPhone.push(name); continue; }
+    const r = await deliverWhatsApp({ kind: 'ESCALA', to: m.teacher.phone, text: messageFor(v, m.id), actor: { id: principal.id, name: principal.name }, meta }).catch((e: unknown) => ({ error: e instanceof Error ? e.message : 'falha' }));
+    (r.error ? failed : sent).push(name);
+  }
+  return { sent, noPhone, failed, testMode: !!zapiConfig().testPhone };
 }
 
 /** Para a impressão / planilha. */

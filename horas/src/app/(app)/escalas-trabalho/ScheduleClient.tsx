@@ -1,9 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeftRight, CheckCircle2, FileSpreadsheet, Lock, Printer, Send, TriangleAlert, Unlock, Wand2 } from 'lucide-react';
+import { ArrowLeftRight, CheckCircle2, FileSpreadsheet, Lock, MessageCircle, Printer, Send, TriangleAlert, Unlock, Wand2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -16,7 +16,8 @@ import type { Alert, Cell, CellKind } from '@/domain/escalas/types';
 import { CLASSIFICATION_LABEL } from '@/domain/escalas/validate';
 import { cn } from '@/lib/cn';
 import type { MonthView } from '@/server/services/ws-service';
-import { confirmDayAction, editCellAction, generateAction, setStatusAction, swapCellsAction } from './actions';
+import { confirmDayAction, editCellAction, generateAction, sendMemberScheduleAction, sendTeamSchedulesAction, setStatusAction, swapCellsAction, wsWhatsAppStatusAction } from './actions';
+import { memberScheduleText } from '@/domain/escalas/whatsapp';
 import { TopScroll } from '@/components/ui/top-scroll';
 
 const KINDS: CellKind[] = ['TRABALHO', 'FOLGA', 'BANCO', 'FERIAS', 'ATESTADO', 'FALTA', 'AFASTAMENTO', 'INDISPONIVEL', 'FECHADO', 'SEM_GRADE'];
@@ -51,6 +52,21 @@ export function ScheduleClient({ view }: { view: MonthView }) {
   const [week, setWeek] = useState(0);
   const [edit, setEdit] = useState<{ memberId: string; date: IsoDate } | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [wa, setWa] = useState<{ configured: boolean; testMode: boolean } | null>(null);
+  const [waMember, setWaMember] = useState<string | null>(null);
+  const [teamMsg, setTeamMsg] = useState<string | null>(null);
+  useEffect(() => { let alive = true; wsWhatsAppStatusAction().then((r) => alive && setWa(r)).catch(() => undefined); return () => { alive = false; }; }, []);
+  const canWa = !!wa?.configured && view.can.edit;
+  const sendTeam = () => {
+    const withPhone = members.filter((m) => m.active && m.hasPhone && view.month.days.some((d) => view.grid[m.id]?.[d]?.kind === 'TRABALHO')).length;
+    if (!confirm(`Enviar a escala de ${view.month.label} pelo WhatsApp para ${withPhone} pessoa(s) com telefone no cadastro?${s.status === 'RASCUNHO' ? ' A escala ainda é rascunho: a mensagem vai como prévia.' : ''}`)) return;
+    start(async () => {
+      const r = await sendTeamSchedulesAction(s.id);
+      if (!r.ok) { setError(r.error); return; }
+      const d = r.data;
+      setTeamMsg([`Enviado para ${d.sent.length}: ${d.sent.join(', ') || '—'}${d.testMode ? ' (modo teste: tudo foi para o número de teste)' : ''}.`, d.noPhone.length ? `Sem telefone no cadastro: ${d.noPhone.join(', ')}.` : '', d.failed.length ? `Falhou: ${d.failed.join(', ')}.` : ''].filter(Boolean).join(' '));
+    });
+  };
   const s = view.schedule!;
   const a = view.analysis!;
   const editable = s.status === 'RASCUNHO' && view.can.edit;
@@ -101,9 +117,10 @@ export function ScheduleClient({ view }: { view: MonthView }) {
         <div className="flex-1" />
         <Link href={`/escalas-trabalho/${s.id}/imprimir`} target="_blank" className={buttonVariants({ variant: 'secondary', size: 'sm' })}><Printer /> Imprimir / PDF</Link>
         <a href={`/escalas-trabalho/${s.id}/planilha`} className={buttonVariants({ variant: 'secondary', size: 'sm' })}><FileSpreadsheet /> Planilha</a>
+        {canWa && <Button size="sm" variant="secondary" disabled={pending} onClick={sendTeam}><MessageCircle /> Enviar para a equipe</Button>}
         <Link href={`/escalas-trabalho?setor=${view.sector.id}&mes=${next}`} className={buttonVariants({ variant: 'ghost', size: 'sm' })}>Próximo mês →</Link>
       </div>
-      <FormMessage error={error} />
+      <FormMessage error={error} success={teamMsg} />
 
       {/* Indicadores */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
@@ -171,7 +188,10 @@ export function ScheduleClient({ view }: { view: MonthView }) {
                 return (
                   <tr key={m.id}>
                     <td className="sticky left-0 z-10 border border-borda bg-white px-2 py-1">
-                      <p className="font-bold text-navy">{m.name}</p>
+                      <p className="flex items-center gap-1 font-bold text-navy">
+                        <span className="flex-1">{m.name}</span>
+                        {canWa && <button type="button" onClick={() => setWaMember(m.id)} title={`Enviar a escala de ${m.name} pelo WhatsApp`} aria-label={`Enviar a escala de ${m.name} pelo WhatsApp`} className={cn('rounded p-0.5 hover:bg-sucesso/10', m.hasPhone ? 'text-sucesso' : 'text-tinta-fraca')}><MessageCircle className="size-3.5" /></button>}
+                      </p>
                       <p className="text-[10px] text-tinta-fraca">{[m.functionName, BOND_LABEL[m.bond], m.mode === 'COBERTURA' ? 'cobertura' : null].filter(Boolean).join(' · ')}</p>
                     </td>
                     {days.map((d) => {
@@ -233,6 +253,7 @@ export function ScheduleClient({ view }: { view: MonthView }) {
         {a.alerts.length > 12 && <button type="button" onClick={() => setShowAll(!showAll)} className="mt-2 text-xs font-semibold text-nacao">{showAll ? 'Mostrar menos' : `Ver todos (${a.alerts.length})`}</button>}
       </Card>
 
+      {waMember && <WhatsSheet view={view} memberId={waMember} testMode={!!wa?.testMode} onClose={() => setWaMember(null)} />}
       {edit && <CellEditor view={view} memberId={edit.memberId} date={edit.date} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); router.refresh(); }} />}
       <p className="text-[11px] text-tinta-fraca">Gerada em {s.generatedAt ? new Date(s.generatedAt).toLocaleString('pt-BR') : '—'}{s.publishedAt ? ` · publicada em ${new Date(s.publishedAt).toLocaleString('pt-BR')}` : ''}. Mês: {mes}.</p>
     </div>
@@ -299,6 +320,42 @@ function CellEditor({ view, memberId, date, onClose, onSaved }: { view: MonthVie
         <p className="mt-1 text-[11px] text-tinta-suave">A troca inverte os dois dias e a verificação de cobertura e jornada roda de novo.</p>
       </div>
       <FormMessage error={error} />
+    </Sheet>
+  );
+}
+
+/** Prévia da mensagem com a escala do mês da pessoa (editável) e envio pela Z-API. */
+function WhatsSheet({ view, memberId, testMode, onClose }: { view: MonthView; memberId: string; testMode: boolean; onClose: () => void }) {
+  const m = view.members.find((x) => x.id === memberId)!;
+  const st = view.analysis?.members.find((x) => x.memberId === memberId);
+  const monthDays = view.days.filter((d) => d.date >= view.month.first && d.date <= view.month.last);
+  const [text, setText] = useState(() => memberScheduleText({
+    sector: view.sector.name, monthLabel: view.month.label, status: view.schedule!.status, name: m.name, days: monthDays,
+    cells: Object.fromEntries(monthDays.map((d) => [d.date, view.grid[m.id]?.[d.date]])), minutes: st?.minutes ?? 0, workDays: st?.days ?? 0, offs: st?.offs ?? 0,
+  }));
+  const [to, setTo] = useState('');
+  const [msg, setMsg] = useState<{ ok?: string; error?: string } | null>(null);
+  const [pending, start] = useTransition();
+  return (
+    <Sheet title={`Escala de ${m.name} pelo WhatsApp`} onClose={onClose}
+      onSubmit={(e) => { e.preventDefault(); start(async () => {
+        const r = await sendMemberScheduleAction(view.schedule!.id, memberId, { to, text });
+        if (!r.ok) return setMsg({ error: r.error });
+        setMsg({ ok: r.data.status === 'SIMULATED' ? `Simulado para ${r.data.to}.` : r.data.testMode ? `Enviado ao número de TESTE (destino real: ${r.data.to}).` : `Enviado para ${r.data.to}. ✅` });
+      }); }}
+      footer={<><Button type="submit" disabled={pending}><MessageCircle /> {pending ? 'Enviando…' : 'Enviar pelo WhatsApp'}</Button><Button type="button" variant="ghost" onClick={onClose}>Fechar</Button></>}>
+      {testMode && <p className="rounded-lg bg-atencao/10 px-3 py-2 text-xs text-atencao">Modo teste: a mensagem vai para o número de teste.</p>}
+      {view.schedule!.status === 'RASCUNHO' && <p className="rounded-lg bg-atencao/10 px-3 py-2 text-xs text-atencao">A escala ainda é rascunho: a mensagem avisa que é uma prévia.</p>}
+      <div>
+        <Label htmlFor="wa-to">Para</Label>
+        <Input id="wa-to" value={to} onChange={(e) => setTo(e.target.value)} inputMode="tel" placeholder={m.hasPhone ? 'Vazio = número do cadastro' : 'Sem telefone no cadastro: informe DDD + número'} />
+      </div>
+      <div>
+        <Label htmlFor="wa-text">Mensagem</Label>
+        <textarea id="wa-text" className="min-h-72 w-full rounded-lg border border-borda p-2 font-mono text-xs" value={text} maxLength={4000} onChange={(e) => setText(e.target.value)} />
+        <p className="text-right text-[11px] text-tinta-fraca">*negrito* funciona no WhatsApp · {text.length}/4000</p>
+      </div>
+      <FormMessage error={msg?.error} success={msg?.ok} />
     </Sheet>
   );
 }
