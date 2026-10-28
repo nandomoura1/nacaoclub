@@ -2507,6 +2507,8 @@ model WsSector {
   holidayConfirm Boolean  @default(false) @map("holiday_confirm")
   /// Rodízio de feriados: quem trabalha no feriado é quem trabalhou menos feriados (histórico dos meses), com os turnos de sábado/domingo.
   holidayRotate  Boolean  @default(false) @map("holiday_rotate")
+  /// Quantas pessoas trabalham no feriado (ex.: Recepção = 1). Vazio = a equipe do dia.
+  holidayStaff   Int?     @map("holiday_staff")
   notes          String?
   sortOrder      Int      @default(0) @map("sort_order")
   active         Boolean  @default(true)

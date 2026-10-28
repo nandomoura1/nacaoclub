@@ -31,7 +31,7 @@ export interface ModelMember {
 }
 export interface ModelPost { name: string; kind: 'ABERTURA' | 'FECHAMENTO' | 'ALMOCO' | null; start: number; end: number; weekdays: number[]; min: number; functionName?: string; mandatory?: boolean }
 export interface ModelRule { kind: string; params: Record<string, unknown>; mandatory: boolean; label?: string }
-export interface SectorModel { name: string; procSector: string | null; hours: HoursMap; holidayMode?: 'SABADO' | 'DOMINGO'; holidayConfirm?: boolean; holidayRotate?: boolean; notes: string; members: ModelMember[]; posts: ModelPost[]; rules: ModelRule[] }
+export interface SectorModel { name: string; procSector: string | null; hours: HoursMap; holidayMode?: 'SABADO' | 'DOMINGO'; holidayConfirm?: boolean; holidayRotate?: boolean; holidayStaff?: number; notes: string; members: ModelMember[]; posts: ModelPost[]; rules: ModelRule[] }
 
 const WEEK = [1, 2, 3, 4, 5];
 
@@ -62,6 +62,7 @@ const recepcao: SectorModel = {
   holidayConfirm: true,
   // Uma pessoa por feriado, em rodízio: quem trabalhou menos feriados vai primeiro.
   holidayRotate: true,
+  holidayStaff: 1,
   notes: 'Modelo do documento (análise de 21/10/2026) com rodízio semanal das 6 posições: todos passam por sábado e domingo. Pendências do documento: horários de almoço e compatibilidade com contratos/CCT.',
   members: RECEPCAO_ORDER.map(([key, display], i) => ({
     key, name: `${display} (Recepção)`, display, functionName: 'Recepção', bond: 'CLT' as const,

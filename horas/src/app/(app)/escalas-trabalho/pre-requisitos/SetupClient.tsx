@@ -82,8 +82,8 @@ function SectorSheet({ sector, procSectors, onClose }: { sector: SectorRow | nul
   );
 }
 
-export function SetupClient({ sectorId, hours, cycleRef, notes, holidayMode, holidayConfirm, holidayRotate, posts, rules, members, kinds, canEdit }: {
-  sectorId: string; hours: HoursMap; cycleRef: string; notes: string | null; holidayMode: string | null; holidayConfirm: boolean; holidayRotate: boolean; posts: PostRow[]; rules: RuleRow[]; members: Opt[];
+export function SetupClient({ sectorId, hours, cycleRef, notes, holidayMode, holidayConfirm, holidayRotate, holidayStaff, posts, rules, members, kinds, canEdit }: {
+  sectorId: string; hours: HoursMap; cycleRef: string; notes: string | null; holidayMode: string | null; holidayConfirm: boolean; holidayRotate: boolean; holidayStaff: number | null; posts: PostRow[]; rules: RuleRow[]; members: Opt[];
   kinds: { value: string; label: string; help: string }[]; canEdit: boolean;
 }) {
   const { pending, error, run } = useAct();
@@ -92,6 +92,7 @@ export function SetupClient({ sectorId, hours, cycleRef, notes, holidayMode, hol
   const [hMode, setHMode] = useState(holidayMode ?? '');
   const [hConfirm, setHConfirm] = useState(holidayConfirm);
   const [hRotate, setHRotate] = useState(holidayRotate);
+  const [hStaff, setHStaff] = useState(holidayStaff ? String(holidayStaff) : '');
   const [post, setPost] = useState<PostRow | 'new' | null>(null);
   const [rule, setRule] = useState<RuleRow | 'new' | null>(null);
   return (
@@ -112,13 +113,17 @@ export function SetupClient({ sectorId, hours, cycleRef, notes, holidayMode, hol
               </Select>
             </div>
             <label className="mb-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={hConfirm} onChange={(e) => setHConfirm(e.target.checked)} className="size-4 accent-[#0169E9]" /> Sempre pedir confirmação nos feriados</label>
+            <div>
+              <Label htmlFor="h-staff">Pessoas no feriado</Label>
+              <Input id="h-staff" type="number" min={1} max={50} value={hStaff} onChange={(e) => setHStaff(e.target.value)} placeholder="equipe do dia" className="w-36" />
+            </div>
             <label className="mb-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={hRotate} onChange={(e) => setHRotate(e.target.checked)} className="size-4 accent-[#0169E9]" /> Rodízio de feriados (quem trabalhou menos feriados vai primeiro)</label>
           </div>
-          <p className="mt-1 text-xs text-tinta-suave">O horário do feriado é a linha “Feriado” acima. Ex.: Recepção = como domingo, 08–14, uma pessoa; Lanchonete e Cozinha = como sábado, 07–17.</p>
+          <p className="mt-1 text-xs text-tinta-suave">O horário do feriado é a linha “Feriado” acima. “Pessoas no feriado” limita a equipe (ex.: Recepção = 1, das 08 às 14); com o rodízio, vai quem trabalhou menos feriados nos meses anteriores (empate: quem trabalhou há mais tempo). Lanchonete e Cozinha = como sábado, 07–17.</p>
         </div>
         <div className="mt-3 flex flex-wrap items-end gap-3">
           <div><Label htmlFor="cy">Início de uma semana A (ciclo A/B)</Label><Input id="cy" type="date" value={cycle} onChange={(e) => setCycle(e.target.value)} className="w-44" /></div>
-          {canEdit && <Button disabled={pending} onClick={() => run(() => saveSectorHoursAction(sectorId, { hours: h, cycleRef: cycle, notes, holidayMode: hMode || null, holidayConfirm: hConfirm, holidayRotate: hRotate }))}>Salvar horário, feriados e ciclo</Button>}
+          {canEdit && <Button disabled={pending} onClick={() => run(() => saveSectorHoursAction(sectorId, { hours: h, cycleRef: cycle, notes, holidayMode: hMode || null, holidayConfirm: hConfirm, holidayRotate: hRotate, holidayStaff: hStaff ? Number(hStaff) : null }))}>Salvar horário, feriados e ciclo</Button>}
         </div>
       </Card>
 

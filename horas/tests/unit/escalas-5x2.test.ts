@@ -26,13 +26,13 @@ function rule(kind: string, params: unknown, mandatory = true): Rule {
   if (!r.ok) throw new Error(r.error);
   return { id: id(), kind, label: kind, params: r.params, mandatory };
 }
-function run(o: { year: number; month: number; members: Member[]; posts?: Post[]; rules?: Rule[]; absences?: Absence[]; hours?: HoursMap; holidays?: [IsoDate, string, string?][]; overrides?: Override[]; prior?: Grid; cycleRef?: IsoDate; edit?: (g: Grid) => void; holidayMode?: string; holidayRotate?: boolean; history?: Record<string, number>; carry?: Record<string, number> }) {
+function run(o: { year: number; month: number; members: Member[]; posts?: Post[]; rules?: Rule[]; absences?: Absence[]; hours?: HoursMap; holidays?: [IsoDate, string, string?][]; overrides?: Override[]; prior?: Grid; cycleRef?: IsoDate; edit?: (g: Grid) => void; holidayMode?: string; holidayRotate?: boolean; history?: Record<string, number>; last?: Record<string, IsoDate>; staff?: number; carry?: Record<string, number> }) {
   const month = monthInfo(o.year, o.month);
   const holidays = new Map((o.holidays ?? []).map(([d, n, s]) => [d, { name: n, scope: s ?? 'NACIONAL' }]));
   const cal = { sectorId: 'S', sectorHours: o.hours ?? ALL, nacaoHours: {}, holidays, overrides: o.overrides ?? [], holidayMode: o.holidayMode ?? null };
   const days = new Map(eachDay(month.rangeStart, month.rangeEnd).map((d) => [d, resolveDay(d, cal)]));
   const base = { month, days, members: o.members, posts: o.posts ?? [], rules: o.rules ?? [], absences: o.absences ?? [], cycleRef: o.cycleRef ?? '2026-10-05' };
-  const g = generate({ ...base, prior: o.prior ?? {}, holidayRotate: o.holidayRotate, holidayHistory: o.history });
+  const g = generate({ ...base, prior: o.prior ?? {}, holidayRotate: o.holidayRotate, holidayHistory: o.history, holidayLast: o.last, holidayStaff: o.staff });
   o.edit?.(g.grid);
   const a = validate({ ...base, grid: g.grid, legal: { CLT, FUNAP }, bankCarry: o.carry });
   return { month, days, grid: g.grid, engineAlerts: g.alerts, analysis: a };
@@ -299,5 +299,22 @@ describe('motor de geração', () => {
     expect(t).toMatch(/Dom 01\/11 — Folga/);
     expect(t.match(/\*Semana /g)!.length).toBe(6);
     expect(t.length).toBeLessThan(4000);
+  });
+
+  it('Recepção: 1 pessoa por feriado mesmo sem modo sábado/domingo; rodízio pelo histórico e por quem trabalhou há mais tempo', () => {
+    const W = (s: number, e: number) => [H(s), H(e), 60] as [number, number, number];
+    const team = ['Duda', 'Lawana', 'Brenda', 'Manu', 'Débora', 'Igor'].map((n, i) => member(n, { hours: { week: { A: [W(5 + i % 3, 13 + i % 3), W(5 + i % 3, 13 + i % 3), W(5 + i % 3, 13 + i % 3), W(5 + i % 3, 13 + i % 3), W(5 + i % 3, 13 + i % 3), null, null] } } }));
+    const hours = { ...ALL, F: [[H(8), H(14)]] } as HoursMap;
+    const holidays: [IsoDate, string][] = [['2026-11-02', 'Finados'], ['2026-11-20', 'Consciência Negra'], ['2026-11-30', 'Evangélico']];
+    // Histórico: todos com 1 feriado, exceto Brenda (0); entre os de 1, Igor e Manu trabalharam há mais tempo.
+    const id = (n: string) => team.find((m) => m.name === n)!.id;
+    const history = Object.fromEntries(team.map((m) => [m.id, m.name === 'Brenda' ? 0 : 1]));
+    const last = { [id('Duda')]: '2026-10-12', [id('Lawana')]: '2026-10-12', [id('Débora')]: '2026-10-12', [id('Igor')]: '2026-09-07', [id('Manu')]: '2026-04-21' };
+    const r = run({ year: 2026, month: 11, members: team, hours, holidays, holidayRotate: true, staff: 1, history, last });
+    const who = holidays.map(([d]) => team.filter((m) => r.grid[m.id]![d]!.kind === 'TRABALHO').map((m) => m.name));
+    expect(who).toEqual([['Brenda'], ['Manu'], ['Igor']]);
+    const c = r.grid[id('Brenda')]!['2026-11-02']!;
+    expect([c.startMin, c.endMin, c.breakMin]).toEqual([H(8), H(14), 15]);
+    expect(r.grid[id('Duda')]!['2026-11-02']!.note).toMatch(/Feriado/);
   });
 });

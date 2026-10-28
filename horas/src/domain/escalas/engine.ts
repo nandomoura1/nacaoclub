@@ -29,6 +29,10 @@ export interface EngineInput {
   holidayRotate?: boolean;
   /** Feriados já trabalhados por pessoa nos meses anteriores. */
   holidayHistory?: Record<string, number>;
+  /** Último feriado trabalhado por pessoa (desempate: quem trabalhou há mais tempo vai antes). */
+  holidayLast?: Record<string, IsoDate>;
+  /** Quantas pessoas trabalham no feriado (vazio = a equipe do dia). */
+  holidayStaff?: number | null;
 }
 
 export const OFF_KINDS: ReadonlySet<CellKind> = new Set(['FOLGA', 'BANCO', 'FECHADO', 'FERIAS', 'ATESTADO', 'FALTA', 'AFASTAMENTO', 'INDISPONIVEL']);
@@ -216,29 +220,40 @@ export function generate(input: EngineInput): { grid: Grid; alerts: Alert[] } {
     forcedWork.set(m.id, must);
   }
 
-  // Etapa 2b: rodízio de feriados. Os turnos do feriado (os de sábado/domingo da
-  // semana) vão para quem trabalhou menos feriados; quem estava escalado e não foi
-  // sorteado folga ("Feriado"). Empate: quem já estava escalado, depois a ordem da equipe.
-  if (input.holidayRotate) {
+  // Etapa 2b: feriados com equipe reduzida e/ou rodízio. Os turnos do feriado são
+  // os de sábado/domingo da semana (modo do setor) ou o horário de feriado; vão para
+  // quem trabalhou menos feriados (histórico dos meses), depois quem trabalhou há
+  // mais tempo, depois quem já estava escalado, depois a ordem da equipe. Quem não
+  // foi escolhido folga ("Feriado").
+  const staff = input.holidayStaff && input.holidayStaff > 0 ? input.holidayStaff : null;
+  if (input.holidayRotate || staff) {
     const count = new Map(members.map((m) => [m.id, input.holidayHistory?.[m.id] ?? 0]));
+    const last = new Map(members.map((m) => [m.id, input.holidayLast?.[m.id] ?? '']));
+    const order = new Map(members.map((m, i) => [m.id, i]));
     for (const date of dates.filter((d) => d >= month.first && d <= month.last)) {
       const d = days.get(date)!;
-      if (!d.asWeekday) continue;
+      if (!isRealHoliday(d) || !d.open.length || (!d.asWeekday && !staff)) continue;
       const holders = members.filter((m) => grid[m.id]![date]!.kind === 'TRABALHO');
-      const shifts = holders.map((m) => grid[m.id]![date]!);
-      if (!shifts.length) continue;
+      const n = staff ?? holders.length;
+      if (!n) continue;
+      const window = d.open[0]!;
+      const gross = window[1] - window[0];
+      const templates: Cell[] = d.asWeekday && holders.length
+        ? holders.map((m) => grid[m.id]![date]!)
+        : [{ kind: 'TRABALHO', startMin: window[0], endMin: window[1], breakMin: gross > 360 ? 60 : gross > 240 ? 15 : 0 }];
       const eligible = members.filter((m) => isScheduled(m) && !absenceOn(absences, m.id, date) && availableOn(m, d) && grid[m.id]![date]!.kind !== 'FECHADO');
-      const order = new Map(members.map((m, i) => [m.id, i]));
-      const chosen = [...eligible].sort((a, b) => count.get(a.id)! - count.get(b.id)!
-        || Number(holders.includes(b)) - Number(holders.includes(a)) || order.get(a.id)! - order.get(b.id)!).slice(0, shifts.length);
+      const rank = (a: Member, b: Member) => (input.holidayRotate ? count.get(a.id)! - count.get(b.id)! || last.get(a.id)!.localeCompare(last.get(b.id)!) : 0)
+        || Number(holders.includes(b)) - Number(holders.includes(a)) || order.get(a.id)! - order.get(b.id)!;
+      const chosen = [...eligible].sort(rank).slice(0, n);
       for (const m of eligible) {
         if (grid[m.id]![date]!.kind === 'TRABALHO') grid[m.id]![date] = { kind: 'FOLGA', note: `Feriado: ${d.holiday!.name}` };
       }
       chosen.forEach((m, i) => {
-        const s = shifts[i]!;
-        grid[m.id]![date] = workCell([s.startMin!, s.endMin!, s.breakMin ?? 0], `Feriado (rodízio): ${d.holiday!.name}`);
+        const t = templates[i % templates.length]!;
+        grid[m.id]![date] = workCell([t.startMin!, t.endMin!, t.breakMin ?? 0], `Feriado${input.holidayRotate ? ' (rodízio)' : ''}: ${d.holiday!.name}`);
         forcedWork.get(m.id)?.add(date);
         count.set(m.id, count.get(m.id)! + 1);
+        last.set(m.id, date);
       });
     }
   }

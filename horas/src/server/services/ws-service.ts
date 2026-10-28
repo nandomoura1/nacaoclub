@@ -187,10 +187,11 @@ export async function saveSectorHours(principal: P | null, sectorId: string, inp
     holidayMode: z.enum(['SABADO', 'DOMINGO']).nullable().or(z.literal('').transform(() => null)).default(null),
     holidayConfirm: z.boolean().default(false),
     holidayRotate: z.boolean().default(false),
+    holidayStaff: z.number().int().min(1, 'Pelo menos 1 pessoa no feriado.').max(50).nullable().default(null),
   }), input);
   return prisma.$transaction(async (tx) => {
     const s = await assertSector(principal, sectorId, tx);
-    await tx.wsSector.update({ where: { id: sectorId }, data: { hours: d.hours, cycleRef: toUtc(mondayOf(d.cycleRef)), notes: d.notes, holidayMode: d.holidayMode, holidayConfirm: d.holidayConfirm, holidayRotate: d.holidayRotate } });
+    await tx.wsSector.update({ where: { id: sectorId }, data: { hours: d.hours, cycleRef: toUtc(mondayOf(d.cycleRef)), notes: d.notes, holidayMode: d.holidayMode, holidayConfirm: d.holidayConfirm, holidayRotate: d.holidayRotate, holidayStaff: d.holidayStaff } });
     await audit(tx, ctx(principal, meta), { action: 'ws.sector.hours', entityType: 'ws_sector', entityId: sectorId, before: { hours: s.hours, cycleRef: fromUtc(s.cycleRef) }, after: d, summary: `${principal.name} alterou o horário/ciclo do setor ${s.name}` });
   });
 }
@@ -550,9 +551,14 @@ async function context(db: Tx, sectorId: string, year: number, month: number) {
   // Feriados já trabalhados (rodízio) e saldo do banco de horas dos meses anteriores deste setor.
   const pastHolidays = await db.holiday.findMany({ where: { date: { lt: toUtc(mi.first), gte: toUtc(addDays(mi.first, -730)) }, scope: { not: 'FACULTATIVO' } }, select: { date: true } });
   const holidayHistory: Record<string, number> = {};
+  const holidayLast: Record<string, IsoDate> = {};
   if (pastHolidays.length) {
-    const worked = await db.wsCell.groupBy({ by: ['memberId'], where: { kind: 'TRABALHO', date: { in: pastHolidays.map((h) => h.date) }, schedule: { sectorId } }, _count: { _all: true } });
-    for (const w of worked) holidayHistory[w.memberId] = w._count._all;
+    const worked = await db.wsCell.findMany({ where: { kind: 'TRABALHO', date: { in: pastHolidays.map((h) => h.date) }, schedule: { sectorId } }, select: { memberId: true, date: true } });
+    for (const w of worked) {
+      holidayHistory[w.memberId] = (holidayHistory[w.memberId] ?? 0) + 1;
+      const d = fromUtc(w.date);
+      if (!holidayLast[w.memberId] || d > holidayLast[w.memberId]!) holidayLast[w.memberId] = d;
+    }
   }
   const previous = await db.wsSchedule.findMany({ where: { sectorId, OR: [{ year: { lt: year } }, { year, month: { lt: month } }] }, select: { analysis: true } });
   const bankCarry: Record<string, number> = {};
@@ -563,7 +569,7 @@ async function context(db: Tx, sectorId: string, year: number, month: number) {
   }
   const domainPosts: Post[] = posts.map((p) => ({ id: p.id, name: p.name, kind: p.kind, startMin: p.startMin, endMin: p.endMin, weekdays: p.weekdays, minPeople: p.minPeople, functionName: p.functionName, mandatory: p.mandatory }));
   const domainRules: Rule[] = rules.map((r) => ({ id: r.id, kind: r.kind, label: r.label, params: r.params as Record<string, unknown>, mandatory: r.mandatory }));
-  return { mi, sector, days, members, membersDb, posts: domainPosts, rules: domainRules, absences, legal, prior, after, elsewhere, schedule, cycleRef: fromUtc(sector.cycleRef), holidayHistory, bankCarry };
+  return { mi, sector, days, members, membersDb, posts: domainPosts, rules: domainRules, absences, legal, prior, after, elsewhere, schedule, cycleRef: fromUtc(sector.cycleRef), holidayHistory, holidayLast, bankCarry };
 }
 
 type Ctx = Awaited<ReturnType<typeof context>>;
@@ -625,7 +631,7 @@ export async function generateSchedule(principal: P | null, sectorId: string, ye
     const c = await context(tx, sectorId, year, month);
     if (c.schedule && c.schedule.status !== 'RASCUNHO') throw new AppError('A escala deste mês já foi aprovada/publicada. Reabra para edição antes de gerar de novo.');
     if (!c.members.some((m) => m.mode === 'FIXO' && m.autoSchedule && (m.hours.base || m.hours.week))) throw new AppError('Nenhum colaborador com horário habitual na equipe: cadastre a equipe antes de gerar.');
-    const out = generate({ month: c.mi, days: c.days, members: c.members, posts: c.posts, rules: c.rules, absences: c.absences, cycleRef: c.cycleRef, prior: c.prior, holidayRotate: c.sector.holidayRotate, holidayHistory: c.holidayHistory });
+    const out = generate({ month: c.mi, days: c.days, members: c.members, posts: c.posts, rules: c.rules, absences: c.absences, cycleRef: c.cycleRef, prior: c.prior, holidayRotate: c.sector.holidayRotate, holidayHistory: c.holidayHistory, holidayLast: c.holidayLast, holidayStaff: c.sector.holidayStaff });
     const sched = c.schedule ?? await tx.wsSchedule.create({ data: { sectorId, year, month } });
     await tx.wsCell.deleteMany({ where: { scheduleId: sched.id } });
     const rows = c.members.flatMap((m) => c.mi.days.map((d) => {
@@ -792,7 +798,7 @@ export async function loadDocumentModels(principal: P | null, meta: RequestMeta)
     await prisma.$transaction(async (tx) => {
       if (await tx.wsSector.findFirst({ where: { name: { equals: model.name, mode: 'insensitive' } } })) { skipped.push(model.name); return; }
       const proc = model.procSector ? await tx.procSector.findFirst({ where: { name: model.procSector }, select: { id: true } }) : null;
-      const sector = await tx.wsSector.create({ data: { name: model.name, procSectorId: proc?.id ?? null, hours: model.hours, cycleRef: toUtc(MODEL_CYCLE_REF), notes: model.notes, sortOrder: DOCUMENT_MODELS.indexOf(model), holidayMode: model.holidayMode ?? null, holidayConfirm: model.holidayConfirm ?? false, holidayRotate: model.holidayRotate ?? false } });
+      const sector = await tx.wsSector.create({ data: { name: model.name, procSectorId: proc?.id ?? null, hours: model.hours, cycleRef: toUtc(MODEL_CYCLE_REF), notes: model.notes, sortOrder: DOCUMENT_MODELS.indexOf(model), holidayMode: model.holidayMode ?? null, holidayConfirm: model.holidayConfirm ?? false, holidayRotate: model.holidayRotate ?? false, holidayStaff: model.holidayStaff ?? null } });
       const ids = new Map<string, string>();
       for (const [i, m] of model.members.entries()) {
         const t = await tx.teacher.findFirst({ where: { name: m.name } }) ?? await tx.teacher.create({ data: { name: m.name, displayName: m.display, createdById: principal.id, notes: `Cadastrado pelo modelo de escala (${model.name}).` } });
