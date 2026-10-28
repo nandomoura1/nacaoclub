@@ -243,4 +243,16 @@ describe('motor de geração', () => {
     expect(codes).not.toContain('INTERVALO');
     expect(codes).toContain('INTERVALO_MAXIMO');
   });
+
+  it('folga do banco de horas: justifica a regra, conta à parte e sai do saldo', () => {
+    const m = member('Marcos', { hours: { base: [H(7), H(15, 20), 60] } });
+    const rules = [rule('TRABALHA_SEMPRE', { memberId: m.id, weekdays: [6] })];
+    const base = run({ year: 2026, month: 11, members: [m], rules });
+    const r = run({ year: 2026, month: 11, members: [m], rules, edit: (g) => { g[m.id]!['2026-11-14'] = { kind: 'BANCO', manual: true }; } });
+    expect(r.analysis.alerts.some((a) => a.code === 'REGRA')).toBe(false);
+    const st = r.analysis.members[0]!;
+    expect(st.bankDays).toBe(1);
+    expect(st.absenceDays).toBe(0);
+    expect(st.balanceMin!).toBeLessThan(base.analysis.members[0]!.balanceMin!);
+  });
 });

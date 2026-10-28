@@ -28,6 +28,8 @@ export interface MemberStats {
   sundays: number;
   holidays: number;
   absenceDays: number;
+  /** Folgas compensadas com o banco de horas. */
+  bankDays: number;
   /** Banco de horas previsto: horas da escala − referência (carga semanal × dias do mês ÷ 7, sem as ausências abonadas). */
   expectedMin: number | null;
   balanceMin: number | null;
@@ -197,7 +199,8 @@ export function validate(v: ValidateInput): Analysis {
     }
 
     const md = month.days.map((d) => row[d]).filter(Boolean) as Cell[];
-    const absenceDays = md.filter((c) => c.kind !== 'TRABALHO' && c.kind !== 'FOLGA' && c.kind !== 'FECHADO' && c.kind !== 'SEM_GRADE').length;
+    const absenceDays = md.filter((c) => c.kind !== 'TRABALHO' && c.kind !== 'FOLGA' && c.kind !== 'BANCO' && c.kind !== 'FECHADO' && c.kind !== 'SEM_GRADE').length;
+    const bankDays = md.filter((c) => c.kind === 'BANCO').length;
     const paidAbsence = month.days.filter((d) => PAID_ABSENCE.has(row[d]?.kind ?? '')).length;
     const minutes = month.days.reduce((s, d) => s + workedMin(row[d]), 0);
     const expectedMin = clt && isScheduled(m) ? Math.round(m.weeklyMin * (month.length - paidAbsence) / 7) : null;
@@ -208,7 +211,7 @@ export function validate(v: ValidateInput): Analysis {
       saturdays: month.days.filter((d) => weekdayOf(d) === 6 && row[d]?.kind === 'TRABALHO').length,
       sundays: month.days.filter((d) => weekdayOf(d) === 7 && row[d]?.kind === 'TRABALHO').length,
       holidays: month.days.filter((d) => isRealHoliday(days.get(d)!) && row[d]?.kind === 'TRABALHO').length,
-      absenceDays, expectedMin, balanceMin: expectedMin == null ? null : minutes - expectedMin,
+      absenceDays, bankDays, expectedMin, balanceMin: expectedMin == null ? null : minutes - expectedMin,
     });
   }
 
@@ -225,7 +228,8 @@ export function validate(v: ValidateInput): Analysis {
       const d = days.get(date)!;
       if (!d.open.length) continue;
       const phase = cyclePhase(date, cycleRef);
-      const absent = (mid: string) => !!absenceOn(absences, mid, date);
+      // Ausência registrada ou folga do banco de horas: dia justificado, não descumpre a regra.
+      const absent = (mid: string) => !!absenceOn(absences, mid, date) || cell(mid, date)?.kind === 'BANCO';
       switch (r.kind) {
         case 'FOLGA_FIXA': {
           const p = r.params as RuleParams<'FOLGA_FIXA'>;

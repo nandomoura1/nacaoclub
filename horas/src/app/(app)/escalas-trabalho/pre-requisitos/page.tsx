@@ -30,6 +30,7 @@ export default async function PreRequisitosPage({ searchParams }: { searchParams
         <>
           <Card className="mb-4 p-4"><SectorMonthPicker sectors={sectors} sectorId={q.sectorId} month={q.mes} showMonth={false} /></Card>
           <SetupClient
+            key={q.sectorId}
             sectorId={q.sectorId}
             hours={setup.sector.hours as HoursMap}
             cycleRef={fromUtc(setup.sector.cycleRef)}

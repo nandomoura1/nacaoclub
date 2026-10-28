@@ -24,7 +24,7 @@ export default async function AusenciasPage({ searchParams }: { searchParams: Pr
     <>
       {header}
       <Card className="mb-4 p-4"><SectorMonthPicker sectors={sectors} sectorId={q.sectorId} month={q.mes} /></Card>
-      <AbsenceClient sectorId={q.sectorId} mes={q.mes} members={abs.members} leaves={abs.leaves} impact={impact} stats={view.analysis?.members ?? []} hasSchedule={!!view.schedule} monthLabel={view.month.label} canEdit={can(principal, 'ws.edit')} />
+      <AbsenceClient key={`${q.sectorId}-${q.mes}`} sectorId={q.sectorId} mes={q.mes} members={abs.members} leaves={abs.leaves} impact={impact} stats={view.analysis?.members ?? []} hasSchedule={!!view.schedule} monthLabel={view.month.label} canEdit={can(principal, 'ws.edit')} />
     </>
   );
 }

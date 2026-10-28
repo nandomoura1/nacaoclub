@@ -19,7 +19,7 @@ import type { MonthView } from '@/server/services/ws-service';
 import { editCellAction, generateAction, setStatusAction, swapCellsAction } from './actions';
 import { TopScroll } from '@/components/ui/top-scroll';
 
-const KINDS: CellKind[] = ['TRABALHO', 'FOLGA', 'FERIAS', 'ATESTADO', 'FALTA', 'AFASTAMENTO', 'INDISPONIVEL', 'FECHADO', 'SEM_GRADE'];
+const KINDS: CellKind[] = ['TRABALHO', 'FOLGA', 'BANCO', 'FERIAS', 'ATESTADO', 'FALTA', 'AFASTAMENTO', 'INDISPONIVEL', 'FECHADO', 'SEM_GRADE'];
 const LEVEL_TONE = { CONFLITO: 'red', AJUSTE: 'amber', INFO: 'neutral' } as const;
 const CLASS_TONE = { SEM_CONFLITOS: 'border-sucesso/40 bg-sucesso/10 text-sucesso', AJUSTES: 'border-atencao/40 bg-atencao/10 text-atencao', COM_CONFLITO: 'border-critico/40 bg-critico/10 text-critico' } as const;
 
@@ -138,7 +138,7 @@ export function ScheduleClient({ view }: { view: MonthView }) {
           )}
           <span className="text-xs text-tinta-fraca">{editable ? 'Toque num dia para editar ou trocar a folga.' : 'Reabra para editar.'}</span>
           <div className="flex flex-wrap gap-1 text-[10px]">
-            {(['FOLGA', 'FERIAS', 'ATESTADO', 'FALTA', 'FECHADO'] as CellKind[]).map((k) => <span key={k} className={cn('rounded px-1.5 py-0.5 font-semibold', CELL_TONE[k])}>{CELL_LABEL[k]}</span>)}
+            {(['FOLGA', 'BANCO', 'FERIAS', 'ATESTADO', 'FALTA', 'FECHADO'] as CellKind[]).map((k) => <span key={k} className={cn('rounded px-1.5 py-0.5 font-semibold', CELL_TONE[k])}>{CELL_LABEL[k]}</span>)}
             <span className="rounded px-1.5 py-0.5 font-semibold ring-2 ring-critico">conflito</span>
             <span className="rounded bg-nacao/10 px-1.5 py-0.5 font-semibold text-nacao">feriado/evento</span>
           </div>
@@ -266,6 +266,8 @@ function CellEditor({ view, memberId, date, onClose, onSaved }: { view: MonthVie
               {KINDS.map((k) => <option key={k} value={k}>{CELL_LABEL[k]}</option>)}
             </Select>
             {['FERIAS', 'ATESTADO', 'FALTA', 'AFASTAMENTO'].includes(v.kind) && <p className="mt-1 text-xs text-tinta-suave">Para valer também nas horas, registre em Férias e ausências.</p>}
+            {v.kind === 'BANCO' && <p className="mt-1 text-xs text-tinta-suave">Folga compensada com o banco de horas: não conta como falta nem descumpre as regras do setor; as horas do dia saem do saldo previsto.</p>}
+            {v.kind === 'TRABALHO' && cur.kind !== 'TRABALHO' && <p className="mt-1 text-xs text-tinta-suave">Trabalho num dia de folga entra como crédito no banco de horas previsto.</p>}
           </div>
           {v.kind === 'TRABALHO' && (
             <div className="grid grid-cols-3 gap-2">

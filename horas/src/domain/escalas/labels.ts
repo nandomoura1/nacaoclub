@@ -6,16 +6,17 @@ import type { Bond, Cell, CellKind } from './types';
 export const BOND_LABEL: Record<Bond, string> = { CLT: 'CLT', FUNAP: 'FUNAP', MEI: 'MEI', FREELANCER: 'Freelancer' };
 
 export const CELL_LABEL: Record<CellKind, string> = {
-  TRABALHO: 'Trabalho', FOLGA: 'Folga', FECHADO: 'Fechado', SEM_GRADE: 'Sem grade',
+  TRABALHO: 'Trabalho', FOLGA: 'Folga', BANCO: 'Folga (banco de horas)', FECHADO: 'Fechado', SEM_GRADE: 'Sem grade',
   FERIAS: 'Férias', ATESTADO: 'Atestado', FALTA: 'Falta', AFASTAMENTO: 'Afastamento', INDISPONIVEL: 'Indisponível',
 };
 export const CELL_SHORT: Record<CellKind, string> = {
-  TRABALHO: '', FOLGA: 'FOLGA', FECHADO: 'FECH', SEM_GRADE: '—', FERIAS: 'FÉRIAS', ATESTADO: 'ATEST', FALTA: 'FALTA', AFASTAMENTO: 'AFAST', INDISPONIVEL: 'INDISP',
+  TRABALHO: '', FOLGA: 'FOLGA', BANCO: 'BANCO', FECHADO: 'FECH', SEM_GRADE: '—', FERIAS: 'FÉRIAS', ATESTADO: 'ATEST', FALTA: 'FALTA', AFASTAMENTO: 'AFAST', INDISPONIVEL: 'INDISP',
 };
 /** Classes Tailwind por situação (fundo + texto). */
 export const CELL_TONE: Record<CellKind, string> = {
   TRABALHO: 'bg-white text-navy',
   FOLGA: 'bg-sucesso/10 text-sucesso',
+  BANCO: 'bg-nacao/10 text-nacao',
   FECHADO: 'bg-fundo text-tinta-fraca',
   SEM_GRADE: 'bg-white text-tinta-fraca',
   FERIAS: 'bg-ciano/20 text-navy-700',
@@ -26,7 +27,7 @@ export const CELL_TONE: Record<CellKind, string> = {
 };
 /** Cores para a planilha (ARGB). */
 export const CELL_FILL: Record<CellKind, string> = {
-  TRABALHO: 'FFFFFFFF', FOLGA: 'FFDDF5E6', FECHADO: 'FFEDEFF3', SEM_GRADE: 'FFFFFFFF', FERIAS: 'FFD2F3FB', ATESTADO: 'FFFFF0D6', FALTA: 'FFFDE0E0', AFASTAMENTO: 'FFFFF0D6', INDISPONIVEL: 'FFEDEFF3',
+  TRABALHO: 'FFFFFFFF', FOLGA: 'FFDDF5E6', BANCO: 'FFDDEBFF', FECHADO: 'FFEDEFF3', SEM_GRADE: 'FFFFFFFF', FERIAS: 'FFD2F3FB', ATESTADO: 'FFFFF0D6', FALTA: 'FFFDE0E0', AFASTAMENTO: 'FFFFF0D6', INDISPONIVEL: 'FFEDEFF3',
 };
 
 export const hhmm = (m: number | null | undefined) => (m == null ? '' : formatClock(m));

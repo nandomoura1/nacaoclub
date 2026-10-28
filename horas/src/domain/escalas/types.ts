@@ -32,7 +32,7 @@ export type MemberHours = { base?: Shift3; week?: WeekCycle } & Partial<Record<'
 export type WeekCycle = { A: WeekPattern; B?: WeekPattern; cycle?: WeekPattern[] };
 
 export type CellKind =
-  | 'TRABALHO' | 'FOLGA' | 'FECHADO' | 'SEM_GRADE'
+  | 'TRABALHO' | 'FOLGA' | 'BANCO' | 'FECHADO' | 'SEM_GRADE'
   | 'FERIAS' | 'ATESTADO' | 'FALTA' | 'AFASTAMENTO' | 'INDISPONIVEL';
 export const ABSENCE_KINDS = ['FERIAS', 'ATESTADO', 'FALTA', 'AFASTAMENTO', 'INDISPONIVEL', 'FOLGA_EXTRA'] as const;
 

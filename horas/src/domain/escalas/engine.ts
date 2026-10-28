@@ -27,7 +27,7 @@ export interface EngineInput {
   prior: Grid;
 }
 
-export const OFF_KINDS: ReadonlySet<CellKind> = new Set(['FOLGA', 'FECHADO', 'FERIAS', 'ATESTADO', 'FALTA', 'AFASTAMENTO', 'INDISPONIVEL']);
+export const OFF_KINDS: ReadonlySet<CellKind> = new Set(['FOLGA', 'BANCO', 'FECHADO', 'FERIAS', 'ATESTADO', 'FALTA', 'AFASTAMENTO', 'INDISPONIVEL']);
 const ABSENCE_KIND: Record<string, CellKind> = { FERIAS: 'FERIAS', ATESTADO: 'ATESTADO', FALTA: 'FALTA', AFASTAMENTO: 'AFASTAMENTO', INDISPONIVEL: 'INDISPONIVEL', FOLGA: 'FOLGA' };
 
 /** Quem entra na geração automática (com horário habitual definido). */

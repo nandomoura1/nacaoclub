@@ -125,7 +125,7 @@ const legalSchema = z.object({
   validated: z.boolean().default(false),
 });
 const cellSchema = z.object({
-  kind: z.enum(['TRABALHO', 'FOLGA', 'FECHADO', 'SEM_GRADE', 'FERIAS', 'ATESTADO', 'FALTA', 'AFASTAMENTO', 'INDISPONIVEL']),
+  kind: z.enum(['TRABALHO', 'FOLGA', 'BANCO', 'FECHADO', 'SEM_GRADE', 'FERIAS', 'ATESTADO', 'FALTA', 'AFASTAMENTO', 'INDISPONIVEL']),
   startMin: min.nullable().optional(), endMin: min.nullable().optional(), breakMin: z.number().int().min(0).max(240).nullable().optional(),
   note: text(120),
 }).refine((c) => c.kind !== 'TRABALHO' || (c.startMin != null && c.endMin != null && c.endMin > c.startMin), 'Informe entrada e saída (a saída depois da entrada).');
