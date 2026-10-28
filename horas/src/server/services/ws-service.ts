@@ -12,6 +12,7 @@ import { buildRotation } from '@/domain/escalas/rotation';
 import { describeRule, parseRule, RULE_KINDS, type RuleKind } from '@/domain/escalas/rules';
 import type { Absence, Bond, Cell, CellKind, DayPlan, Grid, HoursMap, LegalParams, Member, MemberHours, Post, Rule } from '@/domain/escalas/types';
 import { validate, type Analysis } from '@/domain/escalas/validate';
+import { fairness, type FairnessRow } from '@/domain/escalas/fairness';
 import { cancelLeave, saveLeave } from './leave-service';
 import { deliverWhatsApp } from './whatsapp-service';
 import { zapiConfig } from '@/server/whatsapp/zapi';
@@ -597,7 +598,30 @@ export interface MonthView {
   schedule: { id: string; status: string; generatedAt: string | null; approvedAt: string | null; publishedAt: string | null } | null;
   grid: Grid;
   analysis: Analysis | null;
+  fairness: { rows: FairnessRow[]; since: IsoDate };
   can: { edit: boolean; publish: boolean };
+}
+
+/** Sábados, domingos e feriados trabalhados: este mês + escalas dos 12 meses anteriores do setor. */
+async function heavyDays(c: Ctx, grid: Grid): Promise<MonthView['fairness']> {
+  const since = monthInfo(c.mi.year - 1, c.mi.month).first;
+  const [cells, perMonth, hols] = await Promise.all([
+    prisma.wsCell.findMany({ where: { kind: 'TRABALHO', date: { gte: toUtc(since), lt: toUtc(c.mi.first) }, schedule: { sectorId: c.sector.id } }, select: { memberId: true, date: true } }),
+    prisma.wsCell.groupBy({ by: ['memberId', 'scheduleId'], where: { kind: 'TRABALHO', date: { gte: toUtc(since), lt: toUtc(c.mi.first) }, schedule: { sectorId: c.sector.id } } }),
+    prisma.holiday.findMany({ where: { date: { gte: toUtc(since), lte: toUtc(c.mi.last) }, scope: { not: 'FACULTATIVO' } }, select: { date: true } }),
+  ]);
+  const priorMonths: Record<string, number> = {};
+  for (const g of perMonth) priorMonths[g.memberId] = (priorMonths[g.memberId] ?? 0) + 1;
+  const current = Object.entries(grid).flatMap(([memberId, byDay]) =>
+    c.mi.days.filter((d) => byDay[d]?.kind === 'TRABALHO').map((date) => ({ memberId, date })));
+  const rows = fairness({
+    memberIds: c.members.map((m) => m.id),
+    prior: cells.map((x) => ({ memberId: x.memberId, date: fromUtc(x.date) })),
+    current,
+    holidays: new Set(hols.map((h) => fromUtc(h.date))),
+    priorMonths,
+  });
+  return { rows, since };
 }
 
 export async function loadMonth(principal: P | null, sectorId: string, year: number, month: number): Promise<MonthView> {
@@ -620,6 +644,7 @@ export async function loadMonth(principal: P | null, sectorId: string, year: num
     grid,
     // Sempre recalculada: ausência lançada depois da publicação aparece aqui (sem mudar a escala).
     analysis: c.schedule ? analyze(c, grid) : null,
+    fairness: await heavyDays(c, grid),
     can: { edit: can(principal, 'ws.edit'), publish: can(principal, 'ws.publish') },
   };
 }

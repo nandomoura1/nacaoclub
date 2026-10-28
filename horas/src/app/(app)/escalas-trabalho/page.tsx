@@ -11,6 +11,7 @@ import { can } from '@/server/auth/authz';
 import { requirePrincipal } from '@/server/auth/session';
 import { listSectors, loadMonth } from '@/server/services/ws-service';
 import { resolveParams } from './params';
+import { FairnessCard } from './FairnessCard';
 import { GenerateButton, ScheduleClient } from './ScheduleClient';
 import { SectorMonthPicker } from './shared';
 
@@ -118,6 +119,7 @@ export default async function EscalasTrabalhoPage({ searchParams }: { searchPara
       {v.schedule ? <ScheduleClient view={v} /> : (
         <Card className="p-6 text-center text-sm text-tinta-suave">Ainda não há escala para {m.label}. {v.can.edit ? 'Confira os quatro blocos acima e clique em GERAR ESCALA.' : ''}</Card>
       )}
+      <FairnessCard view={v} />
       <p className="mt-4 text-[11px] text-tinta-fraca">Carga semanal de referência e banco de horas previstos: {fmtHours(2400)}/semana por padrão (ajustável por colaborador). Os cálculos de datas, horas e descansos são do sistema (determinísticos), não de IA.</p>
     </>
   );
