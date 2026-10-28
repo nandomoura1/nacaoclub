@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '@/server/db';
 import { AuthorizationError } from '@/server/errors';
 import { saveSector as saveProcSector } from '@/server/services/proc-service';
@@ -21,7 +21,14 @@ describe.skipIf(!hasDb)('Escalas de Trabalho 5x2', () => {
   let sector = '';
   const members: string[] = [];
 
+  // Feriados de nov/dez que outros testes deixam no banco mudariam a escala: saem durante este teste e voltam no fim.
+  let parked: { date: Date; name: string; scope: 'NACIONAL' | 'DISTRITAL' | 'FACULTATIVO' | 'NACAO'; policy: 'CANCELAR_TODAS' | 'MANTER_TODAS' | 'DECIDIR_INDIVIDUALMENTE' }[] = [];
+  const range = { gte: new Date('2026-10-26T00:00:00Z'), lte: new Date('2027-01-10T00:00:00Z') };
+  afterAll(async () => { for (const h of parked) await prisma.holiday.upsert({ where: { date: h.date }, update: {}, create: h }); });
+
   beforeAll(async () => {
+    parked = await prisma.holiday.findMany({ where: { date: range, occurrences: { none: {} } }, select: { date: true, name: true, scope: true, policy: true } });
+    await prisma.holiday.deleteMany({ where: { date: range, occurrences: { none: {} } } });
     await ensureCatalog();
     admin = await makeUser('ADMIN'); lider = await makeUser('LIDER'); outro = await makeUser('LIDER');
     const proc = await saveProcSector(admin.principal, null, { name: `Cozinha ${tag}`, description: null, leaderId: lider.principal.id, taskUrl: null, sortOrder: 90, active: true }, META);
