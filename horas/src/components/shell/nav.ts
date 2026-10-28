@@ -41,7 +41,7 @@ export const NAV_HORAS: NavItem[] = [
   { href: '/pendencias', label: 'Pendências', icon: 'pendencias', permission: 'occurrence.exception', soon: 'E5', mobile: true },
   { href: '/grade', label: 'Grade semanal', icon: 'grade', permission: 'schedule.view' },
   { href: '/escalas', label: 'Escalas', icon: 'escalas', permission: 'duty.edit', mobile: true },
-  { href: '/professores', label: 'Professores', icon: 'professores', permission: 'teacher.view' },
+  { href: '/professores', label: 'Colaboradores', icon: 'professores', permission: 'teacher.view' },
   { href: '/professores/documentos', label: 'Documentos da equipe', short: 'Documentos', icon: 'documentos', permission: 'teacher.docs' },
   { href: '/fechamento', label: 'Fechamento', icon: 'fechamento', permission: 'payroll.view_hours', soon: 'E6', mobile: true },
   { href: '/relatorios', label: 'Relatórios', icon: 'relatorios', permission: 'payroll.view_hours' },

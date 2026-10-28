@@ -104,6 +104,18 @@ describe.skipIf(!hasDb)('E2 · cadastros, feriados e professores', () => {
       await expect(saveTeacher(admin.principal, null, { name: 'Outra Pessoa', aliases: ['duda'] }, META)).rejects.toThrow(/já pertence a Eduarda Teste/);
     });
 
+    it('separa professores (área fim) da equipe 5x2 (área meio)', async () => {
+      const admin = await makeUser('ADMIN');
+      await saveTeacher(admin.principal, null, { name: 'Professora Fim' }, META);
+      const id = await saveTeacher(admin.principal, null, { name: 'Recepcionista Meio', team: 'ESCALA' }, META);
+      const profs = (await listTeachers(admin.principal, { team: 'PROFESSOR' })).map((t) => t.name);
+      const escala = await listTeachers(admin.principal, { team: 'ESCALA' });
+      expect(profs).toContain('Professora Fim');
+      expect(profs).not.toContain('Recepcionista Meio');
+      expect(escala.find((t) => t.id === id)).toMatchObject({ team: 'ESCALA', sectors: [] });
+      await expect(saveTeacher(admin.principal, id, { name: 'Recepcionista Meio', team: 'OUTRO' }, META)).rejects.toThrow();
+    });
+
     it('dado pessoal só sai do servidor para quem pode ver', async () => {
       const admin = await makeUser('ADMIN');
       await saveTeacher(admin.principal, null, { name: 'Pessoa Privada', email: 'privada@teste.dev', phone: '61 99999-0000' }, META);

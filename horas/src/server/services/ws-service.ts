@@ -154,7 +154,7 @@ export async function sectorSetup(principal: P | null, sectorId: string) {
         rules: { orderBy: [{ active: 'desc' }, { createdAt: 'asc' }] },
       },
     }),
-    prisma.teacher.findMany({ where: { active: true }, select: { id: true, name: true, displayName: true }, orderBy: { name: 'asc' } }),
+    prisma.teacher.findMany({ where: { active: true }, select: { id: true, name: true, displayName: true }, orderBy: [{ team: 'asc' }, { name: 'asc' }] }),
     prisma.procSector.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { sortOrder: 'asc' } }),
   ]);
   const nameOf = new Map(sector.members.map((m) => [m.id, m.teacher.displayName || m.teacher.name]));
@@ -236,7 +236,7 @@ export async function saveMember(principal: P | null, sectorId: string, id: stri
       if (!cur) throw new NotFoundError('Colaborador não encontrado na equipe.');
       teacherId = cur.teacherId;
     } else if (!teacherId) {
-      const t = await tx.teacher.create({ data: { name: d.newName!, createdById: principal.id, notes: `Cadastrado pela escala do setor ${s.name}.` } });
+      const t = await tx.teacher.create({ data: { name: d.newName!, team: 'ESCALA', createdById: principal.id, notes: `Cadastrado pela escala do setor ${s.name}.` } });
       teacherId = t.id;
     } else if (await tx.wsMember.findFirst({ where: { sectorId, teacherId } })) {
       throw new AppError('Esta pessoa já está na equipe do setor.');
@@ -801,7 +801,7 @@ export async function loadDocumentModels(principal: P | null, meta: RequestMeta)
       const sector = await tx.wsSector.create({ data: { name: model.name, procSectorId: proc?.id ?? null, hours: model.hours, cycleRef: toUtc(MODEL_CYCLE_REF), notes: model.notes, sortOrder: DOCUMENT_MODELS.indexOf(model), holidayMode: model.holidayMode ?? null, holidayConfirm: model.holidayConfirm ?? false, holidayRotate: model.holidayRotate ?? false, holidayStaff: model.holidayStaff ?? null } });
       const ids = new Map<string, string>();
       for (const [i, m] of model.members.entries()) {
-        const t = await tx.teacher.findFirst({ where: { name: m.name } }) ?? await tx.teacher.create({ data: { name: m.name, displayName: m.display, createdById: principal.id, notes: `Cadastrado pelo modelo de escala (${model.name}).` } });
+        const t = await tx.teacher.findFirst({ where: { name: m.name } }) ?? await tx.teacher.create({ data: { name: m.name, team: 'ESCALA', displayName: m.display, createdById: principal.id, notes: `Cadastrado pelo modelo de escala (${model.name}).` } });
         const row = await tx.wsMember.create({
           data: {
             sectorId: sector.id, teacherId: t.id, functionName: m.functionName, altFunctions: m.altFunctions ?? [], bond: m.bond, mode: m.mode ?? 'FIXO',

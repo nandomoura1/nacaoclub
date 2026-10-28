@@ -19,6 +19,9 @@ const optionalDate = z
   .nullable()
   .optional();
 
+export const TEAMS = ['PROFESSOR', 'ESCALA'] as const;
+export type Team = (typeof TEAMS)[number];
+
 export const teacherSchema = z.object({
   name: z.string().trim().min(2, 'Informe o nome.').max(120),
   displayName: optionalText(40),
@@ -27,6 +30,7 @@ export const teacherSchema = z.object({
   admissionDate: optionalDate,
   terminationDate: optionalDate,
   active: z.boolean().default(true),
+  team: z.enum(TEAMS).default('PROFESSOR'),
   primaryModalityId: optionalUuid,
   positionId: optionalUuid,
   contractTypeId: optionalUuid,
@@ -43,17 +47,19 @@ const include = {
   aliases: { select: { alias: true } },
   position: { select: { name: true } },
   contractType: { select: { name: true } },
+  wsMembers: { where: { active: true }, select: { sector: { select: { name: true } } } },
 } as const;
 
 /**
  * Lista professores. Dado pessoal (e-mail, telefone) só sai do servidor
  * para quem tem teacher.view_personal — a tela nunca recebe o que não pode ver.
  */
-export async function listTeachers(principal: Principal | null, opts: { q?: string; includeInactive?: boolean } = {}) {
+export async function listTeachers(principal: Principal | null, opts: { q?: string; includeInactive?: boolean; team?: Team } = {}) {
   assertCan(principal, 'teacher.view');
   const rows = await prisma.teacher.findMany({
     where: {
       ...(opts.includeInactive ? {} : { active: true }),
+      ...(opts.team ? { team: opts.team } : {}),
       ...(opts.q
         ? { OR: [{ name: { contains: opts.q, mode: 'insensitive' } }, { displayName: { contains: opts.q, mode: 'insensitive' } }] }
         : {}),
@@ -71,6 +77,8 @@ export async function listTeachers(principal: Principal | null, opts: { q?: stri
     admissionDate: t.admissionDate ? fromUtc(t.admissionDate) : null,
     terminationDate: t.terminationDate ? fromUtc(t.terminationDate) : null,
     active: t.active,
+    team: t.team as Team,
+    sectors: [...new Set(t.wsMembers.map((m) => m.sector.name))].sort(),
     primaryModalityId: t.primaryModalityId,
     positionId: t.positionId,
     contractTypeId: t.contractTypeId,
@@ -92,6 +100,7 @@ async function snapshot(db: Tx, id: string) {
     name: t.name,
     displayName: t.displayName,
     active: t.active,
+    team: t.team,
     level: t.level,
     position: t.position?.name ?? null,
     contractType: t.contractType?.name ?? null,

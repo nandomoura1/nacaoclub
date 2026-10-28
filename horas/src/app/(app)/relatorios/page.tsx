@@ -79,7 +79,7 @@ export default async function RelatoriosPage({ searchParams }: { searchParams: P
   const [areas, modalities, teachers] = await Promise.all([
     prisma.coordinationArea.findMany({ where: { deletedAt: null, active: true, ...areaScope }, orderBy: { sortOrder: 'asc' }, select: { id: true, name: true } }),
     prisma.modality.findMany({ where: { active: true, ...(principal.areaIds === null ? {} : { areaId: { in: [...principal.areaIds] } }) }, orderBy: { sortOrder: 'asc' }, select: { id: true, name: true } }),
-    prisma.teacher.findMany({ where: { active: true }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+    prisma.teacher.findMany({ where: { active: true, team: 'PROFESSOR' }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
   ]);
   const filters = [r.labels.area && `Área: ${r.labels.area}`, r.labels.modality && `Modalidade: ${r.labels.modality}`, r.labels.teacher && `Professor: ${r.labels.teacher}`, r.labels.scope].filter(Boolean);
 

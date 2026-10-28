@@ -37,7 +37,7 @@ export default async function GradePage({ searchParams }: { searchParams: Promis
     prisma.activityType.findMany({ where: { active: true }, orderBy: { sortOrder: 'asc' }, select: { id: true, name: true, kind: true } }),
     prisma.space.findMany({ where: { active: true }, orderBy: { sortOrder: 'asc' }, select: { id: true, name: true } }),
     prisma.teacher.findMany({
-      where: { active: true }, orderBy: { name: 'asc' },
+      where: { active: true, team: 'PROFESSOR' }, orderBy: { name: 'asc' },
       select: { id: true, name: true, displayName: true, modalities: { select: { modalityId: true } } },
     }),
   ]);

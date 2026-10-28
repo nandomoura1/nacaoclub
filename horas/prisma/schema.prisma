@@ -389,6 +389,8 @@ model Teacher {
   notes             String?
   /// Orientações só deste professor, no texto da grade compartilhado.
   guidelines        String?
+  /// Time: PROFESSOR (área fim, horista, grade de aulas) ou ESCALA (área meio, escala 5x2).
+  team              String    @default("PROFESSOR")
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
   createdById       String?   @map("created_by") @db.Uuid
@@ -411,6 +413,7 @@ model Teacher {
   wsMembers        WsMember[]
 
   @@index([active, name])
+  @@index([team, active])
   @@map("teachers")
 }
 

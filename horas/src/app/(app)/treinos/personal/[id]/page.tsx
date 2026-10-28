@@ -26,7 +26,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
     isNew ? null : getPersonalWorkout(principal, id).catch((e) => { if (e instanceof NotFoundError || e instanceof AuthorizationError) notFound(); throw e; }),
     personalSlots(principal, today),
     // Coordenação escolhe qualquer professor; o professor escolhe entre os próprios cadastros (se tiver mais de um).
-    prisma.teacher.findMany({ where: all ? { active: true } : { id: { in: principal.teacherIds } }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+    prisma.teacher.findMany({ where: all ? { active: true, team: 'PROFESSOR' } : { id: { in: principal.teacherIds } }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
   ]);
   return (
     <>

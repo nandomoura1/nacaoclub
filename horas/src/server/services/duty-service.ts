@@ -223,7 +223,7 @@ export async function saveDuty(principal: Principal | null, input: unknown, meta
 /** Pessoas que podem ser escaladas (ativos), com as modalidades para sugerir quem é do setor. */
 export async function dutyPeople(principal: Principal | null) {
   assertCan(principal, 'duty.edit');
-  const t = await prisma.teacher.findMany({ where: { active: true }, orderBy: { name: 'asc' }, select: { id: true, name: true, displayName: true, modalities: { select: { modalityId: true } } } });
+  const t = await prisma.teacher.findMany({ where: { active: true, team: 'PROFESSOR' }, orderBy: { name: 'asc' }, select: { id: true, name: true, displayName: true, modalities: { select: { modalityId: true } } } });
   return t.map((x) => ({ id: x.id, name: x.displayName || x.name, fullName: x.name, modalityIds: x.modalities.map((m) => m.modalityId) }));
 }
 

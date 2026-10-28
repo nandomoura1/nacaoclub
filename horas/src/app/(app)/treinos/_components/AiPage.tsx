@@ -24,7 +24,7 @@ export async function AiPage({ slug, mode }: { slug: string; mode?: string }) {
   const [programs, teachers] = await Promise.all([
     planilha ? listPrograms(principal, slug) : [],
     // "Salvar no Personal" (aulões): quem gera escolhe o professor que vai dar a aula.
-    planilha || !can(principal, 'workout.personal') ? [] : prisma.teacher.findMany({ where: { active: true }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+    planilha || !can(principal, 'workout.personal') ? [] : prisma.teacher.findMany({ where: { active: true, team: 'PROFESSOR' }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
   ]);
   const tab = (on: boolean) => cn('rounded-full border px-4 py-2 text-sm font-bold', on ? 'border-navy bg-navy text-white' : 'border-borda text-tinta hover:bg-fundo');
   return (

@@ -117,7 +117,7 @@ async function AulasSection({ principal, teacherId, teacherName, date, today }: 
     prisma.modality.findMany({ where: { active: true, ...areaScope }, orderBy: { sortOrder: 'asc' }, select: { id: true, name: true, color: true, areaId: true, defaultDurationMin: true } }),
     prisma.activityType.findMany({ where: { active: true }, orderBy: { sortOrder: 'asc' }, select: { id: true, name: true, kind: true } }),
     prisma.space.findMany({ where: { active: true }, orderBy: { sortOrder: 'asc' }, select: { id: true, name: true } }),
-    prisma.teacher.findMany({ where: { active: true }, orderBy: { name: 'asc' }, select: { id: true, name: true, displayName: true, modalities: { select: { modalityId: true } } } }),
+    prisma.teacher.findMany({ where: { active: true, team: 'PROFESSOR' }, orderBy: { name: 'asc' }, select: { id: true, name: true, displayName: true, modalities: { select: { modalityId: true } } } }),
   ]);
   return (
     <AulasTab
@@ -140,7 +140,7 @@ async function AusenciasSection({ principal, teacherId, today }: { principal: P;
   const [leaves, me, others] = await Promise.all([
     listLeaves(principal, teacherId),
     prisma.teacherModality.findMany({ where: { teacherId }, select: { modalityId: true } }),
-    prisma.teacher.findMany({ where: { active: true, id: { not: teacherId } }, orderBy: { name: 'asc' }, select: { id: true, name: true, modalities: { select: { modalityId: true } } } }),
+    prisma.teacher.findMany({ where: { active: true, team: 'PROFESSOR', id: { not: teacherId } }, orderBy: { name: 'asc' }, select: { id: true, name: true, modalities: { select: { modalityId: true } } } }),
   ]);
   const mine = new Set(me.map((m) => m.modalityId));
   const suggested = others.filter((t) => t.modalities.some((m) => mine.has(m.modalityId)));

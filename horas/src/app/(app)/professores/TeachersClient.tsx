@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
-import { CalendarDays, FileSpreadsheet, MessageCircle, Pencil, Plus, Search } from 'lucide-react';
+import { CalendarDays, CalendarRange, FileSpreadsheet, MessageCircle, Pencil, Plus, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -11,18 +11,19 @@ import { Input, Label, Select } from '@/components/ui/input';
 import { Sheet } from '@/components/ui/sheet';
 import { cn } from '@/lib/cn';
 import { initials } from '@/lib/format';
-import type { TeacherRow } from '@/server/services/teacher-service';
+import type { TeacherRow, Team } from '@/server/services/teacher-service';
 import { saveTeacherAction } from './actions';
 
 type Mod = { id: string; name: string; color: string; areaId: string };
 type Opt = { id: string; name: string };
 
 export function TeachersClient({
-  teachers, modalities, areas, positions, contractTypes, canEdit, myAreaIds,
+  team, teachers, modalities, areas, positions, contractTypes, canEdit, myAreaIds,
 }: {
-  teachers: TeacherRow[]; modalities: Mod[]; areas: Opt[]; positions: Opt[]; contractTypes: Opt[];
+  team: Team; teachers: TeacherRow[]; modalities: Mod[]; areas: Opt[]; positions: Opt[]; contractTypes: Opt[];
   canEdit: boolean; myAreaIds: string[] | null;
 }) {
+  const prof = team === 'PROFESSOR';
   const [q, setQ] = useState('');
   const [area, setArea] = useState<string>(myAreaIds?.length === 1 ? myAreaIds[0]! : '');
   const [showInactive, setShowInactive] = useState(false);
@@ -32,29 +33,31 @@ export function TeachersClient({
     const needle = q.trim().toLowerCase();
     return teachers.filter((t) =>
       (showInactive || t.active) &&
-      (!area || t.modalities.some((m) => m.areaId === area)) &&
-      (!needle || `${t.name} ${t.displayName ?? ''} ${t.modalities.map((m) => m.name).join(' ')}`.toLowerCase().includes(needle)),
+      (!prof || !area || t.modalities.some((m) => m.areaId === area)) &&
+      (!needle || `${t.name} ${t.displayName ?? ''} ${t.positionName ?? ''} ${t.modalities.map((m) => m.name).join(' ')} ${t.sectors.join(' ')}`.toLowerCase().includes(needle)),
     );
-  }, [teachers, q, area, showInactive]);
+  }, [teachers, q, area, showInactive, prof]);
 
   return (
     <>
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center">
         <div className="relative lg:w-72">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-tinta-fraca" />
-          <Input className="pl-9" placeholder="Nome ou modalidade" value={q} onChange={(e) => setQ(e.target.value)} />
+          <Input className="pl-9" placeholder={prof ? 'Nome ou modalidade' : 'Nome, cargo ou setor'} value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
-        <Select className="lg:w-56" value={area} onChange={(e) => setArea(e.target.value)} aria-label="Filtrar por área">
-          <option value="">Todas as áreas</option>
-          {areas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-        </Select>
+        {prof && (
+          <Select className="lg:w-56" value={area} onChange={(e) => setArea(e.target.value)} aria-label="Filtrar por área">
+            <option value="">Todas as áreas</option>
+            {areas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </Select>
+        )}
         <label className="flex items-center gap-2 text-sm text-tinta-suave">
           <input type="checkbox" className="accent-[#0169E9]" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
           Mostrar inativos
         </label>
         <div className="flex-1" />
-        {canEdit && <Link href="/professores/importar" className={buttonVariants({ variant: 'secondary' })}><FileSpreadsheet /> Importar planilha</Link>}
-        {canEdit && <Button onClick={() => setEditing('new')}><Plus /> Novo professor</Button>}
+        {canEdit && prof && <Link href="/professores/importar" className={buttonVariants({ variant: 'secondary' })}><FileSpreadsheet /> Importar planilha</Link>}
+        {canEdit && <Button onClick={() => setEditing('new')}><Plus /> {prof ? 'Novo professor' : 'Novo colaborador'}</Button>}
       </div>
 
       <p className="mb-2 text-xs font-semibold text-tinta-fraca">{filtered.length} de {teachers.filter((t) => t.active).length} ativos</p>
@@ -78,14 +81,17 @@ export function TeachersClient({
               </div>
               <div className="mt-2 flex flex-wrap gap-1">
                 {!t.active && <Badge tone="red">inativo</Badge>}
-                {t.modalities.map((m) => (
+                {prof && t.modalities.map((m) => (
                   <Badge key={m.id} tone="neutral">
                     <span className="size-2 rounded-full" style={{ background: m.color }} />
                     {m.name}
                   </Badge>
                 ))}
-                {t.modalities.length === 0 && <span className="text-xs text-atencao">sem modalidade habilitada</span>}
+                {prof && t.modalities.length === 0 && <span className="text-xs text-atencao">sem modalidade habilitada</span>}
+                {!prof && t.sectors.map((name) => <Badge key={name} tone="neutral">{name}</Badge>)}
+                {!prof && t.sectors.length === 0 && <span className="text-xs text-atencao">fora das escalas</span>}
               </div>
+              {prof ? (
               <div className="mt-3 flex gap-2">
                 <Link href={`/professores/${t.id}`} className={cn(buttonVariants({ variant: 'secondary', size: 'sm' }), 'min-w-0 flex-1')}>
                   <CalendarDays /> Aulas, ausências e horas
@@ -95,13 +101,20 @@ export function TeachersClient({
                   <MessageCircle />
                 </Link>
               </div>
+              ) : (
+                <Link href="/escalas-trabalho/equipes" className={cn(buttonVariants({ variant: 'secondary', size: 'sm' }), 'mt-3 w-full')}>
+                  <CalendarRange /> Equipes e escalas
+                </Link>
+              )}
             </div>
           </Card>
         ))}
       </div>
       {filtered.length === 0 && (
         <Card className="p-10 text-center text-sm text-tinta-suave">
-          {teachers.length === 0 ? 'Nenhum professor cadastrado ainda. A importação da planilha (grade) também cria professores.' : 'Ninguém com esses filtros.'}
+          {teachers.length === 0
+            ? prof ? 'Nenhum professor cadastrado ainda. A importação da planilha (grade) também cria professores.' : 'Ninguém na equipe 5x2 ainda. Quem entra numa equipe das Escalas de Trabalho aparece aqui.'
+            : 'Ninguém com esses filtros.'}
         </Card>
       )}
 
@@ -109,6 +122,7 @@ export function TeachersClient({
         <TeacherSheet
           key={editing === 'new' ? 'new' : editing.id}
           row={editing === 'new' ? null : editing}
+          team={team}
           modalities={modalities}
           areas={areas}
           positions={positions}
@@ -120,8 +134,8 @@ export function TeachersClient({
   );
 }
 
-function TeacherSheet({ row, modalities, areas, positions, contractTypes, onClose }: {
-  row: TeacherRow | null; modalities: Mod[]; areas: Opt[]; positions: Opt[]; contractTypes: Opt[]; onClose: () => void;
+function TeacherSheet({ row, team, modalities, areas, positions, contractTypes, onClose }: {
+  row: TeacherRow | null; team: Team; modalities: Mod[]; areas: Opt[]; positions: Opt[]; contractTypes: Opt[]; onClose: () => void;
 }) {
   const [v, setV] = useState({
     name: row?.name ?? '',
@@ -131,6 +145,7 @@ function TeacherSheet({ row, modalities, areas, positions, contractTypes, onClos
     admissionDate: row?.admissionDate ?? '',
     terminationDate: row?.terminationDate ?? '',
     active: row?.active ?? true,
+    team: row?.team ?? team,
     primaryModalityId: row?.primaryModalityId ?? '',
     positionId: row?.positionId ?? '',
     contractTypeId: row?.contractTypeId ?? '',
@@ -142,6 +157,7 @@ function TeacherSheet({ row, modalities, areas, positions, contractTypes, onClos
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const set = <K extends keyof typeof v>(k: K, val: (typeof v)[K]) => setV((p) => ({ ...p, [k]: val }));
+  const prof = v.team === 'PROFESSOR';
   const toggleMod = (id: string) =>
     set('modalityIds', v.modalityIds.includes(id) ? v.modalityIds.filter((x) => x !== id) : [...v.modalityIds, id]);
 
@@ -149,7 +165,7 @@ function TeacherSheet({ row, modalities, areas, positions, contractTypes, onClos
     e.preventDefault();
     setError(null);
     const deactivating = row?.active && !v.active;
-    if (deactivating && !confirm(`Desativar ${row!.name}?\n\nEle sai de todas as aulas da grade a partir de ${v.terminationDate ? 'o dia seguinte ao desligamento' : 'hoje'}. Aula que era só dele fica sem professor, para você escalar outro. O histórico de horas não muda.`)) return;
+    if (deactivating && prof && !confirm(`Desativar ${row!.name}?\n\nEle sai de todas as aulas da grade a partir de ${v.terminationDate ? 'o dia seguinte ao desligamento' : 'hoje'}. Aula que era só dele fica sem professor, para você escalar outro. O histórico de horas não muda.`)) return;
     start(async () => {
       const r = await saveTeacherAction(row?.id ?? null, {
         ...v,
@@ -164,12 +180,12 @@ function TeacherSheet({ row, modalities, areas, positions, contractTypes, onClos
 
   return (
     <Sheet
-      title={row ? `Editar ${row.displayName || row.name}` : 'Novo professor'}
+      title={row ? `Editar ${row.displayName || row.name}` : prof ? 'Novo professor' : 'Novo colaborador'}
       onClose={onClose}
       onSubmit={submit}
       footer={<Button type="submit" disabled={pending}>{pending ? 'Salvando…' : 'Salvar'}</Button>}
     >
-      {row && (
+      {row && prof && (
         <Link href={`/professores/${row.id}`} className="mb-4 flex items-center gap-2 rounded-lg bg-nacao/10 p-3 text-sm font-semibold text-nacao hover:bg-nacao/15">
           <CalendarDays className="size-4" /> Lançar aulas fixas e ausências de {row.displayName || row.name} →
         </Link>
@@ -179,8 +195,15 @@ function TeacherSheet({ row, modalities, areas, positions, contractTypes, onClos
           <Label htmlFor="t-name">Nome completo *</Label>
           <Input id="t-name" required value={v.name} onChange={(e) => set('name', e.target.value)} />
         </div>
+        <div className="col-span-2">
+          <Label htmlFor="t-team">Time</Label>
+          <Select id="t-team" value={v.team} onChange={(e) => set('team', e.target.value as Team)}>
+            <option value="PROFESSOR">Professor — área fim, horista com grade de aulas</option>
+            <option value="ESCALA">Equipe 5x2 — área meio, escala de trabalho</option>
+          </Select>
+        </div>
         <div>
-          <Label htmlFor="t-display">Nome na grade</Label>
+          <Label htmlFor="t-display">{prof ? 'Nome na grade' : 'Nome curto'}</Label>
           <Input id="t-display" placeholder="Ex.: Rafa" value={v.displayName} onChange={(e) => set('displayName', e.target.value)} />
         </div>
         <div>
@@ -203,6 +226,7 @@ function TeacherSheet({ row, modalities, areas, positions, contractTypes, onClos
         </div>
       </div>
 
+      {prof && (<>
       <fieldset>
         <legend className="mb-1.5 text-xs font-semibold text-tinta-suave">Modalidades habilitadas</legend>
         <div className="space-y-3">
@@ -244,6 +268,7 @@ function TeacherSheet({ row, modalities, areas, positions, contractTypes, onClos
         <Input id="t-aliases" placeholder="Ex.: Rafa, Rafael (coordenação)" value={v.aliases} onChange={(e) => set('aliases', e.target.value)} />
         <p className="mt-1 text-xs text-tinta-suave">Separados por vírgula. Usados só na importação para reconhecer o professor.</p>
       </div>
+      </>)}
 
       <div className="grid grid-cols-2 gap-3">
         <div>
@@ -273,7 +298,7 @@ function TeacherSheet({ row, modalities, areas, positions, contractTypes, onClos
         <input type="checkbox" className="accent-[#0169E9]" checked={v.active} onChange={(e) => set('active', e.target.checked)} />
         Ativo
       </label>
-      {row?.active && !v.active && (
+      {row?.active && !v.active && prof && (
         <p className="rounded-lg bg-atencao/10 p-2 text-xs text-tinta">Ao salvar, o professor sai de todas as aulas da grade a partir {v.terminationDate ? 'do dia seguinte ao desligamento' : 'de hoje'}. Aula que era só dele fica sem professor.</p>
       )}
       <FormMessage error={error} />
