@@ -30,9 +30,12 @@ export interface MemberStats {
   absenceDays: number;
   /** Folgas compensadas com o banco de horas. */
   bankDays: number;
-  /** Banco de horas previsto: horas da escala − referência (carga semanal × dias do mês ÷ 7, sem as ausências abonadas). */
+  /** Banco de horas previsto: horas da escala − referência (carga semanal × dias do mês ÷ 7, sem as ausências abonadas e os feriados). */
   expectedMin: number | null;
   balanceMin: number | null;
+  /** Saldo trazido dos meses anteriores e o acumulado (anterior + este mês). */
+  carryMin: number | null;
+  totalBankMin: number | null;
 }
 
 export interface Uncovered { date: IsoDate; post: string; kind: string | null; missing: number; mandatory: boolean; suggestions: string[] }
@@ -69,6 +72,8 @@ export interface ValidateInput {
   legal: Partial<Record<string, LegalParams>>;
   /** A mesma pessoa em outro setor no mesmo dia (para "não trabalha em dois setores ao mesmo tempo"). */
   elsewhere?: { memberId: string; date: IsoDate; startMin: number; endMin: number; sector: string }[];
+  /** Saldo do banco de horas dos meses anteriores, por pessoa. */
+  bankCarry?: Record<string, number>;
 }
 
 export const workedMin = (c: Cell | undefined) =>
@@ -203,7 +208,11 @@ export function validate(v: ValidateInput): Analysis {
     const bankDays = md.filter((c) => c.kind === 'BANCO').length;
     const paidAbsence = month.days.filter((d) => PAID_ABSENCE.has(row[d]?.kind ?? '')).length;
     const minutes = month.days.reduce((s, d) => s + workedMin(row[d]), 0);
-    const expectedMin = clt && isScheduled(m) ? Math.round(m.weeklyMin * (month.length - paidAbsence) / 7) : null;
+    // Feriado em dia útil é descanso remunerado: sai da referência; quem trabalha nele ganha crédito no banco.
+    const holidaysOff = month.days.filter((d) => isRealHoliday(days.get(d)!) && weekdayOf(d) <= 5 && !PAID_ABSENCE.has(row[d]?.kind ?? '')).length;
+    const perDay = m.weeklyMin / (m.bond === 'FUNAP' ? 6 : 5);
+    const expectedMin = clt && isScheduled(m) ? Math.max(0, Math.round(m.weeklyMin * (month.length - paidAbsence) / 7 - holidaysOff * perDay)) : null;
+    const carryMin = expectedMin == null ? null : Math.round(v.bankCarry?.[m.id] ?? 0);
     statsOf.push({
       memberId: m.id, name: m.name, bond: m.bond, minutes,
       days: md.filter((c) => c.kind === 'TRABALHO').length,
@@ -212,6 +221,7 @@ export function validate(v: ValidateInput): Analysis {
       sundays: month.days.filter((d) => weekdayOf(d) === 7 && row[d]?.kind === 'TRABALHO').length,
       holidays: month.days.filter((d) => isRealHoliday(days.get(d)!) && row[d]?.kind === 'TRABALHO').length,
       absenceDays, bankDays, expectedMin, balanceMin: expectedMin == null ? null : minutes - expectedMin,
+      carryMin, totalBankMin: expectedMin == null ? null : carryMin! + minutes - expectedMin,
     });
   }
 

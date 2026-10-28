@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '@/server/db';
-import { generateSchedule, loadDocumentModels, loadMonth, setRotation } from '@/server/services/ws-service';
+import { confirmDay, generateSchedule, loadDocumentModels, loadMonth, setRotation } from '@/server/services/ws-service';
 import { cyclePhase } from '@/domain/escalas/calendar';
 import { holidaysOf } from '@/domain/holidays';
 import { META, ensureCatalog, hasDb, makeUser } from './helpers';
@@ -68,20 +68,39 @@ describe.skipIf(!hasDb)('Modelos iniciais das escalas', () => {
     expect(v.analysis!.uncovered).toEqual([]);
   });
 
-  it('Recepção no feriado: como domingo, 08–14, uma pessoa (a do domingo) e sempre para confirmar', async () => {
+  it('Recepção no feriado: 08–14, uma pessoa, em rodízio (cada feriado com uma pessoa diferente) e sempre para confirmar', async () => {
     const v = await view('Recepção');
     const people = ['Duda', 'Lawana', 'Brenda', 'Manu', 'Débora', 'Igor'].map((n) => memberId(v, n));
-    for (const d of ['2026-11-02', '2026-11-20']) { // segunda e sexta
+    const who: string[] = [];
+    for (const d of ['2026-11-02', '2026-11-20', '2026-11-30']) {
       const on = people.filter((id) => v.grid[id]![d]!.kind === 'TRABALHO');
       expect(on.length).toBe(1);
       const c = v.grid[on[0]!]![d]!;
       expect([c.startMin, c.endMin, c.breakMin]).toEqual([H(8), H(14), 15]);
-      // É quem trabalha no domingo dessa semana.
-      const sunday = new Date(Date.parse(`${d}T12:00:00Z`) + (7 - (new Date(`${d}T12:00:00Z`).getUTCDay() || 7)) * 86_400_000).toISOString().slice(0, 10);
-      expect(v.grid[on[0]!]![sunday]!.kind).toBe('TRABALHO');
+      expect(c.note).toMatch(/rodízio/);
       expect(people.filter((id) => id !== on[0]).every((id) => /Feriado/.test(v.grid[id]![d]!.note ?? ''))).toBe(true);
       expect(v.analysis!.alerts.some((a) => a.code === 'CALENDARIO' && a.date === d && /Confirme/.test(a.message))).toBe(true);
+      who.push(on[0]!);
     }
+    expect(new Set(who).size).toBe(3);
+    // Confirmar tira o aviso daquele feriado.
+    await confirmDay(admin.principal, await sector('Recepção'), '2026-11-02', META);
+    const after = await view('Recepção');
+    expect(after.analysis!.alerts.some((a) => a.code === 'CALENDARIO' && a.date === '2026-11-02')).toBe(false);
+    expect(after.analysis!.alerts.some((a) => a.code === 'CALENDARIO' && a.date === '2026-11-20')).toBe(true);
+  });
+
+  it('dezembro: rodízio de feriados lembra novembro e o banco traz o saldo anterior', async () => {
+    const sid = await sector('Recepção');
+    await generateSchedule(admin.principal, sid, 2026, 12, META);
+    const nov = await view('Recepção');
+    const dec = await loadMonth(admin.principal, sid, 2026, 12);
+    const xmas = dec.members.find((m) => dec.grid[m.id]!['2026-12-25']!.kind === 'TRABALHO')!;
+    const novWorkers = new Set(['2026-11-02', '2026-11-20', '2026-11-30'].map((d) => nov.members.find((m) => nov.grid[m.id]![d]!.kind === 'TRABALHO')!.id));
+    expect(novWorkers.has(xmas.id)).toBe(false);
+    const st = dec.analysis!.members.find((m) => m.memberId === xmas.id)!;
+    const novSt = nov.analysis!.members.find((m) => m.memberId === xmas.id)!;
+    expect(st.carryMin).toBe(novSt.balanceMin);
   });
 
   it('Lanchonete e Cozinha no feriado: como sábado (07–17), sem pedir confirmação', async () => {

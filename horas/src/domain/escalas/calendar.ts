@@ -76,6 +76,8 @@ export interface Override {
   reason: string;
   eventName?: string | null;
   extraPeople?: number;
+  /** Gestor confirmou o funcionamento nesta data. */
+  confirmed?: boolean;
 }
 
 export interface CalendarInput {
@@ -163,6 +165,11 @@ export function resolveDay(date: IsoDate, c: CalendarInput): DayPlan {
     if (isHoliday) confirm.push(`Feriado (${holiday!.name}) sem horário de feriado cadastrado: usando o horário habitual — confirme se o setor abre.`);
   }
   // Só em feriado de segunda a sexta: no sábado/domingo o fim de semana já tem a equipe dele.
+  // Confirmado pelo gestor: o aviso sai (o funcionamento continua o definido).
+  if (mine.some((o) => o.confirmed && o.sectorId === c.sectorId) && confirm.length) {
+    notes.push('Funcionamento confirmado pelo gestor');
+    confirm.length = 0;
+  }
   const asWeekday = isHoliday && weekday <= 5 && open.length && (source! === 'SETOR_FERIADO' || source! === 'NACAO_FERIADO')
     ? (c.holidayMode === 'SABADO' ? 6 : c.holidayMode === 'DOMINGO' ? 7 : null) : null;
   return { date, weekday, holiday, asWeekday, open, source: source!, notes, confirm, events };

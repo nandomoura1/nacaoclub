@@ -2505,6 +2505,8 @@ model WsSector {
   holidayMode    String?  @map("holiday_mode")
   /// true = todo feriado aparece para o gestor confirmar, mesmo com o horário já definido.
   holidayConfirm Boolean  @default(false) @map("holiday_confirm")
+  /// Rodízio de feriados: quem trabalha no feriado é quem trabalhou menos feriados (histórico dos meses), com os turnos de sábado/domingo.
+  holidayRotate  Boolean  @default(false) @map("holiday_rotate")
   notes          String?
   sortOrder      Int      @default(0) @map("sort_order")
   active         Boolean  @default(true)
@@ -2612,6 +2614,8 @@ model WsDayOverride {
   eventId     String?  @map("event_id") @db.Uuid
   /// Pessoas a mais pedidas pelo evento (sugestão de reforço; não muda a escala sozinho).
   extraPeople Int      @default(0) @map("extra_people")
+  /// Gestor confirmou o funcionamento nesta data (some o aviso "confirme" do feriado).
+  confirmed   Boolean  @default(false)
   createdById String?  @map("created_by") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at")
 

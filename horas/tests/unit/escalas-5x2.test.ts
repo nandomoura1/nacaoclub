@@ -25,15 +25,15 @@ function rule(kind: string, params: unknown, mandatory = true): Rule {
   if (!r.ok) throw new Error(r.error);
   return { id: id(), kind, label: kind, params: r.params, mandatory };
 }
-function run(o: { year: number; month: number; members: Member[]; posts?: Post[]; rules?: Rule[]; absences?: Absence[]; hours?: HoursMap; holidays?: [IsoDate, string, string?][]; overrides?: Override[]; prior?: Grid; cycleRef?: IsoDate; edit?: (g: Grid) => void }) {
+function run(o: { year: number; month: number; members: Member[]; posts?: Post[]; rules?: Rule[]; absences?: Absence[]; hours?: HoursMap; holidays?: [IsoDate, string, string?][]; overrides?: Override[]; prior?: Grid; cycleRef?: IsoDate; edit?: (g: Grid) => void; holidayMode?: string; holidayRotate?: boolean; history?: Record<string, number>; carry?: Record<string, number> }) {
   const month = monthInfo(o.year, o.month);
   const holidays = new Map((o.holidays ?? []).map(([d, n, s]) => [d, { name: n, scope: s ?? 'NACIONAL' }]));
-  const cal = { sectorId: 'S', sectorHours: o.hours ?? ALL, nacaoHours: {}, holidays, overrides: o.overrides ?? [] };
+  const cal = { sectorId: 'S', sectorHours: o.hours ?? ALL, nacaoHours: {}, holidays, overrides: o.overrides ?? [], holidayMode: o.holidayMode ?? null };
   const days = new Map(eachDay(month.rangeStart, month.rangeEnd).map((d) => [d, resolveDay(d, cal)]));
   const base = { month, days, members: o.members, posts: o.posts ?? [], rules: o.rules ?? [], absences: o.absences ?? [], cycleRef: o.cycleRef ?? '2026-10-05' };
-  const g = generate({ ...base, prior: o.prior ?? {} });
+  const g = generate({ ...base, prior: o.prior ?? {}, holidayRotate: o.holidayRotate, holidayHistory: o.history });
   o.edit?.(g.grid);
-  const a = validate({ ...base, grid: g.grid, legal: { CLT, FUNAP } });
+  const a = validate({ ...base, grid: g.grid, legal: { CLT, FUNAP }, bankCarry: o.carry });
   return { month, days, grid: g.grid, engineAlerts: g.alerts, analysis: a };
 }
 const worked = (g: Grid, mid: string, ds: IsoDate[]) => ds.filter((d) => g[mid]![d]!.kind === 'TRABALHO').length;
@@ -254,5 +254,34 @@ describe('motor de geração', () => {
     expect(st.bankDays).toBe(1);
     expect(st.absenceDays).toBe(0);
     expect(st.balanceMin!).toBeLessThan(base.analysis.members[0]!.balanceMin!);
+  });
+
+  it('rodízio de feriados: 1 pessoa por feriado, quem trabalhou menos vai primeiro; feriado confirmado não pede mais', () => {
+    const team = ['Ana', 'Bia', 'Cris', 'Dani', 'Eva', 'Fê'].map((n) => member(n, { hours: { week: { A: [[H(8), H(16), 60], [H(8), H(16), 60], [H(8), H(16), 60], [H(8), H(16), 60], [H(8), H(16), 60], null, n === 'Fê' ? [H(8), H(14), 15] : null] } } }));
+    const holidays: [IsoDate, string][] = [['2026-11-02', 'Finados'], ['2026-11-20', 'Consciência Negra'], ['2026-11-30', 'Evangélico']];
+    const hours = { ...ALL, F: [[H(8), H(14)]] } as HoursMap;
+    const r = run({ year: 2026, month: 11, members: team, hours, holidays, holidayMode: 'DOMINGO', holidayRotate: true, history: { [team[0]!.id]: 2, [team[5]!.id]: 1 } });
+    const who = holidays.map(([d]) => team.filter((m) => r.grid[m.id]![d]!.kind === 'TRABALHO'));
+    for (const w of who) expect(w.length).toBe(1);
+    // Ninguém repete; quem já tinha feriados (Ana 2, Fê 1) fica para depois.
+    expect(new Set(who.map((w) => w[0]!.id)).size).toBe(3);
+    expect(who.flat().some((m) => m.name === 'Ana' || m.name === 'Fê')).toBe(false);
+    const c = r.grid[who[0]![0]!.id]!['2026-11-02']!;
+    expect([c.startMin, c.endMin, c.breakMin]).toEqual([H(8), H(14), 15]);
+    // Banco: trabalhar no feriado dá crédito em relação a quem folgou.
+    const st = (id: string) => r.analysis.members.find((m) => m.memberId === id)!;
+    expect(st(who[0]![0]!.id).balanceMin!).toBeGreaterThan(st(team[0]!.id).balanceMin! - 1);
+    // Confirmado pelo gestor: some o aviso desse feriado.
+    const conf = run({ year: 2026, month: 11, members: team, hours, holidays, holidayMode: 'DOMINGO', holidayRotate: true, overrides: [{ date: '2026-11-02', sectorId: 'S', closed: false, hours: null, reason: 'ok', confirmed: true }] });
+    const calendar = (x: typeof r) => x.analysis.alerts.filter((a) => a.code === 'CALENDARIO' && a.date === '2026-11-02').length;
+    expect(calendar(conf)).toBe(0);
+  });
+
+  it('banco acumulado soma o saldo dos meses anteriores', () => {
+    const m = member('Ana');
+    const r = run({ year: 2026, month: 11, members: [m], carry: { [m.id]: 300 } });
+    const st = r.analysis.members[0]!;
+    expect(st.carryMin).toBe(300);
+    expect(st.totalBankMin).toBe(300 + st.balanceMin!);
   });
 });

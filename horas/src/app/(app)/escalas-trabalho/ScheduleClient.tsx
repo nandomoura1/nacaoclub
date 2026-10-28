@@ -16,7 +16,7 @@ import type { Alert, Cell, CellKind } from '@/domain/escalas/types';
 import { CLASSIFICATION_LABEL } from '@/domain/escalas/validate';
 import { cn } from '@/lib/cn';
 import type { MonthView } from '@/server/services/ws-service';
-import { editCellAction, generateAction, setStatusAction, swapCellsAction } from './actions';
+import { confirmDayAction, editCellAction, generateAction, setStatusAction, swapCellsAction } from './actions';
 import { TopScroll } from '@/components/ui/top-scroll';
 
 const KINDS: CellKind[] = ['TRABALHO', 'FOLGA', 'BANCO', 'FERIAS', 'ATESTADO', 'FALTA', 'AFASTAMENTO', 'INDISPONIVEL', 'FECHADO', 'SEM_GRADE'];
@@ -162,7 +162,7 @@ export function ScheduleClient({ view }: { view: MonthView }) {
                 <th className="border border-borda bg-navy px-1 text-white">Dias</th>
                 <th className="border border-borda bg-navy px-1 text-white">Folgas</th>
                 <th className="border border-borda bg-navy px-1 text-white" title="Sábados / domingos trabalhados">S/D</th>
-                <th className="border border-borda bg-navy px-1 text-white" title="Banco de horas previsto: horas da escala − referência semanal no mês">Banco</th>
+                <th className="border border-borda bg-navy px-1 text-white" title="Banco de horas acumulado: saldo dos meses anteriores + saldo deste mês (horas da escala − referência)">Banco</th>
               </tr>
             </thead>
             <tbody>
@@ -194,7 +194,7 @@ export function ScheduleClient({ view }: { view: MonthView }) {
                     <td className="border border-borda px-1 text-center">{st?.days ?? 0}</td>
                     <td className="border border-borda px-1 text-center">{st?.offs ?? 0}</td>
                     <td className="border border-borda px-1 text-center">{st ? `${st.saturdays}/${st.sundays}` : '—'}</td>
-                    <td className={cn('border border-borda px-1 text-center font-semibold', (st?.balanceMin ?? 0) < -60 ? 'text-atencao' : (st?.balanceMin ?? 0) > 60 ? 'text-nacao' : 'text-tinta-suave')}>{st?.balanceMin == null ? '—' : fmtHours(st.balanceMin)}</td>
+                    <td title={st?.totalBankMin == null ? '' : `Anterior ${fmtHours(st.carryMin ?? 0)} + este mês ${fmtHours(st.balanceMin ?? 0)}`} className={cn('border border-borda px-1 text-center font-semibold', (st?.totalBankMin ?? 0) < -60 ? 'text-atencao' : (st?.totalBankMin ?? 0) > 60 ? 'text-nacao' : 'text-tinta-suave')}>{st?.totalBankMin == null ? '—' : fmtHours(st.totalBankMin)}</td>
                   </tr>
                 );
               })}
@@ -221,6 +221,10 @@ export function ScheduleClient({ view }: { view: MonthView }) {
               <li key={i} className="text-sm">
                 <Badge tone={LEVEL_TONE[x.level]}>{x.level === 'CONFLITO' ? 'Conflito' : x.level === 'AJUSTE' ? 'Ajuste' : 'Info'}</Badge>{' '}
                 <span className="text-tinta">{x.message}</span>
+                {x.code === 'CALENDARIO' && x.date && view.can.edit && (
+                  <button type="button" disabled={pending} onClick={() => start(async () => { const r = await confirmDayAction(view.sector.id, x.date!); if (!r.ok) setError(r.error); else router.refresh(); })}
+                    className="ml-2 rounded-md bg-nacao px-2 py-0.5 text-[11px] font-bold text-white hover:opacity-90">Confirmar</button>
+                )}
                 {x.suggestions?.length ? <p className="ml-1 mt-0.5 text-xs text-tinta-suave">Sugestão: {x.suggestions.join(' · ')}</p> : null}
               </li>
             ))}

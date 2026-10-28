@@ -37,6 +37,7 @@ export default async function PreRequisitosPage({ searchParams }: { searchParams
             notes={setup.sector.notes}
             holidayMode={setup.sector.holidayMode}
             holidayConfirm={setup.sector.holidayConfirm}
+            holidayRotate={setup.sector.holidayRotate}
             posts={setup.sector.posts}
             rules={setup.rules.map((r) => ({ id: r.id, kind: r.kind, label: r.label, params: r.params as Record<string, unknown>, mandatory: r.mandatory, active: r.active, description: r.description }))}
             members={setup.sector.members.filter((m) => m.active).map((m) => ({ id: m.id, name: m.teacher.displayName || m.teacher.name }))}

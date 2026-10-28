@@ -25,6 +25,10 @@ export interface EngineInput {
   cycleRef: IsoDate;
   /** Células já salvas antes do dia 1º (escala do mês anterior): ficam como estão. */
   prior: Grid;
+  /** Rodízio de feriados: quem trabalhou menos feriados (histórico) trabalha o próximo. */
+  holidayRotate?: boolean;
+  /** Feriados já trabalhados por pessoa nos meses anteriores. */
+  holidayHistory?: Record<string, number>;
 }
 
 export const OFF_KINDS: ReadonlySet<CellKind> = new Set(['FOLGA', 'BANCO', 'FECHADO', 'FERIAS', 'ATESTADO', 'FALTA', 'AFASTAMENTO', 'INDISPONIVEL']);
@@ -210,6 +214,33 @@ export function generate(input: EngineInput): { grid: Grid; alerts: Alert[] } {
     }
     grid[m.id] = row;
     forcedWork.set(m.id, must);
+  }
+
+  // Etapa 2b: rodízio de feriados. Os turnos do feriado (os de sábado/domingo da
+  // semana) vão para quem trabalhou menos feriados; quem estava escalado e não foi
+  // sorteado folga ("Feriado"). Empate: quem já estava escalado, depois a ordem da equipe.
+  if (input.holidayRotate) {
+    const count = new Map(members.map((m) => [m.id, input.holidayHistory?.[m.id] ?? 0]));
+    for (const date of dates.filter((d) => d >= month.first && d <= month.last)) {
+      const d = days.get(date)!;
+      if (!d.asWeekday) continue;
+      const holders = members.filter((m) => grid[m.id]![date]!.kind === 'TRABALHO');
+      const shifts = holders.map((m) => grid[m.id]![date]!);
+      if (!shifts.length) continue;
+      const eligible = members.filter((m) => isScheduled(m) && !absenceOn(absences, m.id, date) && availableOn(m, d) && grid[m.id]![date]!.kind !== 'FECHADO');
+      const order = new Map(members.map((m, i) => [m.id, i]));
+      const chosen = [...eligible].sort((a, b) => count.get(a.id)! - count.get(b.id)!
+        || Number(holders.includes(b)) - Number(holders.includes(a)) || order.get(a.id)! - order.get(b.id)!).slice(0, shifts.length);
+      for (const m of eligible) {
+        if (grid[m.id]![date]!.kind === 'TRABALHO') grid[m.id]![date] = { kind: 'FOLGA', note: `Feriado: ${d.holiday!.name}` };
+      }
+      chosen.forEach((m, i) => {
+        const s = shifts[i]!;
+        grid[m.id]![date] = workCell([s.startMin!, s.endMin!, s.breakMin ?? 0], `Feriado (rodízio): ${d.holiday!.name}`);
+        forcedWork.get(m.id)?.add(date);
+        count.set(m.id, count.get(m.id)! + 1);
+      });
+    }
   }
 
   // Etapa 3: folgas da semana (5x2) onde a cobertura sobra mais.

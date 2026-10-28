@@ -33,7 +33,9 @@ describe.skipIf(!hasDb)('Escalas de Trabalho 5x2', () => {
     admin = await makeUser('ADMIN'); lider = await makeUser('LIDER'); outro = await makeUser('LIDER');
     const proc = await saveProcSector(admin.principal, null, { name: `Cozinha ${tag}`, description: null, leaderId: lider.principal.id, taskUrl: null, sortOrder: 90, active: true }, META);
     sector = await saveSector(admin.principal, null, { name: `Cozinha ${tag}`, procSectorId: proc, hours: OPEN, cycleRef: '2026-10-07', notes: null }, META);
-    await saveLegal(admin.principal, null, CLT, META).catch(() => undefined); // pode já existir de outra execução
+    // Parâmetros CLT próprios deste teste (44h): outros testes cadastram vigências diferentes no mesmo banco.
+    await prisma.wsLegalParam.deleteMany({ where: { bond: 'CLT' } });
+    await saveLegal(admin.principal, null, CLT, META);
   });
 
   it('líder monta a equipe do setor que lidera; outro líder não enxerga', async () => {

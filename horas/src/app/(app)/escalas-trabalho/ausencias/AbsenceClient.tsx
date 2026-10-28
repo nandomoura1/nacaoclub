@@ -76,18 +76,20 @@ export function AbsenceClient({ sectorId, mes, members, leaves, impact, stats, h
       </Card>
 
       <Card className="p-4">
-        <h2 className="mb-1 font-bold text-navy">Banco de horas previsto — {monthLabel}</h2>
-        <p className="mb-2 text-xs text-tinta-suave">Horas da escala − referência (carga semanal × dias do mês ÷ 7, descontando férias, atestados e afastamentos). Só CLT/FUNAP. Trabalho em dia de folga entra como crédito; folga marcada como “Folga (banco de horas)” na escala sai do saldo. É uma previsão, não substitui o ponto.</p>
+        <h2 className="mb-1 font-bold text-navy">Banco de horas — {monthLabel}</h2>
+        <p className="mb-2 text-xs text-tinta-suave">Horas da escala − referência (carga semanal × dias do mês ÷ 7, sem férias, atestados, afastamentos e feriados em dia útil). O acumulado soma os meses anteriores: trabalho em feriado vira crédito e pode ser compensado com “Folga (banco de horas)” na escala. Só CLT/FUNAP. Trabalho em dia de folga entra como crédito; folga marcada como “Folga (banco de horas)” na escala sai do saldo. É uma previsão, não substitui o ponto.</p>
         {!hasSchedule ? <p className="text-sm text-tinta-suave">Gere a escala do mês para ver o banco de horas.</p> : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead><tr className="text-left text-xs text-tinta-suave"><th className="py-1">Colaborador</th><th>Vínculo</th><th className="text-right">Escala</th><th className="text-right">Referência</th><th className="text-right">Saldo</th><th className="text-right">Ausências</th><th className="text-right">Folgas do banco</th></tr></thead>
+              <thead><tr className="text-left text-xs text-tinta-suave"><th className="py-1">Colaborador</th><th>Vínculo</th><th className="text-right">Escala</th><th className="text-right">Referência</th><th className="text-right">Saldo do mês</th><th className="text-right">Anterior</th><th className="text-right">Acumulado</th><th className="text-right">Ausências</th><th className="text-right">Folgas do banco</th></tr></thead>
               <tbody className="divide-y divide-borda">
                 {stats.map((s) => (
                   <tr key={s.memberId}>
                     <td className="py-1 font-semibold text-navy">{s.name}</td><td>{BOND_LABEL[s.bond as Bond]}</td>
                     <td className="text-right">{fmtHours(s.minutes)}</td><td className="text-right">{s.expectedMin == null ? '—' : fmtHours(s.expectedMin)}</td>
-                    <td className={s.balanceMin == null ? 'text-right' : s.balanceMin < 0 ? 'text-right font-bold text-atencao' : 'text-right font-bold text-nacao'}>{s.balanceMin == null ? '—' : fmtHours(s.balanceMin)}</td>
+                    <td className="text-right">{s.balanceMin == null ? '—' : fmtHours(s.balanceMin)}</td>
+                    <td className="text-right">{s.carryMin == null ? '—' : fmtHours(s.carryMin)}</td>
+                    <td className={s.totalBankMin == null ? 'text-right' : s.totalBankMin < 0 ? 'text-right font-bold text-atencao' : 'text-right font-bold text-nacao'}>{s.totalBankMin == null ? '—' : fmtHours(s.totalBankMin)}</td>
                     <td className="text-right">{s.absenceDays}</td>
                     <td className="text-right">{s.bankDays ?? 0}</td>
                   </tr>

@@ -183,10 +183,11 @@ export async function saveSectorHours(principal: P | null, sectorId: string, inp
     hours: hoursMapSchema, cycleRef: z.string().refine(isIsoDate, 'Data inválida.'), notes: text(500),
     holidayMode: z.enum(['SABADO', 'DOMINGO']).nullable().or(z.literal('').transform(() => null)).default(null),
     holidayConfirm: z.boolean().default(false),
+    holidayRotate: z.boolean().default(false),
   }), input);
   return prisma.$transaction(async (tx) => {
     const s = await assertSector(principal, sectorId, tx);
-    await tx.wsSector.update({ where: { id: sectorId }, data: { hours: d.hours, cycleRef: toUtc(mondayOf(d.cycleRef)), notes: d.notes, holidayMode: d.holidayMode, holidayConfirm: d.holidayConfirm } });
+    await tx.wsSector.update({ where: { id: sectorId }, data: { hours: d.hours, cycleRef: toUtc(mondayOf(d.cycleRef)), notes: d.notes, holidayMode: d.holidayMode, holidayConfirm: d.holidayConfirm, holidayRotate: d.holidayRotate } });
     await audit(tx, ctx(principal, meta), { action: 'ws.sector.hours', entityType: 'ws_sector', entityId: sectorId, before: { hours: s.hours, cycleRef: fromUtc(s.cycleRef) }, after: d, summary: `${principal.name} alterou o horário/ciclo do setor ${s.name}` });
   });
 }
@@ -389,6 +390,18 @@ export async function saveOverride(principal: P | null, id: string | null, input
   });
 }
 
+/** Confirma o funcionamento do setor numa data (some o aviso "confirme"; a escala não muda). */
+export async function confirmDay(principal: P | null, sectorId: string, date: string, meta: RequestMeta) {
+  assertCan(principal, 'ws.edit');
+  if (!isIsoDate(date)) throw new AppError('Data inválida.');
+  return prisma.$transaction(async (tx) => {
+    const s = await assertSector(principal, sectorId, tx);
+    const done = await tx.wsDayOverride.findFirst({ where: { sectorId, date: toUtc(date), confirmed: true } });
+    if (!done) await tx.wsDayOverride.create({ data: { date: toUtc(date), sectorId, confirmed: true, reason: 'Funcionamento confirmado', createdById: principal.id } });
+    await audit(tx, ctx(principal, meta), { action: 'ws.day.confirmed', entityType: 'ws_sector', entityId: sectorId, after: { data: date }, summary: `${principal.name} confirmou o funcionamento de ${s.name} em ${formatDateBR(date)}` });
+  });
+}
+
 export async function deleteOverride(principal: P | null, id: string, meta: RequestMeta) {
   assertCan(principal, 'ws.edit');
   return prisma.$transaction(async (tx) => {
@@ -502,7 +515,7 @@ async function context(db: Tx, sectorId: string, year: number, month: number) {
     db.wsSchedule.findUnique({ where: { sectorId_year_month: { sectorId, year: p.y, month: p.m } }, include: { cells: { where: { date: { gte: toUtc(mi.rangeStart) } } } } }),
     db.wsSchedule.findUnique({ where: { sectorId_year_month: { sectorId, year: n.y, month: n.m } }, include: { cells: { where: { date: { lte: toUtc(mi.rangeEnd) } } } } }),
   ]);
-  const ovs: Override[] = overrides.map((o) => ({ date: fromUtc(o.date), sectorId: o.sectorId, closed: o.closed, hours: (o.hours as [number, number][] | null) ?? null, reason: o.reason, eventName: o.event?.name ?? null, extraPeople: o.extraPeople }));
+  const ovs: Override[] = overrides.map((o) => ({ date: fromUtc(o.date), sectorId: o.sectorId, closed: o.closed, hours: (o.hours as [number, number][] | null) ?? null, reason: o.reason, eventName: o.event?.name ?? null, extraPeople: o.extraPeople, confirmed: o.confirmed }));
   const cal = { sectorId, sectorHours: sector.hours as HoursMap, nacaoHours: (settings?.nacaoHours ?? {}) as HoursMap, holidays: new Map(holidays.map((h) => [fromUtc(h.date), { name: h.name, scope: h.scope }])), overrides: ovs, holidayMode: sector.holidayMode, holidayConfirm: sector.holidayConfirm };
   const days = new Map<IsoDate, DayPlan>(eachDay(mi.rangeStart, mi.rangeEnd).map((d) => [d, resolveDay(d, cal)]));
   // Ativos + quem já está na escala salva deste mês (mesmo desativado depois).
@@ -531,9 +544,23 @@ async function context(db: Tx, sectorId: string, year: number, month: number) {
     include: { member: { select: { teacherId: true, sector: { select: { name: true } } } } },
   });
   const elsewhere = others.filter((c) => memberOfTeacher.has(c.member.teacherId)).map((c) => ({ memberId: memberOfTeacher.get(c.member.teacherId)!, date: fromUtc(c.date), startMin: c.startMin ?? 0, endMin: c.endMin ?? 0, sector: c.member.sector.name }));
+  // Feriados já trabalhados (rodízio) e saldo do banco de horas dos meses anteriores deste setor.
+  const pastHolidays = await db.holiday.findMany({ where: { date: { lt: toUtc(mi.first), gte: toUtc(addDays(mi.first, -730)) }, scope: { not: 'FACULTATIVO' } }, select: { date: true } });
+  const holidayHistory: Record<string, number> = {};
+  if (pastHolidays.length) {
+    const worked = await db.wsCell.groupBy({ by: ['memberId'], where: { kind: 'TRABALHO', date: { in: pastHolidays.map((h) => h.date) }, schedule: { sectorId } }, _count: { _all: true } });
+    for (const w of worked) holidayHistory[w.memberId] = w._count._all;
+  }
+  const previous = await db.wsSchedule.findMany({ where: { sectorId, OR: [{ year: { lt: year } }, { year, month: { lt: month } }] }, select: { analysis: true } });
+  const bankCarry: Record<string, number> = {};
+  for (const s of previous) {
+    for (const st of ((s.analysis as { members?: { memberId: string; balanceMin: number | null }[] })?.members ?? [])) {
+      if (st.balanceMin != null) bankCarry[st.memberId] = (bankCarry[st.memberId] ?? 0) + st.balanceMin;
+    }
+  }
   const domainPosts: Post[] = posts.map((p) => ({ id: p.id, name: p.name, kind: p.kind, startMin: p.startMin, endMin: p.endMin, weekdays: p.weekdays, minPeople: p.minPeople, functionName: p.functionName, mandatory: p.mandatory }));
   const domainRules: Rule[] = rules.map((r) => ({ id: r.id, kind: r.kind, label: r.label, params: r.params as Record<string, unknown>, mandatory: r.mandatory }));
-  return { mi, sector, days, members, membersDb, posts: domainPosts, rules: domainRules, absences, legal, prior, after, elsewhere, schedule, cycleRef: fromUtc(sector.cycleRef) };
+  return { mi, sector, days, members, membersDb, posts: domainPosts, rules: domainRules, absences, legal, prior, after, elsewhere, schedule, cycleRef: fromUtc(sector.cycleRef), holidayHistory, bankCarry };
 }
 
 type Ctx = Awaited<ReturnType<typeof context>>;
@@ -546,7 +573,7 @@ function gridOf(c: Ctx, cells: { memberId: string; date: Date; kind: string; sta
 }
 
 function analyze(c: Ctx, grid: Grid): Analysis {
-  return validate({ month: c.mi, days: c.days, members: c.members, posts: c.posts, rules: c.rules, absences: c.absences, cycleRef: c.cycleRef, grid, legal: c.legal, elsewhere: c.elsewhere });
+  return validate({ month: c.mi, days: c.days, members: c.members, posts: c.posts, rules: c.rules, absences: c.absences, cycleRef: c.cycleRef, grid, legal: c.legal, elsewhere: c.elsewhere, bankCarry: c.bankCarry });
 }
 
 export interface MonthView {
@@ -594,7 +621,7 @@ export async function generateSchedule(principal: P | null, sectorId: string, ye
     const c = await context(tx, sectorId, year, month);
     if (c.schedule && c.schedule.status !== 'RASCUNHO') throw new AppError('A escala deste mês já foi aprovada/publicada. Reabra para edição antes de gerar de novo.');
     if (!c.members.some((m) => m.mode === 'FIXO' && m.autoSchedule && (m.hours.base || m.hours.week))) throw new AppError('Nenhum colaborador com horário habitual na equipe: cadastre a equipe antes de gerar.');
-    const out = generate({ month: c.mi, days: c.days, members: c.members, posts: c.posts, rules: c.rules, absences: c.absences, cycleRef: c.cycleRef, prior: c.prior });
+    const out = generate({ month: c.mi, days: c.days, members: c.members, posts: c.posts, rules: c.rules, absences: c.absences, cycleRef: c.cycleRef, prior: c.prior, holidayRotate: c.sector.holidayRotate, holidayHistory: c.holidayHistory });
     const sched = c.schedule ?? await tx.wsSchedule.create({ data: { sectorId, year, month } });
     await tx.wsCell.deleteMany({ where: { scheduleId: sched.id } });
     const rows = c.members.flatMap((m) => c.mi.days.map((d) => {
@@ -710,7 +737,7 @@ export async function loadDocumentModels(principal: P | null, meta: RequestMeta)
     await prisma.$transaction(async (tx) => {
       if (await tx.wsSector.findFirst({ where: { name: { equals: model.name, mode: 'insensitive' } } })) { skipped.push(model.name); return; }
       const proc = model.procSector ? await tx.procSector.findFirst({ where: { name: model.procSector }, select: { id: true } }) : null;
-      const sector = await tx.wsSector.create({ data: { name: model.name, procSectorId: proc?.id ?? null, hours: model.hours, cycleRef: toUtc(MODEL_CYCLE_REF), notes: model.notes, sortOrder: DOCUMENT_MODELS.indexOf(model), holidayMode: model.holidayMode ?? null, holidayConfirm: model.holidayConfirm ?? false } });
+      const sector = await tx.wsSector.create({ data: { name: model.name, procSectorId: proc?.id ?? null, hours: model.hours, cycleRef: toUtc(MODEL_CYCLE_REF), notes: model.notes, sortOrder: DOCUMENT_MODELS.indexOf(model), holidayMode: model.holidayMode ?? null, holidayConfirm: model.holidayConfirm ?? false, holidayRotate: model.holidayRotate ?? false } });
       const ids = new Map<string, string>();
       for (const [i, m] of model.members.entries()) {
         const t = await tx.teacher.findFirst({ where: { name: m.name } }) ?? await tx.teacher.create({ data: { name: m.name, displayName: m.display, createdById: principal.id, notes: `Cadastrado pelo modelo de escala (${model.name}).` } });

@@ -41,7 +41,7 @@ export default async function ImprimirEscalaPage({ params, searchParams }: { par
         <p className="text-xs text-tinta-fraca">“Paisagem” e “Salvar como PDF” para enviar.</p>
         <PrintButton auto={sp.auto !== '0'} />
       </div>
-      <FitSheet enabled>
+      <FitSheet enabled stretch={false}>
         <div className="mb-2 flex items-end justify-between border-b-2 border-navy pb-1.5">
           <div>
             <div className="text-navy"><Logo tone="light" /></div>
@@ -50,7 +50,7 @@ export default async function ImprimirEscalaPage({ params, searchParams }: { par
           </div>
           <p className="text-right text-[11px] text-tinta-suave">Emitido em {formatDateTime(new Date())}</p>
         </div>
-        <table className="w-full table-fixed border-collapse text-[8.5px] leading-tight">
+        <table className="w-full table-fixed border-collapse text-[8px] leading-tight">
           <thead>
             <tr>
               <th className="w-28 border border-navy bg-navy px-1 py-0.5 text-left text-white">Colaborador</th>
@@ -61,8 +61,8 @@ export default async function ImprimirEscalaPage({ params, searchParams }: { par
           <tbody>
             {v.members.map((m) => (
               <tr key={m.id}>
-                <td className="border border-borda px-1 py-0.5"><b className="text-navy">{m.name}</b><br /><span className="text-[7.5px] text-tinta-suave">{[m.functionName, BOND_LABEL[m.bond]].filter(Boolean).join(' · ')}</span></td>
-                {v.month.days.map((d) => { const c = v.grid[m.id]?.[d]; return <td key={d} className={cn('border border-borda px-0 py-0.5 text-center font-semibold', c ? CELL_TONE[c.kind] : '')}>{cellText(c)}</td>; })}
+                <td className="border border-borda px-1 py-1"><b className="text-navy">{m.name}</b><br /><span className="text-[7.5px] text-tinta-suave">{[m.functionName, BOND_LABEL[m.bond]].filter(Boolean).join(' · ')}</span></td>
+                {v.month.days.map((d) => { const c = v.grid[m.id]?.[d]; return <td key={d} className={cn('whitespace-nowrap border border-borda px-0 py-1 text-center text-[7px] font-semibold tracking-tight', c ? CELL_TONE[c.kind] : '')}>{cellText(c)}</td>; })}
                 <td className="border border-borda text-center font-bold text-navy">{fmtHours(stats.get(m.id)?.minutes ?? 0)}</td>
               </tr>
             ))}

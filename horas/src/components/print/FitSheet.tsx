@@ -12,7 +12,8 @@ const mm = (v: number) => (v * 96) / 25.4;
  * papel; se não cabe, reduz tudo por igual (zoom) mantendo a largura total.
  * Recalcula antes de imprimir e quando as fontes carregam.
  */
-export function FitSheet({ enabled, children }: { enabled: boolean; children: React.ReactNode }) {
+/** `stretch` = estica as linhas até o fim do papel (grade semanal); false = mantém as linhas na altura natural (escala do mês). */
+export function FitSheet({ enabled, stretch = true, children }: { enabled: boolean; stretch?: boolean; children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const el = ref.current;
@@ -35,14 +36,14 @@ export function FitSheet({ enabled, children }: { enabled: boolean; children: Re
       el.style.zoom = String(z);
       // Sobrou papel: as linhas da tabela crescem até o fim da folha.
       const free = H / z - el.scrollHeight;
-      if (table && free > 4) table.style.height = `${table.offsetHeight + free - 2}px`;
+      if (stretch && table && free > 4) table.style.height = `${table.offsetHeight + free - 2}px`;
     };
     fit();
     void document.fonts?.ready.then(fit);
     window.addEventListener('beforeprint', fit);
     window.addEventListener('resize', fit);
     return () => { window.removeEventListener('beforeprint', fit); window.removeEventListener('resize', fit); };
-  }, [enabled]);
+  }, [enabled, stretch]);
   return (
     <div className="overflow-x-auto print:overflow-visible">
       <div ref={ref} className={enabled ? 'mx-auto origin-top-left bg-white print:m-0 print:shadow-none shadow-sm ring-1 ring-borda print:ring-0 p-0' : ''}>{children}</div>

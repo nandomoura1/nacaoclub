@@ -31,3 +31,4 @@ export const swapCellsAction = async (scheduleId: string, a: { memberId: string;
 export const setStatusAction = async (scheduleId: string, status: 'RASCUNHO' | 'APROVADA' | 'PUBLICADA') => act((p, m) => ws.setScheduleStatus(p, scheduleId, status, m));
 export const loadModelsAction = async () => act((p, m) => ws.loadDocumentModels(p, m));
 export const setRotationAction = async (sectorId: string, memberIds: string[]) => act((p, m) => ws.setRotation(p, sectorId, memberIds, m), memberIds.length ? 'Rodízio montado. Gere a escala de novo para aplicar.' : 'Rodízio desfeito.');
+export const confirmDayAction = async (sectorId: string, date: string) => act((p, m) => ws.confirmDay(p, sectorId, date, m), 'Funcionamento confirmado.');
