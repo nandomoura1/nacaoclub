@@ -13,6 +13,7 @@ async function act<T>(fn: (p: Awaited<ReturnType<typeof getPrincipal>>, meta: Aw
 
 export const saveSectorAction = async (id: string | null, input: unknown) => act((p, m) => ws.saveSector(p, id, input, m), 'Setor salvo.');
 export const saveSectorHoursAction = async (sectorId: string, input: unknown) => act((p, m) => ws.saveSectorHours(p, sectorId, input, m), 'Horário do setor salvo.');
+export const saveHolidayRuleAction = async (sectorId: string, input: unknown) => act((p, m) => ws.saveHolidayRule(p, sectorId, input, m), 'Regra de feriados salva.');
 export const savePostAction = async (sectorId: string, id: string | null, input: unknown) => act((p, m) => ws.savePost(p, sectorId, id, input, m), 'Posto salvo.');
 export const deletePostAction = async (sectorId: string, id: string) => act((p, m) => ws.deletePost(p, sectorId, id, m), 'Posto excluído.');
 export const saveMemberAction = async (sectorId: string, id: string | null, input: unknown) => act((p, m) => ws.saveMember(p, sectorId, id, input, m), 'Colaborador salvo.');

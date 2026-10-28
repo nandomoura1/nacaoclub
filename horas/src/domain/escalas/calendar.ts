@@ -86,10 +86,27 @@ export interface CalendarInput {
   nacaoHours: HoursMap;
   holidays: Map<IsoDate, { name: string; scope: string }>;
   overrides: Override[];
-  /** Feriado funciona como SABADO ou DOMINGO (equipe e postos desse dia). */
+  /** Regra do feriado: SABADO/DOMINGO (horário, equipe e postos desse dia), PROPRIO (linha F) ou FECHADO. Sem regra = como sábado. */
   holidayMode?: string | null;
   /** Todo feriado pede confirmação do gestor, mesmo com horário definido. */
   holidayConfirm?: boolean;
+}
+
+export const HOLIDAY_MODES = ['SABADO', 'DOMINGO', 'PROPRIO', 'FECHADO'] as const;
+export type HolidayMode = (typeof HOLIDAY_MODES)[number];
+export const HOLIDAY_MODE_LABEL: Record<HolidayMode, string> = { SABADO: 'Como sábado', DOMINGO: 'Como domingo', PROPRIO: 'Horário próprio', FECHADO: 'Fechado' };
+/** Regra básica da Nação: feriado funciona como sábado. */
+export const holidayModeOf = (mode: string | null | undefined): HolidayMode => (HOLIDAY_MODES as readonly string[]).includes(mode ?? '') ? mode as HolidayMode : 'SABADO';
+/**
+ * Horário pré-programado do setor no feriado (undefined = setor sem esse horário cadastrado).
+ * "Como sábado/domingo" troca só o feriado de segunda a sexta; no fim de semana vale o horário do próprio dia.
+ */
+export function holidayHours(sectorHours: HoursMap, mode: string | null | undefined, weekday: number): Window[] | undefined {
+  const m = holidayModeOf(mode);
+  if (m === 'FECHADO') return [];
+  if (m === 'PROPRIO') return sectorHours.F;
+  if (weekday >= 6) return sectorHours[String(weekday) as DayKey];
+  return sectorHours[m === 'SABADO' ? '6' : '7'];
 }
 
 const fmt = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
@@ -128,6 +145,8 @@ export function resolveDay(date: IsoDate, c: CalendarInput): DayPlan {
 
   // Feriado "de verdade" (nacional/distrital/da Nação); ponto facultativo só muda se houver horário de feriado.
   const isHoliday = !!holiday && holiday.scope !== 'FACULTATIVO';
+  const mode = holidayModeOf(c.holidayMode);
+  const fh = isHoliday ? holidayHours(c.sectorHours, mode, weekday) : undefined;
   if (holiday && !isHoliday) notes.push(`Ponto facultativo: ${holiday.name}`);
   const habitual = (): { open: Window[]; source: DayPlan['source'] } | null => {
     if (c.sectorHours[wk]) return { open: c.sectorHours[wk]!, source: 'SETOR' };
@@ -145,19 +164,20 @@ export function resolveDay(date: IsoDate, c: CalendarInput): DayPlan {
     source = 'NACAO_EXCECAO';
     if (nacaoEx.closed) { open = []; notes.push(`Nação fechada: ${nacaoEx.reason}`); }
     else {
-      const h = (isHoliday && c.sectorHours.F) || habitual()?.open || nacaoEx.hours!;
+      const h = (fh?.length ? fh : null) || habitual()?.open || nacaoEx.hours!;
       open = intersect(h, nacaoEx.hours!);
       notes.push(`Funcionamento especial da Nação: ${nacaoEx.reason}`);
       if (!covers(nacaoEx.hours!, h)) confirm.push(`O setor funciona ${windowsLabel(h)}, mas a Nação funciona ${windowsLabel(nacaoEx.hours!)} (${nacaoEx.reason}). Confirme o horário do setor nesta data.`);
     }
-  } else if (isHoliday && c.sectorHours.F) {
-    open = c.sectorHours.F; source = 'SETOR_FERIADO';
-    const como = c.holidayMode === 'SABADO' ? ' (funciona como sábado)' : c.holidayMode === 'DOMINGO' ? ' (funciona como domingo)' : '';
-    notes.push(`Feriado (${holiday!.name}): ${windowsLabel(open)}${como}`);
-    if (c.holidayConfirm) confirm.push(`Feriado (${holiday!.name}): pré-definido ${windowsLabel(open)}${como}. Confirme o funcionamento e a equipe.`);
-  } else if (isHoliday && c.nacaoHours.F) {
-    const h = habitual()?.open ?? c.nacaoHours.F;
-    open = intersect(h, c.nacaoHours.F); source = 'NACAO_FERIADO'; notes.push(`Feriado (${holiday!.name}): horário de feriado da Nação`);
+  } else if (fh) {
+    open = fh; source = 'SETOR_FERIADO';
+    const como = mode === 'SABADO' ? ' (como sábado)' : mode === 'DOMINGO' ? ' (como domingo)' : '';
+    notes.push(`Feriado (${holiday!.name}): ${open.length ? windowsLabel(open) : 'fechado'}${como}`);
+    if (c.holidayConfirm) confirm.push(`Feriado (${holiday!.name}): pré-definido ${open.length ? windowsLabel(open) : 'fechado'}${como}. Confirme o funcionamento e a equipe.`);
+  } else if (isHoliday && (c.nacaoHours.F ?? c.nacaoHours['6'])) {
+    const nf = (c.nacaoHours.F ?? c.nacaoHours['6'])!;
+    const h = habitual()?.open ?? nf;
+    open = intersect(h, nf); source = 'NACAO_FERIADO'; notes.push(`Feriado (${holiday!.name}): horário de feriado da Nação`);
   } else {
     const h = habitual();
     if (h) { open = h.open; source = h.source; }
@@ -172,6 +192,6 @@ export function resolveDay(date: IsoDate, c: CalendarInput): DayPlan {
   }
   // Exceção de horário num feriado (ex.: fecha mais cedo) continua sendo feriado "como sábado/domingo".
   const asWeekday = isHoliday && weekday <= 5 && open.length && (source! === 'SETOR_FERIADO' || source! === 'NACAO_FERIADO' || source! === 'SETOR_EXCECAO' || source! === 'NACAO_EXCECAO')
-    ? (c.holidayMode === 'SABADO' ? 6 : c.holidayMode === 'DOMINGO' ? 7 : null) : null;
+    ? (mode === 'SABADO' ? 6 : mode === 'DOMINGO' ? 7 : null) : null;
   return { date, weekday, holiday, asWeekday, open, source: source!, notes, confirm, events };
 }

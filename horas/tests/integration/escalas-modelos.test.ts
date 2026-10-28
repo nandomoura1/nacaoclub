@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '@/server/db';
-import { confirmDay, generateSchedule, loadDocumentModels, loadMonth, setRotation } from '@/server/services/ws-service';
+import { confirmDay, deleteOverride, generateSchedule, holidayBoard, loadDocumentModels, loadMonth, saveHolidayRule, saveOverride, setRotation } from '@/server/services/ws-service';
 import { cyclePhase } from '@/domain/escalas/calendar';
 import { holidaysOf } from '@/domain/holidays';
 import { META, ensureCatalog, hasDb, makeUser } from './helpers';
@@ -43,7 +43,7 @@ describe.skipIf(!hasDb)('Modelos iniciais das escalas', () => {
     const v = await view('Recepção');
     const people = ['Duda', 'Lawana', 'Brenda', 'Manu', 'Débora', 'Igor'].map((n) => memberId(v, n));
     const k = (id: string, d: string) => v.grid[id]![d]!.kind;
-    const feriado = new Set(v.days.filter((d) => d.asWeekday).map((d) => d.date));
+    const feriado = new Set(v.days.filter((d) => d.holiday && d.holiday.scope !== 'FACULTATIVO').map((d) => d.date));
     // Semanas inteiras do mês sem feriado em dia útil (no feriado só uma pessoa trabalha).
     for (const w of v.month.weeks.filter((x) => x.days.every((d) => d >= v.month.first && d <= v.month.last && !feriado.has(d)))) {
       const [, , , qui, sex, sab, dom] = w.days as [string, string, string, string, string, string, string];
@@ -68,7 +68,7 @@ describe.skipIf(!hasDb)('Modelos iniciais das escalas', () => {
     expect(v.analysis!.uncovered).toEqual([]);
   });
 
-  it('Recepção no feriado: 08–14, uma pessoa, em rodízio (cada feriado com uma pessoa diferente) e sempre para confirmar', async () => {
+  it('Recepção no feriado: horário próprio 07–14, uma pessoa, em rodízio (cada feriado com uma pessoa diferente) e sempre para confirmar', async () => {
     const v = await view('Recepção');
     const people = ['Duda', 'Lawana', 'Brenda', 'Manu', 'Débora', 'Igor'].map((n) => memberId(v, n));
     const who: string[] = [];
@@ -76,9 +76,10 @@ describe.skipIf(!hasDb)('Modelos iniciais das escalas', () => {
       const on = people.filter((id) => v.grid[id]![d]!.kind === 'TRABALHO');
       expect(on.length).toBe(1);
       const c = v.grid[on[0]!]![d]!;
-      expect([c.startMin, c.endMin, c.breakMin]).toEqual([H(8), H(14), 15]);
+      expect([c.startMin, c.endMin, c.breakMin]).toEqual([H(7), H(14), 60]);
       expect(c.note).toMatch(/rodízio/);
-      expect(people.filter((id) => id !== on[0]).every((id) => /Feriado/.test(v.grid[id]![d]!.note ?? ''))).toBe(true);
+      // Os demais folgam (no feriado ou já na folga da grade daquele dia).
+      expect(people.filter((id) => id !== on[0]).every((id) => v.grid[id]![d]!.kind === 'FOLGA' && /^(Feriado|Folga da grade)/.test(v.grid[id]![d]!.note ?? ''))).toBe(true);
       expect(v.analysis!.alerts.some((a) => a.code === 'CALENDARIO' && a.date === d && /Confirme/.test(a.message))).toBe(true);
       who.push(on[0]!);
     }
@@ -103,11 +104,13 @@ describe.skipIf(!hasDb)('Modelos iniciais das escalas', () => {
     expect(st.carryMin).toBe(novSt.balanceMin);
   });
 
-  it('Lanchonete e Cozinha no feriado: como sábado (07–17), sem pedir confirmação', async () => {
-    for (const n of ['Lanchonete', 'Cozinha']) {
+  it('Lanchonete, Cozinha e Limpeza no feriado: como sábado (horário de sábado do setor), para confirmar', async () => {
+    for (const n of ['Lanchonete', 'Cozinha', 'Limpeza e Manutenção']) {
       const v = await view(n);
-      expect(v.days.find((d) => d.date === '2026-11-02')!.open).toEqual([[H(7), H(17)]]);
-      expect(v.analysis!.alerts.filter((a) => a.code === 'CALENDARIO')).toEqual([]);
+      const sabado = v.days.find((d) => d.date === '2026-11-07')!.open;
+      expect(v.days.find((d) => d.date === '2026-11-02')!.open).toEqual(sabado);
+      expect(v.analysis!.alerts.some((a) => a.code === 'CALENDARIO' && a.date === '2026-11-02' && /como sábado/.test(a.message))).toBe(true);
+      if (n === 'Limpeza e Manutenção') continue;
       const sab = '2026-11-07'; // sábado da mesma semana
       const seg = '2026-11-09'; // segunda seguinte
       for (const m of v.members.filter((x) => x.mode === 'FIXO' && x.autoSchedule)) {
@@ -174,5 +177,28 @@ describe.skipIf(!hasDb)('Modelos iniciais das escalas', () => {
     expect(v.analysis!.alerts.filter((x) => x.code === 'REGRA')).toEqual([]);
     const fia = v.analysis!.members.find((m) => m.name === 'Fia')!;
     expect(fia.days).toBeGreaterThanOrEqual(20);
+  });
+
+  it('tela Feriados: regra do setor, ajuste de um feriado (Nação fecha às 14h) e confirmação', async () => {
+    const lanch = await sector('Lanchonete');
+    let b = await holidayBoard(admin.principal, '2026-11-01');
+    const nov15 = () => b.holidays.find((h) => h.date === '2026-11-15')!.sectors.find((x) => x.sectorId === lanch)!;
+    expect(b.sectors.find((x) => x.id === lanch)!.mode).toBe('SABADO');
+    // 15/11/2026 é domingo: feriado no fim de semana fica com o horário do próprio dia (domingo 08–17).
+    expect(nov15()).toMatchObject({ open: [[H(8), H(17)]], needsConfirm: true });
+    const adj = await saveOverride(admin.principal, null, { date: '2026-11-15', sectorId: null, hours: [[H(8), H(14)]], reason: 'Nação fecha às 14h' }, META);
+    b = await holidayBoard(admin.principal, '2026-11-01');
+    expect(nov15()).toMatchObject({ open: [[H(8), H(14)]], adjusted: true });
+    await confirmDay(admin.principal, lanch, '2026-11-15', META);
+    b = await holidayBoard(admin.principal, '2026-11-01');
+    expect(nov15()).toMatchObject({ confirmed: true, needsConfirm: false });
+    await deleteOverride(admin.principal, nov15().confirmationId!, META);
+    await deleteOverride(admin.principal, adj, META);
+    // Horário próprio exige horário; fechado fecha todos os feriados do setor.
+    await expect(saveHolidayRule(admin.principal, lanch, { mode: 'PROPRIO' }, META)).rejects.toThrow(/horário/);
+    await saveHolidayRule(admin.principal, lanch, { mode: 'FECHADO', confirm: false }, META);
+    b = await holidayBoard(admin.principal, '2026-11-01');
+    expect(nov15()).toMatchObject({ open: [], needsConfirm: false });
+    await saveHolidayRule(admin.principal, lanch, { mode: 'SABADO', rotate: true, confirm: true }, META);
   });
 });

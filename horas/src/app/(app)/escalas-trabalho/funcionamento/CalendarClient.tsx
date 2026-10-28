@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Clock, Plus, Trash2, Users } from 'lucide-react';
+import { CalendarCheck, Plus, Trash2, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -19,16 +20,14 @@ import { HoursMapEditor } from '../shared';
 type Data = Awaited<ReturnType<typeof calendarData>>;
 type Draft = { date: string; sectorId: string; closed: boolean; start: string; end: string; reason: string; eventId: string; extraPeople: number };
 
-export function CalendarClient({ data, mes, sectorId, canEdit, adjustDate }: { data: Data; mes: string; sectorId: string | null; canEdit: boolean; adjustDate: string | null }) {
+export function CalendarClient({ data, mes, sectorId, canEdit }: { data: Data; mes: string; sectorId: string | null; canEdit: boolean }) {
   const router = useRouter();
   const path = usePathname();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [hours, setHours] = useState<HoursMap>(data.nacaoHours);
   const newDraft = (o: Partial<Draft> = {}): Draft => ({ date: data.month.first, sectorId: data.canAdmin ? '' : sectorId ?? '', closed: false, start: '', end: '', reason: '', eventId: '', extraPeople: 0, ...o });
-  const holidayDraft = (date: string) => newDraft({ date, reason: `Feriado: ${data.holidays.find((h) => h.date === date)?.name ?? ''} — horário reduzido` });
-  // Vindo da escala ("Ajustar" num feriado): já abre a exceção daquela data.
-  const [draft, setDraft] = useState<Draft | null>(() => (canEdit && adjustDate && data.holidays.some((h) => h.date === adjustDate) ? holidayDraft(adjustDate) : null));
+  const [draft, setDraft] = useState<Draft | null>(null);
   const run = (fn: () => Promise<{ ok: boolean; error?: string }>, after?: () => void) => start(async () => {
     const r = await fn();
     if (!r.ok) setError(r.error ?? 'Erro.'); else { setError(null); after?.(); router.refresh(); }
@@ -50,7 +49,7 @@ export function CalendarClient({ data, mes, sectorId, canEdit, adjustDate }: { d
             {data.holidays.map((h) => (
               <li key={`h${h.date}`} className="flex flex-wrap items-center gap-1">
                 <Badge tone="blue">Feriado</Badge> <b className="text-navy">{formatDateBR(h.date).slice(0, 5)}</b> {WEEKDAYS[weekdayOf(h.date) - 1]!.short.toLowerCase()} · {h.name} <span className="text-xs text-tinta-fraca">({h.scope.toLowerCase()})</span>
-                {canEdit && <button type="button" onClick={() => setDraft(holidayDraft(h.date))} className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-nacao"><Clock className="size-3.5" /> Ajustar horário</button>}
+                <Link href="/escalas-trabalho/feriados" className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-nacao"><CalendarCheck className="size-3.5" /> Confirmar / ajustar</Link>
               </li>
             ))}
             {data.overrides.map((o) => (
@@ -63,7 +62,7 @@ export function CalendarClient({ data, mes, sectorId, canEdit, adjustDate }: { d
             ))}
             {!data.holidays.length && !data.overrides.length && <li className="text-tinta-suave">Nenhum feriado ou exceção neste mês.</li>}
           </ul>
-          <p className="mt-3 text-xs text-tinta-suave">Feriados vêm do cadastro do sistema (Administração → Cadastros). Cada setor tem o horário de feriado pré-programado (Pré-requisitos). Num feriado diferente (ex.: fechar às 14h), use <b>Ajustar horário</b> antes de gerar a escala: vale para a Nação inteira ou só para um setor, e o setor fica dentro desse horário.</p>
+          <p className="mt-3 text-xs text-tinta-suave">Feriados vêm do cadastro do sistema (Administração → Cadastros). Regra básica: no feriado cada setor funciona como no sábado. Regras por setor, confirmação e ajuste de cada feriado ficam no menu <Link href="/escalas-trabalho/feriados" className="font-semibold text-nacao underline">Feriados</Link>.</p>
         </Card>
 
         <Card className="p-4">

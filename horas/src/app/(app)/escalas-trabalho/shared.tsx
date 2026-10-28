@@ -8,7 +8,8 @@ import { formatClock, parseClock, WEEKDAYS } from '@/domain/dates';
 import type { DayKey, HoursMap, MemberHours, Shift3, Window, WeekCycle, WeekPattern } from '@/domain/escalas/types';
 import { cn } from '@/lib/cn';
 
-export const DAY_KEYS: { key: DayKey; label: string }[] = [...WEEKDAYS.map((w) => ({ key: String(w.n) as DayKey, label: w.long })), { key: 'F', label: 'Feriado' }];
+/** Dias do horário de funcionamento. O feriado tem tela própria (Feriados). */
+export const DAY_KEYS: { key: DayKey; label: string }[] = WEEKDAYS.map((w) => ({ key: String(w.n) as DayKey, label: w.long }));
 
 /** Escolha do setor e do mês (vai para a mesma página com ?setor=&mes=). */
 export function SectorMonthPicker({ sectors, sectorId, month, showMonth = true }: { sectors: { id: string; name: string }[]; sectorId: string; month: string; showMonth?: boolean }) {
@@ -36,7 +37,7 @@ export function SectorMonthPicker({ sectors, sectorId, month, showMonth = true }
 const toClock = (m: number | undefined) => (m == null ? '' : formatClock(Math.min(m, 1439)));
 const fromClock = (v: string, end = false) => { const m = parseClock(v); return m == null ? null : end && m === 0 ? 1440 : m; };
 
-function WindowInput({ value, onChange, onRemove }: { value: Window; onChange: (w: Window) => void; onRemove?: () => void }) {
+export function WindowInput({ value, onChange, onRemove }: { value: Window; onChange: (w: Window) => void; onRemove?: () => void }) {
   return (
     <span className="inline-flex items-center gap-1">
       <Input type="time" value={toClock(value[0])} onChange={(e) => { const v = fromClock(e.target.value); if (v != null) onChange([v, value[1]]); }} className="h-8 w-[7.5rem] px-2" />
@@ -59,7 +60,7 @@ export function HoursMapEditor({ value, onChange, undefinedLabel = 'Usa o da Na�
           <div key={key} className="flex flex-wrap items-center gap-2 px-3 py-2">
             <span className="w-20 text-sm font-semibold text-navy">{label}</span>
             <Select value={mode} onChange={(e) => set(key, e.target.value === 'indef' ? undefined : e.target.value === 'fechado' ? [] : [[420, 1320]])} className="h-8 w-40 text-xs">
-              <option value="indef">{key === 'F' ? 'Sem horário de feriado' : undefinedLabel}</option>
+              <option value="indef">{undefinedLabel}</option>
               <option value="aberto">Aberto</option>
               <option value="fechado">Fechado</option>
             </Select>

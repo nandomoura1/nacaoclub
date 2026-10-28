@@ -61,8 +61,12 @@ describe('calendário real', () => {
     expect(cyclePhase('2026-09-28', ref)).toBe('B');
   });
   it('prioridade: exceção do setor > especial da Nação > feriado > habitual > Nação', () => {
-    const base = { sectorId: 'S', sectorHours: { ...ALL, F: [[H(8), H(12)]] } as HoursMap, nacaoHours: { 1: [[H(5), H(23)]] } as HoursMap, holidays: new Map([['2026-11-02', { name: 'Finados', scope: 'NACIONAL' }]]), overrides: [] as Override[] };
+    const base = { sectorId: 'S', sectorHours: { ...ALL, F: [[H(8), H(12)]] } as HoursMap, nacaoHours: { 1: [[H(5), H(23)]] } as HoursMap, holidays: new Map([['2026-11-02', { name: 'Finados', scope: 'NACIONAL' }]]), overrides: [] as Override[], holidayMode: 'PROPRIO' };
     expect(resolveDay('2026-11-02', base).open).toEqual([[H(8), H(12)]]);
+    // Regra básica (sem regra no setor): feriado funciona como sábado, com o horário de sábado.
+    const padrao = resolveDay('2026-11-02', { ...base, holidayMode: null });
+    expect([padrao.open, padrao.asWeekday]).toEqual([ALL['6'], 6]);
+    expect(resolveDay('2026-11-02', { ...base, holidayMode: 'FECHADO' }).open).toEqual([]);
     expect(resolveDay('2026-11-02', base).source).toBe('SETOR_FERIADO');
     const nacao = { ...base, overrides: [{ date: '2026-11-03', sectorId: null, closed: false, hours: [[H(8), H(16)]], reason: 'Manutenção' }] as Override[] };
     const d = resolveDay('2026-11-03', nacao);
@@ -164,7 +168,7 @@ describe('motor de geração', () => {
   it('feriado fechado, evento com reforço e mudança de horário', () => {
     const team = ['Ana', 'Bia'].map((n) => member(n, { hours: { base: [H(6), H(14, 20), 60] } }));
     const r = run({
-      year: 2026, month: 11, members: team, hours: { ...ALL, F: [] }, holidays: [['2026-11-02', 'Finados'], ['2026-11-20', 'Consciência Negra']],
+      year: 2026, month: 11, members: team, hours: { ...ALL, F: [] }, holidayMode: 'FECHADO', holidays: [['2026-11-02', 'Finados'], ['2026-11-20', 'Consciência Negra']],
       overrides: [
         { date: '2026-11-07', sectorId: null, closed: false, hours: null, reason: 'Nação Celebration', eventName: 'Nação Celebration', extraPeople: 2 },
         { date: '2026-11-11', sectorId: 'S', closed: false, hours: [[H(8), H(12)]], reason: 'Horário reduzido' },
@@ -335,7 +339,7 @@ describe('motor de geração', () => {
     const id = (n: string) => team.find((m) => m.name === n)!.id;
     const history = Object.fromEntries(team.map((m) => [m.id, m.name === 'Brenda' ? 0 : 1]));
     const last = { [id('Duda')]: '2026-10-12', [id('Lawana')]: '2026-10-12', [id('Débora')]: '2026-10-12', [id('Igor')]: '2026-09-07', [id('Manu')]: '2026-04-21' };
-    const r = run({ year: 2026, month: 11, members: team, hours, holidays, holidayRotate: true, staff: 1, history, last });
+    const r = run({ year: 2026, month: 11, members: team, hours, holidays, holidayMode: 'PROPRIO', holidayRotate: true, staff: 1, history, last });
     const who = holidays.map(([d]) => team.filter((m) => r.grid[m.id]![d]!.kind === 'TRABALHO').map((m) => m.name));
     expect(who).toEqual([['Brenda'], ['Manu'], ['Igor']]);
     const c = r.grid[id('Brenda')]!['2026-11-02']!;

@@ -71,7 +71,7 @@ export default async function EscalasTrabalhoPage({ searchParams }: { searchPara
           {holidays.length > 0 && <ul className="mt-2 space-y-0.5 text-sm">{holidays.map((d) => (
             <li key={d.date} className="flex flex-wrap items-baseline gap-x-1">
               <b className="text-navy">{formatDateBR(d.date).slice(0, 5)}</b> {d.holiday!.name} <span className="text-xs text-tinta-fraca">({d.holiday!.scope.toLowerCase()}) · {d.open.length ? windowsLabel(d.open) : 'fechado'}</span>
-              {v.can.edit && <Link href={`/escalas-trabalho/funcionamento?setor=${q.sectorId}&mes=${q.mes}&dia=${d.date}`} className="ml-auto text-xs font-semibold text-nacao">Ajustar horário</Link>}
+              {v.can.edit && <Link href="/escalas-trabalho/feriados" className="ml-auto text-xs font-semibold text-nacao">Confirmar / ajustar</Link>}
             </li>
           ))}</ul>}
         </Card>

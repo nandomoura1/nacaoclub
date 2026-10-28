@@ -1,3 +1,4 @@
+import type { HolidayMode } from '@/domain/escalas/calendar';
 import { buildRotation } from '@/domain/escalas/rotation';
 import type { Bond, HoursMap, Mode, Shift3, WeekCycle, WeekPattern } from '@/domain/escalas/types';
 
@@ -31,7 +32,7 @@ export interface ModelMember {
 }
 export interface ModelPost { name: string; kind: 'ABERTURA' | 'FECHAMENTO' | 'ALMOCO' | null; start: number; end: number; weekdays: number[]; min: number; functionName?: string; mandatory?: boolean }
 export interface ModelRule { kind: string; params: Record<string, unknown>; mandatory: boolean; label?: string }
-export interface SectorModel { name: string; procSector: string | null; hours: HoursMap; holidayMode?: 'SABADO' | 'DOMINGO'; holidayConfirm?: boolean; holidayRotate?: boolean; holidayStaff?: number; notes: string; members: ModelMember[]; posts: ModelPost[]; rules: ModelRule[] }
+export interface SectorModel { name: string; procSector: string | null; hours: HoursMap; holidayMode?: HolidayMode; holidayConfirm?: boolean; holidayRotate?: boolean; holidayStaff?: number; notes: string; members: ModelMember[]; posts: ModelPost[]; rules: ModelRule[] }
 
 const WEEK = [1, 2, 3, 4, 5];
 
@@ -56,9 +57,9 @@ const RECEPCAO_CYCLES = buildRotation(RECEPCAO_POSITIONS);
 const recepcao: SectorModel = {
   name: 'Recepção',
   procSector: 'Recepção e Comercial',
-  hours: { 1: [[h(5), h(22)]], 2: [[h(5), h(22)]], 3: [[h(5), h(22)]], 4: [[h(5), h(22)]], 5: [[h(5), h(22)]], 6: [[h(7), h(17)]], 7: [[h(8), h(14)]], F: [[h(8), h(14)]] },
+  hours: { 1: [[h(5), h(22)]], 2: [[h(5), h(22)]], 3: [[h(5), h(22)]], 4: [[h(5), h(22)]], 5: [[h(5), h(22)]], 6: [[h(7), h(17)]], 7: [[h(8), h(14)]], F: [[h(7), h(14)]] },
   // Feriado: como domingo (08–14, uma pessoa — a da posição de domingo), sempre para confirmar.
-  holidayMode: 'DOMINGO',
+  holidayMode: 'PROPRIO',
   holidayConfirm: true,
   // Uma pessoa por feriado, em rodízio: quem trabalhou menos feriados vai primeiro.
   holidayRotate: true,
@@ -86,6 +87,8 @@ const limpeza: SectorModel = {
   name: 'Limpeza e Manutenção',
   procSector: 'Manutenção e Infraestrutura',
   hours: { 1: [[h(6, 30), h(22)]], 2: [[h(6, 30), h(22)]], 3: [[h(6, 30), h(22)]], 4: [[h(6, 30), h(22)]], 5: [[h(6, 30), h(22)]], 6: [[h(7), h(17)]], 7: [[h(8), h(17, 30)]] },
+  holidayMode: 'SABADO',
+  holidayConfirm: true,
   notes: 'Modelo do documento (versão revisada). John: líder CLT sem grade. Vaga "Novo FUNAP" (seg–sex 10h–20h e sáb 08h–17h) ainda sem pessoa: cadastre quando contratar. Jornadas FUNAP como informadas, sem validação contratual.',
   members: [
     { key: 'marcos', name: 'Marcos (Limpeza)', display: 'Marcos', functionName: 'Limpeza geral', bond: 'CLT', fixedOff: [5, 7], week: { A: wk(L.m, L.m, L.m, L.m, OFF, L.sab, OFF) } },
@@ -117,9 +120,10 @@ const C = { jm: s(h(7), h(16), 60), dt: s(h(13), h(22), 60), sab: s(h(8), h(17),
 const lanchonete: SectorModel = {
   name: 'Lanchonete',
   procSector: 'Lanchonete',
-  hours: { 1: [[h(7), h(22)]], 2: [[h(7), h(22)]], 3: [[h(7), h(22)]], 4: [[h(7), h(22)]], 5: [[h(7), h(22)]], 6: [[h(8), h(17)]], 7: [[h(8), h(17)]], F: [[h(7), h(17)]] },
-  // Regra: feriado funciona como sábado, das 7h às 17h.
+  hours: { 1: [[h(7), h(22)]], 2: [[h(7), h(22)]], 3: [[h(7), h(22)]], 4: [[h(7), h(22)]], 5: [[h(7), h(22)]], 6: [[h(8), h(17)]], 7: [[h(8), h(17)]] },
+  // Regra: feriado funciona como sábado (horário e equipe de sábado), confirmado a cada feriado.
   holidayMode: 'SABADO',
+  holidayConfirm: true,
   notes: 'Modelo do documento (revisado). Caio é gerente contratado como MEI: os horários dele são janelas de cobertura (sem 5x2 nem regras CLT). DP/jurídico devem validar a atuação MEI com horários fixos.',
   members: [
     { key: 'caio', name: 'Caio (Lanchonete)', display: 'Caio', functionName: 'Gerente', altFunctions: ['Atendimento'], bond: 'MEI', week: { A: wk(OFF, s(h(7), h(15), 0), s(h(12), h(22), 0), s(h(12), h(22), 0), s(h(9), h(14), 0), s(h(8), h(17), 0), s(h(8), h(15), 0)), B: wk(OFF, s(h(14), h(22), 0), s(h(7), h(15), 0), s(h(14), h(22), 0), s(h(9), h(14), 0), s(h(8), h(17), 0), s(h(8), h(15), 0)) }, notes: 'Sexta: apoio gerencial a partir das 9h.' },
@@ -145,9 +149,10 @@ const K = { m: s(h(7), h(16), 60), t: s(h(13), h(22), 60), sab: s(h(8), h(17), 6
 const cozinha: SectorModel = {
   name: 'Cozinha',
   procSector: null,
-  hours: { 1: [[h(7), h(22)]], 2: [[h(7), h(22)]], 3: [[h(7), h(22)]], 4: [[h(7), h(22)]], 5: [[h(7), h(22)]], 6: [[h(8), h(17)]], 7: [[h(8), h(14)]], F: [[h(7), h(17)]] },
-  // Regra: feriado funciona como sábado, das 7h às 17h.
+  hours: { 1: [[h(7), h(22)]], 2: [[h(7), h(22)]], 3: [[h(7), h(22)]], 4: [[h(7), h(22)]], 5: [[h(7), h(22)]], 6: [[h(8), h(17)]], 7: [[h(8), h(14)]] },
+  // Regra: feriado funciona como sábado (horário e equipe de sábado), confirmado a cada feriado.
   holidayMode: 'SABADO',
+  holidayConfirm: true,
   notes: 'Modelo do documento (nova escala 5x2). Equipe 1 = Caliane e Tati; Equipe 2 = Renata e Tati Amorim. DP: validar 37h nas semanas com domingo e a jornada FUNAP (Eliel somaria 48h).',
   members: [
     { key: 'fia', name: 'Fia (Cozinha)', display: 'Fia', functionName: 'Cozinheira', altFunctions: ['Almoço'], bond: 'CLT', fixedOff: [2, 7], week: { A: wk(K.m, OFF, K.m, K.m, K.m, K.sab, OFF) }, notes: 'Responsável pela produção do almoço quando escalada.' },

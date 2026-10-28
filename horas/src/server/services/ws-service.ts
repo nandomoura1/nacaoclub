@@ -6,7 +6,7 @@ import type { Principal } from '@/server/auth/principal';
 import type { RequestMeta } from '@/server/auth/session';
 import { AppError, NotFoundError } from '@/server/errors';
 import { addDays, eachDay, formatDateBR, fromUtc, isIsoDate, toUtc, type IsoDate } from '@/domain/dates';
-import { mondayOf, monthInfo, resolveDay, type MonthInfo, type Override } from '@/domain/escalas/calendar';
+import { HOLIDAY_MODES, holidayModeOf, mondayOf, monthInfo, resolveDay, type MonthInfo, type Override } from '@/domain/escalas/calendar';
 import { generate } from '@/domain/escalas/engine';
 import { buildRotation } from '@/domain/escalas/rotation';
 import { describeRule, parseRule, RULE_KINDS, type RuleKind } from '@/domain/escalas/rules';
@@ -185,16 +185,77 @@ export async function saveSectorHours(principal: P | null, sectorId: string, inp
   assertCan(principal, 'ws.edit');
   const d = parse(z.object({
     hours: hoursMapSchema, cycleRef: z.string().refine(isIsoDate, 'Data inválida.'), notes: text(500),
-    holidayMode: z.enum(['SABADO', 'DOMINGO']).nullable().or(z.literal('').transform(() => null)).default(null),
-    holidayConfirm: z.boolean().default(false),
-    holidayRotate: z.boolean().default(false),
-    holidayStaff: z.number().int().min(1, 'Pelo menos 1 pessoa no feriado.').max(50).nullable().default(null),
   }), input);
   return prisma.$transaction(async (tx) => {
     const s = await assertSector(principal, sectorId, tx);
-    await tx.wsSector.update({ where: { id: sectorId }, data: { hours: d.hours, cycleRef: toUtc(mondayOf(d.cycleRef)), notes: d.notes, holidayMode: d.holidayMode, holidayConfirm: d.holidayConfirm, holidayRotate: d.holidayRotate, holidayStaff: d.holidayStaff } });
+    // O horário próprio de feriado (F) é da tela Feriados: não se perde ao salvar o habitual.
+    const F = (s.hours as HoursMap).F;
+    await tx.wsSector.update({ where: { id: sectorId }, data: { hours: { ...d.hours, ...(F ? { F } : {}) }, cycleRef: toUtc(mondayOf(d.cycleRef)), notes: d.notes } });
     await audit(tx, ctx(principal, meta), { action: 'ws.sector.hours', entityType: 'ws_sector', entityId: sectorId, before: { hours: s.hours, cycleRef: fromUtc(s.cycleRef) }, after: d, summary: `${principal.name} alterou o horário/ciclo do setor ${s.name}` });
   });
+}
+
+// ─── Feriados ─────────────────────────────────────────────────
+
+/** Regra do setor nos feriados: como sábado/domingo, horário próprio ou fechado; equipe, rodízio e confirmação. */
+export async function saveHolidayRule(principal: P | null, sectorId: string, input: unknown, meta: RequestMeta) {
+  assertCan(principal, 'ws.edit');
+  const d = parse(z.object({
+    mode: z.enum(HOLIDAY_MODES),
+    hours: z.array(win).min(1, 'Informe o horário do feriado.').max(3).nullable().default(null),
+    staff: z.number().int().min(1, 'Pelo menos 1 pessoa no feriado.').max(50).nullable().default(null),
+    rotate: z.boolean().default(false),
+    confirm: z.boolean().default(true),
+  }), input);
+  if (d.mode === 'PROPRIO' && !d.hours) throw new AppError('Informe o horário próprio do feriado.');
+  return prisma.$transaction(async (tx) => {
+    const s = await assertSector(principal, sectorId, tx);
+    const hours = { ...(s.hours as HoursMap) };
+    if (d.mode === 'PROPRIO') hours.F = d.hours!; else delete hours.F;
+    const after = { holidayMode: d.mode, holidayConfirm: d.confirm, holidayRotate: d.rotate, holidayStaff: d.staff };
+    await tx.wsSector.update({ where: { id: sectorId }, data: { ...after, hours } });
+    await audit(tx, ctx(principal, meta), { action: 'ws.sector.holiday', entityType: 'ws_sector', entityId: sectorId, before: { holidayMode: s.holidayMode, holidayConfirm: s.holidayConfirm, holidayRotate: s.holidayRotate, holidayStaff: s.holidayStaff, F: (s.hours as HoursMap).F ?? null }, after: { ...after, F: hours.F ?? null }, summary: `${principal.name} alterou a regra de feriados do setor ${s.name}` });
+  });
+}
+
+/** Próximos 12 meses de feriados com o funcionamento resolvido de cada setor (padrão, ajustado, confirmado). */
+export async function holidayBoard(principal: P | null, from: IsoDate) {
+  assertCan(principal, 'ws.view');
+  const scope = await sectorScope(principal);
+  const until = addDays(from, 365);
+  const [settings, sectors, holidays] = await Promise.all([
+    prisma.appSettings.findUnique({ where: { id: 1 }, select: { nacaoHours: true } }),
+    prisma.wsSector.findMany({ where: { active: true, ...(scope ? { id: { in: scope } } : {}) }, orderBy: { sortOrder: 'asc' } }),
+    prisma.holiday.findMany({ where: { date: { gte: toUtc(from), lte: toUtc(until) } }, orderBy: { date: 'asc' } }),
+  ]);
+  const overrides = await prisma.wsDayOverride.findMany({
+    where: { date: { in: holidays.map((h) => h.date) }, OR: [{ sectorId: null }, { sectorId: { in: sectors.map((x) => x.id) } }] },
+    include: { sector: { select: { name: true } } }, orderBy: { createdAt: 'asc' },
+  });
+  const ovs: Override[] = overrides.map((o) => ({ date: fromUtc(o.date), sectorId: o.sectorId, closed: o.closed, hours: (o.hours as [number, number][] | null) ?? null, reason: o.reason, eventName: null, extraPeople: o.extraPeople, confirmed: o.confirmed }));
+  const hmap = new Map(holidays.map((h) => [fromUtc(h.date), { name: h.name, scope: h.scope }]));
+  const nacaoHours = (settings?.nacaoHours ?? {}) as HoursMap;
+  return {
+    canAdmin: can(principal, 'ws.admin'),
+    canEdit: can(principal, 'ws.edit'),
+    sectors: sectors.map((x) => {
+      const hours = x.hours as HoursMap;
+      return { id: x.id, name: x.name, mode: holidayModeOf(x.holidayMode), saturday: hours['6'] ?? null, sunday: hours['7'] ?? null, own: hours.F ?? null, staff: x.holidayStaff, rotate: x.holidayRotate, confirm: x.holidayConfirm };
+    }),
+    holidays: holidays.map((h) => {
+      const date = fromUtc(h.date);
+      return {
+        date, name: h.name, scope: h.scope,
+        adjustments: overrides.filter((o) => fromUtc(o.date) === date && !o.confirmed).map((o) => ({ id: o.id, sectorId: o.sectorId, sector: o.sector?.name ?? null, closed: o.closed, hours: (o.hours as [number, number][] | null) ?? null, reason: o.reason })),
+        sectors: sectors.map((x) => {
+          const plan = resolveDay(date, { sectorId: x.id, sectorHours: x.hours as HoursMap, nacaoHours, holidays: hmap, overrides: ovs, holidayMode: x.holidayMode, holidayConfirm: x.holidayConfirm });
+          const confirmation = overrides.find((o) => o.sectorId === x.id && fromUtc(o.date) === date && o.confirmed);
+          const adjusted = plan.source === 'SETOR_EXCECAO' || plan.source === 'NACAO_EXCECAO';
+          return { sectorId: x.id, open: plan.open, adjusted, confirmed: !!confirmation, confirmationId: confirmation?.id ?? null, needsConfirm: plan.confirm.length > 0, note: plan.confirm[0] ?? null };
+        }),
+      };
+    }),
+  };
 }
 
 export async function savePost(principal: P | null, sectorId: string, id: string | null, input: unknown, meta: RequestMeta) {

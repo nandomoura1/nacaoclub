@@ -66,6 +66,7 @@ export function absenceOn(absences: Absence[], memberId: string, date: IsoDate):
   return absences.find((a) => a.memberId === memberId && a.start <= date && date <= a.end);
 }
 
+const OUT_OF_HOURS = 'Horário fora do funcionamento do setor';
 export const isRealHoliday = (d: DayPlan) => !!d.holiday && d.holiday.scope !== 'FACULTATIVO';
 
 /** FUNAP (6x1) trabalha o feriado como dia normal: só folga nos dias fixos. */
@@ -217,7 +218,7 @@ export function generate(input: EngineInput): { grid: Grid; alerts: Alert[] } {
         continue;
       }
       const s = shiftFor(m, d, cycleRef);
-      if (!s) { row[date] = { kind: 'FOLGA', note: 'Horário fora do funcionamento do setor' }; continue; }
+      if (!s) { row[date] = { kind: 'FOLGA', note: OUT_OF_HOURS }; continue; }
       row[date] = workCell(s);
       if (r.work.length) must.add(date);
     }
@@ -252,7 +253,8 @@ export function generate(input: EngineInput): { grid: Grid; alerts: Alert[] } {
         || Number(holders.includes(b)) - Number(holders.includes(a)) || order.get(a.id)! - order.get(b.id)!;
       const chosen = [...eligible].sort(rank).slice(0, n);
       for (const m of eligible) {
-        if (grid[m.id]![date]!.kind === 'TRABALHO') grid[m.id]![date] = { kind: 'FOLGA', note: `Feriado: ${d.holiday!.name}` };
+        const cur = grid[m.id]![date]!;
+        if (cur.kind === 'TRABALHO' || (cur.kind === 'FOLGA' && cur.note === OUT_OF_HOURS)) grid[m.id]![date] = { kind: 'FOLGA', note: `Feriado: ${d.holiday!.name}` };
       }
       chosen.forEach((m, i) => {
         const t = templates[i % templates.length]!;

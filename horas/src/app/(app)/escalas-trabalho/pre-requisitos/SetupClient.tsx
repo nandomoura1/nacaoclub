@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import Link from 'next/link';
+import { CalendarCheck, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -82,48 +83,27 @@ function SectorSheet({ sector, procSectors, onClose }: { sector: SectorRow | nul
   );
 }
 
-export function SetupClient({ sectorId, hours, cycleRef, notes, holidayMode, holidayConfirm, holidayRotate, holidayStaff, posts, rules, members, kinds, canEdit }: {
-  sectorId: string; hours: HoursMap; cycleRef: string; notes: string | null; holidayMode: string | null; holidayConfirm: boolean; holidayRotate: boolean; holidayStaff: number | null; posts: PostRow[]; rules: RuleRow[]; members: Opt[];
+export function SetupClient({ sectorId, hours, cycleRef, notes, posts, rules, members, kinds, canEdit }: {
+  sectorId: string; hours: HoursMap; cycleRef: string; notes: string | null; posts: PostRow[]; rules: RuleRow[]; members: Opt[];
   kinds: { value: string; label: string; help: string }[]; canEdit: boolean;
 }) {
   const { pending, error, run } = useAct();
   const [h, setH] = useState(hours);
   const [cycle, setCycle] = useState(cycleRef);
-  const [hMode, setHMode] = useState(holidayMode ?? '');
-  const [hConfirm, setHConfirm] = useState(holidayConfirm);
-  const [hRotate, setHRotate] = useState(holidayRotate);
-  const [hStaff, setHStaff] = useState(holidayStaff ? String(holidayStaff) : '');
   const [post, setPost] = useState<PostRow | 'new' | null>(null);
   const [rule, setRule] = useState<RuleRow | 'new' | null>(null);
   return (
     <div className="space-y-4">
       <Card className="p-4">
         <h2 className="mb-1 font-bold text-navy">Horário habitual do setor</h2>
-        <p className="mb-3 text-xs text-tinta-suave">Prioridade na geração: exceção do setor na data → funcionamento especial da Nação na data → este horário (e o de feriado) → horário geral da Nação.</p>
+        <p className="mb-3 text-xs text-tinta-suave">Prioridade na geração: exceção do setor na data → funcionamento especial da Nação na data → feriado (tela Feriados) → este horário → horário geral da Nação.</p>
         <HoursMapEditor value={h} onChange={setH} />
-        <div className="mt-3 rounded-lg bg-fundo p-3">
-          <p className="mb-2 text-sm font-bold text-navy">Feriados</p>
-          <div className="flex flex-wrap items-end gap-3">
-            <div>
-              <Label htmlFor="h-mode">No feriado, a equipe trabalha como</Label>
-              <Select id="h-mode" value={hMode} onChange={(e) => setHMode(e.target.value)} className="w-64">
-                <option value="">Todos, no horário de feriado</option>
-                <option value="SABADO">No sábado (equipe e postos de sábado)</option>
-                <option value="DOMINGO">No domingo (equipe e postos de domingo)</option>
-              </Select>
-            </div>
-            <label className="mb-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={hConfirm} onChange={(e) => setHConfirm(e.target.checked)} className="size-4 accent-[#0169E9]" /> Sempre pedir confirmação nos feriados</label>
-            <div>
-              <Label htmlFor="h-staff">Pessoas no feriado</Label>
-              <Input id="h-staff" type="number" min={1} max={50} value={hStaff} onChange={(e) => setHStaff(e.target.value)} placeholder="equipe do dia" className="w-36" />
-            </div>
-            <label className="mb-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={hRotate} onChange={(e) => setHRotate(e.target.checked)} className="size-4 accent-[#0169E9]" /> Rodízio de feriados (quem trabalhou menos feriados vai primeiro)</label>
-          </div>
-          <p className="mt-1 text-xs text-tinta-suave">O horário do feriado é a linha “Feriado” acima. “Pessoas no feriado” limita a equipe (ex.: Recepção = 1, das 08 às 14); com o rodízio, vai quem trabalhou menos feriados nos meses anteriores (empate: quem trabalhou há mais tempo). Lanchonete e Cozinha = como sábado, 07–17.</p>
-        </div>
+        <Link href="/escalas-trabalho/feriados" className="mt-3 flex items-center gap-2 rounded-lg bg-nacao/10 p-3 text-sm font-semibold text-nacao hover:bg-nacao/15">
+          <CalendarCheck className="size-4" /> Feriados: regra do setor (padrão = como sábado), confirmação e ajustes de cada feriado →
+        </Link>
         <div className="mt-3 flex flex-wrap items-end gap-3">
           <div><Label htmlFor="cy">Início de uma semana A (ciclo A/B)</Label><Input id="cy" type="date" value={cycle} onChange={(e) => setCycle(e.target.value)} className="w-44" /></div>
-          {canEdit && <Button disabled={pending} onClick={() => run(() => saveSectorHoursAction(sectorId, { hours: h, cycleRef: cycle, notes, holidayMode: hMode || null, holidayConfirm: hConfirm, holidayRotate: hRotate, holidayStaff: hStaff ? Number(hStaff) : null }))}>Salvar horário, feriados e ciclo</Button>}
+          {canEdit && <Button disabled={pending} onClick={() => run(() => saveSectorHoursAction(sectorId, { hours: h, cycleRef: cycle, notes }))}>Salvar horário e ciclo</Button>}
         </div>
       </Card>
 
