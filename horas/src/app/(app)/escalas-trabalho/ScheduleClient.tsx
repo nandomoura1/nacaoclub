@@ -85,8 +85,18 @@ export function ScheduleClient({ view }: { view: MonthView }) {
   }, [a.uncovered]);
   const stats = new Map(a.members.map((x) => [x.memberId, x]));
   const members = view.members.filter((m) => m.active || Object.keys(view.grid[m.id] ?? {}).some((d) => d >= view.month.first));
-  const status = (to: 'RASCUNHO' | 'APROVADA' | 'PUBLICADA') => start(async () => {
-    const r = await setStatusAction(s.id, to);
+  const conflictCount = a.alerts.filter((x) => x.level === 'CONFLITO').length;
+  const status = (to: 'RASCUNHO' | 'APROVADA' | 'PUBLICADA') => {
+    let accept: { reason: string } | undefined;
+    if (to !== 'RASCUNHO' && conflictCount) {
+      const reason = prompt(`A escala tem ${conflictCount} conflito(s) (veja os alertas). Para ${to === 'PUBLICADA' ? 'publicar' : 'aprovar'} mesmo assim, escreva a justificativa (ex.: "abertura das 05h coberta à mão"):`);
+      if (reason === null) return;
+      accept = { reason };
+    }
+    doStatus(to, accept);
+  };
+  const doStatus = (to: 'RASCUNHO' | 'APROVADA' | 'PUBLICADA', accept?: { reason: string }) => start(async () => {
+    const r = await setStatusAction(s.id, to, accept);
     if (!r.ok) setError(r.error); else { setError(null); router.refresh(); }
   });
   const alerts = showAll ? a.alerts : a.alerts.slice(0, 12);
@@ -102,15 +112,20 @@ export function ScheduleClient({ view }: { view: MonthView }) {
           <p className="text-xs opacity-90">
             {a.classification === 'SEM_CONFLITOS' && 'A escala atende às regras cadastradas e à cobertura exigida.'}
             {a.classification === 'AJUSTES' && 'Há pendências ou preferências não atendidas (veja os alertas).'}
-            {a.classification === 'COM_CONFLITO' && 'Há falha de cobertura, descanso ou regra obrigatória: não pode ser aprovada nem publicada.'}
+            {a.classification === 'COM_CONFLITO' && 'Há falha de cobertura, descanso ou regra obrigatória. Dá para aprovar/publicar assim com uma justificativa (fica no histórico).'}
           </p>
         </div>
         <Badge tone={s.status === 'PUBLICADA' ? 'green' : s.status === 'APROVADA' ? 'blue' : 'neutral'}>{STATUS_LABEL[s.status]}</Badge>
       </div>
+      {s.accepted && (
+        <p className="rounded-lg bg-atencao/10 px-3 py-2 text-xs text-tinta">
+          <b>{s.accepted.status === 'PUBLICADA' ? 'Publicada' : 'Aprovada'} com {s.accepted.count} conflito(s)</b> por {s.accepted.by} em {new Date(s.accepted.at).toLocaleString('pt-BR')}: “{s.accepted.reason}”
+        </p>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
-        {view.can.publish && s.status === 'RASCUNHO' && <Button disabled={pending || a.classification === 'COM_CONFLITO'} onClick={() => status('APROVADA')}><CheckCircle2 /> Aprovar</Button>}
-        {view.can.publish && s.status === 'APROVADA' && <Button disabled={pending || a.classification === 'COM_CONFLITO'} onClick={() => status('PUBLICADA')}><Send /> Publicar</Button>}
+        {view.can.publish && s.status === 'RASCUNHO' && <Button disabled={pending} onClick={() => status('APROVADA')}><CheckCircle2 /> {conflictCount ? 'Aprovar com conflito' : 'Aprovar'}</Button>}
+        {view.can.publish && s.status === 'APROVADA' && <Button disabled={pending} onClick={() => status('PUBLICADA')}><Send /> {conflictCount ? 'Publicar com conflito' : 'Publicar'}</Button>}
         {view.can.publish && s.status !== 'RASCUNHO' && <Button variant="secondary" disabled={pending} onClick={() => confirm('Reabrir volta a escala para rascunho (dá para editar e gerar de novo). Continuar?') && status('RASCUNHO')}><Unlock /> Reabrir para edição</Button>}
         {!editable && s.status === 'RASCUNHO' && !view.can.edit && <span className="text-xs text-tinta-suave">Só leitura.</span>}
         {s.status !== 'RASCUNHO' && <span className="inline-flex items-center gap-1 text-xs text-tinta-suave"><Lock className="size-3" /> {s.status === 'PUBLICADA' ? 'Publicada' : 'Aprovada'}: ausências novas aparecem nos alertas sem mudar a escala.</span>}

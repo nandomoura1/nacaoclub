@@ -67,6 +67,13 @@ describe.skipIf(!hasDb)('Escalas de Trabalho 5x2', () => {
     let a = await editCell(lider.principal, view.schedule!.id, members[0]!, '2026-11-03', { kind: 'TRABALHO', startMin: H(7), endMin: H(15, 20), breakMin: 60 }, META);
     expect(a.classification).toBe('COM_CONFLITO');
     await expect(setScheduleStatus(admin.principal, view.schedule!.id, 'APROVADA', META)).rejects.toThrow(/conflito/);
+    // Com justificativa, aprova mesmo com conflito (fica registrado); reabrir limpa.
+    await expect(setScheduleStatus(admin.principal, view.schedule!.id, 'APROVADA', META, { reason: 'ok' })).rejects.toThrow(/justificativa/);
+    await setScheduleStatus(admin.principal, view.schedule!.id, 'APROVADA', META, { reason: 'Fia combinou trabalhar nesta terça' });
+    const ok = await loadMonth(admin.principal, sector, 2026, 11);
+    expect(ok.schedule).toMatchObject({ status: 'APROVADA', accepted: { count: 1, reason: 'Fia combinou trabalhar nesta terça' } });
+    await setScheduleStatus(admin.principal, view.schedule!.id, 'RASCUNHO', META);
+    expect((await loadMonth(admin.principal, sector, 2026, 11)).schedule!.accepted).toBeNull();
     a = await editCell(lider.principal, view.schedule!.id, members[0]!, '2026-11-03', { kind: 'FOLGA' }, META);
     expect(a.alerts.some((x) => x.code === 'FOLGA_FIXA')).toBe(false);
     // Troca de folga e volta.

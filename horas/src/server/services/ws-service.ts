@@ -647,6 +647,9 @@ function analyze(c: Ctx, grid: Grid): Analysis {
   return validate({ month: c.mi, days: c.days, members: c.members, posts: c.posts, rules: c.rules, absences: c.absences, cycleRef: c.cycleRef, grid, legal: c.legal, elsewhere: c.elsewhere, bankCarry: c.bankCarry });
 }
 
+/** Aprovação/publicação com conflito aceito pelo gestor. */
+export type Accepted = { count: number; reason: string; by: string; at: string; status: string };
+
 export interface MonthView {
   month: MonthInfo;
   sector: { id: string; name: string; cycleRef: IsoDate };
@@ -656,7 +659,7 @@ export interface MonthView {
   rules: (Rule & { description: string })[];
   absences: Absence[];
   legal: Partial<Record<string, LegalParams>>;
-  schedule: { id: string; status: string; generatedAt: string | null; approvedAt: string | null; publishedAt: string | null } | null;
+  schedule: { id: string; status: string; accepted: Accepted | null; generatedAt: string | null; approvedAt: string | null; publishedAt: string | null } | null;
   grid: Grid;
   analysis: Analysis | null;
   fairness: { rows: FairnessRow[]; since: IsoDate };
@@ -701,7 +704,7 @@ export async function loadMonth(principal: P | null, sectorId: string, year: num
     rules: c.rules.map((r) => ({ ...r, description: describeRule(r.kind, r.params, (id) => nameOf.get(id) ?? '—') })),
     absences: c.absences,
     legal: c.legal,
-    schedule: c.schedule ? { id: c.schedule.id, status: c.schedule.status, generatedAt: c.schedule.generatedAt?.toISOString() ?? null, approvedAt: c.schedule.approvedAt?.toISOString() ?? null, publishedAt: c.schedule.publishedAt?.toISOString() ?? null } : null,
+    schedule: c.schedule ? { id: c.schedule.id, status: c.schedule.status, accepted: c.schedule.status === 'RASCUNHO' ? null : ((c.schedule.analysis as { accepted?: Accepted | null }).accepted ?? null), generatedAt: c.schedule.generatedAt?.toISOString() ?? null, approvedAt: c.schedule.approvedAt?.toISOString() ?? null, publishedAt: c.schedule.publishedAt?.toISOString() ?? null } : null,
     grid,
     // Sempre recalculada: ausência lançada depois da publicação aparece aqui (sem mudar a escala).
     analysis: c.schedule ? analyze(c, grid) : null,
@@ -785,7 +788,11 @@ export async function swapCells(principal: P | null, scheduleId: string, a: { me
   }, { timeout: 60_000, maxWait: 10_000 });
 }
 
-export async function setScheduleStatus(principal: P | null, scheduleId: string, status: 'RASCUNHO' | 'APROVADA' | 'PUBLICADA', meta: RequestMeta) {
+/**
+ * Muda o status. Com conflito, aprovar/publicar exige confirmação explícita e justificativa
+ * (ex.: "abertura 05h coberta à mão"): fica no histórico e aparece na escala.
+ */
+export async function setScheduleStatus(principal: P | null, scheduleId: string, status: 'RASCUNHO' | 'APROVADA' | 'PUBLICADA', meta: RequestMeta, accept?: { reason: string }) {
   assertCan(principal, 'ws.publish');
   return prisma.$transaction(async (tx) => {
     const sch = await tx.wsSchedule.findUnique({ where: { id: scheduleId }, include: { sector: { select: { name: true } } } });
@@ -794,9 +801,13 @@ export async function setScheduleStatus(principal: P | null, scheduleId: string,
     if (status !== 'RASCUNHO') {
       const c = await context(tx, sch.sectorId, sch.year, sch.month);
       const a = analyze(c, gridOf(c, c.schedule!.cells));
-      if (a.classification === 'COM_CONFLITO') throw new AppError(`A escala tem ${a.alerts.filter((x) => x.level === 'CONFLITO').length} conflito(s) impeditivo(s): corrija antes de ${status === 'PUBLICADA' ? 'publicar' : 'aprovar'}.`);
+      const conflicts = a.alerts.filter((x) => x.level === 'CONFLITO');
+      const reason = accept?.reason.trim() ?? '';
+      if (conflicts.length && reason.length < 5) throw new AppError(`A escala tem ${conflicts.length} conflito(s): para ${status === 'PUBLICADA' ? 'publicar' : 'aprovar'} assim, escreva a justificativa (ex.: "abertura das 05h coberta à mão").`);
       if (status === 'PUBLICADA' && sch.status === 'RASCUNHO') throw new AppError('Aprove a escala antes de publicar.');
-      await tx.wsSchedule.update({ where: { id: scheduleId }, data: { analysis: a as object } });
+      const accepted = conflicts.length ? { count: conflicts.length, reason: reason.slice(0, 300), by: principal.name, at: new Date().toISOString(), status } : null;
+      await tx.wsSchedule.update({ where: { id: scheduleId }, data: { analysis: { ...a, accepted } as object } });
+      if (accepted) await audit(tx, ctx(principal, meta), { action: 'ws.schedule.conflicts_accepted', entityType: 'ws_schedule', entityId: scheduleId, after: { conflitos: conflicts.map((x) => x.message), justificativa: accepted.reason }, summary: `${principal.name} ${status === 'PUBLICADA' ? 'publicou' : 'aprovou'} a escala de ${sch.sector.name} com ${conflicts.length} conflito(s): ${accepted.reason}` });
     }
     const label = { RASCUNHO: 'reabriu para edição', APROVADA: 'aprovou', PUBLICADA: 'publicou' }[status];
     await tx.wsSchedule.update({
