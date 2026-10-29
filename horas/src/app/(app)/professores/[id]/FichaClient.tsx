@@ -18,6 +18,7 @@ import type { LeaveItem } from '@/server/services/leave-service';
 import { RemoveSlotSheet, SlotCard, SlotSheet, type Editing, type SheetProps } from '../../grade/GradeClient';
 import { cancelLeaveAction, previewLeaveAction, removeExtraHoursAction, saveExtraHoursAction, saveLeaveAction, setLeaveDeductsAction } from './actions';
 import type { ExtraHoursItem } from '@/server/services/extra-hours-service';
+import { generatePeriodAction } from '../../calendario/actions';
 
 /* ───────────────────────── Aulas fixas ───────────────────────── */
 
@@ -220,7 +221,8 @@ export function AusenciasTab({ teacherId, leaves, substitutes, canManage, today 
               }
               const r = await saveLeaveAction(teacherId, payload());
               if (!r.ok) return setMsg({ error: r.error });
-              setMsg({ ok: `Ausência lançada: ${r.data.applied} aula(s) ajustada(s)${r.data.closed ? ` · ${r.data.closed} em competência fechada ficaram como estavam` : ''}.` });
+              const later = preview.pending ? ` As ${preview.pending.count} aula(s) de ${preview.pending.periods.map((x) => x.label).join(', ')} entram quando a competência for gerada.` : '';
+              setMsg({ ok: `Ausência lançada: ${r.data.applied} aula(s) ajustada(s)${r.data.closed ? ` · ${r.data.closed} em competência fechada ficaram como estavam` : ''}.${later}` });
               setPreview(null);
               router.refresh();
             });
@@ -289,6 +291,23 @@ export function AusenciasTab({ teacherId, leaves, substitutes, canManage, today 
                 <p className="font-bold text-navy">Afeta {preview.count} aula(s) · {formatMinutes(preview.minutes)} · {v.deductsHours ? 'sai das horas do professor' : 'abonada: continua contando para o professor'}</p>
                 {preview.sample.length > 0 && <p className="mt-1 text-xs text-tinta-suave">{preview.sample.join(' · ')}{preview.count > preview.sample.length ? ' …' : ''}</p>}
                 {preview.note && <p className="mt-1 text-xs text-tinta-suave">{preview.note}</p>}
+                {preview.pending && (
+                  <div className="mt-2 rounded-lg bg-atencao/10 p-2 text-xs text-tinta">
+                    <p><b>+ {preview.pending.count} aula(s) · {formatMinutes(preview.pending.minutes)}</b> da grade em <b>{preview.pending.periods.map((x) => x.label).join(', ')}</b>, competência ainda não gerada: {v.deductsHours ? 'serão descontadas' : 'serão abonadas'} assim que ela for gerada (pode lançar a ausência agora).</p>
+                    {preview.pending.canGenerate && (
+                      <Button type="button" size="sm" variant="secondary" className="mt-2" disabled={pending} onClick={() => start(async () => {
+                        for (const x of preview.pending!.periods) {
+                          const g = await generatePeriodAction(x.year, x.month);
+                          if (!g.ok) return setMsg({ error: g.error });
+                        }
+                        const r = await previewLeaveAction(teacherId, payload());
+                        if (r.ok) setPreview(r.data);
+                        setMsg({ ok: `Competência ${preview.pending!.periods.map((x) => x.label).join(', ')} gerada.` });
+                        router.refresh();
+                      })}>Gerar competência {preview.pending.periods.map((x) => x.label).join(', ')} agora</Button>
+                    )}
+                  </div>
+                )}
                 {preview.closed > 0 && <p className="mt-1 text-xs text-atencao">{preview.closed} aula(s) estão em competência fechada e não serão alteradas.</p>}
                 {preview.conflicts.map((c) => <p key={c} className="mt-1 text-xs text-atencao">⚠ {c}</p>)}
               </div>

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
 import { prisma, type Tx } from '@/server/db';
 import { audit } from '@/server/audit';
-import { assertCan } from '@/server/auth/authz';
+import { assertCan, can } from '@/server/auth/authz';
 import type { Principal } from '@/server/auth/principal';
 import type { RequestMeta } from '@/server/auth/session';
 import { AppError, NotFoundError } from '@/server/errors';
@@ -141,8 +141,12 @@ export async function previewLeave(principal: Principal | null, teacherId: strin
       if (hit) conflicts.push(`${formatDateBR(fromUtc(o.date))} ${formatClock(o.startMin)}: substituto já tem ${hit.modality.name}`);
     }
   }
-  const periodsMissing = !occ.length;
+  // Aulas da grade ainda não geradas (competência por gerar): serão afetadas quando a competência for gerada.
+  const { ungeneratedClasses } = await import('./period-service');
+  const pending = await ungeneratedClasses(teacherId, d.startDate, end);
+  const periodsMissing = !occ.length && !pending.count;
   return {
+    pending: pending.count ? { ...pending, canGenerate: can(principal, 'period.generate') } : null,
     count: affected.length,
     minutes: affected.reduce((s, o) => s + o.plannedDurationMin, 0),
     closed: affected.filter((o) => o.period.status === 'FECHADO').length,

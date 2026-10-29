@@ -106,7 +106,9 @@ describe.skipIf(!hasDb)('E5 · ausências lançadas na ficha do professor', () =
     }, META);
     const pre = await previewLeave(admin.principal, ana.id, { type: 'FERIAS', startDate: '2034-05-01', endDate: '2034-05-31', coverage: 'PENDENTE' });
     expect(pre.count).toBe(0);
-    expect(pre.note).toMatch(/quando a competência for gerada/);
+    // A prévia mostra as aulas da grade que serão afetadas quando a competência for gerada (terças 02 a 30/05).
+    expect(pre.pending).toMatchObject({ count: 5, minutes: 300, canGenerate: true });
+    expect(pre.pending!.periods.map((x) => x.label)).toEqual(['Maio/2034', 'Junho/2034']);
     await saveLeave(admin.principal, ana.id, { type: 'FERIAS', startDate: '2034-05-01', endDate: '2034-05-31', coverage: 'PENDENTE' }, META);
     await generatePeriod(admin.principal, { year: 2034, month: 5 }, META); // 26/04 a 25/05: terças 02, 09, 16, 23/05 de férias
     const me = (await periodOverview(admin.principal, { year: 2034, month: 5 })).teachers.find((t) => t.teacherId === ana.id)!;

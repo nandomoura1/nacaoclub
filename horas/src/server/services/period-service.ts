@@ -53,6 +53,23 @@ async function holidaysIn(tx: Tx, start: IsoDate, end: IsoDate) {
 }
 
 /**
+ * Aulas da grade de um professor no intervalo que AINDA NÃO foram geradas (competência não gerada).
+ * Serve para a prévia de ausência: mostra o que será descontado quando a competência for gerada.
+ */
+export async function ungeneratedClasses(teacherId: string, start: IsoDate, end: IsoDate) {
+  const [versions, holidays, startDay] = await Promise.all([gradeVersions(prisma, start, end), holidaysIn(prisma, start, end), periodStartDay()]);
+  const planned = expandGrade({ start, end }, versions, holidays, {})
+    .filter((p) => p.status !== 'CANCELADA' && p.people.some((x) => x.teacherId === teacherId));
+  const existing = new Set((await prisma.classOccurrence.findMany({
+    where: { date: { gte: toUtc(start), lte: toUtc(end) }, slotId: { not: null } }, select: { slotId: true, date: true },
+  })).map((o) => `${o.slotId}|${fromUtc(o.date)}`));
+  const missing = planned.filter((p) => !existing.has(`${p.slotId}|${p.date}`));
+  const refs = new Map<string, PeriodRef & { label: string }>();
+  for (const p of missing) { const r = periodOf(p.date, startDay); refs.set(`${r.year}-${r.month}`, { ...r, label: periodLabel(r) }); }
+  return { count: missing.length, minutes: missing.reduce((n, p) => n + p.durationMin, 0), periods: [...refs.values()] };
+}
+
+/**
  * Cria as aulas previstas que faltam no período (a partir de `from`).
  * Idempotente: aula que já existe (slot + data) não é recriada nem alterada.
  */
