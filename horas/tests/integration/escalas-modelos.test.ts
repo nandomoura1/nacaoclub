@@ -202,7 +202,7 @@ describe.skipIf(!hasDb)('Modelos iniciais das escalas', () => {
     await saveHolidayRule(admin.principal, lanch, { mode: 'SABADO', rotate: true, confirm: true }, META);
   });
 
-  it('férias da Brenda (02 a 16/11): remaneja horário ou troca folga na semana, sem posto obrigatório descoberto', async () => {
+  it('férias da Brenda (02 a 16/11): só troca folgas na semana — não muda o horário de ninguém', async () => {
     const sid = await sector('Recepção');
     const before = await view('Recepção');
     const brenda = before.members.find((m) => m.name === 'Brenda')!;
@@ -210,15 +210,23 @@ describe.skipIf(!hasDb)('Modelos iniciais das escalas', () => {
     try {
       await generateSchedule(admin.principal, sid, 2026, 11, META);
       const v = await view('Recepção');
-      expect(v.analysis!.alerts.filter((a) => a.code === 'DESCOBERTO' && a.level === 'CONFLITO')).toEqual([]);
       expect(v.grid[brenda.id]!['2026-11-10']!.kind).toBe('FERIAS');
-      const notes = Object.values(v.grid).flatMap((row) => Object.values(row).map((c) => c.note ?? ''));
-      expect(notes.some((n) => /^(Remanejado|Troca de folga)/.test(n))).toBe(true);
+      // Quem já trabalhava no dia continua no mesmo horário de antes das férias.
+      for (const m of v.members.filter((x) => x.id !== brenda.id)) {
+        for (const d of v.month.days) {
+          const c = v.grid[m.id]![d]!; const o = before.grid[m.id]![d]!;
+          if (c.kind === 'TRABALHO' && o.kind === 'TRABALHO') expect([d, m.name, c.startMin, c.endMin]).toEqual([d, m.name, o.startMin, o.endMin]);
+        }
+      }
+      // Quem sai da folga para cobrir faz o turno que seria da Brenda.
+      const swapped = v.members.flatMap((m) => v.month.days.filter((d) => /^Troca de folga/.test(v.grid[m.id]![d]!.note ?? '')).map((d) => ({ d, c: v.grid[m.id]![d]! })));
+      expect(swapped.length).toBeGreaterThan(0);
+      for (const { d, c } of swapped) expect([c.startMin, c.endMin]).toEqual([before.grid[brenda.id]![d]!.startMin, before.grid[brenda.id]![d]!.endMin]);
       // Ninguém passa de 5 dias nas semanas inteiras do mês.
       for (const w of v.month.weeks.filter((x) => x.days.every((d) => d >= v.month.first && d <= v.month.last))) {
         for (const m of v.members.filter((x) => x.id !== brenda.id)) expect(w.days.filter((d) => v.grid[m.id]![d]!.kind === 'TRABALHO').length).toBeLessThanOrEqual(5);
       }
-      expect(v.analysis!.alerts.filter((a) => a.level === 'CONFLITO' && a.code !== 'AUSENTE_ESCALADO')).toEqual([]);
+      expect(v.analysis!.alerts.filter((a) => a.level === 'CONFLITO' && a.code !== 'AUSENTE_ESCALADO' && a.code !== 'DESCOBERTO')).toEqual([]);
     } finally {
       await prisma.leave.delete({ where: { id: leave.id } });
       await generateSchedule(admin.principal, sid, 2026, 11, META);
