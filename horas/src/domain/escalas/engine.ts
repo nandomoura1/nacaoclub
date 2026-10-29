@@ -325,6 +325,96 @@ export function generate(input: EngineInput): { grid: Grid; alerts: Alert[] } {
     }
   }
 
+  // Troca de folga na mesma semana: quem folga no dia trabalha e folga noutro dia da semana em que
+  // não faz falta. Continua com os mesmos dias na semana; respeita folga fixa, ausência, descanso e sequência.
+  const swaps = new Map<string, number>();
+  const br = (x: IsoDate) => `${x.slice(8, 10)}/${x.slice(5, 7)}`;
+  const swappable = (c: Cell | undefined) => c?.kind === 'FOLGA' && /^(Folga da grade|Folga da semana)/.test(c.note ?? '');
+  const restOk = (m: Member, row: Record<IsoDate, Cell>, date: IsoDate, sh: Shift3) => {
+    if (m.bond !== 'CLT') return true;
+    const prev = row[addDays(date, -1)];
+    const next = row[addDays(date, 1)];
+    return !(prev?.kind === 'TRABALHO' && prev.endMin != null && 1440 - prev.endMin + sh[0] < 660)
+      && !(next?.kind === 'TRABALHO' && next.startMin != null && 1440 - sh[1] + next.startMin < 660);
+  };
+  const run = (row: Record<IsoDate, Cell>, date: IsoDate) => {
+    let n = 1;
+    for (let x = addDays(date, -1); row[x]?.kind === 'TRABALHO'; x = addDays(x, -1)) n++;
+    for (let x = addDays(date, 1); row[x]?.kind === 'TRABALHO'; x = addDays(x, 1)) n++;
+    return n;
+  };
+  const swapOff = (date: IsoDate, p: Post) => {
+    const d = days.get(date)!;
+    const week = month.weeks.find((w) => w.days.includes(date))!;
+    let pick: { m: Member; off: IsoDate; shift: Shift3; score: number } | null = null;
+    for (const m of members) {
+      const row = grid[m.id]!;
+      if (!isScheduled(m) || !fiveByTwo(m) || !swappable(row[date]) || m.fixedOff.includes(d.weekday) || !availableOn(m, d) || absenceOn(absences, m.id, date) || !hasFunction(m, p.functionName)) continue;
+      // Duração habitual da pessoa no mês; o turno começa ou termina no posto, dentro do funcionamento.
+      const work = monthDates.map((x) => row[x]!).filter((c) => c.kind === 'TRABALHO' && c.startMin != null);
+      if (!work.length) continue;
+      const durs = work.map((c) => c.endMin! - c.startMin!).sort((a, b) => a - b);
+      const dur = durs[Math.floor(durs.length / 2)]!;
+      const same = work.find((c) => c.endMin! - c.startMin! === dur)?.breakMin ?? 0;
+      const brk = dur > 360 ? Math.max(same, 60) : dur > 240 ? Math.max(same, 15) : same;
+      const opts: Shift3[] = [[p.startMin, p.startMin + dur, brk], [p.endMin - dur, p.endMin, brk]];
+      const shift = opts.find(([a, b]) => d.open.some(([o, c]) => o <= a && b <= c) && a <= p.startMin && b >= p.endMin);
+      if (!shift || !restOk(m, row, date, shift)) continue;
+      for (const off of week.days) {
+        if (off === date || off < month.first || off > month.last || row[off]?.kind !== 'TRABALHO' || forcedWork.get(m.id)!.has(off) || isPrior(m.id, off)) continue;
+        if (dayPosts.get(off)!.some((o) => o.mandatory && covers(row[off], m, o) && members.filter((x) => x.id !== m.id && covers(grid[x.id]![off], x, o)).length < o.minPeople)) continue;
+        const trial = { ...row, [date]: workCell(shift), [off]: { kind: 'FOLGA' as const } };
+        if (run(trial, date) > 6) continue;
+        const score = (swaps.get(m.id) ?? 0) * 100 - Math.min(slack(m, off), 20);
+        if (!pick || score < pick.score) pick = { m, off, shift, score };
+      }
+    }
+    return pick;
+  };
+
+  // Etapa 4a2: posto obrigatório descoberto (ex.: titular de férias) → remaneja o horário de quem
+  // já trabalha no dia: mesma duração e intervalo, dentro do funcionamento, sem descobrir outro
+  // posto e respeitando o descanso entre jornadas (11h no CLT). Não cria gente nem dia extra.
+  for (const date of monthDates) {
+    const d = days.get(date)!;
+    // Só quando alguém da equipe está ausente no dia: sem ausência, posto descoberto é falha de cadastro (vira conflito).
+    if (!members.some((x) => absenceOn(absences, x.id, date))) continue;
+    for (const p of dayPosts.get(date)!.filter((x) => x.mandatory)) {
+      if (members.some((x) => covers(grid[x.id]![date], x, p))) continue;
+      let best: { m: Member; cell: Cell; moved: number } | null = null;
+      for (const m of members) {
+        const c = grid[m.id]![date]!;
+        if (c.kind !== 'TRABALHO' || c.startMin == null || c.endMin == null || !hasFunction(m, p.functionName) || isPrior(m.id, date)) continue;
+        const dur = c.endMin - c.startMin;
+        if (p.endMin - p.startMin > dur) continue;
+        const start = p.startMin < c.startMin ? p.startMin : p.endMin > c.endMin ? p.endMin - dur : c.startMin;
+        const cell: Cell = { ...c, startMin: start, endMin: start + dur };
+        if (!covers(cell, m, p) || !d.open.some(([a, b]) => a <= start && start + dur <= b)) continue;
+        // Não pode descobrir outro posto que hoje depende dela.
+        const others = dayPosts.get(date)!.filter((o) => o !== p && covers(c, m, o) && !covers(cell, m, o));
+        if (others.some((o) => members.filter((x) => x.id !== m.id && covers(grid[x.id]![date], x, o)).length < o.minPeople)) continue;
+        if (m.bond === 'CLT') {
+          const prev = grid[m.id]![addDays(date, -1)];
+          const next = grid[m.id]![addDays(date, 1)];
+          if (prev?.kind === 'TRABALHO' && prev.endMin != null && 1440 - prev.endMin + start < 660) continue;
+          if (next?.kind === 'TRABALHO' && next.startMin != null && 1440 - (start + dur) + next.startMin < 660) continue;
+        }
+        const moved = Math.abs(start - c.startMin);
+        if (moved > 120) continue;
+        if (!best || moved < best.moved) best = { m, cell, moved };
+      }
+      const absent = members.filter((x) => absenceOn(absences, x.id, date)).map((x) => x.name);
+      const why = absent.length ? ` (${absent.join(', ')} ausente)` : '';
+      if (best) { grid[best.m.id]![date] = { ...best.cell, note: `Remanejado: cobre ${p.name}${why}` }; continue; }
+      const swap = swapOff(date, p);
+      if (swap) {
+        grid[swap.m.id]![swap.off] = { kind: 'FOLGA', note: `Folga trocada com ${br(date)}` };
+        grid[swap.m.id]![date] = workCell(swap.shift, `Troca de folga: cobre ${p.name}${why}`);
+        swaps.set(swap.m.id, (swaps.get(swap.m.id) ?? 0) + 1);
+      }
+    }
+  }
+
   // Etapa 4b: cobertura avulsa (MEI/freelancer nos dias disponíveis) só onde falta gente.
   const coverCount = new Map<string, number>();
   for (const date of monthDates) {

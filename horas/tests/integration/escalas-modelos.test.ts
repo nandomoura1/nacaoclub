@@ -201,4 +201,27 @@ describe.skipIf(!hasDb)('Modelos iniciais das escalas', () => {
     expect(nov15()).toMatchObject({ open: [], needsConfirm: false });
     await saveHolidayRule(admin.principal, lanch, { mode: 'SABADO', rotate: true, confirm: true }, META);
   });
+
+  it('férias da Brenda (02 a 16/11): remaneja horário ou troca folga na semana, sem posto obrigatório descoberto', async () => {
+    const sid = await sector('Recepção');
+    const before = await view('Recepção');
+    const brenda = before.members.find((m) => m.name === 'Brenda')!;
+    const leave = await prisma.leave.create({ data: { teacherId: brenda.teacherId, type: 'FERIAS', coverage: 'PENDENTE', startDate: new Date('2026-11-02T00:00:00Z'), endDate: new Date('2026-11-16T00:00:00Z') } });
+    try {
+      await generateSchedule(admin.principal, sid, 2026, 11, META);
+      const v = await view('Recepção');
+      expect(v.analysis!.alerts.filter((a) => a.code === 'DESCOBERTO' && a.level === 'CONFLITO')).toEqual([]);
+      expect(v.grid[brenda.id]!['2026-11-10']!.kind).toBe('FERIAS');
+      const notes = Object.values(v.grid).flatMap((row) => Object.values(row).map((c) => c.note ?? ''));
+      expect(notes.some((n) => /^(Remanejado|Troca de folga)/.test(n))).toBe(true);
+      // Ninguém passa de 5 dias nas semanas inteiras do mês.
+      for (const w of v.month.weeks.filter((x) => x.days.every((d) => d >= v.month.first && d <= v.month.last))) {
+        for (const m of v.members.filter((x) => x.id !== brenda.id)) expect(w.days.filter((d) => v.grid[m.id]![d]!.kind === 'TRABALHO').length).toBeLessThanOrEqual(5);
+      }
+      expect(v.analysis!.alerts.filter((a) => a.level === 'CONFLITO' && a.code !== 'AUSENTE_ESCALADO')).toEqual([]);
+    } finally {
+      await prisma.leave.delete({ where: { id: leave.id } });
+      await generateSchedule(admin.principal, sid, 2026, 11, META);
+    }
+  });
 });
