@@ -364,6 +364,53 @@ export function generate(input: EngineInput): { grid: Grid; alerts: Alert[] } {
     return pick;
   };
 
+  // Etapa 4a1: fim de semana de quem está ausente (férias, atestado...) não fica quebrado.
+  // Quem trabalharia quinta e sexta e folgaria no fim de semana cobre o sábado/domingo no turno
+  // da pessoa ausente e ganha a folga na quinta. Nessa quinta, o resto da equipe faz o horário
+  // fixo de sexta (a quinta fica com uma pessoa a menos, como a sexta).
+  const own = (m: Member) => m.hours.week?.cycle?.[0] ?? m.hours.week?.A;
+  const weekendCount = (m: Member) => monthDates.filter((x) => weekdayOf(x) >= 6 && grid[m.id]![x]?.kind === 'TRABALHO').length;
+  for (const date of monthDates.filter((x) => weekdayOf(x) >= 6)) {
+    const d = days.get(date)!;
+    if (!d.open.length || isRealHoliday(d)) continue;
+    const week = month.weeks.find((w) => w.days.includes(date))!;
+    const thu = week.days[3]!;
+    if (thu < month.first || isRealHoliday(days.get(thu)!)) continue;
+    for (const a of members.filter((x) => absenceOn(absences, x.id, date))) {
+      const hole = shiftFor(a, d, cycleRef);
+      if (!hole || members.filter((x) => grid[x.id]![date]!.kind === 'TRABALHO').some((x) => grid[x.id]![date]!.note?.startsWith(`Cobre o fim de semana de ${a.name}`))) continue;
+      const cands = members.filter((m) => {
+        const row = grid[m.id]!;
+        return m.id !== a.id && isScheduled(m) && fiveByTwo(m) && swappable(row[date]) && availableOn(m, d) && !m.fixedOff.includes(d.weekday)
+          && !absenceOn(absences, m.id, date) && !absenceOn(absences, m.id, thu)
+          && row[thu]?.kind === 'TRABALHO' && !forcedWork.get(m.id)!.has(thu) && !isPrior(m.id, thu)
+          && restOk(m, row, date, hole) && run({ ...row, [date]: workCell(hole), [thu]: { kind: 'FOLGA' } }, date) <= 6;
+      });
+      if (!cands.length) continue;
+      // Quinta com uma pessoa a menos: quem trabalha faz o horário fixo de sexta.
+      const thuPlan = (m: Member) => {
+        const out = new Map<string, Cell>([[m.id, { kind: 'FOLGA', note: `Folga trocada: cobre ${br(date)} (${a.name} ausente)` }]]);
+        for (const x of members) {
+          const c = grid[x.id]![thu]!;
+          const f = own(x)?.[4];
+          if (x.id === m.id || c.kind !== 'TRABALHO' || !f || (c.startMin === f[0] && c.endMin === f[1])) continue;
+          const piece = intersect([[f[0], f[1]]], days.get(thu)!.open)[0];
+          if (!piece || !restOk(x, grid[x.id]!, thu, [piece[0], piece[1], f[2]])) continue;
+          out.set(x.id, workCell([piece[0], piece[1], f[2]], `Quinta com escala de sexta (${m.name} cobre ${br(date)})`));
+        }
+        return out;
+      };
+      // Prefere quem, saindo da quinta, não deixa posto obrigatório descoberto; depois quem fez menos fins de semana.
+      const holesThu = (plan: Map<string, Cell>) => dayPosts.get(thu)!.filter((p) => p.mandatory
+        && members.filter((x) => covers(plan.get(x.id) ?? grid[x.id]![thu], x, p)).length < p.minPeople).length;
+      const ranked = cands.map((m) => ({ m, plan: thuPlan(m) })).map((o) => ({ ...o, holes: holesThu(o.plan) }))
+        .sort((x, y) => x.holes - y.holes || weekendCount(x.m) - weekendCount(y.m) || members.indexOf(x.m) - members.indexOf(y.m));
+      const { m, plan } = ranked[0]!;
+      for (const [id, c] of plan) grid[id]![thu] = c;
+      grid[m.id]![date] = workCell(hole, `Cobre o fim de semana de ${a.name} (ausente)`);
+    }
+  }
+
   // Etapa 4a2: posto obrigatório descoberto porque alguém está ausente (férias, atestado...) →
   // só troca folga na semana: quem folgava no dia assume o turno da pessoa ausente e folga noutro dia.
   // O horário de quem já trabalha no dia não muda (ajuste fino de horário é do gestor, à mão).
