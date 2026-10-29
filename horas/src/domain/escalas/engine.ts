@@ -352,7 +352,10 @@ export function generate(input: EngineInput): { grid: Grid; alerts: Alert[] } {
       if (!isScheduled(m) || !fiveByTwo(m) || !swappable(row[date]) || m.fixedOff.includes(d.weekday) || !availableOn(m, d) || absenceOn(absences, m.id, date) || !hasFunction(m, p.functionName)) continue;
       const shift = shifts.find((sh) => restOk(m, row, date, sh));
       if (!shift) continue;
-      for (const off of week.days) {
+      // Regra da escala: quem trabalha o sábado folga na sexta; quem trabalha o domingo folga na quinta.
+      const wd = weekdayOf(date);
+      const allowed = wd === 6 ? [week.days[4]!] : wd === 7 ? [week.days[3]!] : week.days;
+      for (const off of allowed) {
         if (off === date || off < month.first || off > month.last || row[off]?.kind !== 'TRABALHO' || forcedWork.get(m.id)!.has(off) || isPrior(m.id, off)) continue;
         if (dayPosts.get(off)!.some((o) => o.mandatory && covers(row[off], m, o) && members.filter((x) => x.id !== m.id && covers(grid[x.id]![off], x, o)).length < o.minPeople)) continue;
         const trial = { ...row, [date]: workCell(shift), [off]: { kind: 'FOLGA' as const } };
@@ -363,6 +366,45 @@ export function generate(input: EngineInput): { grid: Grid; alerts: Alert[] } {
     }
     return pick;
   };
+
+  // Etapa 4a1: o fim de semana tem prioridade. Se quem está ausente (férias, atestado...) teria
+  // fim de semana na semana (folga quinta ⇒ domingo; folga sexta ⇒ sábado), alguém do grupo que
+  // folgaria sábado e domingo assume o PADRÃO DE FOLGA dela naquela semana: folga no dia útil dela
+  // e trabalha o sábado/domingo no turno de fim de semana. De segunda a sexta segue o próprio horário.
+  const weekendCount = (m: Member) => monthDates.filter((x) => weekdayOf(x) >= 6 && grid[m.id]![x]?.kind === 'TRABALHO').length;
+  for (const week of month.weeks) {
+    if (week.days.some((x) => x < month.first || x > month.last)) continue;
+    for (const a of members.filter((x) => isScheduled(x) && fiveByTwo(x))) {
+      const sh = week.days.map((x) => shiftFor(a, days.get(x)!, cycleRef));
+      const wk = [5, 6].filter((i) => sh[i] && absenceOn(absences, a.id, week.days[i]!) && !isRealHoliday(days.get(week.days[i]!)!));
+      if (!wk.length) continue;
+      const offs = [0, 1, 2, 3, 4].filter((i) => !sh[i] && days.get(week.days[i]!)!.open.length && !isRealHoliday(days.get(week.days[i]!)!));
+      const cands = members.filter((m) => {
+        if (m.id === a.id || !isScheduled(m) || !fiveByTwo(m)) return false;
+        const row = grid[m.id]!;
+        if (week.days.some((x) => absenceOn(absences, m.id, x))) return false;
+        if (![0, 1, 2, 3, 4].every((i) => row[week.days[i]!]?.kind === 'TRABALHO' || isRealHoliday(days.get(week.days[i]!)!))) return false;
+        if (![5, 6].every((i) => swappable(row[week.days[i]!]))) return false;
+        if (offs.some((i) => forcedWork.get(m.id)!.has(week.days[i]!))) return false;
+        return wk.every((i) => !m.fixedOff.includes(i + 1) && availableOn(m, days.get(week.days[i]!)!));
+      });
+      const plan = (m: Member) => {
+        const row = { ...grid[m.id]! };
+        for (const i of offs) row[week.days[i]!] = { kind: 'FOLGA', note: `Folga no padrão de ${a.name} (ausente): fim de semana primeiro` };
+        for (const i of wk) row[week.days[i]!] = workCell(sh[i]!, `Fim de semana de ${a.name} (ausente)`);
+        return row;
+      };
+      const ok = cands.map((m) => ({ m, row: plan(m) })).filter(({ m, row }) => wk.every((i) => restOk(m, row, week.days[i]!, sh[i]!)) && week.days.every((x) => row[x]!.kind !== 'TRABALHO' || run(row, x) <= 6));
+      if (!ok.length) continue;
+      // Prefere quem, folgando no dia útil, não deixa posto obrigatório descoberto; depois quem fez menos fins de semana.
+      const holes = (m: Member, row: Record<IsoDate, Cell>) => offs.reduce((n, i) => {
+        const x = week.days[i]!;
+        return n + dayPosts.get(x)!.filter((p) => p.mandatory && members.filter((o) => covers(o.id === m.id ? row[x] : grid[o.id]![x], o, p)).length < p.minPeople).length;
+      }, 0);
+      const best = ok.map((o) => ({ ...o, h: holes(o.m, o.row) })).sort((x, y) => x.h - y.h || weekendCount(x.m) - weekendCount(y.m) || members.indexOf(x.m) - members.indexOf(y.m))[0]!;
+      grid[best.m.id] = best.row;
+    }
+  }
 
   // Etapa 4a2: posto obrigatório descoberto porque alguém está ausente (férias, atestado...) →
   // só troca folga na semana: quem folgava no dia assume o turno da pessoa ausente e folga noutro dia.

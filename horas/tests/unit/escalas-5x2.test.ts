@@ -3,6 +3,7 @@ import { addDays, eachDay, weekdayOf, type IsoDate } from '@/domain/dates';
 import { cyclePhase, monthInfo, resolveDay, type Override } from '@/domain/escalas/calendar';
 import { generate } from '@/domain/escalas/engine';
 import { parseRule } from '@/domain/escalas/rules';
+import { buildRotation } from '@/domain/escalas/rotation';
 import type { Absence, Grid, HoursMap, LegalParams, Member, Post, Rule } from '@/domain/escalas/types';
 import { validate } from '@/domain/escalas/validate';
 import { memberScheduleText } from '@/domain/escalas/whatsapp';
@@ -86,6 +87,39 @@ describe('calendário real', () => {
 });
 
 describe('motor de geração', () => {
+  it('Recepção com férias: quem cobre o sábado folga na SEXTA (não noutro dia), mesmo com feriado na segunda', () => {
+    const S = (a: number, b: number, i = 60) => [a, b, i] as [number, number, number];
+    // Grades fixas da Recepção (semana 1 = 26/10) e rodízio só das folgas.
+    const own = [
+      [S(300, 780), S(300, 780), S(300, 780), S(300, 780), S(300, 840), null, null],
+      [S(360, 840), S(360, 840), S(360, 840), S(360, 840), S(360, 900), null, null],
+      [S(420, 900), S(420, 900), S(420, 900), S(420, 900), S(780, 1320), null, null],
+      [S(780, 1260), S(780, 1260), S(780, 1260), S(780, 1260), null, S(420, 960), null],
+      [S(840, 1320), S(840, 1320), S(840, 1320), S(840, 1320), null, S(480, 1020), null],
+      [S(840, 1320), S(840, 1320), S(840, 1320), null, S(780, 1320), null, S(480, 840, 15)],
+    ];
+    const cycles = buildRotation(own as never);
+    const team = ['Duda', 'Lawana', 'Brenda', 'Manu', 'Débora', 'Igor'].map((n, i) => member(n, { hours: { week: { A: cycles[i]![0]!, cycle: cycles[i] } } }));
+    const brenda = team[2]!;
+    const hours: HoursMap = { 1: [[H(5), H(22)]], 2: [[H(5), H(22)]], 3: [[H(5), H(22)]], 4: [[H(5), H(22)]], 5: [[H(5), H(22)]], 6: [[H(7), H(17)]], 7: [[H(8), H(14)]], F: [[H(7), H(14)]] };
+    const r = run({
+      year: 2026, month: 11, members: team, hours, cycleRef: '2026-10-26', holidayMode: 'PROPRIO', staff: 1, holidayRotate: true,
+      holidays: [['2026-11-02', 'Finados'], ['2026-11-15', 'Proclamação'], ['2026-11-20', 'Consciência Negra']],
+      absences: [{ memberId: brenda.id, start: '2026-11-02', end: '2026-11-16', type: 'FERIAS', substituteName: null }],
+    });
+    // Semana de 02/11: a Brenda (folga sexta, sábado 07–16) está de férias → alguém assume: folga sexta 06, sábado 07.
+    const sat = team.filter((m) => r.grid[m.id]!['2026-11-07']!.kind === 'TRABALHO');
+    expect(sat.length).toBe(2);
+    const cover = team.find((m) => /^Fim de semana de Brenda/.test(r.grid[m.id]!['2026-11-07']!.note ?? ''))!;
+    expect(cover).toBeTruthy();
+    expect(r.grid[cover.id]!['2026-11-06']!.kind).toBe('FOLGA');
+    for (const d of ['2026-11-03', '2026-11-04', '2026-11-05']) expect(r.grid[cover.id]![d]!.kind).toBe('TRABALHO');
+    // Ninguém folga numa terça/quarta para trabalhar o sábado.
+    for (const m of team.filter((x) => x.id !== brenda.id)) {
+      for (const d of ['2026-11-03', '2026-11-04', '2026-11-10', '2026-11-11']) expect([m.name, d, r.grid[m.id]![d]!.kind]).toEqual([m.name, d, 'TRABALHO']);
+    }
+  });
+
   it('CLT 5x2: duas folgas por semana e cobertura mantida', () => {
     const team = ['Ana', 'Bia', 'Cris', 'Dani'].map((n) => member(n));
     const r = run({ year: 2026, month: 11, members: team, posts: [post('Abertura', H(7), H(10), { kind: 'ABERTURA', minPeople: 2 })] });
