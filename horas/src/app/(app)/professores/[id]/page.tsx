@@ -1,12 +1,13 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { ArrowLeft, BarChart3, Printer } from 'lucide-react';
+import { ArrowLeft, BarChart3, CalendarDays, CalendarRange, Plane, Printer } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Select } from '@/components/ui/input';
-import { formatDateBR, isIsoDate } from '@/domain/dates';
+import { formatDateBR, fromUtc, isIsoDate } from '@/domain/dates';
+import { LEAVE_LABEL } from '@/domain/leave';
 import { periodKey, periodLabel, periodOf, shiftPeriod } from '@/domain/period';
 import { cn } from '@/lib/cn';
 import { filterGrade } from '@/lib/grade-filter';
@@ -34,6 +35,7 @@ const TABS = [
   { key: 'aulas', label: 'Aulas fixas' },
   { key: 'ausencias', label: 'Ausências e exceções' },
   { key: 'horas', label: 'Horas' },
+  { key: 'escala', label: 'Escala e ausências' },
   { key: 'documentos', label: 'Documentos' },
 ] as const;
 type Tab = (typeof TABS)[number]['key'];
@@ -59,24 +61,28 @@ export default async function FichaPage({ params, searchParams }: {
   const canDocs = can(principal, 'teacher.docs');
   // Cada aba só aparece para quem pode usá-la (grade e ausências leem a grade).
   const canGrade = can(principal, 'schedule.view');
-  const allowed: Record<Tab, boolean> = { aulas: canGrade, ausencias: canGrade, horas: canHours, documentos: canDocs };
+  // Equipe 5x2 (área meio) não tem grade de aulas nem horas de horista: escala, ausências e documentos.
+  const escala = teacher.team === 'ESCALA';
+  const allowed: Record<Tab, boolean> = escala
+    ? { aulas: false, ausencias: false, horas: false, escala: true, documentos: canDocs }
+    : { aulas: canGrade, ausencias: canGrade, horas: canHours, escala: false, documentos: canDocs };
   const tabs = TABS.filter((t) => allowed[t.key]);
   const tab: Tab | null = tabs.some((t) => t.key === sp.aba) ? (sp.aba as Tab) : tabs[0]?.key ?? null;
   const today = todayIso();
   const date = sp.data && isIsoDate(sp.data) ? sp.data : today;
   const base = `/professores/${id}`;
-  const share = can(principal, 'schedule.view') ? await teacherShareData(principal, id, date) : null;
+  const share = !escala && can(principal, 'schedule.view') ? await teacherShareData(principal, id, date) : null;
   const docs = canDocs ? await teacherDocs(principal, id, today) : null;
 
   return (
     <>
-      <Link href="/professores" className="mb-3 inline-flex items-center gap-1 text-sm text-tinta-suave hover:text-nacao print:hidden"><ArrowLeft className="size-4" /> Professores</Link>
+      <Link href={escala ? '/professores?time=escala' : '/professores'} className="mb-3 inline-flex items-center gap-1 text-sm text-tinta-suave hover:text-nacao print:hidden"><ArrowLeft className="size-4" /> {escala ? 'Equipe 5x2' : 'Professores'}</Link>
       <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center">
         <span className="grid size-14 shrink-0 place-items-center rounded-full bg-navy text-lg font-bold text-white">{initials(teacher.displayName || teacher.name)}</span>
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-extrabold text-navy">{teacher.name}{!teacher.active && <Badge tone="red" className="ml-2 align-middle">inativo</Badge>}{docs?.internship && docs.internship.state !== 'vigente' && <Link href={`${base}?aba=documentos`}><InternBadge s={docs.internship} className="ml-2 align-middle" /></Link>}</h1>
           <p className="text-sm text-tinta-suave">
-            {[teacher.displayName && `“${teacher.displayName}” na grade`, teacher.position?.name, teacher.contractType?.name, teacher.admissionDate && `desde ${formatDateBR(teacher.admissionDate.toISOString().slice(0, 10))}`].filter(Boolean).join(' · ') || 'Cadastro básico'}
+            {[teacher.displayName && `“${teacher.displayName}”${escala ? '' : ' na grade'}`, teacher.position?.name, teacher.contractType?.name, teacher.admissionDate && `desde ${formatDateBR(teacher.admissionDate.toISOString().slice(0, 10))}`].filter(Boolean).join(' · ') || 'Cadastro básico'}
           </p>
           <div className="mt-1.5 flex flex-wrap gap-1">
             {teacher.modalities.map((m) => (
@@ -86,7 +92,7 @@ export default async function FichaPage({ params, searchParams }: {
         </div>
         <div className="flex flex-wrap gap-2 print:hidden">
           {share && <ShareGrade teacherId={id} data={share} autoOpen={sp.compartilhar === '1'} />}
-          <a href={`/grade/imprimir?professor=${id}&data=${date}`} target="_blank" rel="noopener" className={buttonVariants({ variant: 'secondary' })}><Printer /> Imprimir grade dele</a>
+          {!escala && <a href={`/grade/imprimir?professor=${id}&data=${date}`} target="_blank" rel="noopener" className={buttonVariants({ variant: 'secondary' })}><Printer /> Imprimir grade dele</a>}
         </div>
       </div>
 
@@ -102,6 +108,7 @@ export default async function FichaPage({ params, searchParams }: {
       {!tab && <p className="rounded-lg bg-fundo p-4 text-sm text-tinta-suave">Seu perfil vê só o cadastro deste colaborador.</p>}
       {tab === 'aulas' && <AulasSection principal={principal} teacherId={id} teacherName={teacher.displayName || teacher.name} date={date} today={today} />}
       {tab === 'ausencias' && <AusenciasSection principal={principal} teacherId={id} today={today} />}
+      {tab === 'escala' && <EscalaSection principal={principal} teacherId={id} today={today} />}
       {tab === 'documentos' && docs && <DocsTab v={docs} />}
       {tab === 'horas' && <HorasSection principal={principal} teacherId={id} competencia={sp.competencia} base={base} />}
     </>
@@ -155,6 +162,61 @@ async function AusenciasSection({ principal, teacherId, today }: { principal: P;
         others: others.filter((t) => !suggested.includes(t)).map((t) => ({ id: t.id, name: t.name })),
       }}
     />
+  );
+}
+
+/** Equipe 5x2: setores em que está escalado(a) e ausências. Férias se lançam pela escala do setor. */
+async function EscalaSection({ principal, teacherId, today }: { principal: P; teacherId: string; today: string }) {
+  const [members, leaves] = await Promise.all([
+    prisma.wsMember.findMany({ where: { teacherId, active: true }, select: { bond: true, functionName: true, sector: { select: { id: true, name: true } } } }),
+    prisma.leave.findMany({ where: { teacherId, cancelledAt: null, slotId: null }, orderBy: { startDate: 'desc' }, take: 30, select: { id: true, type: true, startDate: true, endDate: true, notes: true } }),
+  ]);
+  const first = members[0]?.sector.id;
+  const canWs = can(principal, 'ws.view');
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <Card className="p-4">
+        <h2 className="mb-1 font-bold text-navy">Férias, faltas e atestados</h2>
+        <p className="mb-3 text-sm text-tinta-suave">Lance pela escala do setor: a ausência entra na montagem da escala do mês (o motor não escala a pessoa nesses dias) e aparece nos alertas, com sugestão de substituto, se a escala já estiver pronta.</p>
+        {canWs && first ? (
+          <Link href={`/escalas-trabalho/ausencias?setor=${first}`} className={buttonVariants()}><Plane /> Lançar férias ou ausência</Link>
+        ) : (
+          <p className="text-sm text-atencao">{first ? 'Seu perfil não acessa as Escalas de Trabalho.' : 'Esta pessoa ainda não está em nenhuma equipe de escala (Escalas de Trabalho → Equipes).'}</p>
+        )}
+        <ul className="mt-4 divide-y divide-borda text-sm">
+          {leaves.map((l) => {
+            const s = fromUtc(l.startDate); const e = fromUtc(l.endDate);
+            return (
+              <li key={l.id} className="flex flex-wrap items-center gap-2 py-2">
+                <Badge tone={l.type === 'FERIAS' ? 'blue' : 'neutral'}>{LEAVE_LABEL[l.type]}</Badge>
+                <span className="font-semibold text-navy">{formatDateBR(s)}{e !== s ? ` a ${formatDateBR(e)}` : ''}</span>
+                {e < today && <span className="text-xs text-tinta-fraca">encerrada</span>}
+                {l.notes && <span className="w-full text-xs text-tinta-suave">{l.notes}</span>}
+              </li>
+            );
+          })}
+          {!leaves.length && <li className="py-2 text-tinta-suave">Nenhuma ausência lançada.</li>}
+        </ul>
+      </Card>
+      <Card className="p-4">
+        <h2 className="mb-3 font-bold text-navy">Escalas</h2>
+        <ul className="space-y-2 text-sm">
+          {members.map((m) => (
+            <li key={m.sector.id} className="flex flex-wrap items-center gap-2">
+              <b className="text-navy">{m.sector.name}</b>
+              <span className="text-xs text-tinta-suave">{[m.functionName, m.bond].filter(Boolean).join(' · ')}</span>
+              {canWs && (
+                <span className="ml-auto flex gap-3 text-xs font-semibold">
+                  <Link href={`/escalas-trabalho?setor=${m.sector.id}`} className="inline-flex items-center gap-1 text-nacao"><CalendarDays className="size-3.5" /> Escala do mês</Link>
+                  <Link href={`/escalas-trabalho/ausencias?setor=${m.sector.id}`} className="inline-flex items-center gap-1 text-nacao"><CalendarRange className="size-3.5" /> Ausências do setor</Link>
+                </span>
+              )}
+            </li>
+          ))}
+          {!members.length && <li className="text-tinta-suave">Fora das escalas.</li>}
+        </ul>
+      </Card>
+    </div>
   );
 }
 
