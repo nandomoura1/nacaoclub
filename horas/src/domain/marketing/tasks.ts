@@ -66,3 +66,21 @@ export function openDependencies(deps: { title: string; column: string }[]): str
 }
 
 export const isOverdue = (t: { dueDate: string | null; column: string }, today: string) => !!t.dueDate && t.dueDate < today && !isDone(t.column);
+
+/** Imagens anexadas aos cartões (sem SVG: pode carregar script). */
+const TASK_IMAGE_MIME: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif' };
+export const TASK_IMAGE_ACCEPT = 'image/png,image/jpeg,image/webp,image/gif';
+export const MAX_TASK_IMAGE_BYTES = 10 * 1024 * 1024;
+export const MAX_TASK_IMAGES = 20;
+
+export function taskImageMime(fileName: string): string | null {
+  return TASK_IMAGE_MIME[fileName.toLowerCase().match(/\.([a-z0-9]{2,5})$/)?.[1] ?? ''] ?? null;
+}
+
+/** Caminho no bucket: tarefas/AAAA-MM/<uuid>-<nome-limpo>.<ext> */
+export function taskImagePath(id: string, fileName: string, now = new Date()): string {
+  const e = fileName.toLowerCase().match(/\.([a-z0-9]{2,5})$/)?.[1] ?? 'png';
+  const clean = fileName.replace(/\.[^.]+$/, '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50) || 'imagem';
+  return `tarefas/${now.toISOString().slice(0, 7)}/${id}-${clean}.${e}`;
+}
+export const TASK_IMAGE_PATH_RE = /^tarefas\/\d{4}-\d{2}\/[0-9a-f-]{36}-[a-z0-9-]+\.(png|jpe?g|webp|gif)$/;

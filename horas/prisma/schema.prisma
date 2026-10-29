@@ -1847,6 +1847,7 @@ model MktTask {
   boardColumn MktBoardColumn?     @relation(fields: [columnId], references: [id], onDelete: SetNull)
   checklist   MktTaskCheckItem[]
   links       MktTaskLink[]
+  attachments MktTaskAttachment[]
   dependsOn   MktTaskDependency[] @relation("TaskDependsOn")
   blocking    MktTaskDependency[] @relation("TaskBlocks")
 
@@ -1880,6 +1881,24 @@ model MktTaskLink {
 
   @@index([taskId])
   @@map("mkt_task_links")
+}
+
+/// Imagem anexada ao cartão do Kanban (arquivo no bucket privado; capa = aparece no cartão).
+model MktTaskAttachment {
+  id          String   @id @default(uuid()) @db.Uuid
+  taskId      String   @map("task_id") @db.Uuid
+  path        String
+  fileName    String   @map("file_name")
+  mime        String
+  sizeBytes   Int      @map("size_bytes")
+  isCover     Boolean  @default(false) @map("is_cover")
+  createdById String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  task MktTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@map("mkt_task_attachments")
 }
 
 model MktTaskDependency {

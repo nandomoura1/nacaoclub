@@ -16,6 +16,7 @@ import {
   addCheckItemAction, addTaskCommentAction, addTaskLinkAction, deleteTaskAction, getTaskAction, removeCheckItemAction, removeTaskLinkAction,
   saveTaskAction, setDependenciesAction, toggleCheckItemAction,
 } from '../actions';
+import { TaskImages } from './TaskImages';
 
 export interface TaskDefaults { campaignId?: string | null; column?: string; columnId?: string; areaKey?: string | null; dueDate?: string | null; title?: string; milestone?: string | null; origin?: 'MANUAL' | 'ANTECEDENCIA' }
 
@@ -98,6 +99,9 @@ export function TaskSheet({ taskId, defaults, options, siblings, canEdit, onClos
           <textarea className="min-h-40 w-full resize-y rounded-lg border border-borda p-2 text-sm" value={f.description} disabled={ro} maxLength={20000} onChange={(e) => set('description', e.target.value)} />
           <p className="text-right text-[11px] text-tinta-fraca">{f.description.length.toLocaleString('pt-BR')}/20.000</p>
         </div>
+        {detail
+          ? <TaskImages taskId={detail.id} images={detail.attachments} canEdit={canEdit} onChange={async () => { await load(detail.id); router.refresh(); }} onError={(e) => setMsg({ error: e })} />
+          : canEdit && <p className="rounded-xl bg-fundo p-3 text-xs text-tinta-suave">Salve a tarefa para anexar imagens.</p>}
         <div className="grid grid-cols-2 gap-2 [&>*]:min-w-0">
           <div className="col-span-2"><Label>Campanha</Label>
             <Select value={f.campaignId} disabled={ro} onChange={(e) => set('campaignId', e.target.value)}>

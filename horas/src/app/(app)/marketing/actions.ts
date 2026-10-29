@@ -9,7 +9,7 @@ import {
 } from '@/server/services/marketing-service';
 import { deleteColumn, reorderColumns, saveColumn } from '@/server/services/mkt-board-service';
 import {
-  addCheckItem, addTaskComment, addTaskLink, deleteTask, getTask, moveTask, removeCheckItem, removeTaskLink, saveTask, setDependencies, toggleCheckItem, type TaskDetail,
+  addCheckItem, addTaskComment, addTaskImage, addTaskLink, deleteTask, getTask, moveTask, removeCheckItem, removeTaskImage, removeTaskLink, saveTask, setDependencies, setTaskCover, startTaskImage, toggleCheckItem, type TaskDetail,
 } from '@/server/services/mkt-task-service';
 import {
   createMeeting, decideMinutes, decideRecommendation, decideTaskSuggestion, generateMinutes, refreshMeetingAgenda, refreshRecommendations, saveMeetingNotes, suggestCampaignTasks,
@@ -89,6 +89,18 @@ export async function addTaskLinkAction(taskId: string, url: string, label: stri
 }
 export async function removeTaskLinkAction(linkId: string): Promise<ActionResult> {
   return runAction(async () => { await removeTaskLink(await getPrincipal(), linkId); refresh(); return undefined; });
+}
+export async function startTaskImageAction(taskId: string, file: { name: string; size: number }): Promise<ActionResult<{ path: string; mime: string; uploadUrl: string }>> {
+  return runAction(async () => startTaskImage(await getPrincipal(), taskId, file));
+}
+export async function addTaskImageAction(taskId: string, input: { path: string; fileName: string }): Promise<ActionResult<string>> {
+  return runAction(async () => { const r = await addTaskImage(await getPrincipal(), taskId, input, await requestMeta()); refresh(); return r; });
+}
+export async function setTaskCoverAction(attachmentId: string, cover: boolean): Promise<ActionResult> {
+  return runAction(async () => { await setTaskCover(await getPrincipal(), attachmentId, cover); refresh(); return undefined; });
+}
+export async function removeTaskImageAction(attachmentId: string): Promise<ActionResult> {
+  return runAction(async () => { await removeTaskImage(await getPrincipal(), attachmentId, await requestMeta()); refresh(); return undefined; });
 }
 export async function setDependenciesAction(taskId: string, ids: string[]): Promise<ActionResult> {
   return runAction(async () => { await setDependencies(await getPrincipal(), taskId, ids, await requestMeta()); refresh(); return undefined; });

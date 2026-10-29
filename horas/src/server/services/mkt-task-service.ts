@@ -7,7 +7,9 @@ import type { RequestMeta } from '@/server/auth/session';
 import { AppError, NotFoundError } from '@/server/errors';
 import { isIsoDate } from '@/domain/dates';
 import { isDone, labelOf, PRIORITIES, TASK_COLUMNS, type TaskColumn } from '@/domain/marketing/constants';
-import { isOverdue, openDependencies, positionBetween } from '@/domain/marketing/tasks';
+import { isOverdue, MAX_TASK_IMAGE_BYTES, MAX_TASK_IMAGES, openDependencies, positionBetween, TASK_IMAGE_PATH_RE, taskImageMime, taskImagePath } from '@/domain/marketing/tasks';
+import { randomUUID } from 'node:crypto';
+import { objectSize, removeObjects, signedReadUrls, signedUploadUrl } from '@/server/storage';
 import { columnFor } from '@/domain/marketing/board';
 import { dt, iso, listColumns } from './marketing-service';
 
@@ -131,9 +133,10 @@ export async function moveTask(principal: Principal | null, id: string, columnId
 export async function deleteTask(principal: Principal | null, id: string, meta: RequestMeta) {
   assertCan(principal, 'mkt.edit');
   await prisma.$transaction(async (tx) => {
-    const t = await tx.mktTask.findUnique({ where: { id } });
+    const t = await tx.mktTask.findUnique({ where: { id }, include: { attachments: { select: { path: true } } } });
     if (!t) throw new NotFoundError('Tarefa não encontrada.');
     await tx.mktTask.delete({ where: { id } });
+    if (t.attachments.length) await removeObjects(t.attachments.map((a) => a.path)).catch(() => undefined);
     await tx.mktComment.deleteMany({ where: { entityType: 'task', entityId: id } });
     await audit(tx, { actorId: principal.id, ...meta }, { action: 'mkt.task_deleted', entityType: 'mkt_task', entityId: id, before: { titulo: t.title, coluna: t.column }, summary: `${principal.name} excluiu a tarefa "${t.title}"` });
   });
@@ -155,8 +158,12 @@ export async function board(principal: Principal | null, today: string, f: Board
     include: {
       area: true, campaign: { select: { id: true, name: true } }, checklist: { select: { done: true } },
       dependsOn: { include: { dependsOn: { select: { column: true } } } },
+      attachments: { select: { path: true, isCover: true } },
     },
   });
+  // Capa do cartão (imagem marcada como capa): URL assinada de 1 hora, em lote.
+  const covers = rows.map((r) => r.attachments.find((a) => a.isCover)?.path).filter((x): x is string => !!x);
+  const coverUrls = covers.length ? await signedReadUrls(covers).catch(() => ({} as Record<string, string>)) : {};
   const [users, columns] = await Promise.all([
     prisma.user.findMany({ where: { id: { in: [...new Set(rows.flatMap((r) => [r.assigneeId, ...r.collaboratorIds]).filter((x): x is string => !!x))] } }, select: { id: true, name: true } }),
     listColumns(),
@@ -168,6 +175,8 @@ export async function board(principal: Principal | null, today: string, f: Board
     assigneeId: t.assigneeId, assignee: t.assigneeId ? names.get(t.assigneeId) ?? null : null,
     collaborators: t.collaboratorIds.map((u) => names.get(u)).filter((x): x is string => !!x),
     checklist: { total: t.checklist.length, done: t.checklist.filter((c) => c.done).length },
+    images: t.attachments.length,
+    cover: (() => { const c = t.attachments.find((a) => a.isCover); return c ? coverUrls[c.path] ?? null : null; })(),
     blocked: t.dependsOn.some((d) => !isDone(d.dependsOn.column)),
     overdue: isOverdue({ dueDate: iso(t.dueDate), column: t.column }, today),
   }));
@@ -181,6 +190,7 @@ export async function getTask(principal: Principal | null, id: string) {
     where: { id },
     include: {
       area: true, campaign: { select: { id: true, name: true } }, checklist: { orderBy: { position: 'asc' } }, links: true, boardColumn: { select: { name: true } },
+      attachments: { orderBy: { createdAt: 'asc' } },
       dependsOn: { include: { dependsOn: { select: { id: true, title: true, column: true } } } },
     },
   });
@@ -190,12 +200,14 @@ export async function getTask(principal: Principal | null, id: string) {
     prisma.auditLog.findMany({ where: { entityType: 'mkt_task', entityId: id }, orderBy: { at: 'desc' }, take: 20, select: { at: true, summary: true } }),
   ]);
   const names = new Map((await prisma.user.findMany({ where: { id: { in: comments.map((c) => c.authorId).filter((x): x is string => !!x) } }, select: { id: true, name: true } })).map((u) => [u.id, u.name]));
+  const urls = t.attachments.length ? await signedReadUrls(t.attachments.map((a) => a.path)).catch(() => ({} as Record<string, string>)) : {};
   return {
     id: t.id, title: t.title, description: t.description, campaignId: t.campaignId, campaign: t.campaign, eventId: t.eventId,
     areaKey: t.area?.key ?? null, assigneeId: t.assigneeId, collaboratorIds: t.collaboratorIds, dueDate: iso(t.dueDate), priority: t.priority,
     column: t.column, columnName: t.boardColumn?.name ?? null, tags: t.tags, origin: t.origin, milestone: t.milestone,
     checklist: t.checklist.map((c) => ({ id: c.id, text: c.text, done: c.done })),
     links: t.links.map((l) => ({ id: l.id, url: l.url, label: l.label })),
+    attachments: t.attachments.map((a) => ({ id: a.id, fileName: a.fileName, sizeBytes: a.sizeBytes, isCover: a.isCover, url: urls[a.path] ?? null, at: a.createdAt.toISOString() })),
     dependsOn: t.dependsOn.map((d) => ({ id: d.dependsOn.id, title: d.dependsOn.title, done: isDone(d.dependsOn.column) })),
     comments: comments.map((c) => ({ id: c.id, body: c.body, at: c.createdAt.toISOString(), author: c.authorId ? names.get(c.authorId) ?? null : null })),
     history: history.map((h) => ({ at: h.at.toISOString(), summary: h.summary })),
@@ -239,6 +251,64 @@ export async function addTaskLink(principal: Principal | null, taskId: string, u
     await touch(tx, principal, taskId, meta, 'anexou um link');
   });
 }
+// ── Imagens do cartão ─────────────────────────────────────────
+
+/** 1º passo: URL assinada para o navegador enviar a imagem direto ao bucket. */
+export async function startTaskImage(principal: Principal | null, taskId: string, file: { name: string; size: number }) {
+  assertCan(principal, 'mkt.edit');
+  const mime = taskImageMime(file.name);
+  if (!mime) throw new AppError('Envie uma imagem PNG, JPG, WEBP ou GIF.');
+  if (file.size <= 0) throw new AppError('Arquivo vazio.');
+  if (file.size > MAX_TASK_IMAGE_BYTES) throw new AppError('Imagem acima de 10 MB. Exporte em tamanho menor.');
+  const n = await prisma.mktTaskAttachment.count({ where: { taskId } });
+  if (n >= MAX_TASK_IMAGES) throw new AppError(`O cartão já tem ${MAX_TASK_IMAGES} imagens. Exclua alguma antes.`);
+  if (!(await prisma.mktTask.findUnique({ where: { id: taskId }, select: { id: true } }))) throw new NotFoundError('Tarefa não encontrada.');
+  const path = taskImagePath(randomUUID(), file.name);
+  return { path, mime, uploadUrl: await signedUploadUrl(path) };
+}
+
+/** 2º passo: confirma que a imagem chegou e anexa. A primeira vira a capa do cartão. */
+export async function addTaskImage(principal: Principal | null, taskId: string, input: { path: string; fileName: string }, meta: RequestMeta) {
+  assertCan(principal, 'mkt.edit');
+  if (!TASK_IMAGE_PATH_RE.test(input.path)) throw new AppError('Envio inválido.');
+  const mime = taskImageMime(input.path);
+  const size = await objectSize(input.path);
+  if (!mime || size === null) throw new AppError('A imagem não chegou ao armazenamento. Envie de novo.');
+  return prisma.$transaction(async (tx) => {
+    const hasCover = await tx.mktTaskAttachment.count({ where: { taskId, isCover: true } });
+    const a = await tx.mktTaskAttachment.create({ data: { taskId, path: input.path, fileName: String(input.fileName).slice(0, 200), mime, sizeBytes: size, isCover: !hasCover, createdById: principal.id } });
+    await touch(tx, principal, taskId, meta, `anexou a imagem "${a.fileName}"`);
+    return a.id;
+  });
+}
+
+/** Define (ou tira, com `cover = false`) a imagem de capa do cartão. */
+export async function setTaskCover(principal: Principal | null, attachmentId: string, cover: boolean) {
+  assertCan(principal, 'mkt.edit');
+  const a = await prisma.mktTaskAttachment.findUnique({ where: { id: attachmentId } });
+  if (!a) throw new NotFoundError('Imagem não encontrada.');
+  await prisma.$transaction([
+    prisma.mktTaskAttachment.updateMany({ where: { taskId: a.taskId }, data: { isCover: false } }),
+    ...(cover ? [prisma.mktTaskAttachment.update({ where: { id: attachmentId }, data: { isCover: true } })] : []),
+  ]);
+}
+
+export async function removeTaskImage(principal: Principal | null, attachmentId: string, meta: RequestMeta) {
+  assertCan(principal, 'mkt.edit');
+  const a = await prisma.mktTaskAttachment.findUnique({ where: { id: attachmentId } });
+  if (!a) throw new NotFoundError('Imagem não encontrada.');
+  await prisma.$transaction(async (tx) => {
+    await tx.mktTaskAttachment.delete({ where: { id: attachmentId } });
+    // Era a capa: a próxima imagem do cartão assume.
+    if (a.isCover) {
+      const next = await tx.mktTaskAttachment.findFirst({ where: { taskId: a.taskId }, orderBy: { createdAt: 'asc' } });
+      if (next) await tx.mktTaskAttachment.update({ where: { id: next.id }, data: { isCover: true } });
+    }
+    await touch(tx, principal, a.taskId, meta, `excluiu a imagem "${a.fileName}"`);
+  });
+  await removeObjects([a.path]).catch(() => undefined);
+}
+
 export async function removeTaskLink(principal: Principal | null, linkId: string) {
   assertCan(principal, 'mkt.edit');
   await prisma.mktTaskLink.delete({ where: { id: linkId } });
