@@ -9,7 +9,9 @@ import { Card } from '@/components/ui/card';
 import { FormMessage } from '@/components/ui/alert';
 import { Input, Label, Select } from '@/components/ui/input';
 import { Sheet } from '@/components/ui/sheet';
-import { WEEKDAYS } from '@/domain/dates';
+import { addDays, formatDateBR, WEEKDAYS } from '@/domain/dates';
+import { cycleIndex, mondayOf } from '@/domain/escalas/calendar';
+import { todayIso } from '@/lib/today';
 import { BOND_LABEL, hhmm } from '@/domain/escalas/labels';
 import type { Bond, MemberHours, Mode, Shift3 } from '@/domain/escalas/types';
 import { removeMemberAction, saveMemberAction, setRotationAction } from '../actions';
@@ -62,7 +64,7 @@ export function TeamClient({ sectorId, members, people, canEdit, cycleRef }: { s
               )}
             </div>
             <p className="mt-1 text-xs text-tinta">
-              {m.hours.week?.cycle ? <span>Rodízio de {m.hours.week.cycle.length} semanas · semana 1: {weekText(m.hours.week.cycle[0]!)}</span>
+              {m.hours.week?.cycle ? <CycleText cycle={m.hours.week.cycle} cycleRef={cycleRef} />
                 : m.hours.week ? <span>Grade semanal{m.hours.week.B ? ' A/B' : ''}: {weekText(m.hours.week.A)}{m.hours.week.B ? <> · <b>B:</b> {weekText(m.hours.week.B)}</> : null}</span>
                 : m.hours.base ? `${hhmm(m.hours.base[0])}–${hhmm(m.hours.base[1])} (intervalo ${m.hours.base[2]} min)` : m.mode === 'COBERTURA' ? 'Sob demanda (cobre postos descobertos)' : <span className="text-atencao">sem horário habitual</span>}
               {m.hours['6'] && ` · sáb ${hhmm(m.hours['6'][0])}–${hhmm(m.hours['6'][1])}`}
@@ -163,6 +165,24 @@ function MemberSheet({ sectorId, member, people, onClose, onSaved }: { sectorId:
       <div><Label htmlFor="m-obs">Observações e restrições</Label><Input id="m-obs" value={v.notes} maxLength={500} onChange={(e) => set('notes', e.target.value)} /></div>
       <FormMessage error={error} />
     </Sheet>
+  );
+}
+
+/** Rodízio: mostra a semana do ciclo que vale em cada data (a semana 1 começa na referência do setor). */
+function CycleText({ cycle, cycleRef }: { cycle: (readonly [number, number, number] | null)[][]; cycleRef: string }) {
+  const monday = mondayOf(todayIso());
+  const weeks = cycle.map((_, k) => { const d = addDays(monday, k * 7); return { d, i: cycleIndex(d, cycleRef, cycle.length) }; });
+  const now = weeks[0]!;
+  return (
+    <span>
+      Rodízio de {cycle.length} semanas · <b>semana de {formatDateBR(now.d).slice(0, 5)} = semana {now.i + 1}</b>: {weekText(cycle[now.i]!)}
+      <details className="mt-1">
+        <summary className="cursor-pointer font-semibold text-nacao">Ver as próximas semanas</summary>
+        <ul className="mt-1 space-y-0.5">
+          {weeks.slice(1).map(({ d, i }) => <li key={d}><b>{formatDateBR(d).slice(0, 5)}</b> (semana {i + 1}): {weekText(cycle[i]!)}</li>)}
+        </ul>
+      </details>
+    </span>
   );
 }
 
