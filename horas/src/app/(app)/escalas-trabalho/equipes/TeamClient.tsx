@@ -42,7 +42,7 @@ export function TeamClient({ sectorId, members, people, canEdit, cycleRef }: { s
         <p className="text-sm text-tinta-suave">{members.filter((m) => m.active).length} ativo(s)</p>
         {canEdit && (
           <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" onClick={() => setRotation(true)}><RefreshCw /> Montar rodízio</Button>
+            <Button variant="secondary" onClick={() => setRotation(true)}><RefreshCw /> Montar rodízio das folgas</Button>
             <Button onClick={() => setOpen('new')}><Plus /> Adicionar colaborador</Button>
           </div>
         )}
@@ -168,14 +168,15 @@ function MemberSheet({ sectorId, member, people, onClose, onSaved }: { sectorId:
   );
 }
 
-/** Rodízio: mostra a semana do ciclo que vale em cada data (a semana 1 começa na referência do setor). */
+/** Rodízio das folgas: horário fixo da pessoa + o padrão de folga que vale em cada semana. */
 function CycleText({ cycle, cycleRef }: { cycle: (readonly [number, number, number] | null)[][]; cycleRef: string }) {
   const monday = mondayOf(todayIso());
   const weeks = cycle.map((_, k) => { const d = addDays(monday, k * 7); return { d, i: cycleIndex(d, cycleRef, cycle.length) }; });
   const now = weeks[0]!;
   return (
     <span>
-      Rodízio de {cycle.length} semanas · <b>semana de {formatDateBR(now.d).slice(0, 5)} = semana {now.i + 1}</b>: {weekText(cycle[now.i]!)}
+      <b>Horário fixo:</b> {weekText(cycle[0]!)}
+      <br /><b>Rodízio das folgas ({cycle.length} semanas) · semana de {formatDateBR(now.d).slice(0, 5)}:</b> {weekText(cycle[now.i]!)}
       <details className="mt-1">
         <summary className="cursor-pointer font-semibold text-nacao">Ver as próximas semanas</summary>
         <ul className="mt-1 space-y-0.5">
@@ -186,7 +187,7 @@ function CycleText({ cycle, cycleRef }: { cycle: (readonly [number, number, numb
   );
 }
 
-/** Rodízio de posições: cada pessoa começa na grade atual (posição) e avança uma posição por semana. */
+/** Rodízio das folgas: cada pessoa mantém o horário fixo; o padrão de folga avança uma posição por semana. */
 function RotationSheet({ sectorId, members, cycleRef, onClose, onSaved }: { sectorId: string; members: TeamMember[]; cycleRef: string; onClose: () => void; onSaved: () => void }) {
   const eligible = members.filter((m) => m.hours.week);
   const inRotation = eligible.filter((m) => m.hours.week?.cycle);
@@ -198,9 +199,9 @@ function RotationSheet({ sectorId, members, cycleRef, onClose, onSaved }: { sect
   const move = (i: number, d: -1 | 1) => { const o = [...order]; const j = i + d; if (j < 0 || j >= o.length) return; [o[i], o[j]] = [o[j]!, o[i]!]; setOrder(o); };
   const save = (ids: string[]) => start(async () => { const r = await setRotationAction(sectorId, ids); if (!r.ok) setError(r.error); else onSaved(); });
   return (
-    <Sheet title="Montar rodízio" onClose={onClose} onSubmit={(e) => { e.preventDefault(); save(order); }}
-      footer={<><Button type="submit" disabled={pending || order.length < 2}>{pending ? 'Salvando…' : `Montar rodízio de ${order.length} semanas`}</Button>{inRotation.length > 0 && <Button type="button" variant="ghost" disabled={pending} onClick={() => confirm('Desfazer o rodízio? Cada pessoa fica com a grade da semana 1.') && save([])}>Desfazer rodízio</Button>}</>}>
-      <p className="text-sm text-tinta-suave">A grade atual de cada pessoa vira uma <b>posição</b>. Toda semana cada um avança para a posição de quem está abaixo na lista (o último volta para a primeira). Em {order.length} semanas todos passam por todas as posições, inclusive sábado e domingo.</p>
+    <Sheet title="Montar rodízio das folgas" onClose={onClose} onSubmit={(e) => { e.preventDefault(); save(order); }}
+      footer={<><Button type="submit" disabled={pending || order.length < 2}>{pending ? 'Salvando…' : `Montar rodízio das folgas (${order.length} semanas)`}</Button>{inRotation.length > 0 && <Button type="button" variant="ghost" disabled={pending} onClick={() => confirm('Desfazer o rodízio? Cada pessoa fica com o horário e as folgas fixos dela, toda semana.') && save([])}>Desfazer rodízio</Button>}</>}>
+      <p className="text-sm text-tinta-suave">Gira <b>só as folgas</b>: o horário de segunda a sexta de cada pessoa é sempre o dela (grade fixa). Toda semana cada um passa para o padrão de folga de quem está abaixo na lista (ex.: folga quinta ⇒ trabalha domingo; folga sexta ⇒ trabalha sábado; trabalha quinta e sexta ⇒ folga sábado e domingo). No sábado/domingo trabalhado, faz o turno de fim de semana do padrão. Se um posto ficar sem ninguém (ex.: quem abre às 05h de folga), a escala sinaliza para ajuste manual.</p>
       <p className="text-xs text-tinta-suave">Semana 1 = semana de {cycleRef.split('-').reverse().join('/')} (data de referência do setor, em Pré-requisitos). Depois de montar, gere a escala de novo.</p>
       <ol className="space-y-1">
         {order.map((id, i) => {

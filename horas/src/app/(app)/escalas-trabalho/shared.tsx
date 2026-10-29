@@ -151,7 +151,7 @@ export function WeekPatternEditor({ value, onChange }: { value: WeekCycle; onCha
     const k = Math.min(tab, n - 1);
     return (
       <div className="space-y-2">
-        <p className="text-xs text-tinta-suave">Rodízio de {n} semanas (a semana 1 começa na data de referência do setor). Para refazer a ordem, use “Montar rodízio”.</p>
+        <p className="text-xs text-tinta-suave">Rodízio das folgas de {n} semanas (a semana 1 é a grade fixa e começa na data de referência do setor). Para refazer, use “Montar rodízio das folgas”.</p>
         <div className="flex flex-wrap gap-1">
           {value.cycle.map((_, i) => <button key={i} type="button" onClick={() => setTab(i)} className={cn('rounded-md border px-2.5 py-1 text-xs font-bold', i === k ? 'border-nacao bg-nacao text-white' : 'border-borda text-tinta-suave')}>Semana {i + 1}</button>)}
         </div>

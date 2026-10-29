@@ -39,10 +39,11 @@ describe.skipIf(!hasDb)('Modelos iniciais das escalas', () => {
     expect(clt.validatedAt).toBeNull();
   });
 
-  it('Recepção: rodízio de 6 posições — folga quinta ⇒ domingo; folga sexta ⇒ sábado; qui+sex ⇒ folga no fim de semana', async () => {
+  it('Recepção: rodízio das folgas — folga quinta ⇒ domingo; folga sexta ⇒ sábado; qui+sex ⇒ folga no fim de semana; horário de seg–sex sempre o fixo', async () => {
     const v = await view('Recepção');
     const people = ['Duda', 'Lawana', 'Brenda', 'Manu', 'Débora', 'Igor'].map((n) => memberId(v, n));
     const k = (id: string, d: string) => v.grid[id]![d]!.kind;
+    const fixedTue = new Map(people.map((id) => [id, v.members.find((m) => m.id === id)!.hours.week!.cycle![0]![1]![0]]));
     const feriado = new Set(v.days.filter((d) => d.holiday && d.holiday.scope !== 'FACULTATIVO').map((d) => d.date));
     // Semanas inteiras do mês sem feriado em dia útil (no feriado só uma pessoa trabalha).
     for (const w of v.month.weeks.filter((x) => x.days.every((d) => d >= v.month.first && d <= v.month.last && !feriado.has(d)))) {
@@ -59,13 +60,15 @@ describe.skipIf(!hasDb)('Modelos iniciais das escalas', () => {
       expect(people.filter((id) => k(id, sex) === 'TRABALHO').length).toBe(4);
       // Cada pessoa: 5 dias e 2 folgas por semana.
       for (const id of people) expect(w.days.filter((d) => k(id, d) === 'TRABALHO').length).toBe(5);
+      // Segunda a quarta (todos trabalham): cada um no próprio horário fixo, igual em todas as semanas.
+      for (const id of people) expect(v.grid[id]![w.days[1]!]!.startMin).toBe(fixedTue.get(id));
     }
     // Domingo gira: pessoas diferentes em domingos seguidos; ninguém mais em todos.
     const sundays = v.month.days.filter((d) => new Date(`${d}T12:00:00Z`).getUTCDay() === 0);
     const who = sundays.map((d) => people.find((id) => k(id, d) === 'TRABALHO'));
     expect(new Set(who).size).toBe(who.length);
-    expect(v.analysis!.alerts.filter((a) => a.level === 'CONFLITO')).toEqual([]);
-    expect(v.analysis!.uncovered).toEqual([]);
+    // Horário não muda para cobrir furo: quando quem abre às 05h está de folga, o posto fica sinalizado (ajuste manual).
+    expect(v.analysis!.alerts.filter((a) => a.level === 'CONFLITO').every((a) => a.code === 'DESCOBERTO' && /Abertura \(05:00/.test(a.message))).toBe(true);
   });
 
   it('Recepção no feriado: horário próprio 07–14, uma pessoa, em rodízio (cada feriado com uma pessoa diferente) e sempre para confirmar', async () => {

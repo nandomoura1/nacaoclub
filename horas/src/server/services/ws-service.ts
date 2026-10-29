@@ -329,9 +329,9 @@ export async function removeMember(principal: P | null, sectorId: string, id: st
 }
 
 /**
- * Monta o rodízio: as pessoas escolhidas (na ordem) começam na grade atual de
- * cada uma (semana 1 = semana de referência do setor) e avançam uma posição
- * por semana. `memberIds` vazio desfaz o rodízio de todo o setor (fica a grade da semana 1).
+ * Monta o rodízio das folgas: as pessoas escolhidas (na ordem) começam na grade fixa
+ * de cada uma (semana 1 = semana de referência do setor) e, a cada semana, passam ao
+ * padrão de folga do próximo — sempre no próprio horário de segunda a sexta. `memberIds` vazio desfaz o rodízio de todo o setor (fica a grade da semana 1).
  */
 export async function setRotation(principal: P | null, sectorId: string, memberIds: string[], meta: RequestMeta) {
   assertCan(principal, 'ws.edit');
