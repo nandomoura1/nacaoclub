@@ -65,6 +65,11 @@ Commits: mensagem em português, explicando o porquê. Sem identificador de mode
 
 ## Decisões de negócio já tomadas (não reverter sem pedir)
 
+**Permissões das Escalas 5x2**: Líder e Coordenador veem e **geram** escalas de **todos os setores**
+(`ws.all_sectors`); aprovar/publicar (`ws.publish`), funcionamento da Nação e parâmetros legais
+(`ws.admin`) ficam com a gestão (Administrador, DP/Financeiro). Henrique (líder comercial) está na
+equipe da Recepção sem horário fixo e fora da geração automática: escalado à mão para cobrir furos.
+
 **Colaboradores**: `Teacher.team` = `PROFESSOR` (área fim, horista, grade de aulas) ou `ESCALA`
 (área meio, escala 5x2). Listas da Gestão de Horas mostram só PROFESSOR.
 

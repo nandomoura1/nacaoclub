@@ -33,7 +33,8 @@ const ctx = (p: P, meta: RequestMeta) => ({ actorId: p.id, ...meta });
 
 /** Diretoria/DP (ws.admin) vê todos os setores; o líder, os setores da Gestão de Processos que lidera. */
 export async function sectorScope(p: P, db: Tx = prisma): Promise<string[] | null> {
-  if (can(p, 'ws.admin')) return null;
+  // Gestão (ws.admin) e quem gera escala de todos os setores (líder/coordenador) veem todos.
+  if (can(p, 'ws.admin') || can(p, 'ws.all_sectors')) return null;
   const rows = await db.wsSector.findMany({ where: { procSector: { leaderId: p.id } }, select: { id: true } });
   return rows.map((r) => r.id);
 }

@@ -32,6 +32,9 @@ describe.skipIf(!hasDb)('Escalas de Trabalho 5x2', () => {
     await prisma.holiday.deleteMany({ where: { date: range, occurrences: { none: {} } } });
     await ensureCatalog();
     admin = await makeUser('ADMIN'); lider = await makeUser('LIDER'); outro = await makeUser('LIDER');
+    // Papel restrito ao setor que lidera (sem "todos os setores"): como um papel personalizado.
+    const restrito = (u: typeof lider) => ({ ...u, principal: { ...u.principal, permissions: new Set([...u.principal.permissions].filter((k) => k !== 'ws.all_sectors')) } });
+    lider = restrito(lider); outro = restrito(outro);
     const proc = await saveProcSector(admin.principal, null, { name: `Cozinha ${tag}`, description: null, leaderId: lider.principal.id, taskUrl: null, sortOrder: 90, active: true }, META);
     sector = await saveSector(admin.principal, null, { name: `Cozinha ${tag}`, procSectorId: proc, hours: OPEN, cycleRef: '2026-10-07', notes: null }, META);
     // Parâmetros CLT próprios deste teste (44h): outros testes cadastram vigências diferentes no mesmo banco.
@@ -39,7 +42,18 @@ describe.skipIf(!hasDb)('Escalas de Trabalho 5x2', () => {
     await saveLegal(admin.principal, null, CLT, META);
   });
 
-  it('líder monta a equipe do setor que lidera; outro líder não enxerga', async () => {
+  it('líder e coordenador (papéis do sistema) veem e geram escalas de todos os setores, mas não aprovam', async () => {
+    const lid = await makeUser('LIDER');
+    const coord = await makeUser('COORDENADOR');
+    for (const u of [lid, coord]) {
+      expect((await listSectors(u.principal)).map((x) => x.id)).toContain(sector);
+      expect(u.principal.permissions.has('ws.publish')).toBe(false);
+      expect(u.principal.permissions.has('ws.admin')).toBe(false);
+    }
+    await expect(saveSector(coord.principal, null, { name: 'X', hours: {}, cycleRef: '2026-10-05' }, META)).rejects.toBeInstanceOf(AuthorizationError);
+  });
+
+  it('papel restrito ao setor: líder monta a equipe do setor que lidera; outro líder não enxerga', async () => {
     await expect(saveSector(lider.principal, null, { name: 'X', hours: {}, cycleRef: '2026-10-05' }, META)).rejects.toBeInstanceOf(AuthorizationError);
     expect((await listSectors(lider.principal)).map((s) => s.id)).toEqual([sector]);
     expect(await listSectors(outro.principal)).toEqual([]);

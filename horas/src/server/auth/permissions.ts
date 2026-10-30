@@ -64,6 +64,7 @@ export const PERMISSIONS = {
   'ws.view': 'Escalas de Trabalho 5x2: ver as escalas mensais dos setores que acompanha',
   'ws.edit': 'Escalas de Trabalho 5x2: montar equipe, pré-requisitos e ausências, gerar e editar o rascunho (setores que lidera)',
   'ws.publish': 'Escalas de Trabalho 5x2: aprovar, publicar e reabrir escalas',
+  'ws.all_sectors': 'Escalas de Trabalho 5x2: ver e gerar as escalas de todos os setores (sem aprovar/publicar)',
   'ws.admin': 'Escalas de Trabalho 5x2: todos os setores, funcionamento da Nação e parâmetros legais (DP)',
 } as const;
 
@@ -104,6 +105,9 @@ export const SYSTEM_ROLES: Record<
       'duty.edit',
       'whatsapp.send',
       'edu.view',
+      'ws.view',
+      'ws.edit',
+      'ws.all_sectors',
     ],
   },
   CONSULTA: {
@@ -145,7 +149,7 @@ export const SYSTEM_ROLES: Record<
   LIDER: {
     name: 'Líder de setor',
     description: 'Acompanha e atualiza as demandas do próprio setor (Gestão de Processos), registra atas, publica materiais na Universidade Nação, cadastra colaboradores, cuida dos documentos da equipe (inclusive atestados), lança faltas, folgas e afastamentos, monta a grade e a escala de fim de semana/feriados das próprias áreas e vê a grade de todas; monta a escala mensal 5x2 dos setores que lidera (aprovar e publicar fica com a gestão). Combine com o perfil da função.',
-    permissions: ['proc.view', 'proc.edit', 'edu.view', 'edu.edit', 'teacher.view', 'teacher.edit', 'teacher.docs', 'schedule.view', 'schedule.view_all', 'schedule.edit', 'occurrence.exception', 'leave.manage', 'duty.edit', 'ws.view', 'ws.edit'],
+    permissions: ['proc.view', 'proc.edit', 'edu.view', 'edu.edit', 'teacher.view', 'teacher.edit', 'teacher.docs', 'schedule.view', 'schedule.view_all', 'schedule.edit', 'occurrence.exception', 'leave.manage', 'duty.edit', 'ws.view', 'ws.edit', 'ws.all_sectors'],
   },
 };
 
