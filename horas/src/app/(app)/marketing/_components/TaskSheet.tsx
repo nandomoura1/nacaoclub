@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, ExternalLink, Link2, ListChecks, MessageSquare, Plus, Save, Trash2, X } from 'lucide-react';
+import { Check, Copy, ExternalLink, Link2, ListChecks, MessageCircle, MessageSquare, Plus, Save, Trash2, X } from 'lucide-react';
 import { Sheet } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { FormMessage } from '@/components/ui/alert';
@@ -17,6 +17,28 @@ import {
   saveTaskAction, setDependenciesAction, toggleCheckItemAction,
 } from '../actions';
 import { TaskImages } from './TaskImages';
+
+/** Link direto do cartão (abre o Kanban com a tarefa aberta) e compartilhamento no WhatsApp. */
+function ShareTask({ detail, people }: { detail: TaskDetail; people: { id: string; name: string }[] }) {
+  const [copied, setCopied] = useState(false);
+  const url = typeof window === 'undefined' ? '' : `${window.location.origin}/marketing/kanban?tarefa=${detail.id}`;
+  const who = people.find((p) => p.id === detail.assigneeId)?.name;
+  const text = [
+    `📌 *${detail.title}*`,
+    [detail.columnName ?? labelOf(TASK_COLUMNS, detail.column), detail.dueDate ? `prazo ${detail.dueDate.split('-').reverse().join('/')}` : null, who ? `resp. ${who}` : null].filter(Boolean).join(' · '),
+    detail.campaign ? `Campanha: ${detail.campaign.name}` : null,
+    url,
+  ].filter(Boolean).join('\n');
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { prompt('Copie o link:', url); }
+  };
+  return (
+    <div className="flex flex-wrap gap-2">
+      <a href={`https://wa.me/?text=${encodeURIComponent(text)}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-borda bg-white px-3 py-1.5 text-xs font-semibold text-[#128C7E] hover:bg-fundo"><MessageCircle className="size-4" /> Enviar no WhatsApp</a>
+      <button type="button" onClick={copy} className="inline-flex items-center gap-1.5 rounded-lg border border-borda bg-white px-3 py-1.5 text-xs font-semibold text-navy hover:bg-fundo">{copied ? <Check className="size-4 text-sucesso" /> : <Copy className="size-4" />} {copied ? 'Link copiado' : 'Copiar link'}</button>
+    </div>
+  );
+}
 
 export interface TaskDefaults { campaignId?: string | null; column?: string; columnId?: string; areaKey?: string | null; dueDate?: string | null; title?: string; milestone?: string | null; origin?: 'MANUAL' | 'ANTECEDENCIA' }
 
@@ -93,6 +115,7 @@ export function TaskSheet({ taskId, defaults, options, siblings, canEdit, onClos
       }>
       <div className="space-y-3">
         <FormMessage error={msg.error} success={msg.ok} />
+        {detail && <ShareTask detail={detail} people={options.people} />}
         <div><Label>Título</Label><Input value={f.title} disabled={ro} onChange={(e) => set('title', e.target.value)} required /></div>
         <div>
           <Label>Descrição</Label>

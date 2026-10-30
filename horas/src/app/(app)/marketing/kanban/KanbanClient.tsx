@@ -143,12 +143,19 @@ function useBoardNav(columns: BoardColumn[]) {
   return { ref, visible, edges, by, go, panHandlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp } };
 }
 
-export function KanbanClient({ tasks: initial, columns, options, canEdit }: { tasks: BoardTask[]; columns: BoardColumn[]; options: MktOptions; canEdit: boolean }) {
+export function KanbanClient({ tasks: initial, columns, options, canEdit, openId }: { tasks: BoardTask[]; columns: BoardColumn[]; options: MktOptions; canEdit: boolean; openId: string | null }) {
   const router = useRouter();
   const [tasks, setTasks] = useState(initial);
   const [syncKey, setSyncKey] = useState(initial);
   if (syncKey !== initial) { setSyncKey(initial); setTasks(initial); }
-  const [open, setOpen] = useState<{ id: string | null; defaults?: TaskDefaults } | null>(null);
+  // Link do cartão (?tarefa=…) abre a tarefa; abrir/fechar atualiza o endereço para compartilhar.
+  const [open, setOpenState] = useState<{ id: string | null; defaults?: TaskDefaults } | null>(openId ? { id: openId } : null);
+  const setOpen = (v: { id: string | null; defaults?: TaskDefaults } | null) => {
+    setOpenState(v);
+    const u = new URL(window.location.href);
+    if (v?.id) u.searchParams.set('tarefa', v.id); else u.searchParams.delete('tarefa');
+    window.history.replaceState(null, '', u);
+  };
   const [active, setActive] = useState<BoardTask | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [, start] = useTransition();

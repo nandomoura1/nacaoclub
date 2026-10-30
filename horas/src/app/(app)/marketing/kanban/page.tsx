@@ -15,7 +15,7 @@ import { NewTaskButton } from './NewTaskButton';
 
 export const metadata: Metadata = { title: 'Kanban de Marketing' };
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ campanha?: string; area?: string; responsavel?: string; q?: string; tag?: string; atrasadas?: string }> }) {
+export default async function Page({ searchParams }: { searchParams: Promise<{ campanha?: string; area?: string; responsavel?: string; q?: string; tag?: string; atrasadas?: string; tarefa?: string }> }) {
   const principal = await requirePrincipal();
   if (!can(principal, 'mkt.view')) redirect('/hoje');
   const sp = await searchParams;
@@ -39,7 +39,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ c
         <Button type="submit" size="sm" variant="secondary">Filtrar</Button>
         {filtered && <Link href="/marketing/kanban" className="text-xs font-semibold text-nacao">limpar</Link>}
       </form>
-      <KanbanClient tasks={tasks} columns={columns} options={options} canEdit={canEdit} />
+      <KanbanClient tasks={tasks} columns={columns} options={options} canEdit={canEdit} openId={uuid(sp.tarefa) ?? null} />
     </>
   );
 }
