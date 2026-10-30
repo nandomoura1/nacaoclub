@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Category } from '@/types/domain';
 import { CATEGORIES, CATEGORY_LABEL } from '@/types/domain';
 import type { Snapshot } from '@/services/snapshot';
-import { buildLeaderboard } from '@/lib/scoring/build';
+import { leaderboardDoSnapshot } from '@/lib/scoring/build';
 import { standingsByCategory } from '@/lib/scoring/overall';
 import { useLiveSnapshot } from '@/hooks/useLiveSnapshot';
 import { BrandLogo } from '@/components/BrandLogo';
@@ -47,13 +47,7 @@ export function DisplayLeaderboard({ initial }: { initial: Snapshot }) {
 
   const board = useMemo(
     () =>
-      buildLeaderboard({
-        teams: snapshot.teams,
-        wod1: snapshot.wod1,
-        wod2: snapshot.wod2,
-        wod3: snapshot.wod3,
-        settings: snapshot.settings,
-      }),
+      leaderboardDoSnapshot(snapshot),
     [snapshot],
   );
 
@@ -151,15 +145,15 @@ export function DisplayLeaderboard({ initial }: { initial: Snapshot }) {
                 <th scope="col" className="px-[0.8vw] pb-[0.8vh] text-left font-display text-[0.85vw] font-bold tracking-wider uppercase">
                   Dupla
                 </th>
-                <th scope="col" className="w-[7vw] px-[0.8vw] pb-[0.8vh] text-right font-display text-[0.85vw] font-bold tracking-wider uppercase">
-                  WOD 1
-                </th>
-                <th scope="col" className="w-[7vw] px-[0.8vw] pb-[0.8vh] text-right font-display text-[0.85vw] font-bold tracking-wider uppercase">
-                  WOD 2
-                </th>
-                <th scope="col" className="w-[7vw] px-[0.8vw] pb-[0.8vh] text-right font-display text-[0.85vw] font-bold tracking-wider uppercase">
-                  WOD 3
-                </th>
+                {snapshot.wods.map((w) => (
+                  <th
+                    key={w.id}
+                    scope="col"
+                    className="w-[7vw] px-[0.8vw] pb-[0.8vh] text-right font-display text-[0.85vw] font-bold tracking-wider uppercase"
+                  >
+                    WOD {w.numero}
+                  </th>
+                ))}
                 <th scope="col" className="w-[10vw] px-[0.8vw] pb-[0.8vh] text-right font-display text-[0.85vw] font-bold tracking-wider uppercase">
                   Total
                 </th>
@@ -217,9 +211,15 @@ export function DisplayLeaderboard({ initial }: { initial: Snapshot }) {
                       </span>
                     </td>
 
-                    <DisplayPoints value={row.wod1?.hasResult ? row.wod1.points : null} />
-                    <DisplayPoints value={row.wod2?.hasResult ? row.wod2.points : null} />
-                    <DisplayPoints value={row.wod3?.hasResult ? row.wod3.points : null} />
+                    {snapshot.wods.map((w) => {
+                      const score = row.wods[w.id];
+                      return (
+                        <DisplayPoints
+                          key={w.id}
+                          value={score?.hasResult ? score.points : null}
+                        />
+                      );
+                    })}
 
                     <td className="px-[0.8vw] py-[0.9vh] text-right">
                       <span className="tnum font-display text-[2.8vw] leading-none font-black">

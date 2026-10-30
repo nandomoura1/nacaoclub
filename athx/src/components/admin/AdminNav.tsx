@@ -3,18 +3,29 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-const LINKS: readonly { href: string; label: string; exact?: boolean }[] = [
+const FIXOS: readonly { href: string; label: string; exact?: boolean }[] = [
   { href: '/admin', label: 'Painel', exact: true },
   { href: '/admin/teams', label: 'Duplas' },
-  { href: '/admin/wod/1', label: 'WOD 1' },
-  { href: '/admin/wod/2', label: 'WOD 2' },
-  { href: '/admin/wod/3', label: 'WOD 3' },
+];
+
+const FINAIS: readonly { href: string; label: string; exact?: boolean }[] = [
   { href: '/admin/results', label: 'Conferência' },
+  { href: '/admin/wods', label: 'WODs' },
   { href: '/admin/settings', label: 'Configurações' },
 ];
 
-export function AdminNav() {
+/**
+ * As abas de lançamento saem dos WODs do evento, não de uma lista fixa.
+ * Cadastrar um quarto workout faz a aba aparecer sozinha.
+ */
+export function AdminNav({ wods = [] }: { wods?: { numero: number; nome: string }[] }) {
   const pathname = usePathname();
+
+  const LINKS: { href: string; label: string; exact?: boolean }[] = [
+    ...FIXOS,
+    ...wods.map((w) => ({ href: `/admin/wod/${w.numero}`, label: `WOD ${w.numero}` })),
+    ...FINAIS,
+  ];
 
   return (
     <nav aria-label="Navegação da organização" className="border-t border-white/[0.06]">

@@ -40,14 +40,15 @@ export const TEAM_STATUS_LABEL: Record<TeamStatus, string> = {
 export const RESULT_STATUSES = ['DRAFT', 'PUBLISHED', 'LOCKED'] as const;
 export type ResultStatus = (typeof RESULT_STATUSES)[number];
 
-export type Battery = 1 | 2;
-export type WodNumber = 1 | 2 | 3;
-
-export const WOD_META: Record<WodNumber, { name: string; cap: string; capSeconds: number; format: string }> = {
-  1: { name: 'STRENGTH', cap: '16 minutos', capSeconds: 960, format: 'CARGA MÁXIMA' },
-  2: { name: 'ENDURANCE', cap: '22 minutos', capSeconds: 1320, format: "AMRAP 22'" },
-  3: { name: 'METCON', cap: '20 minutos', capSeconds: 1200, format: 'FOR TIME' },
-};
+/**
+ * A bateria é um número qualquer: quantas o evento tem sai de
+ * event_settings.baterias, editável na tela de WODs.
+ */
+export type Battery = number;
+/**
+ * O evento não tem mais número de WOD cravado no tipo. Um WOD é uma linha
+ * da tabela `wods`, criada em /admin/wods — ver src/types/wod.ts.
+ */
 
 export interface EventInfo {
   id: string;
@@ -70,35 +71,8 @@ export interface Team {
   status: TeamStatus;
 }
 
-/** WOD 1 — seis cargas por dupla (3 levantamentos × 2 atletas). */
-export interface Wod1Result {
-  teamId: string;
-  strictPressAthlete1: number | null;
-  strictPressAthlete2: number | null;
-  backSquatAthlete1: number | null;
-  backSquatAthlete2: number | null;
-  deadliftAthlete1: number | null;
-  deadliftAthlete2: number | null;
-  status: ResultStatus;
-}
 
-/** WOD 2 — AMRAP 22': corrida (shuttle run) + assault bike. */
-export interface Wod2Result {
-  teamId: string;
-  runKm: number | null;
-  bikeKm: number | null;
-  status: ResultStatus;
-}
 
-/** WOD 3 — FOR TIME, CAP 20:00. */
-export interface Wod3Result {
-  teamId: string;
-  timeSeconds: number | null;
-  completed: boolean;
-  /** Reps/metros concluídos dentro do CAP quando `completed = false`. */
-  volumeCompleted: number | null;
-  status: ResultStatus;
-}
 
 /* ==========================================================================
    CONFIGURAÇÕES QUE A ORGANIZAÇÃO AINDA PRECISA FECHAR (§15, §26, §48)
@@ -159,51 +133,59 @@ export type DnfPolicy = (typeof DNF_POLICIES)[number];
  * NENHUM mantém o comportamento honesto de antes: as duplas dividem a
  * posição, a tela mostra EMPATE e a decisão é de gente.
  */
-export const TIE_BREAKERS = ['NENHUM', 'WOD3', 'WOD2', 'WOD1'] as const;
-export type TieBreaker = (typeof TIE_BREAKERS)[number];
-
-export const TIE_BREAKER_LABEL: Record<TieBreaker, string> = {
-  NENHUM: 'Nenhum — decisão manual',
-  WOD3: 'Melhor colocação no WOD 3 — Metcon',
-  WOD2: 'Melhor colocação no WOD 2 — Endurance',
-  WOD1: 'Melhor colocação no WOD 1 — Strength',
-};
-
-/** Forma curta, para caber num selo de tabela. */
-export const TIE_BREAKER_SHORT: Record<TieBreaker, string> = {
-  NENHUM: '—',
-  WOD3: 'WOD 3',
-  WOD2: 'WOD 2',
-  WOD1: 'WOD 1',
-};
+export const SEM_DESEMPATE = 'NENHUM' as const;
 
 /**
- * A REGRA DO EVENTO: empate na classificação geral é decidido pela melhor
- * colocação no WOD 3.
+ * Um critério é `NENHUM` ou `WOD<numero>` — "melhor colocação no WOD 3" vira
+ * `WOD3`. Como os WODs agora são cadastrados pela organização, a lista de
+ * opções é montada a partir dos WODs do evento, não de um enum fixo.
+ */
+export type TieBreaker = typeof SEM_DESEMPATE | `WOD${number}`;
+
+const FORMATO_WOD = /^WOD(\d{1,3})$/;
+
+export function ehTieBreaker(valor: string): valor is TieBreaker {
+  return valor === SEM_DESEMPATE || FORMATO_WOD.test(valor);
+}
+
+/** O número do WOD a que o critério se refere, ou null para NENHUM. */
+export function wodDoCriterio(criterio: TieBreaker): number | null {
+  const m = FORMATO_WOD.exec(criterio);
+  return m?.[1] ? Number(m[1]) : null;
+}
+
+export function tieBreakerDoWod(numero: number): TieBreaker {
+  return `WOD${numero}`;
+}
+
+/** Rótulo curto, para caber num selo de tabela. */
+export function tieBreakerCurto(criterio: TieBreaker): string {
+  const n = wodDoCriterio(criterio);
+  return n === null ? '—' : `WOD ${n}`;
+}
+
+/**
+ * A REGRA DO EVENTO: empate na classificação da categoria é decidido pela
+ * melhor colocação no ÚLTIMO WOD do evento — o WOD 3 na etapa de setembro.
  *
- * Decisão da organização do Nação Celebration, e por isso é o PADRÃO do
- * sistema — não algo que alguém precise lembrar de configurar antes do
- * pódio. Continua trocável em /admin/settings: escolher outro critério, ou
- * NENHUM para voltar à decisão manual, sobrescreve este padrão.
+ * Decisão da organização, e por isso é o padrão. Continua trocável em
+ * /admin/settings, inclusive para NENHUM, que devolve a decisão à mesa.
  */
 export const TIE_BREAKER_PADRAO: TieBreaker = 'WOD3';
 
 /**
  * Lê o que está guardado no banco.
  *
- * A coluna já foi texto livre: até pouco tempo o campo só REGISTRAVA a regra,
- * sem aplicá-la. Uma frase escrita ali não vira ordenação — o sistema não
- * adivinha o que ela queria dizer —, então valor irreconhecível cai no
- * `padrao` recebido, e o formulário mostra o texto antigo para conferência.
+ * A coluna já foi texto livre: houve uma época em que o campo só REGISTRAVA
+ * a regra, sem aplicá-la. Valor irreconhecível cai no `padrao` recebido, e o
+ * formulário mostra o texto antigo para conferência.
  */
 export function parseTieBreaker(
   valor: string | null | undefined,
-  padrao: TieBreaker = 'NENHUM',
+  padrao: TieBreaker = SEM_DESEMPATE,
 ): TieBreaker {
   const limpo = (valor ?? '').trim().toUpperCase();
-  return (TIE_BREAKERS as readonly string[]).includes(limpo)
-    ? (limpo as TieBreaker)
-    : padrao;
+  return ehTieBreaker(limpo) ? limpo : padrao;
 }
 
 export interface EventSettings {
@@ -219,6 +201,8 @@ export interface EventSettings {
    * motor nunca usa.
    */
   tieBreakerLegado: string | null;
+  /** Quantas baterias o evento tem. */
+  baterias: number;
   liveMode: boolean;
   maintenanceMode: boolean;
 }
@@ -231,6 +215,7 @@ export const DEFAULT_SETTINGS: EventSettings = {
   tieBreaker2: 'NENHUM',
   tieBreaker3: 'NENHUM',
   tieBreakerLegado: null,
+  baterias: 2,
   liveMode: true,
   maintenanceMode: false,
 };
@@ -240,7 +225,7 @@ export function criteriosDeDesempate(
   settings: Pick<EventSettings, 'tieBreaker1' | 'tieBreaker2' | 'tieBreaker3'>,
 ): TieBreaker[] {
   return [settings.tieBreaker1, settings.tieBreaker2, settings.tieBreaker3].filter(
-    (c): c is TieBreaker => c !== 'NENHUM',
+    (c): c is TieBreaker => c !== SEM_DESEMPATE,
   );
 }
 
@@ -260,80 +245,21 @@ export interface RankedEntry {
   needsDecision: boolean;
 }
 
-export interface Wod1Score {
-  teamId: string;
 
-  /** Prova 1A — soma do Strict Press dos dois atletas. */
-  strictPress: number;
-  rankStrictPress: number | null;
-  pointsStrictPress: number | null;
 
-  /** Prova 1B — soma do Back Squat dos dois atletas. */
-  backSquat: number;
-  rankBackSquat: number | null;
-  pointsBackSquat: number | null;
-
-  /** Prova 1C — soma do Deadlift dos dois atletas. */
-  deadlift: number;
-  rankDeadlift: number | null;
-  pointsDeadlift: number | null;
-
-  /** Prova 1D — soma das seis cargas. */
-  totalLoad: number;
-  rankTotal: number | null;
-  pointsTotal: number | null;
-
-  /**
-   * Pontuação do WOD 1 na classificação geral.
-   * Depende de `settings.wod1ScoringMode` — ver o comentário lá.
-   */
-  points: number | null;
-
-  /** Posição na prova 1D. Mantido para leitura rápida e compatibilidade. */
-  rank: number | null;
-
-  tied: boolean;
-  hasResult: boolean;
-}
-
-export interface Wod2Score {
-  teamId: string;
-  runKm: number;
-  bikeKm: number;
-  totalKm: number;
-  rankRun: number | null;
-  pointsRun: number | null;
-  rankBike: number | null;
-  pointsBike: number | null;
-  rankTotal: number | null;
-  pointsTotal: number | null;
-  /** Soma 2A + 2B + 2C — é a pontuação do WOD 2 na classificação geral. */
-  points: number | null;
-  tied: boolean;
-  hasResult: boolean;
-}
-
-export interface Wod3Score {
-  teamId: string;
-  timeSeconds: number;
-  completed: boolean;
-  volumeCompleted: number | null;
-  rank: number | null;
-  points: number | null;
-  tied: boolean;
-  needsDecision: boolean;
-  hasResult: boolean;
-}
 
 export interface StandingRow {
   team: Team;
-  wod1: Wod1Score | null;
-  wod2: Wod2Score | null;
-  wod3: Wod3Score | null;
-  /** Soma dos pontos dos WODs já pontuados. Menor = melhor. */
+  /** Pontuação de cada prova do evento, indexada por id da prova. */
+  provas: Record<string, import('./wod').ProvaScore>;
+  /** Total de cada WOD, indexado por id do WOD. */
+  wods: Record<string, import('./wod').WodScore>;
+  /** Soma dos pontos de todas as provas que pontuam. Menor = melhor. */
   totalPoints: number;
-  /** Quantos WODs já têm resultado válido para esta dupla (0–3). */
+  /** Quantos WODs já têm resultado válido para esta dupla. */
   scoredWods: number;
+  /** Quantos WODs o evento tem — para a tela dizer "2 de 3". */
+  totalWods: number;
   /**
    * Posição na classificação GERAL — as três categorias misturadas.
    *

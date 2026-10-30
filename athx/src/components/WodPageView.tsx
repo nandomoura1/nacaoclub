@@ -1,17 +1,17 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import type { Category, WodNumber } from '@/types/domain';
+import type { Category } from '@/types/domain';
 import { CATEGORIES, CATEGORY_LABEL, CATEGORY_SHORT } from '@/types/domain';
 import type { Snapshot } from '@/services/snapshot';
-import { buildLeaderboard } from '@/lib/scoring/build';
+import { leaderboardDoSnapshot } from '@/lib/scoring/build';
 import { standingsByCategory } from '@/lib/scoring/overall';
 import { useLiveSnapshot } from '@/hooks/useLiveSnapshot';
 import { WodRanking } from '@/components/WodRanking';
 import { LiveIndicator } from '@/components/LiveIndicator';
 import { Tabs } from '@/components/ui/Tabs';
 import { Card } from '@/components/ui/Card';
-import { WODS } from '@/lib/wods';
+
 
 type CategoryFilter = 'TODAS' | Category;
 
@@ -21,20 +21,14 @@ const CATEGORY_TABS = [
 ];
 
 /** Página pública de um WOD (§28): descrição, CAP, provas e ranking ao vivo. */
-export function WodPageView({ initial, wod }: { initial: Snapshot; wod: WodNumber }) {
+export function WodPageView({ initial, numero }: { initial: Snapshot; numero: number }) {
   const { snapshot, updatedAt } = useLiveSnapshot(initial);
   const [category, setCategory] = useState<CategoryFilter>('TODAS');
-  const spec = WODS[wod];
+  const wod = snapshot.wods.find((w) => w.numero === numero);
 
   const board = useMemo(
     () =>
-      buildLeaderboard({
-        teams: snapshot.teams,
-        wod1: snapshot.wod1,
-        wod2: snapshot.wod2,
-        wod3: snapshot.wod3,
-        settings: snapshot.settings,
-      }),
+      leaderboardDoSnapshot(snapshot),
     [snapshot],
   );
 
@@ -47,23 +41,46 @@ export function WodPageView({ initial, wod }: { initial: Snapshot; wod: WodNumbe
     return alvo.map((c) => ({ category: c, rows: standingsByCategory(board.standings, c) }));
   }, [board.standings, category]);
 
+  if (!wod) {
+    return (
+      <Card className="p-6 text-center">
+        <p className="font-display font-bold uppercase">WOD não encontrado</p>
+        <p className="mt-1 text-sm text-white/50">
+          Este evento não tem um WOD {numero}. A organização monta os workouts em
+          Configurações → WODs.
+        </p>
+      </Card>
+    );
+  }
+
+
+
   return (
     <div className="space-y-7">
       {/* ---- A prova ------------------------------------------------------ */}
       <Card className="p-5 sm:p-6">
-        <p className="text-sm text-white/65">{spec.resumo}</p>
+        {wod.resumo ? <p className="text-sm text-white/65">{wod.resumo}</p> : null}
 
-        {spec.blocos ? (
+        {wod.blocos.length > 0 ? (
           <ul className="mt-4 space-y-1.5">
-            {spec.blocos.map((b) => (
+            {wod.blocos.map((b) => (
               <li
-                key={b.janela}
+                key={`${b.ordem}-${b.movimento}`}
                 className="flex flex-wrap items-baseline gap-x-3 border-b border-white/[0.07] pb-1.5 last:border-0"
               >
-                <span className="tnum font-display text-xs font-bold tracking-wider text-nacao-cyan uppercase">
-                  {b.janela}
-                </span>
+                {b.janela ? (
+                  <span className="tnum font-display text-xs font-bold tracking-wider text-nacao-cyan uppercase">
+                    {b.janela}
+                  </span>
+                ) : null}
                 <span className="font-display text-sm font-bold">{b.movimento}</span>
+                {b.masculino || b.feminino ? (
+                  <span className="text-[11px] text-white/45">
+                    {[b.masculino ? `M ${b.masculino}` : null, b.feminino ? `F ${b.feminino}` : null]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                ) : null}
                 {b.detalhe ? (
                   <span className="w-full text-[11px] text-white/45">{b.detalhe}</span>
                 ) : null}
@@ -72,46 +89,27 @@ export function WodPageView({ initial, wod }: { initial: Snapshot; wod: WodNumbe
           </ul>
         ) : null}
 
-        {spec.sequencia ? (
-          <ol className="mt-4 space-y-1.5">
-            {spec.sequencia.map((s) => (
-              <li
-                key={s.ordem}
-                className="flex flex-wrap items-baseline gap-x-3 border-b border-white/[0.07] pb-1.5 last:border-0"
-              >
-                <span className="tnum font-display text-xs font-bold text-nacao-cyan">
-                  {s.ordem}.
-                </span>
-                <span className="font-display text-sm font-bold">{s.movimento}</span>
-                {s.masculino || s.feminino ? (
-                  <span className="text-[11px] text-white/45">
-                    M {s.masculino} · F {s.feminino}
-                  </span>
-                ) : null}
-              </li>
-            ))}
-          </ol>
-        ) : null}
-
         <div className="mt-5 grid gap-2 sm:grid-cols-2">
-          {spec.provas.map((p) => (
-            <div key={p.codigo} className="rounded-xl bg-white/[0.045] px-3.5 py-2.5">
+          {wod.provas.map((p) => (
+            <div key={p.id} className="rounded-xl bg-white/[0.045] px-3.5 py-2.5">
               <p className="font-display text-[10px] font-bold tracking-wider text-nacao-sky uppercase">
                 Prova {p.codigo}
+                {p.origem === 'SOMA' ? ' · calculada' : ''}
+                {p.pontua ? '' : ' · não pontua'}
               </p>
               <p className="font-display text-sm font-bold">{p.descricao}</p>
-              <p className="text-[11px] text-white/45">{p.criterio}</p>
+              {p.criterio ? <p className="text-[11px] text-white/45">{p.criterio}</p> : null}
             </div>
           ))}
         </div>
 
-        {spec.regras ? (
+        {wod.regras.length > 0 ? (
           <div className="mt-5">
             <p className="font-display text-[10px] font-bold tracking-kicker text-white/45 uppercase">
               Regras de execução
             </p>
             <ul className="mt-2 space-y-1.5">
-              {spec.regras.map((regra) => (
+              {wod.regras.map((regra) => (
                 <li key={regra} className="flex items-start gap-2 text-xs text-white/65">
                   <span aria-hidden="true" className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-nacao-cyan" />
                   {regra}
@@ -122,17 +120,28 @@ export function WodPageView({ initial, wod }: { initial: Snapshot; wod: WodNumbe
         ) : null}
 
         <p className="mt-4 rounded-xl border border-nacao-cyan/20 bg-nacao-cyan/[0.06] px-3.5 py-2.5 text-xs text-white/75">
-          {spec.pontuacao}
+          {wod.provas.filter((p) => p.pontua).length > 1 ? (
+            <>
+              O WOD {wod.numero} gera {wod.provas.filter((p) => p.pontua).length} pontuações.{' '}
+              <strong>
+                PONTUAÇÃO DO WOD {wod.numero} ={' '}
+                {wod.provas.filter((p) => p.pontua).map((p) => `Pts ${p.codigo}`).join(' + ')}
+              </strong>
+              .{' '}
+            </>
+          ) : null}
+          Em cada prova, 1º lugar = 1 ponto, 2º = 2 pontos, e assim por diante — contando
+          apenas as duplas da mesma categoria.
         </p>
 
         {/* Pendências declaradas, não escondidas (§48). */}
-        {spec.pendencias.length > 0 ? (
+        {wod.pendencias.length > 0 ? (
           <details className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5">
             <summary className="cursor-pointer font-display text-[10px] font-bold tracking-wider text-white/50 uppercase">
-              Regras ainda não definidas ({spec.pendencias.length})
+              Regras ainda não definidas ({wod.pendencias.length})
             </summary>
             <ul className="mt-2 list-disc space-y-1 pl-4 text-[11px] text-white/50">
-              {spec.pendencias.map((p) => (
+              {wod.pendencias.map((p) => (
                 <li key={p}>{p}</li>
               ))}
             </ul>

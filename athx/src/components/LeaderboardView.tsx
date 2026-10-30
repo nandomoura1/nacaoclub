@@ -2,20 +2,20 @@
 
 import { useMemo, useState } from 'react';
 import { Printer } from 'lucide-react';
-import type { Battery, Category, StandingRow, WodNumber } from '@/types/domain';
+import type { Battery, Category, StandingRow } from '@/types/domain';
 import {
   CATEGORIES,
   CATEGORY_LABEL,
   CATEGORY_SHORT,
-  TIE_BREAKER_SHORT,
-  WOD_META,
   criteriosDeDesempate,
+  tieBreakerCurto,
 } from '@/types/domain';
+import type { Wod } from '@/types/wod';
+import { bateriasDaAgenda, capEmTexto, formulaDoTotal, horariosDaBateria } from '@/types/wod';
 import type { Snapshot } from '@/services/snapshot';
-import { buildLeaderboard } from '@/lib/scoring/build';
+import { leaderboardDoSnapshot } from '@/lib/scoring/build';
 import { standingsByCategory } from '@/lib/scoring/overall';
 import { matchesQuery } from '@/lib/search';
-import { horariosDaBateria } from '@/lib/wods';
 import { useLiveSnapshot } from '@/hooks/useLiveSnapshot';
 import { LiveIndicator } from '@/components/LiveIndicator';
 import { RankingTable } from '@/components/RankingTable';
@@ -27,20 +27,14 @@ import { EmptyState } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 
 type CategoryFilter = 'TODAS' | Category;
-type BatteryFilter = 'TODAS' | '1' | '2';
-type ViewFilter = 'GERAL' | '1' | '2' | '3';
+/** 'TODAS' ou o número da bateria em texto. */
+type BatteryFilter = string;
+/** 'GERAL' ou o id de um WOD. */
+type ViewFilter = string;
 
 /** Um bloco de classificação: uma categoria e as duplas dela, já reposicionadas. */
 type Section = { category: Category; rows: StandingRow[] };
 
-// "Todas as baterias" por extenso: com só "Todas", a tela mostraria dois
-// chips idênticos — um da categoria e outro da bateria — e ninguém saberia
-// qual é qual.
-const BATTERY_TABS = [
-  { value: 'TODAS' as const, label: 'Todas as baterias' },
-  { value: '1' as const, label: 'Bateria 1' },
-  { value: '2' as const, label: 'Bateria 2' },
-];
 
 // O primeiro chip não mostra uma classificação única misturando as três
 // categorias: mostra as TRÊS classificações, uma embaixo da outra. Por isso
@@ -51,12 +45,6 @@ const CATEGORY_TABS = [
   ...CATEGORIES.map((c) => ({ value: c, label: CATEGORY_SHORT[c] })),
 ];
 
-const VIEW_TABS = [
-  { value: 'GERAL' as const, label: 'Geral' },
-  { value: '1' as const, label: 'WOD 1' },
-  { value: '2' as const, label: 'WOD 2' },
-  { value: '3' as const, label: 'WOD 3' },
-];
 
 /**
  * LeaderboardView — a tela principal do público.
@@ -77,15 +65,32 @@ export function LeaderboardView({ initial }: { initial: Snapshot }) {
   const [battery, setBattery] = useState<BatteryFilter>('TODAS');
   const [view, setView] = useState<ViewFilter>('GERAL');
 
+  // As abas saem do evento: um WOD novo vira uma aba sozinho.
+  const viewTabs = useMemo(
+    () => [
+      { value: 'GERAL', label: 'Geral' },
+      ...snapshot.wods.map((w) => ({ value: w.id, label: `WOD ${w.numero}` })),
+    ],
+    [snapshot.wods],
+  );
+
+  // "Todas as baterias" por extenso: com só "Todas", a tela mostraria dois
+  // chips idênticos — um da categoria e outro da bateria — e ninguém saberia
+  // qual é qual.
+  const batteryTabs = useMemo(() => {
+    const baterias = bateriasDaAgenda(snapshot.agenda);
+    const lista = baterias.length > 0
+      ? baterias
+      : Array.from({ length: snapshot.settings.baterias }, (_, i) => i + 1);
+    return [
+      { value: 'TODAS', label: 'Todas as baterias' },
+      ...lista.map((b) => ({ value: String(b), label: `Bateria ${b}` })),
+    ];
+  }, [snapshot.agenda, snapshot.settings.baterias]);
+
   const board = useMemo(
     () =>
-      buildLeaderboard({
-        teams: snapshot.teams,
-        wod1: snapshot.wod1,
-        wod2: snapshot.wod2,
-        wod3: snapshot.wod3,
-        settings: snapshot.settings,
-      }),
+      leaderboardDoSnapshot(snapshot),
     [snapshot],
   );
 
@@ -115,7 +120,7 @@ export function LeaderboardView({ initial }: { initial: Snapshot }) {
 
   const pendingDecision = board.standings.some((r) => r.needsDecision);
   const criterios = criteriosDeDesempate(snapshot.settings);
-  const wodAtual = view === 'GERAL' ? null : (Number(view) as WodNumber);
+  const wodAtual: Wod | null = snapshot.wods.find((w) => w.id === view) ?? null;
 
   return (
     <div className="space-y-6">
@@ -154,7 +159,7 @@ export function LeaderboardView({ initial }: { initial: Snapshot }) {
           {category === 'TODAS' ? 'Classificação por categoria' : CATEGORY_LABEL[category]}
         </h2>
         <p className="mt-1 text-sm text-white/50">
-          Menor pontuação = melhor classificação · soma de 1A + 1B + 1C + 1D + 2A + 2B + 2C + 3
+          Menor pontuação = melhor classificação · soma de {formulaDoTotal(snapshot.wods)}
         </p>
 
         {/* Duas duplas com o mesmo total vão aparecer em posições diferentes.
@@ -165,7 +170,7 @@ export function LeaderboardView({ initial }: { initial: Snapshot }) {
             {criterios.map((c, i) => (
               <span key={c}>
                 {i > 0 ? ', depois no ' : ''}
-                <strong className="text-white/70">{TIE_BREAKER_SHORT[c]}</strong>
+                <strong className="text-white/70">{tieBreakerCurto(c)}</strong>
               </span>
             ))}
           </p>
@@ -176,11 +181,13 @@ export function LeaderboardView({ initial }: { initial: Snapshot }) {
             <strong className="font-display font-bold tracking-wider text-nacao-cyan uppercase">
               Bateria {battery}
             </strong>
-            {horariosDaBateria(Number(battery) as Battery).map(({ wod, hora }) => (
-              <span key={wod} className="tnum">
-                WOD {wod} · {hora.split('–')[0]}
-              </span>
-            ))}
+            {horariosDaBateria(snapshot.agenda, snapshot.wods, Number(battery) as Battery).map(
+              ({ wod, hora }) => (
+                <span key={wod.id} className="tnum">
+                  WOD {wod.numero} · {hora.split('–')[0]}
+                </span>
+              ),
+            )}
           </p>
         ) : null}
       </div>
@@ -198,7 +205,7 @@ export function LeaderboardView({ initial }: { initial: Snapshot }) {
             size="sm"
           />
           <Tabs
-            options={VIEW_TABS}
+            options={viewTabs}
             value={view}
             onChange={setView}
             label="Escolher a visão dos resultados"
@@ -208,7 +215,7 @@ export function LeaderboardView({ initial }: { initial: Snapshot }) {
 
         {/* Bateria: é por aqui que o atleta acha a própria no dia do evento. */}
         <Tabs
-          options={BATTERY_TABS}
+          options={batteryTabs}
           value={battery}
           onChange={setBattery}
           label="Filtrar por bateria"
@@ -232,10 +239,12 @@ export function LeaderboardView({ initial }: { initial: Snapshot }) {
       {wodAtual ? (
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <h3 className="font-display text-lg font-extrabold uppercase">
-            WOD {wodAtual} — {WOD_META[wodAtual].name}
+            WOD {wodAtual.numero} — {wodAtual.nome}
           </h3>
           <span className="font-display text-[10px] font-bold tracking-wider text-white/40 uppercase">
-            CAP {WOD_META[wodAtual].cap} · {WOD_META[wodAtual].format}
+            {[wodAtual.formato, capEmTexto(wodAtual.capSegundos) ? `CAP ${capEmTexto(wodAtual.capSegundos)}` : null]
+              .filter(Boolean)
+              .join(' · ')}
           </span>
         </div>
       ) : null}
@@ -291,7 +300,7 @@ export function LeaderboardView({ initial }: { initial: Snapshot }) {
                       <Podium rows={rows} categoryScoped />
                     </div>
                   ) : null}
-                  <RankingTable rows={rows} categoryScoped />
+                  <RankingTable rows={rows} wods={snapshot.wods} categoryScoped />
                 </>
               )}
             </section>

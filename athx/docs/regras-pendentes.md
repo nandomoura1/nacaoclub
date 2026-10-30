@@ -102,6 +102,15 @@ gravado, mas **não** é usado para ordenar.
 
 ---
 
+## 3b. Como cadastrar uma regra nova
+
+As regras de execução e as pendências de cada workout agora são **campos**,
+não texto no código: `/admin/wods` → *Editar* no WOD → *Regras de execução* e
+*Regras ainda não definidas*. O que for escrito ali aparece na página pública
+do WOD, e as pendências continuam **declaradas**, não escondidas (§48).
+
+---
+
 ## 4. Altura do Box Jump Over (WOD 3)
 
 **Falta:** a altura não foi informada.

@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import type { WodNumber } from '@/types/domain';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
 import { PageIntro } from '@/components/PageIntro';
@@ -9,13 +8,15 @@ import { WodPageView } from '@/components/WodPageView';
 import { MaintenanceScreen } from '@/components/MaintenanceScreen';
 import { EventErrorScreen } from '@/components/EventErrorScreen';
 import { getSnapshot } from '@/services/leaderboard-service';
-import { WODS } from '@/lib/wods';
+import { capEmTexto } from '@/types/wod';
 import type { Snapshot } from '@/services/snapshot';
 
 export const dynamic = 'force-dynamic';
 
-function parseWod(value: string): WodNumber | null {
-  return value === '1' || value === '2' || value === '3' ? (Number(value) as WodNumber) : null;
+/** O número do WOD na URL. Qual existe é decisão do evento, não do código. */
+function parseWod(value: string): number | null {
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : null;
 }
 
 export async function generateMetadata({
@@ -24,18 +25,26 @@ export async function generateMetadata({
   params: Promise<{ number: string }>;
 }): Promise<Metadata> {
   const { number } = await params;
-  const wod = parseWod(number);
-  if (!wod) return { title: 'WOD' };
+  const numero = parseWod(number);
+  if (!numero) return { title: 'WOD' };
+
+  let nome = '';
+  try {
+    const snapshot = await getSnapshot();
+    nome = snapshot.wods.find((w) => w.numero === numero)?.nome ?? '';
+  } catch {
+    nome = '';
+  }
+
   return {
-    title: `WOD ${wod} — ${WODS[wod].nome}`,
-    description: WODS[wod].resumo,
+    title: nome ? `WOD ${numero} — ${nome}` : `WOD ${numero}`,
   };
 }
 
 export default async function WodPage({ params }: { params: Promise<{ number: string }> }) {
   const { number } = await params;
-  const wod = parseWod(number);
-  if (!wod) notFound();
+  const numero = parseWod(number);
+  if (!numero) notFound();
 
   let snapshot: Snapshot;
   try {
@@ -46,25 +55,26 @@ export default async function WodPage({ params }: { params: Promise<{ number: st
 
   if (snapshot.event.maintenanceMode) return <MaintenanceScreen />;
 
-  const spec = WODS[wod];
+  const wod = snapshot.wods.find((w) => w.numero === numero);
+  const cap = capEmTexto(wod?.capSegundos ?? null);
 
   return (
     <>
       <SiteHeader />
       <PageIntro
-        kicker={`${spec.formato} · CAP ${spec.cap}`}
-        title={`WOD ${wod}`}
-        subtitle={spec.nome}
+        kicker={[wod?.formato, cap ? `CAP ${cap}` : null].filter(Boolean).join(' · ')}
+        title={`WOD ${numero}`}
+        subtitle={wod?.nome ?? ''}
       >
         <nav aria-label="Escolher WOD">
-          <ul className="flex gap-2">
-            {([1, 2, 3] as const).map((n) => (
+          <ul className="flex flex-wrap gap-2">
+            {snapshot.wods.map(({ numero: n }) => (
               <li key={n}>
                 <Link
                   href={`/wod/${n}`}
-                  aria-current={n === wod ? 'page' : undefined}
+                  aria-current={n === numero ? 'page' : undefined}
                   className={`block rounded-lg border px-3.5 py-2 font-display text-[11px] font-bold tracking-wider uppercase ${
-                    n === wod
+                    n === numero
                       ? 'border-nacao-cyan/55 bg-nacao-cyan/15 text-nacao-cyan'
                       : 'border-white/12 bg-white/[0.04] text-white/55 hover:text-white'
                   }`}
@@ -78,7 +88,7 @@ export default async function WodPage({ params }: { params: Promise<{ number: st
       </PageIntro>
 
       <main id="conteudo" className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-        <WodPageView initial={snapshot} wod={wod} />
+        <WodPageView initial={snapshot} numero={numero} />
       </main>
 
       <SiteFooter demo={snapshot.demo} />

@@ -1,25 +1,22 @@
 import { describe, expect, it } from 'vitest';
+import type { Category } from '@/types/domain';
 import { buildLeaderboard } from '@/lib/scoring/build';
 import { standingsByCategory } from '@/lib/scoring/overall';
-import type { Category } from '@/types/domain';
-import { settings, team, w1, w2, w3 } from './helpers';
+import { cargas, cenario, distancias, prova, settings, team, tempo, WODS } from './helpers';
 import input from './fixtures/parity-input.json';
 import expected from './fixtures/parity-expected.json';
 
 /**
  * PARIDADE ENTRE OS DOIS MOTORES (§25)
  *
- * `parity-expected.json` NÃO foi escrito à mão: é a saída real do motor SQL
- * (supabase/migrations/…_scoring.sql) rodando em um PostgreSQL 16 sobre o
- * dataset de `parity-input.json` — 20 duplas divididas em 5 Masculinas, 6
- * Femininas e 9 Mistas, com empates propositais de carga e de tempo, duplas
- * que não concluíram o WOD 3 e uma distância de corrida fora do múltiplo de
- * 500 m.
+ * `parity-expected.json` NÃO foi escrito à mão: é a saída real das views
+ * athx_valores, athx_prova_scores, athx_wod_scores e athx_standings rodando
+ * em um PostgreSQL 16 sobre o dataset de `parity-input.json`.
  *
- * A divisão desigual (5 · 6 · 9) é de propósito: é ela que prova que cada
- * prova é ranqueada DENTRO da categoria. Se os dois motores ranqueassem as
- * 20 duplas juntas, os tetos de pontuação sairiam iguais nas três e o teste
- * passaria sem provar nada.
+ * São 20 duplas divididas em 5 Masculinas, 6 Femininas e 9 Mistas — divisão
+ * desigual de propósito: é ela que prova que cada prova é ranqueada dentro
+ * da categoria. Há empates de carga, empates de tempo, duplas que não
+ * concluíram o WOD 3 e uma distância fora do múltiplo de 500 m.
  *
  * Este teste roda o motor TypeScript sobre o MESMO dataset e exige resultado
  * idêntico. Se alguém mexer em um dos dois lados sem mexer no outro, quebra
@@ -27,15 +24,12 @@ import expected from './fixtures/parity-expected.json';
  * classificações diferentes.
  */
 
-interface Row {
+interface Linha {
   n: number;
   cat: Category;
-  sp1: number;
-  sp2: number;
-  bs1: number;
-  bs2: number;
-  dl1: number;
-  dl2: number;
+  sp1: number; sp2: number;
+  bs1: number; bs2: number;
+  dl1: number; dl2: number;
   runKm: number;
   bikeKm: number;
   finished: boolean;
@@ -43,88 +37,118 @@ interface Row {
   volume: number | null;
 }
 
-const rows = input as Row[];
+interface ProvaEsperada {
+  valor: number | null;
+  rank: number | null;
+  points: number | null;
+  tied: boolean;
+  needs_decision: boolean;
+}
+
+interface Esperado {
+  team_number: number;
+  category: Category;
+  position: number;
+  category_position: number;
+  tied: boolean;
+  total_points: number;
+  scored_wods: number;
+  provas: Record<string, ProvaEsperada>;
+  wods: Record<string, { points: number | null; rank: number | null; has_result: boolean }>;
+}
+
+const linhas = input as Linha[];
+const esperado = expected as Esperado[];
+
+const board = buildLeaderboard(
+  cenario({
+    teams: linhas.map((r) => team(r.n, { category: r.cat })),
+    wod1: linhas.flatMap((r) => cargas(`team-${r.n}`, [r.sp1, r.sp2, r.bs1, r.bs2, r.dl1, r.dl2])),
+    wod2: linhas.flatMap((r) => distancias(`team-${r.n}`, r.runKm, r.bikeKm)),
+    wod3: linhas.map((r) => tempo(`team-${r.n}`, r.time, r.finished, r.volume)),
+    // O fixture foi gerado com o padrão do banco: desempate pelo WOD 3.
+    settings: settings({ tieBreaker1: 'WOD3' }),
+  }),
+);
+
+const porNumero = new Map(board.standings.map((s) => [s.team.teamNumber, s]));
 
 describe('Motor TypeScript × motor SQL', () => {
-  const board = buildLeaderboard({
-    teams: rows.map((r) => team(r.n, { category: r.cat })),
-    wod1: rows.map((r) => w1(`team-${r.n}`, [r.sp1, r.sp2, r.bs1, r.bs2, r.dl1, r.dl2])),
-    wod2: rows.map((r) => w2(`team-${r.n}`, r.runKm, r.bikeKm)),
-    wod3: rows.map((r) =>
-      w3(`team-${r.n}`, r.time, r.finished, { volumeCompleted: r.volume }),
-    ),
-    settings: settings(),
+  it('o cenário é mesmo desigual — 5 · 6 · 9', () => {
+    const porCategoria = (c: Category) => esperado.filter((e) => e.category === c).length;
+    expect(porCategoria('MASCULINA')).toBe(5);
+    expect(porCategoria('FEMININA')).toBe(6);
+    expect(porCategoria('MISTA')).toBe(9);
   });
 
-  const byNumber = new Map(board.standings.map((s) => [s.team.teamNumber, s]));
+  it('produz o mesmo valor bruto em cada prova', () => {
+    for (const linha of esperado) {
+      const row = porNumero.get(linha.team_number);
+      expect(row, `dupla ${linha.team_number}`).toBeDefined();
 
-  it('produz a mesma classificação geral que o PostgreSQL', () => {
-    const actual = board.standings.map((s) => ({
-      team_number: s.team.teamNumber,
-      position: s.position,
-      total_points: s.totalPoints,
-    }));
-
-    const want = expected.map((e) => ({
-      team_number: e.team_number,
-      position: e.position,
-      total_points: e.total_points,
-    }));
-
-    expect(actual).toEqual(want);
-  });
-
-  it('produz as mesmas posições e pontos em cada WOD', () => {
-    for (const row of expected) {
-      const s = byNumber.get(row.team_number);
-      expect(s, `dupla ${row.team_number}`).toBeDefined();
-      if (!s) continue;
-
-      // WOD 1 — as quatro provas, uma a uma
-      expect(s.wod1?.strictPress, `1A kg dupla ${row.team_number}`).toBe(row.strict_press);
-      expect(s.wod1?.rankStrictPress, `1A pos dupla ${row.team_number}`).toBe(row.rank_strict_press);
-      expect(s.wod1?.pointsStrictPress, `1A pts dupla ${row.team_number}`).toBe(row.points_strict_press);
-
-      expect(s.wod1?.backSquat, `1B kg dupla ${row.team_number}`).toBe(row.back_squat);
-      expect(s.wod1?.rankBackSquat, `1B pos dupla ${row.team_number}`).toBe(row.rank_back_squat);
-      expect(s.wod1?.pointsBackSquat, `1B pts dupla ${row.team_number}`).toBe(row.points_back_squat);
-
-      expect(s.wod1?.deadlift, `1C kg dupla ${row.team_number}`).toBe(row.deadlift);
-      expect(s.wod1?.rankDeadlift, `1C pos dupla ${row.team_number}`).toBe(row.rank_deadlift);
-      expect(s.wod1?.pointsDeadlift, `1C pts dupla ${row.team_number}`).toBe(row.points_deadlift);
-
-      expect(s.wod1?.totalLoad, `1D kg dupla ${row.team_number}`).toBe(row.total_load);
-      expect(s.wod1?.rankTotal, `1D pos dupla ${row.team_number}`).toBe(row.wod1_rank_total);
-      expect(s.wod1?.pointsTotal, `1D pts dupla ${row.team_number}`).toBe(row.points_total);
-
-      // PONTUAÇÃO DO WOD 1 = 1A + 1B + 1C + 1D
-      expect(s.wod1?.points, `WOD1 pts dupla ${row.team_number}`).toBe(row.wod1_points);
-
-      expect(s.wod2?.totalKm, `WOD2 km dupla ${row.team_number}`).toBe(row.total_km);
-      expect(s.wod2?.rankRun, `2A dupla ${row.team_number}`).toBe(row.rank_run);
-      expect(s.wod2?.rankBike, `2B dupla ${row.team_number}`).toBe(row.rank_bike);
-      expect(s.wod2?.rankTotal, `2C dupla ${row.team_number}`).toBe(row.rank_total);
-      expect(s.wod2?.points, `WOD2 pts dupla ${row.team_number}`).toBe(row.wod2_points);
-
-      expect(s.wod3?.rank, `WOD3 rank dupla ${row.team_number}`).toBe(row.wod3_rank);
-      expect(s.wod3?.points, `WOD3 pts dupla ${row.team_number}`).toBe(row.wod3_points);
-      expect(s.wod3?.needsDecision, `WOD3 decisão dupla ${row.team_number}`).toBe(
-        row.needs_decision,
-      );
+      for (const [codigo, alvo] of Object.entries(linha.provas)) {
+        const score = row?.provas[prova(codigo).id];
+        expect(score?.valor ?? null, `valor de ${codigo} na dupla ${linha.team_number}`).toBe(
+          alvo.valor,
+        );
+      }
     }
   });
 
-  it('coloca cada dupla na mesma posição de categoria que o banco', () => {
+  it('produz a mesma posição e os mesmos pontos em cada prova', () => {
+    for (const linha of esperado) {
+      const row = porNumero.get(linha.team_number);
+
+      for (const [codigo, alvo] of Object.entries(linha.provas)) {
+        const score = row?.provas[prova(codigo).id];
+        const onde = `${codigo} na dupla ${linha.team_number}`;
+        expect(score?.rank ?? null, `posição de ${onde}`).toBe(alvo.rank);
+        expect(score?.points ?? null, `pontos de ${onde}`).toBe(alvo.points);
+        expect(score?.tied ?? false, `empate de ${onde}`).toBe(alvo.tied);
+      }
+    }
+  });
+
+  it('produz o mesmo total por WOD', () => {
+    for (const linha of esperado) {
+      const row = porNumero.get(linha.team_number);
+
+      for (const [numero, alvo] of Object.entries(linha.wods)) {
+        const wod = WODS.find((w) => w.numero === Number(numero));
+        const score = row?.wods[wod!.id];
+        const onde = `WOD ${numero} da dupla ${linha.team_number}`;
+        expect(score?.points ?? null, `pontos do ${onde}`).toBe(alvo.points);
+        expect(score?.hasResult ?? false, `resultado do ${onde}`).toBe(alvo.has_result);
+      }
+    }
+  });
+
+  it('produz a mesma classificação geral', () => {
+    for (const linha of esperado) {
+      const row = porNumero.get(linha.team_number);
+      expect(row?.totalPoints, `total da dupla ${linha.team_number}`).toBe(linha.total_points);
+      expect(row?.scoredWods, `WODs da dupla ${linha.team_number}`).toBe(linha.scored_wods);
+      expect(row?.position, `posição geral da dupla ${linha.team_number}`).toBe(linha.position);
+    }
+  });
+
+  it('coloca cada dupla na mesma posição de categoria', () => {
     for (const categoria of ['MASCULINA', 'FEMININA', 'MISTA'] as const) {
-      const naCategoria = standingsByCategory(board.standings, categoria);
-      for (const row of naCategoria) {
-        const esperado = expected.find((e) => e.team_number === row.team.teamNumber);
-        expect(esperado, `dupla ${row.team.teamNumber}`).toBeDefined();
-        expect(esperado?.category, `categoria da dupla ${row.team.teamNumber}`).toBe(categoria);
+      for (const row of standingsByCategory(board.standings, categoria)) {
+        const alvo = esperado.find((e) => e.team_number === row.team.teamNumber);
+        expect(alvo?.category, `categoria da dupla ${row.team.teamNumber}`).toBe(categoria);
         expect(row.position, `posição na categoria da dupla ${row.team.teamNumber}`).toBe(
-          esperado?.category_position,
+          alvo?.category_position,
         );
       }
+    }
+  });
+
+  it('marca os mesmos empates que o banco', () => {
+    for (const linha of esperado) {
+      expect(porNumero.get(linha.team_number)?.tied, `empate da dupla ${linha.team_number}`).toBe(
+        linha.tied,
+      );
     }
   });
 
@@ -134,29 +158,13 @@ describe('Motor TypeScript × motor SQL', () => {
       const teto = naCategoria.length;
 
       for (const row of naCategoria) {
-        const pontos = [
-          row.wod1?.pointsStrictPress,
-          row.wod1?.pointsBackSquat,
-          row.wod1?.pointsDeadlift,
-          row.wod1?.pointsTotal,
-          row.wod2?.pointsRun,
-          row.wod2?.pointsBike,
-          row.wod2?.pointsTotal,
-          row.wod3?.points,
-        ];
-        for (const pts of pontos) {
-          if (pts === null || pts === undefined) continue;
-          expect(pts, `dupla ${row.team.teamNumber} em ${categoria}`).toBeLessThanOrEqual(teto);
+        for (const p of board.provaList) {
+          const pontos = row.provas[p.id]?.points;
+          if (pontos === null || pontos === undefined) continue;
+          expect(pontos, `${p.codigo} da dupla ${row.team.teamNumber} em ${categoria}`)
+            .toBeLessThanOrEqual(teto);
         }
       }
-    }
-  });
-
-  it('marca os mesmos empates que o banco', () => {
-    for (const row of expected) {
-      expect(byNumber.get(row.team_number)?.tied, `empate dupla ${row.team_number}`).toBe(
-        row.tied,
-      );
     }
   });
 });

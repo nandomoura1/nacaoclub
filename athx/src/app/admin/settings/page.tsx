@@ -28,7 +28,7 @@ export default async function AdminSettingsPage() {
         </p>
       </header>
 
-      <SettingsForm settings={snapshot.settings} />
+      <SettingsForm settings={snapshot.settings} wods={snapshot.wods} />
     </div>
   );
 }

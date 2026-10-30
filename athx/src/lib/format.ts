@@ -56,3 +56,40 @@ export function normalize(text: string): string {
     .replace(/[̀-ͯ]/g, '')
     .trim();
 }
+
+/**
+ * O resultado bruto de uma prova, na unidade dela.
+ *
+ * Uma função só para todas as unidades: é a tela perguntando ao cadastro da
+ * prova como mostrar, em vez de carregar um `if` por WOD.
+ */
+export function valorDaProva(
+  unidade: import('@/types/wod').Unidade,
+  valor: number | null | undefined,
+): string {
+  if (valor === null || valor === undefined) return '—';
+
+  switch (unidade) {
+    case 'KG':
+      return kg(valor);
+    case 'KM':
+      return km(valor, valor % 1 === 0 ? 0 : 2);
+    case 'METROS':
+      return `${Math.round(valor)} m`;
+    case 'SEGUNDOS':
+      return formatarSegundos(valor);
+    case 'REPS':
+      return `${points(valor)} reps`;
+    case 'CALORIAS':
+      return `${points(valor)} cal`;
+    default:
+      return points(valor);
+  }
+}
+
+/** 872 -> "14:32" */
+function formatarSegundos(total: number): string {
+  const m = Math.floor(total / 60);
+  const s = Math.round(total % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}

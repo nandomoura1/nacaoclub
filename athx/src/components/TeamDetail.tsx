@@ -2,18 +2,17 @@
 
 import { useMemo } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Bike, Clock, Dumbbell, Footprints, Timer } from 'lucide-react';
+import { ArrowLeft, Clock, Dumbbell, Timer } from 'lucide-react';
 import type { Snapshot } from '@/services/snapshot';
-import { TIE_BREAKER_SHORT, WOD_META } from '@/types/domain';
-import { horariosDaBateria } from '@/lib/wods';
-import { buildLeaderboard } from '@/lib/scoring/build';
+import { tieBreakerCurto } from '@/types/domain';
+import { capEmTexto, horariosDaBateria } from '@/types/wod';
+import { leaderboardDoSnapshot } from '@/lib/scoring/build';
 import { standingsByCategory } from '@/lib/scoring/overall';
 import { useLiveSnapshot } from '@/hooks/useLiveSnapshot';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { LiveIndicator } from '@/components/LiveIndicator';
-import { categoryLabel, kg, km, points, teamNumber } from '@/lib/format';
-import { formatWod3Bruto } from '@/lib/time';
+import { categoryLabel, points, teamNumber, valorDaProva } from '@/lib/format';
 
 /**
  * Detalhe da dupla (§10) — a tela que o aluno abre para se ver.
@@ -25,13 +24,7 @@ export function TeamDetail({ initial, teamId }: { initial: Snapshot; teamId: str
 
   const board = useMemo(
     () =>
-      buildLeaderboard({
-        teams: snapshot.teams,
-        wod1: snapshot.wod1,
-        wod2: snapshot.wod2,
-        wod3: snapshot.wod3,
-        settings: snapshot.settings,
-      }),
+      leaderboardDoSnapshot(snapshot),
     [snapshot],
   );
 
@@ -41,6 +34,11 @@ export function TeamDetail({ initial, teamId }: { initial: Snapshot; teamId: str
   // A posição que interessa ao atleta é a da CATEGORIA dele — é lá que a
   // disputa acontece. A posição no geral misturaria as três categorias e
   // diria "7º lugar" para quem é o 1º entre as duplas mistas.
+  const horarios = useMemo(
+    () => (team ? horariosDaBateria(snapshot.agenda, snapshot.wods, team.battery) : []),
+    [snapshot.agenda, snapshot.wods, team],
+  );
+
   const row = useMemo(() => {
     if (!geral || !team) return geral;
     return standingsByCategory(board.standings, team.category).find(
@@ -114,14 +112,22 @@ export function TeamDetail({ initial, teamId }: { initial: Snapshot; teamId: str
           </p>
         </div>
 
-        <ul className="mt-4 grid grid-cols-3 gap-2">
-          {horariosDaBateria(team.battery).map(({ wod, hora }) => (
-            <li key={wod} className="rounded-xl bg-nacao-abyss/40 px-2.5 py-2.5 text-center">
+        <ul
+          className="mt-4 grid gap-2"
+          style={{
+            gridTemplateColumns: `repeat(${Math.min(
+              Math.max(horarios.length, 1),
+              3,
+            )}, minmax(0, 1fr))`,
+          }}
+        >
+          {horarios.map(({ wod, hora }) => (
+            <li key={wod.id} className="rounded-xl bg-nacao-abyss/40 px-2.5 py-2.5 text-center">
               <p className="font-display text-[9px] font-bold tracking-wider text-white/45 uppercase">
-                WOD {wod}
+                WOD {wod.numero}
               </p>
               <p className="font-display text-[10px] font-bold text-nacao-sky uppercase">
-                {WOD_META[wod].name}
+                {wod.nome}
               </p>
               <p className="tnum mt-1 font-display text-base font-extrabold text-white sm:text-lg">
                 {hora.split('–')[0]}
@@ -160,7 +166,7 @@ export function TeamDetail({ initial, teamId }: { initial: Snapshot; teamId: str
             {row.desempatadoPor ? (
               <p className="mt-1 text-xs text-nacao-sky">
                 Empate de pontos resolvido pela melhor colocação no{' '}
-                {TIE_BREAKER_SHORT[row.desempatadoPor]}
+                {tieBreakerCurto(row.desempatadoPor)}
               </p>
             ) : null}
           </div>
@@ -188,108 +194,89 @@ export function TeamDetail({ initial, teamId }: { initial: Snapshot; teamId: str
         </Card>
       )}
 
-      {/* ---- WOD 1 -------------------------------------------------------- */}
-      <Card className="p-5">
-        <WodHeader n={1} />
-        {row?.wod1?.hasResult ? (
-          <>
-            <div className="mt-4 grid grid-cols-3 gap-2">
-              <Stat
-                label="1A Press"
-                value={kg(row.wod1.strictPress)}
-                hint={`${row.wod1.rankStrictPress}º · ${points(row.wod1.pointsStrictPress)} pt`}
-                icon={<Dumbbell size={14} />}
-              />
-              <Stat
-                label="1B Squat"
-                value={kg(row.wod1.backSquat)}
-                hint={`${row.wod1.rankBackSquat}º · ${points(row.wod1.pointsBackSquat)} pt`}
-                icon={<Dumbbell size={14} />}
-              />
-              <Stat
-                label="1C Deadlift"
-                value={kg(row.wod1.deadlift)}
-                hint={`${row.wod1.rankDeadlift}º · ${points(row.wod1.pointsDeadlift)} pt`}
-                icon={<Dumbbell size={14} />}
-              />
-            </div>
-            <Result
-              label="1D Total de cargas"
-              value={kg(row.wod1.totalLoad)}
-              rank={row.wod1.rankTotal}
-              pts={row.wod1.points}
-              note="Pontuação do WOD 1 = 1A + 1B + 1C + 1D"
-            />
-          </>
-        ) : (
-          <Pending />
-        )}
-      </Card>
+      {/* ---- Um cartão por WOD do evento ---------------------------------- */}
+      {snapshot.wods.map((wod) => {
+        const total = row?.wods[wod.id];
+        const cap = capEmTexto(wod.capSegundos);
+        // A prova calculada resume o workout; as outras viram os cartões de cima.
+        const resumo = wod.provas.find((p) => p.origem === 'SOMA');
+        const parciais = wod.provas.filter((p) => p !== resumo);
 
-      {/* ---- WOD 2 -------------------------------------------------------- */}
-      <Card className="p-5">
-        <WodHeader n={2} />
-        {row?.wod2?.hasResult ? (
-          <>
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              <Stat
-                label="2A Corrida"
-                value={km(row.wod2.runKm)}
-                hint={`${row.wod2.rankRun}º · ${points(row.wod2.pointsRun)} pt`}
-                icon={<Footprints size={14} />}
-              />
-              <Stat
-                label="2B Bike"
-                value={km(row.wod2.bikeKm)}
-                hint={`${row.wod2.rankBike}º · ${points(row.wod2.pointsBike)} pt`}
-                icon={<Bike size={14} />}
-              />
+        return (
+          <Card key={wod.id} className="p-5">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <h2 className="font-display text-xl font-extrabold uppercase">
+                WOD {wod.numero} — <span className="text-nacao-cyan">{wod.nome}</span>
+              </h2>
+              <span className="font-display text-[10px] font-bold tracking-wider text-white/40 uppercase">
+                {[wod.formato, cap ? `CAP ${cap}` : null].filter(Boolean).join(' · ')}
+              </span>
             </div>
-            <Result
-              label="2C Soma dos KM"
-              value={km(row.wod2.totalKm)}
-              rank={row.wod2.rankTotal}
-              pts={row.wod2.points}
-              note="Pontuação do WOD 2 = 2A + 2B + 2C"
-            />
-          </>
-        ) : (
-          <Pending />
-        )}
-      </Card>
 
-      {/* ---- WOD 3 -------------------------------------------------------- */}
-      <Card className="p-5">
-        <WodHeader n={3} />
-        {row?.wod3?.hasResult ? (
-          <>
-            {!row.wod3.completed ? (
-              <p className="mt-4 rounded-xl border border-amber-400/25 bg-amber-400/[0.07] px-3.5 py-2.5 text-xs text-amber-200/90">
-                Não concluiu dentro do CAP de 20:00.
-                {row.wod3.volumeCompleted !== null
-                  ? ` Volume registrado: ${row.wod3.volumeCompleted}.`
-                  : ''}
-                {row.wod3.needsDecision
-                  ? ' O critério de ordenação dos incompletos ainda será definido pela organização.'
-                  : ''}
-              </p>
-            ) : null}
-            <Result
-              label={row.wod3.completed ? 'Tempo' : 'Volume no CAP'}
-              value={formatWod3Bruto(
-                row.wod3.completed,
-                row.wod3.timeSeconds,
-                row.wod3.volumeCompleted,
-              )}
-              rank={row.wod3.rank}
-              pts={row.wod3.points}
-              icon={<Timer size={14} />}
-            />
-          </>
-        ) : (
-          <Pending />
-        )}
-      </Card>
+            {total?.hasResult ? (
+              <>
+                {wod.permiteCap && !total.concluiu ? (
+                  <p className="mt-4 rounded-xl border border-amber-400/25 bg-amber-400/[0.07] px-3.5 py-2.5 text-xs text-amber-200/90">
+                    Não concluiu dentro do CAP{cap ? ` de ${cap}` : ''}.
+                    {total.volume !== null ? ` Volume registrado: ${points(total.volume)}.` : ''}
+                  </p>
+                ) : null}
+
+                {parciais.length > 1 ? (
+                  <div
+                    className="mt-4 grid gap-2"
+                    style={{
+                      gridTemplateColumns: `repeat(${Math.min(parciais.length, 3)}, minmax(0, 1fr))`,
+                    }}
+                  >
+                    {parciais.map((prova) => {
+                      const score = row?.provas[prova.id];
+                      return (
+                        <Stat
+                          key={prova.id}
+                          label={`${prova.codigo} ${prova.descricao}`}
+                          value={valorDaProva(prova.unidade, score?.valor)}
+                          hint={
+                            score?.rank
+                              ? `${score.rank}º · ${points(score.points)} pt`
+                              : 'aguardando'
+                          }
+                          icon={<Dumbbell size={14} />}
+                        />
+                      );
+                    })}
+                  </div>
+                ) : null}
+
+                {(() => {
+                  const principal = resumo ?? parciais[0];
+                  if (!principal) return null;
+                  const score = row?.provas[principal.id];
+                  return (
+                    <Result
+                      label={`${principal.codigo} ${principal.descricao}`}
+                      value={valorDaProva(principal.unidade, score?.valor)}
+                      rank={score?.rank ?? null}
+                      pts={total.points}
+                      note={
+                        wod.provas.length > 1
+                          ? `Pontuação do WOD ${wod.numero} = ${wod.provas
+                              .filter((p) => p.pontua)
+                              .map((p) => p.codigo)
+                              .join(' + ')}`
+                          : undefined
+                      }
+                      icon={<Timer size={14} />}
+                    />
+                  );
+                })()}
+              </>
+            ) : (
+              <Pending />
+            )}
+          </Card>
+        );
+      })}
 
       <div className="no-print">
         <LiveIndicator
@@ -297,20 +284,6 @@ export function TeamDetail({ initial, teamId }: { initial: Snapshot; teamId: str
           lastUpdate={new Date(updatedAt).toISOString()}
         />
       </div>
-    </div>
-  );
-}
-
-function WodHeader({ n }: { n: 1 | 2 | 3 }) {
-  const meta = WOD_META[n];
-  return (
-    <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-white/[0.09] pb-3">
-      <h2 className="font-display text-lg font-extrabold uppercase">
-        WOD {n} — <span className="text-nacao-cyan">{meta.name}</span>
-      </h2>
-      <span className="font-display text-[10px] font-bold tracking-wider text-white/40 uppercase">
-        {meta.format} · CAP {meta.cap}
-      </span>
     </div>
   );
 }

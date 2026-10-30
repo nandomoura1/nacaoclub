@@ -1,34 +1,28 @@
-import type {
-  EventSettings,
-  ResultStatus,
-  StandingRow,
-  Team,
-  Wod1Result,
-  Wod1Score,
-  Wod2Result,
-  Wod2Score,
-  Wod3Result,
-  Wod3Score,
-} from '@/types/domain';
+import type { EventSettings, ResultStatus, StandingRow, Team } from '@/types/domain';
+import type { Prova, ProvaResult, ProvaScore, Wod, WodEntry, WodScore } from '@/types/wod';
+import { todasAsProvas } from '@/types/wod';
 import { PUBLIC_STATUSES } from './eligibility';
-import { scoreWod1 } from './wod1';
-import { scoreWod2 } from './wod2';
-import { scoreWod3 } from './wod3';
+import { pontuarEvento } from './motor';
 import { computeStandings } from './overall';
 
 export interface RawResults {
   teams: Team[];
-  wod1: Wod1Result[];
-  wod2: Wod2Result[];
-  wod3: Wod3Result[];
+  wods: Wod[];
+  entries: WodEntry[];
+  results: ProvaResult[];
   settings: EventSettings;
 }
 
 export interface Leaderboard {
   standings: StandingRow[];
-  wod1: Map<string, Wod1Score>;
-  wod2: Map<string, Wod2Score>;
-  wod3: Map<string, Wod3Score>;
+  /** provaId -> teamId -> pontuação. */
+  provas: Map<string, Map<string, ProvaScore>>;
+  /** wodId -> teamId -> total do workout. */
+  wodScores: Map<string, Map<string, WodScore>>;
+  /** Os WODs do evento, na ordem de exibição. */
+  wods: Wod[];
+  /** Todas as provas, na ordem — é a ordem das colunas da tabela. */
+  provaList: Prova[];
   settings: EventSettings;
   teams: Team[];
 }
@@ -48,23 +42,54 @@ export function buildLeaderboard(
   options: { statuses?: readonly ResultStatus[] } = {},
 ): Leaderboard {
   const statuses = options.statuses ?? PUBLIC_STATUSES;
-  const { teams, settings } = raw;
-  const tieMode = settings.tiePointsMode;
+  const { teams, wods, entries, results, settings } = raw;
 
-  const wod1 = scoreWod1(teams, raw.wod1, { tieMode, statuses });
-  const wod2 = scoreWod2(teams, raw.wod2, { tieMode, statuses });
-  const wod3 = scoreWod3(teams, raw.wod3, {
-    tieMode,
+  const ordenados = [...wods].sort((a, b) => a.ordem - b.ordem || a.numero - b.numero);
+
+  const motor = pontuarEvento({
+    teams,
+    wods: ordenados,
+    entries,
+    results,
+    settings,
     statuses,
-    dnfPolicy: settings.dnfPolicy,
   });
 
   return {
-    standings: computeStandings(teams, wod1, wod2, wod3, settings),
-    wod1,
-    wod2,
-    wod3,
+    standings: computeStandings({
+      teams,
+      wods: ordenados,
+      provas: motor.provas,
+      totaisPorWod: motor.wods,
+      settings,
+    }),
+    provas: motor.provas,
+    wodScores: motor.wods,
+    wods: ordenados,
+    provaList: todasAsProvas(ordenados),
     settings,
     teams,
   };
+}
+
+/**
+ * Atalho para as telas: monta a classificação a partir do snapshot.
+ *
+ * Toda tela faz exatamente isto, e repetir o desmonte do snapshot em oito
+ * lugares é como uma delas acaba esquecendo de passar a agenda nova.
+ */
+export function leaderboardDoSnapshot(
+  snapshot: import('@/services/snapshot').Snapshot,
+  options: { statuses?: readonly ResultStatus[] } = {},
+): Leaderboard {
+  return buildLeaderboard(
+    {
+      teams: snapshot.teams,
+      wods: snapshot.wods,
+      entries: snapshot.entries,
+      results: snapshot.results,
+      settings: snapshot.settings,
+    },
+    options,
+  );
 }

@@ -3,13 +3,14 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { ChevronDown, Users } from 'lucide-react';
-import type { Battery, Team } from '@/types/domain';
-import { SCHEDULE } from '@/lib/wods';
+import type { Team } from '@/types/domain';
+import type { AgendaItem } from '@/types/wod';
 import { Tabs } from '@/components/ui/Tabs';
 import { Badge } from '@/components/ui/Badge';
 import { categoryShort, teamNumber } from '@/lib/format';
 
-type Filtro = 'TODAS' | '1' | '2';
+/** 'TODAS' ou o número da bateria em texto. */
+type Filtro = string;
 
 /**
  * Programação com as duplas de cada bateria.
@@ -19,20 +20,25 @@ type Filtro = 'TODAS' | '1' | '2';
  * toques a pessoa vê só os horários dela e quem mais está na bateria.
  */
 export function ScheduleTimeline({
-  bateria1,
-  bateria2,
+  agenda,
+  duplasPorBateria,
 }: {
-  bateria1: Team[];
-  bateria2: Team[];
+  /** A programação do dia, cadastrada em /admin/wods. */
+  agenda: AgendaItem[];
+  /** Quais duplas disputam cada bateria. */
+  duplasPorBateria: Record<number, Team[]>;
 }) {
   const [filtro, setFiltro] = useState<Filtro>('TODAS');
   const [abertas, setAbertas] = useState<Set<string>>(new Set());
 
-  const duplasDa = (b: Battery) => (b === 1 ? bateria1 : bateria2);
-  const temDuplas = bateria1.length + bateria2.length > 0;
+  const baterias = [...new Set(agenda.map((a) => a.bateria).filter((b): b is number => b !== null))]
+    .sort((a, b) => a - b);
 
-  const visiveis = SCHEDULE.filter(
-    (item) => filtro === 'TODAS' || item.bateria === undefined || item.bateria === Number(filtro),
+  const duplasDa = (b: number) => duplasPorBateria[b] ?? [];
+  const temDuplas = Object.values(duplasPorBateria).some((d) => d.length > 0);
+
+  const visiveis = agenda.filter(
+    (item) => filtro === 'TODAS' || item.bateria === null || item.bateria === Number(filtro),
   );
 
   const alternar = (chave: string) =>
@@ -52,9 +58,11 @@ export function ScheduleTimeline({
           </p>
           <Tabs
             options={[
-              { value: 'TODAS' as const, label: 'Tudo' },
-              { value: '1' as const, label: `Bateria 1 · ${bateria1.length} duplas` },
-              { value: '2' as const, label: `Bateria 2 · ${bateria2.length} duplas` },
+              { value: 'TODAS', label: 'Tudo' },
+              ...baterias.map((b) => ({
+                value: String(b),
+                label: `Bateria ${b} · ${duplasDa(b).length} duplas`,
+              })),
             ]}
             value={filtro}
             onChange={setFiltro}

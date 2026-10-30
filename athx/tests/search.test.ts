@@ -2,19 +2,22 @@ import { describe, expect, it } from 'vitest';
 import { matchesQuery } from '@/lib/search';
 import { buildLeaderboard } from '@/lib/scoring/build';
 import { standingsByCategory } from '@/lib/scoring/overall';
-import { settings, team, w1 } from './helpers';
+import { cargas, cenario, team } from './helpers';
 
-const board = buildLeaderboard({
-  teams: [
+const board = buildLeaderboard(
+  cenario({
+    teams: [
     team(1, { teamName: 'Cerrado', athlete1: 'Marina Cerrado', athlete2: 'Rafa Cerrado', category: 'MISTA' }),
     team(2, { teamName: 'Ipê Amarelo', athlete1: 'Bia Ipê', athlete2: 'Nina Ipê', category: 'FEMININA' }),
     team(7, { teamName: 'Buriti', athlete1: 'Zé Buriti', athlete2: 'Dan Buriti', category: 'MASCULINA' }),
   ],
-  wod1: [w1('team-1', [100]), w1('team-2', [90]), w1('team-7', [80])],
-  wod2: [],
-  wod3: [],
-  settings: settings(),
-});
+    wod1: [
+      ...cargas('team-1', [100, 100, 100, 100, 100, 100]),
+      ...cargas('team-2', [90, 90, 90, 90, 90, 90]),
+      ...cargas('team-7', [80, 80, 80, 80, 80, 80]),
+    ],
+  }),
+);
 
 const rows = board.standings;
 const acha = (q: string) => rows.filter((r) => matchesQuery(r, q)).map((r) => r.team.teamName);
@@ -62,18 +65,19 @@ describe('Filtro por categoria (§29)', () => {
   });
 
   it('renumera as posições dentro da categoria', () => {
-    const board2 = buildLeaderboard({
-      teams: [
-        team(1, { category: 'MASCULINA' }),
-        team(2, { category: 'FEMININA' }),
-        team(3, { category: 'MASCULINA' }),
-        team(4, { category: 'MASCULINA' }),
-      ],
-      wod1: [w1('team-1', [400]), w1('team-2', [300]), w1('team-3', [200]), w1('team-4', [100])],
-      wod2: [],
-      wod3: [],
-      settings: settings(),
-    });
+    const board2 = buildLeaderboard(
+      cenario({
+        teams: [
+          team(1, { category: 'MASCULINA' }),
+          team(2, { category: 'FEMININA' }),
+          team(3, { category: 'MASCULINA' }),
+          team(4, { category: 'MASCULINA' }),
+        ],
+        wod1: [400, 300, 200, 100].flatMap((kg, i) =>
+          cargas(`team-${i + 1}`, [kg, kg, kg, kg, kg, kg]),
+        ),
+      }),
+    );
 
     const masc = standingsByCategory(board2.standings, 'MASCULINA');
     expect(masc.map((r) => r.team.id)).toEqual(['team-1', 'team-3', 'team-4']);

@@ -252,7 +252,36 @@ Quem não concluir grava **CAP = 20:00** e o **volume concluído**.
 
 ### Classificação geral
 
-A competição tem **oito pontuações independentes**. O total é a soma das oito:
+### O evento é dado, não código
+
+Os workouts e as provas de cada um são **cadastrados em `/admin/wods`**, não
+escritos no código. Um WOD tem as provas que a organização quiser, e cada
+prova carrega o que o motor precisa saber:
+
+| Campo | O que decide |
+|---|---|
+| **Unidade** | kg, km, metros, tempo, repetições ou calorias — como o número é digitado e exibido |
+| **Direção** | maior vence ou menor vence |
+| **Origem** | lançada pelo juiz, ou **calculada** como soma de outras provas do mesmo WOD |
+| **Por atleta** | o juiz digita dois campos e a prova vale a soma (é o caso das cargas) |
+| **Pontua** | se entra no total do evento |
+
+O motor não conhece "1A" nem "corrida". Ele percorre as provas do evento e
+aplica a mesma regra em todas: resolve o valor, separa quem conta, ranqueia
+dentro da categoria na direção da prova, e transforma posição em ponto. Um
+workout novo não precisa de uma linha de código.
+
+Prova calculada **nunca é digitada** — é o que impede a 1D de divergir de
+1A + 1B + 1C por um erro de digitação. E o banco recusa somar uma prova que
+já é uma soma, porque conta de conta faria os dois motores discordarem.
+
+A programação do dia e o número de baterias também são dado: horários,
+briefing e pódio saem da tabela `agenda`, editável na mesma tela.
+
+---
+
+A etapa de setembro, cadastrada assim, tem **oito pontuações independentes**.
+O total é a soma das oito:
 
 ```
 TOTAL = 1A + 1B + 1C + 1D  +  2A + 2B + 2C  +  3
@@ -520,6 +549,7 @@ npm run lint        # ESLint
 | `standings.test.ts` | classificação geral, empates, resultado parcial, filtro por categoria |
 | `categoria.test.ts` | teto de pontos por categoria nas 8 provas, DNF e desclassificada |
 | `desempate.test.ts` | critérios em ordem, empate que sobrevive, herança na categoria |
+| `motor.test.ts` | prova por atleta, prova calculada, direção, CAP, homologação, teto por categoria |
 | `parity.test.ts` | **motor TypeScript × motor SQL** sobre 20 duplas |
 | `search.test.ts` | busca por dupla, atleta, número, sem acento; filtro por categoria |
 | `validation.test.ts` | schemas de lançamento e cadastro |

@@ -1,12 +1,12 @@
 import Link from 'next/link';
 import { ArrowRight, ClipboardList, Monitor, QrCode, Users } from 'lucide-react';
 import { getSnapshot } from '@/services/leaderboard-service';
-import { buildLeaderboard } from '@/lib/scoring/build';
+import { leaderboardDoSnapshot } from '@/lib/scoring/build';
+import { capEmTexto } from '@/types/wod';
 import { ADMIN_STATUSES } from '@/lib/scoring/eligibility';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { EventErrorScreen } from '@/components/EventErrorScreen';
-import { WOD_META } from '@/types/domain';
 import type { Snapshot } from '@/services/snapshot';
 
 export const dynamic = 'force-dynamic';
@@ -20,33 +20,18 @@ export default async function AdminDashboard() {
     return <EventErrorScreen message={error instanceof Error ? error.message : ''} />;
   }
 
-  const publico = buildLeaderboard({
-    teams: snapshot.teams,
-    wod1: snapshot.wod1,
-    wod2: snapshot.wod2,
-    wod3: snapshot.wod3,
-    settings: snapshot.settings,
-  });
+  const publico = leaderboardDoSnapshot(snapshot);
 
-  const previa = buildLeaderboard(
-    {
-      teams: snapshot.teams,
-      wod1: snapshot.wod1,
-      wod2: snapshot.wod2,
-      wod3: snapshot.wod3,
-      settings: snapshot.settings,
-    },
-    { statuses: ADMIN_STATUSES },
-  );
+  const previa = leaderboardDoSnapshot(snapshot, { statuses: ADMIN_STATUSES });
 
-  const progresso = ([1, 2, 3] as const).map((n) => {
-    const results =
-      n === 1 ? snapshot.wod1 : n === 2 ? snapshot.wod2 : snapshot.wod3;
-    const publicados = results.filter(
-      (r) => r.status === 'PUBLISHED' || r.status === 'LOCKED',
-    ).length;
-    const rascunhos = results.filter((r) => r.status === 'DRAFT').length;
-    return { n, publicados, rascunhos };
+  // Um cartão por WOD do evento — três, cinco ou um, conforme o cadastro.
+  const progresso = snapshot.wods.map((wod) => {
+    const entradas = snapshot.entries.filter((e) => e.wodId === wod.id);
+    return {
+      wod,
+      publicados: entradas.filter((e) => e.status === 'PUBLISHED' || e.status === 'LOCKED').length,
+      rascunhos: entradas.filter((e) => e.status === 'DRAFT').length,
+    };
   });
 
   const ativos = snapshot.teams.filter((t) => t.status !== 'DESCLASSIFICADA').length;
@@ -79,15 +64,18 @@ export default async function AdminDashboard() {
         <h2 className="mb-3 font-display text-sm font-bold tracking-wider text-white/50 uppercase">
           Lançamento por WOD
         </h2>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {progresso.map(({ n, publicados, rascunhos }) => (
-            <Link key={n} href={`/admin/wod/${n}`} className="group">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {progresso.map(({ wod, publicados, rascunhos }) => (
+            <Link key={wod.id} href={`/admin/wod/${wod.numero}`} className="group">
               <Card className="flex h-full flex-col justify-between gap-4 p-5 transition-colors group-hover:bg-white/[0.08]">
                 <div>
                   <p className="font-display text-[10px] font-bold tracking-kicker text-nacao-cyan uppercase">
-                    {WOD_META[n].name} · CAP {WOD_META[n].cap}
+                    {wod.nome}
+                    {capEmTexto(wod.capSegundos) ? ` · CAP ${capEmTexto(wod.capSegundos)}` : ''}
                   </p>
-                  <p className="mt-1 font-display text-2xl font-black uppercase">WOD {n}</p>
+                  <p className="mt-1 font-display text-2xl font-black uppercase">
+                    WOD {wod.numero}
+                  </p>
                 </div>
 
                 <div>

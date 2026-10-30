@@ -4,12 +4,13 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Save } from 'lucide-react';
 import type { DnfPolicy, EventSettings, TieBreaker, TiePointsMode } from '@/types/domain';
-import { TIE_BREAKERS, TIE_BREAKER_LABEL } from '@/types/domain';
+import { SEM_DESEMPATE, tieBreakerDoWod } from '@/types/domain';
+import type { Wod } from '@/types/wod';
 import { salvarConfiguracoes } from '@/app/admin/actions';
 import type { ActionResult } from '@/app/admin/actions';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
-import { Select } from '@/components/ui/Input';
+import { Input, Select } from '@/components/ui/Input';
 
 const TIE_MODES: { value: TiePointsMode; titulo: string; descricao: string }[] = [
   {
@@ -53,7 +54,14 @@ const DNF_POLICIES: { value: DnfPolicy; titulo: string; descricao: string }[] = 
  * organização. Em vez de o sistema inventar, ele pergunta — e deixa a
  * escolha explícita, auditável e reversível.
  */
-export function SettingsForm({ settings }: { settings: EventSettings }) {
+export function SettingsForm({
+  settings,
+  wods,
+}: {
+  settings: EventSettings;
+  /** Os WODs do evento: é deles que sai a lista de critérios possíveis. */
+  wods: Wod[];
+}) {
   const router = useRouter();
   const [pendente, startTransition] = useTransition();
   const [form, setForm] = useState<EventSettings>(settings);
@@ -149,6 +157,31 @@ export function SettingsForm({ settings }: { settings: EventSettings }) {
         </div>
       </Card>
 
+      {/* ---- Baterias ----------------------------------------------------- */}
+      <Card className="p-5">
+        <CardHeader kicker="§37 Programação" title="Quantas baterias o evento tem" />
+        <p className="mt-2 text-sm text-white/55">
+          As duplas são divididas em baterias para disputar o mesmo workout em horários
+          diferentes. Este número é o que a tela de duplas oferece ao cadastrar, e os
+          horários de cada bateria ficam na programação, em{' '}
+          <strong>Configurações → WODs</strong>.
+        </p>
+
+        <div className="mt-4 max-w-[12rem]">
+          <Input
+            id="baterias"
+            type="number"
+            min={1}
+            max={20}
+            label="Baterias"
+            value={String(form.baterias)}
+            onChange={(e) =>
+              setForm({ ...form, baterias: Math.max(1, Number(e.target.value) || 1) })
+            }
+          />
+        </div>
+      </Card>
+
       {/* ---- Desempate ---------------------------------------------------- */}
       <Card className="p-5">
         <CardHeader kicker="§15 Classificação geral" title="Critérios de desempate" />
@@ -187,9 +220,10 @@ export function SettingsForm({ settings }: { settings: EventSettings }) {
                   setForm({ ...form, [campo]: e.target.value as TieBreaker })
                 }
               >
-                {TIE_BREAKERS.map((criterio) => (
-                  <option key={criterio} value={criterio}>
-                    {TIE_BREAKER_LABEL[criterio]}
+                <option value={SEM_DESEMPATE}>Nenhum — decisão manual</option>
+                {wods.map((w) => (
+                  <option key={w.id} value={tieBreakerDoWod(w.numero)}>
+                    Melhor colocação no WOD {w.numero} — {w.nome}
                   </option>
                 ))}
               </Select>

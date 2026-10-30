@@ -5,13 +5,15 @@ import { z } from 'zod';
 import { EVENT_SLUG, IS_DEMO } from '@/lib/env';
 import { getServerSupabase } from '@/lib/supabase/server';
 import {
+  agendaSchema,
+  lancamentoSchema,
+  provaSchema,
   settingsSchema,
   teamSchema,
-  wod1RowSchema,
-  wod2RowSchema,
-  wod3RowSchema,
+  wodSchema,
 } from '@/lib/validation';
-import type { ResultStatus, WodNumber } from '@/types/domain';
+import { parseTimeToSeconds } from '@/lib/time';
+import type { ResultStatus } from '@/types/domain';
 
 export interface ActionResult {
   ok: boolean;
@@ -157,176 +159,44 @@ export async function excluirDupla(teamId: string): Promise<ActionResult> {
    RESULTADOS (§19, §20, §21)
    ========================================================================= */
 
-export async function salvarWod1(rows: unknown[]): Promise<ActionResult> {
-  if (IS_DEMO) return DEMO_BLOCK;
 
-  try {
-    const { supabase, user, eventId } = await requireAdmin();
-    const parsed = rows.map((r) => wod1RowSchema.parse(r));
 
-    const payload = parsed.map((r) => ({
-      event_id: eventId,
-      team_id: r.teamId,
-      strict_press_athlete_1: r.strictPressAthlete1,
-      strict_press_athlete_2: r.strictPressAthlete2,
-      back_squat_athlete_1: r.backSquatAthlete1,
-      back_squat_athlete_2: r.backSquatAthlete2,
-      deadlift_athlete_1: r.deadliftAthlete1,
-      deadlift_athlete_2: r.deadliftAthlete2,
-      updated_by: user.id,
-    }));
-
-    const { error } = await supabase
-      .from('wod1_results')
-      .upsert(payload, { onConflict: 'team_id' });
-    if (error) throw new Error(error.message);
-
-    revalidateTudo();
-    return { ok: true, message: `${payload.length} resultado(s) do WOD 1 salvos como rascunho.` };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return { ok: false, message: error.issues[0]?.message ?? 'Dados inválidos.' };
-    }
-    return fail(error);
-  }
-}
-
-export async function salvarWod2(rows: unknown[]): Promise<ActionResult> {
-  if (IS_DEMO) return DEMO_BLOCK;
-
-  try {
-    const { supabase, user, eventId } = await requireAdmin();
-
-    // Valida linha a linha para dizer EXATAMENTE qual dupla tem problema —
-    // no meio do evento, "dados inválidos" sem contexto não ajuda ninguém.
-    const fieldErrors: Record<string, string> = {};
-    const parsed: { teamId: string; runKm: number | null; bikeKm: number | null }[] = [];
-
-    for (const row of rows) {
-      const result = wod2RowSchema.safeParse(row);
-      if (!result.success) {
-        const teamId = (row as { teamId?: string }).teamId ?? 'desconhecida';
-        fieldErrors[teamId] = result.error.issues[0]?.message ?? 'Valor inválido';
-      } else {
-        parsed.push(result.data);
-      }
-    }
-
-    if (Object.keys(fieldErrors).length > 0) {
-      return {
-        ok: false,
-        message: 'Corrija os valores destacados antes de salvar.',
-        fieldErrors,
-      };
-    }
-
-    const payload = parsed.map((r) => ({
-      event_id: eventId,
-      team_id: r.teamId,
-      run_km: r.runKm,
-      bike_km: r.bikeKm,
-      updated_by: user.id,
-    }));
-
-    const { error } = await supabase
-      .from('wod2_results')
-      .upsert(payload, { onConflict: 'team_id' });
-    if (error) throw new Error(error.message);
-
-    revalidateTudo();
-    return { ok: true, message: `${payload.length} resultado(s) do WOD 2 salvos como rascunho.` };
-  } catch (error) {
-    return fail(error);
-  }
-}
-
-export async function salvarWod3(rows: unknown[]): Promise<ActionResult> {
-  if (IS_DEMO) return DEMO_BLOCK;
-
-  try {
-    const { supabase, user, eventId } = await requireAdmin();
-
-    const fieldErrors: Record<string, string> = {};
-    const payload: Record<string, unknown>[] = [];
-
-    for (const row of rows) {
-      const result = wod3RowSchema.safeParse(row);
-      if (!result.success) {
-        const teamId = (row as { teamId?: string }).teamId ?? 'desconhecida';
-        fieldErrors[teamId] = result.error.issues[0]?.message ?? 'Valor inválido';
-        continue;
-      }
-      payload.push({
-        event_id: eventId,
-        team_id: result.data.teamId,
-        time_seconds: result.data.timeSeconds,
-        completed: result.data.completed,
-        volume_completed: result.data.volumeCompleted,
-        updated_by: user.id,
-      });
-    }
-
-    if (Object.keys(fieldErrors).length > 0) {
-      return { ok: false, message: 'Corrija os tempos destacados.', fieldErrors };
-    }
-
-    const { error } = await supabase
-      .from('wod3_results')
-      .upsert(payload, { onConflict: 'team_id' });
-    if (error) throw new Error(error.message);
-
-    revalidateTudo();
-    return { ok: true, message: `${payload.length} resultado(s) do WOD 3 salvos como rascunho.` };
-  } catch (error) {
-    return fail(error);
-  }
-}
 
 /* =========================================================================
    HOMOLOGAÇÃO (§22) — DRAFT -> PUBLISHED -> LOCKED
    ========================================================================= */
 
-const TABELA: Record<WodNumber, string> = {
-  1: 'wod1_results',
-  2: 'wod2_results',
-  3: 'wod3_results',
-};
 
 export async function definirStatus(
-  wod: WodNumber,
+  wodId: string,
   teamIds: string[],
   status: ResultStatus,
 ): Promise<ActionResult> {
   if (IS_DEMO) return DEMO_BLOCK;
 
   try {
-    const { supabase, user, eventId } = await requireAdmin();
+    const { supabase, user } = await requireAdmin();
     if (teamIds.length === 0) {
       return { ok: false, message: 'Nenhuma dupla selecionada.' };
     }
 
     const { error } = await supabase
-      .from(TABELA[wod])
+      .from('wod_entries')
       .update({ status, updated_by: user.id })
+      .eq('wod_id', wodId)
       .in('team_id', teamIds);
 
     if (error) throw new Error(error.message);
 
-    // O gatilho do banco já recalcula, mas pedimos explicitamente: assim o
-    // recálculo acontece ainda dentro desta requisição e a próxima leitura
-    // já sai correta (§25).
-    const { error: recalcError } = await supabase.rpc('athx_recalculate_event', {
-      p_event: eventId,
-    });
-    if (recalcError) throw new Error(recalcError.message);
-
+    // Não há recálculo a pedir: a pontuação é calculada na leitura, pela
+    // view athx_prova_scores e pelo motor TypeScript. Publicar já basta.
     revalidateTudo();
 
     const rotulo =
       status === 'PUBLISHED' ? 'publicados' : status === 'LOCKED' ? 'travados' : 'em rascunho';
     return {
       ok: true,
-      message: `Resultados do WOD ${wod} ${rotulo} com sucesso. (${teamIds.length} dupla(s))`,
+      message: `Resultados ${rotulo} com sucesso. (${teamIds.length} dupla(s))`,
     };
   } catch (error) {
     return fail(error);
@@ -335,23 +205,22 @@ export async function definirStatus(
 
 /** Destrava um resultado LOCKED — exige motivo e gera auditoria (§22, §23). */
 export async function destravarResultado(
-  wod: WodNumber,
+  wodId: string,
   teamId: string,
   motivo: string,
 ): Promise<ActionResult> {
   if (IS_DEMO) return DEMO_BLOCK;
 
   try {
-    const { supabase, eventId } = await requireAdmin();
+    const { supabase } = await requireAdmin();
 
-    const { error } = await supabase.rpc('athx_unlock_result', {
-      p_wod_number: wod,
-      p_team_id: teamId,
-      p_reason: motivo,
+    const { error } = await supabase.rpc('athx_unlock_entry', {
+      p_wod: wodId,
+      p_team: teamId,
+      p_motivo: motivo,
     });
     if (error) throw new Error(error.message);
 
-    await supabase.rpc('athx_recalculate_event', { p_event: eventId });
     revalidateTudo();
     return { ok: true, message: 'Resultado destravado e registrado na auditoria.' };
   } catch (error) {
@@ -359,16 +228,21 @@ export async function destravarResultado(
   }
 }
 
+/**
+ * Releitura forçada.
+ *
+ * Não existe mais "recalcular": a pontuação é calculada na leitura, tanto
+ * pelo motor TypeScript quanto pelas views do banco. Nada fica materializado
+ * para sair do lugar. O botão continua existindo porque é útil quando a
+ * pessoa quer ter certeza de que está vendo o estado mais recente.
+ */
 export async function recalcular(): Promise<ActionResult> {
   if (IS_DEMO) return DEMO_BLOCK;
 
   try {
-    const { supabase, eventId } = await requireAdmin();
-    const { error } = await supabase.rpc('athx_recalculate_event', { p_event: eventId });
-    if (error) throw new Error(error.message);
-
+    await requireAdmin();
     revalidateTudo();
-    return { ok: true, message: 'Classificação recalculada.' };
+    return { ok: true, message: 'Classificação atualizada a partir dos lançamentos.' };
   } catch (error) {
     return fail(error);
   }
@@ -420,4 +294,285 @@ export async function salvarConfiguracoes(input: unknown): Promise<ActionResult>
 export async function sair(): Promise<void> {
   const supabase = await getServerSupabase();
   await supabase.auth.signOut();
+}
+
+
+/* ==========================================================================
+   LANÇAMENTO DE RESULTADOS
+   ========================================================================== */
+
+/**
+ * Converte o que o juiz digitou conforme a UNIDADE da prova.
+ *
+ * O campo é texto porque é um input. Tempo chega "14:32", distância chega
+ * "2,41", carga chega "137,5". A conversão acontece aqui, no servidor, que é
+ * onde a unidade da prova é conhecida — a tela só mostra o teclado certo.
+ */
+function paraNumero(texto: string | null, unidade: string): number | null {
+  const limpo = (texto ?? '').trim();
+  if (limpo === '') return null;
+
+  if (unidade === 'SEGUNDOS') return parseTimeToSeconds(limpo);
+
+  const n = Number(limpo.replace(',', '.'));
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+/**
+ * Salva o lançamento de um WOD inteiro: a homologação de cada dupla e o
+ * valor dela em cada prova digitada.
+ *
+ * Uma ação só para qualquer workout. Antes eram três, uma por WOD, cada uma
+ * sabendo os nomes das colunas daquele — e um WOD novo pedia uma quarta.
+ */
+export async function salvarLancamentos(
+  wodId: string,
+  linhas: unknown[],
+): Promise<ActionResult> {
+  if (IS_DEMO) return DEMO_BLOCK;
+
+  try {
+    const dados = linhas.map((l) => lancamentoSchema.parse(l));
+    const { supabase, user, eventId } = await requireAdmin();
+
+    const { data: provas, error: provasError } = await supabase
+      .from('provas')
+      .select('id, unidade, por_atleta, origem')
+      .eq('wod_id', wodId);
+    if (provasError) throw new Error(provasError.message);
+
+    const porId = new Map((provas ?? []).map((p) => [p.id as string, p]));
+
+    // Homologação: uma linha por dupla.
+    const entradas = dados.map((l) => ({
+      event_id: eventId,
+      wod_id: wodId,
+      team_id: l.teamId,
+      concluiu: l.concluiu,
+      volume: l.volume,
+      updated_by: user.id,
+    }));
+
+    const { error: entradaError } = await supabase
+      .from('wod_entries')
+      .upsert(entradas, { onConflict: 'wod_id,team_id' });
+    if (entradaError) throw new Error(entradaError.message);
+
+    // Valores: um por prova digitada. Prova calculada nunca é gravada.
+    const valores: Record<string, unknown>[] = [];
+    for (const linha of dados) {
+      for (const [provaId, campos] of Object.entries(linha.valores)) {
+        const prova = porId.get(provaId);
+        if (!prova || prova.origem !== 'DIGITADA') continue;
+
+        valores.push({
+          event_id: eventId,
+          prova_id: provaId,
+          team_id: linha.teamId,
+          valor: prova.por_atleta ? null : paraNumero(campos.valor, prova.unidade),
+          valor_atleta_1: prova.por_atleta ? paraNumero(campos.atleta1, prova.unidade) : null,
+          valor_atleta_2: prova.por_atleta ? paraNumero(campos.atleta2, prova.unidade) : null,
+        });
+      }
+    }
+
+    if (valores.length > 0) {
+      const { error } = await supabase
+        .from('prova_results')
+        .upsert(valores, { onConflict: 'prova_id,team_id' });
+      if (error) throw new Error(error.message);
+    }
+
+    revalidateTudo();
+    return { ok: true, message: `${dados.length} lançamento(s) salvos.` };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+/* ==========================================================================
+   O EVENTO: WODs, PROVAS E AGENDA
+   ========================================================================== */
+
+export async function salvarWod(input: unknown): Promise<ActionResult> {
+  if (IS_DEMO) return DEMO_BLOCK;
+
+  try {
+    const dados = wodSchema.parse(input);
+    const { supabase, eventId } = await requireAdmin();
+
+    const linha = {
+      event_id: eventId,
+      numero: dados.numero,
+      nome: dados.nome,
+      formato: dados.formato,
+      cap_segundos: dados.capSegundos,
+      resumo: dados.resumo,
+      permite_cap: dados.permiteCap,
+      regras: dados.regras,
+      pendencias: dados.pendencias,
+      ordem: dados.ordem,
+    };
+
+    const { data, error } = dados.id
+      ? await supabase.from('wods').update(linha).eq('id', dados.id).select('id').single()
+      : await supabase.from('wods').insert(linha).select('id').single();
+    if (error) throw new Error(error.message);
+
+    const wodId = data.id as string;
+
+    // Os blocos são reescritos por inteiro: é uma lista ordenada curta, e
+    // casar item a item renderia mais código do que valor.
+    const { error: limpa } = await supabase.from('wod_blocos').delete().eq('wod_id', wodId);
+    if (limpa) throw new Error(limpa.message);
+
+    if (dados.blocos.length > 0) {
+      const { error: insere } = await supabase.from('wod_blocos').insert(
+        dados.blocos.map((b) => ({
+          wod_id: wodId,
+          ordem: b.ordem,
+          janela: b.janela,
+          movimento: b.movimento,
+          detalhe: b.detalhe,
+          masculino: b.masculino,
+          feminino: b.feminino,
+        })),
+      );
+      if (insere) throw new Error(insere.message);
+    }
+
+    revalidateTudo();
+    return { ok: true, message: `WOD ${dados.numero} salvo.` };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function excluirWod(wodId: string): Promise<ActionResult> {
+  if (IS_DEMO) return DEMO_BLOCK;
+
+  try {
+    const { supabase } = await requireAdmin();
+
+    // Apagar um WOD apaga as provas e os lançamentos dele em cascata. Avisar
+    // o tamanho do estrago é obrigação de quem pergunta "tem certeza?".
+    const { count } = await supabase
+      .from('prova_results')
+      .select('id', { count: 'exact', head: true })
+      .in(
+        'prova_id',
+        ((await supabase.from('provas').select('id').eq('wod_id', wodId)).data ?? []).map(
+          (p) => p.id as string,
+        ),
+      );
+
+    const { error } = await supabase.from('wods').delete().eq('id', wodId);
+    if (error) throw new Error(error.message);
+
+    revalidateTudo();
+    return {
+      ok: true,
+      message:
+        count && count > 0
+          ? `WOD excluído, junto com ${count} lançamento(s).`
+          : 'WOD excluído.',
+    };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function salvarProva(input: unknown): Promise<ActionResult> {
+  if (IS_DEMO) return DEMO_BLOCK;
+
+  try {
+    const dados = provaSchema.parse(input);
+    const { supabase } = await requireAdmin();
+
+    const linha = {
+      wod_id: dados.wodId,
+      codigo: dados.codigo.toUpperCase(),
+      descricao: dados.descricao,
+      criterio: dados.criterio,
+      unidade: dados.unidade,
+      direcao: dados.direcao,
+      origem: dados.origem,
+      por_atleta: dados.porAtleta,
+      componentes: dados.componentes.map((c) => c.toUpperCase()),
+      pontua: dados.pontua,
+      ordem: dados.ordem,
+    };
+
+    const { error } = dados.id
+      ? await supabase.from('provas').update(linha).eq('id', dados.id)
+      : await supabase.from('provas').insert(linha);
+    if (error) throw new Error(error.message);
+
+    revalidateTudo();
+    return { ok: true, message: `Prova ${linha.codigo} salva.` };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function excluirProva(provaId: string): Promise<ActionResult> {
+  if (IS_DEMO) return DEMO_BLOCK;
+
+  try {
+    const { supabase } = await requireAdmin();
+
+    const { count } = await supabase
+      .from('prova_results')
+      .select('id', { count: 'exact', head: true })
+      .eq('prova_id', provaId);
+
+    const { error } = await supabase.from('provas').delete().eq('id', provaId);
+    if (error) throw new Error(error.message);
+
+    revalidateTudo();
+    return {
+      ok: true,
+      message:
+        count && count > 0 ? `Prova excluída, junto com ${count} lançamento(s).` : 'Prova excluída.',
+    };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function salvarAgenda(itens: unknown[]): Promise<ActionResult> {
+  if (IS_DEMO) return DEMO_BLOCK;
+
+  try {
+    const dados = itens.map((i) => agendaSchema.parse(i));
+    const { supabase, eventId } = await requireAdmin();
+
+    // A agenda é uma lista ordenada curta: reescrever por inteiro é mais
+    // simples e mais previsível do que casar linha a linha.
+    const { error: limpa } = await supabase.from('agenda').delete().eq('event_id', eventId);
+    if (limpa) throw new Error(limpa.message);
+
+    if (dados.length > 0) {
+      const { error } = await supabase.from('agenda').insert(
+        dados.map((a) => ({
+          event_id: eventId,
+          ordem: a.ordem,
+          hora: a.hora,
+          titulo: a.titulo,
+          detalhe: a.detalhe,
+          itens: a.itens,
+          nota: a.nota,
+          wod_id: a.wodId,
+          bateria: a.bateria,
+          destaque: a.destaque,
+        })),
+      );
+      if (error) throw new Error(error.message);
+    }
+
+    revalidateTudo();
+    return { ok: true, message: `Programação salva (${dados.length} momentos).` };
+  } catch (error) {
+    return fail(error);
+  }
 }

@@ -1,11 +1,5 @@
-import type {
-  EventInfo,
-  EventSettings,
-  Team,
-  Wod1Result,
-  Wod2Result,
-  Wod3Result,
-} from '@/types/domain';
+import type { EventInfo, EventSettings, Team } from '@/types/domain';
+import type { AgendaItem, ProvaResult, Wod, WodEntry } from '@/types/wod';
 
 /**
  * Snapshot — o estado completo do evento em um único objeto serializável.
@@ -15,14 +9,23 @@ import type {
  * mais simples e mais consistente do que N consultas parciais — e garante
  * que servidor e navegador rodem EXATAMENTE o mesmo motor de cálculo
  * (src/lib/scoring), sem duplicar regra (§25, §34).
+ *
+ * O snapshot carrega também a DEFINIÇÃO do evento — os WODs e suas provas —,
+ * porque elas agora são dado editável e não constante de código. A tela
+ * precisa saber quantas colunas desenhar antes de desenhar.
  */
 export interface Snapshot {
   event: EventInfo;
   settings: EventSettings;
   teams: Team[];
-  wod1: Wod1Result[];
-  wod2: Wod2Result[];
-  wod3: Wod3Result[];
+  /** Os workouts do evento, com as provas de cada um. */
+  wods: Wod[];
+  /** A programação do dia. */
+  agenda: AgendaItem[];
+  /** Homologação e CAP: uma linha por dupla por WOD. */
+  entries: WodEntry[];
+  /** Os valores lançados: uma linha por dupla por prova. */
+  results: ProvaResult[];
   /** ISO. Alimenta o "Última atualização HH:MM" (§9). */
   lastUpdate: string;
   /** true quando os dados são fictícios (§54). */

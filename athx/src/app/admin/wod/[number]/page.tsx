@@ -1,16 +1,15 @@
 import { notFound } from 'next/navigation';
-import type { WodNumber } from '@/types/domain';
-import { WOD_META } from '@/types/domain';
 import { WodEntry } from '@/components/admin/WodEntry';
 import { EventErrorScreen } from '@/components/EventErrorScreen';
 import { getSnapshot } from '@/services/leaderboard-service';
-import { WODS } from '@/lib/wods';
 import type { Snapshot } from '@/services/snapshot';
 
 export const dynamic = 'force-dynamic';
 
-function parseWod(value: string): WodNumber | null {
-  return value === '1' || value === '2' || value === '3' ? (Number(value) as WodNumber) : null;
+/** Qual WOD existe é decisão do evento, não do código. */
+function parseWod(value: string): number | null {
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : null;
 }
 
 export default async function AdminWodPage({
@@ -19,8 +18,8 @@ export default async function AdminWodPage({
   params: Promise<{ number: string }>;
 }) {
   const { number } = await params;
-  const wod = parseWod(number);
-  if (!wod) notFound();
+  const numero = parseWod(number);
+  if (!numero) notFound();
 
   let snapshot: Snapshot;
   try {
@@ -29,7 +28,8 @@ export default async function AdminWodPage({
     return <EventErrorScreen message={error instanceof Error ? error.message : ''} />;
   }
 
-  const spec = WODS[wod];
+  const wod = snapshot.wods.find((w) => w.numero === numero);
+  if (!wod) notFound();
 
   return (
     <div className="space-y-6">
@@ -37,10 +37,9 @@ export default async function AdminWodPage({
         <p className="font-display text-[10px] font-bold tracking-kicker text-nacao-cyan uppercase">
           Lançamento de resultados
         </p>
-        <h1 className="mt-1 font-display text-3xl font-black tracking-tight uppercase">
-          WOD {wod} — {WOD_META[wod].name}
-        </h1>
-        <p className="mt-1.5 max-w-2xl text-sm text-white/55">{spec.resumo}</p>
+        {wod.resumo ? (
+          <p className="mt-1.5 max-w-2xl text-sm text-white/55">{wod.resumo}</p>
+        ) : null}
       </header>
 
       <WodEntry snapshot={snapshot} wod={wod} />

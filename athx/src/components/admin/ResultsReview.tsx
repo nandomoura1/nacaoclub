@@ -3,10 +3,11 @@
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Download, FileJson, Printer, RefreshCw, Unlock } from 'lucide-react';
-import type { Category, ResultStatus, StandingRow, WodNumber } from '@/types/domain';
+import type { Category, StandingRow } from '@/types/domain';
+import type { Wod } from '@/types/wod';
 import { CATEGORIES, CATEGORY_LABEL, CATEGORY_SHORT } from '@/types/domain';
 import type { Snapshot } from '@/services/snapshot';
-import { buildLeaderboard } from '@/lib/scoring/build';
+import { leaderboardDoSnapshot } from '@/lib/scoring/build';
 import { standingsByCategory } from '@/lib/scoring/overall';
 import { ADMIN_STATUSES, PUBLIC_STATUSES } from '@/lib/scoring/eligibility';
 import { destravarResultado, recalcular } from '@/app/admin/actions';
@@ -43,39 +44,27 @@ export function ResultsReview({ snapshot }: { snapshot: Snapshot }) {
   const [visao, setVisao] = useState<'PUBLICO' | 'PREVIA'>('PUBLICO');
   const [categoria, setCategoria] = useState<CategoryFilter>('TODAS');
   const [aviso, setAviso] = useState<ActionResult | null>(null);
-  const [destravar, setDestravar] = useState<{ wod: WodNumber; teamId: string; nome: string } | null>(null);
+  const [destravar, setDestravar] = useState<{ wod: Wod; teamId: string; nome: string } | null>(null);
   const [motivo, setMotivo] = useState('');
-
-  const raw = {
-    teams: snapshot.teams,
-    wod1: snapshot.wod1,
-    wod2: snapshot.wod2,
-    wod3: snapshot.wod3,
-    settings: snapshot.settings,
-  };
 
   const board = useMemo(
     () =>
-      buildLeaderboard(raw, {
+      leaderboardDoSnapshot(snapshot, {
         statuses: visao === 'PUBLICO' ? PUBLIC_STATUSES : ADMIN_STATUSES,
       }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [snapshot, visao],
   );
 
   const travados = useMemo(() => {
-    const lista: { wod: WodNumber; teamId: string; nome: string; status: ResultStatus }[] = [];
-    for (const team of snapshot.teams) {
-      const checar = (wod: WodNumber, status?: ResultStatus) => {
-        if (status === 'LOCKED') {
-          lista.push({ wod, teamId: team.id, nome: team.teamName, status });
-        }
-      };
-      checar(1, snapshot.wod1.find((r) => r.teamId === team.id)?.status);
-      checar(2, snapshot.wod2.find((r) => r.teamId === team.id)?.status);
-      checar(3, snapshot.wod3.find((r) => r.teamId === team.id)?.status);
-    }
-    return lista;
+    const porId = new Map(snapshot.wods.map((w) => [w.id, w]));
+    return snapshot.entries
+      .filter((e) => e.status === 'LOCKED')
+      .map((e) => ({
+        wod: porId.get(e.wodId),
+        teamId: e.teamId,
+        nome: snapshot.teams.find((t) => t.id === e.teamId)?.teamName ?? '',
+      }))
+      .filter((x): x is { wod: Wod; teamId: string; nome: string } => x.wod !== undefined);
   }, [snapshot]);
 
   // Um bloco por categoria, com a posição recalculada dentro dela.
@@ -109,7 +98,7 @@ export function ResultsReview({ snapshot }: { snapshot: Snapshot }) {
   function confirmarDestravar() {
     if (!destravar) return;
     startTransition(async () => {
-      const resultado = await destravarResultado(destravar.wod, destravar.teamId, motivo);
+      const resultado = await destravarResultado(destravar.wod.id, destravar.teamId, motivo);
       setAviso(resultado);
       if (resultado.ok) {
         setDestravar(null);
@@ -214,9 +203,9 @@ export function ResultsReview({ snapshot }: { snapshot: Snapshot }) {
           </p>
           <ul className="mt-3 divide-y divide-white/[0.07]">
             {travados.map((t) => (
-              <li key={`${t.wod}-${t.teamId}`} className="flex items-center justify-between gap-3 py-2">
+              <li key={`${t.wod.id}-${t.teamId}`} className="flex items-center justify-between gap-3 py-2">
                 <span className="text-sm">
-                  <Badge tone="danger">WOD {t.wod}</Badge>{' '}
+                  <Badge tone="danger">WOD {t.wod.numero}</Badge>{' '}
                   <span className="ml-1.5 font-display font-bold">{t.nome}</span>
                 </span>
                 <Button
@@ -236,14 +225,20 @@ export function ResultsReview({ snapshot }: { snapshot: Snapshot }) {
       {/* ---- Tabela de conferência, uma por categoria ---------------------- */}
       <div className="space-y-6">
         {blocos.map(({ categoria: cat, rows }) => (
-          <TabelaConferencia key={cat} categoria={cat} rows={rows} visao={visao} />
+          <TabelaConferencia
+            key={cat}
+            categoria={cat}
+            rows={rows}
+            wods={snapshot.wods}
+            visao={visao}
+          />
         ))}
       </div>
 
       <Modal
         open={destravar !== null}
         onClose={() => setDestravar(null)}
-        title={`Destravar WOD ${destravar?.wod} — ${destravar?.nome}`}
+        title={`Destravar WOD ${destravar?.wod.numero} — ${destravar?.nome}`}
         footer={
           <>
             <Button variant="ghost" onClick={() => setDestravar(null)}>
@@ -276,10 +271,13 @@ export function ResultsReview({ snapshot }: { snapshot: Snapshot }) {
 function TabelaConferencia({
   categoria,
   rows,
+  wods,
   visao,
 }: {
   categoria: Category;
   rows: readonly StandingRow[];
+  /** Os WODs do evento: definem as colunas. */
+  wods: readonly Wod[];
   visao: 'PUBLICO' | 'PREVIA';
 }) {
   return (
@@ -300,7 +298,7 @@ function TabelaConferencia({
               : 'Prévia — inclui rascunhos ainda não publicados'}
           </span>
           <span className="tnum mt-0.5 block text-[11px] text-white/40">
-            TOTAL = 1A + 1B + 1C + 1D + 2A + 2B + 2C + 3 · menor total vence · máximo de{' '}
+            TOTAL = {wods.flatMap((w) => w.provas.filter((p) => p.pontua).map((p) => p.codigo)).join(' + ')} · menor total vence · máximo de{' '}
             {rows.length} {rows.length === 1 ? 'ponto' : 'pontos'} por prova nesta categoria
           </span>
         </caption>
@@ -308,29 +306,21 @@ function TabelaConferencia({
         <thead>
           <tr className="border-b border-white/[0.07] text-white/30">
             <th colSpan={3} />
-            <th
-              colSpan={4}
-              className="px-3 pt-2 text-center font-display text-[9px] font-bold tracking-wider uppercase"
-            >
-              WOD 1 — Strength
-            </th>
-            <th
-              colSpan={3}
-              className="px-3 pt-2 text-center font-display text-[9px] font-bold tracking-wider uppercase"
-            >
-              WOD 2 — Endurance
-            </th>
-            <th className="px-3 pt-2 text-center font-display text-[9px] font-bold tracking-wider uppercase">
-              WOD 3
-            </th>
+            {wods.map((w) => (
+              <th
+                key={w.id}
+                colSpan={w.provas.length}
+                className="px-3 pt-2 text-center font-display text-[9px] font-bold tracking-wider uppercase"
+              >
+                WOD {w.numero} — {w.nome}
+              </th>
+            ))}
             <th colSpan={2} />
           </tr>
           <tr className="border-b border-white/12">
             {[
               'Pos', 'Nº', 'Dupla',
-              '1A', '1B', '1C', '1D',
-              '2A', '2B', '2C',
-              '3',
+              ...wods.flatMap((w) => w.provas.map((p) => p.codigo)),
               'Total', 'WODs',
             ].map((h) => (
               <th
@@ -347,7 +337,10 @@ function TabelaConferencia({
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={13} className="px-3 py-6 text-center text-sm text-white/40">
+              <td
+                colSpan={5 + wods.reduce((n, w) => n + w.provas.length, 0)}
+                className="px-3 py-6 text-center text-sm text-white/40"
+              >
                 Nenhuma dupla nesta categoria.
               </td>
             </tr>
@@ -368,19 +361,22 @@ function TabelaConferencia({
                     </Badge>
                   ) : null}
                 </td>
-                {/* As OITO pontuações que somam o total geral. */}
-                <Parcela valor={row.wod1?.pointsStrictPress} />
-                <Parcela valor={row.wod1?.pointsBackSquat} />
-                <Parcela valor={row.wod1?.pointsDeadlift} />
-                <Parcela valor={row.wod1?.pointsTotal} destaque />
-                <Parcela valor={row.wod2?.pointsRun} />
-                <Parcela valor={row.wod2?.pointsBike} />
-                <Parcela valor={row.wod2?.pointsTotal} destaque />
-                <Parcela valor={row.wod3?.points} destaque />
+                {/* Uma parcela por prova do evento. */}
+                {wods.flatMap((w) =>
+                  w.provas.map((p) => (
+                    <Parcela
+                      key={p.id}
+                      valor={row.provas[p.id]?.points}
+                      destaque={p.origem === 'SOMA' || w.provas.length === 1}
+                    />
+                  )),
+                )}
                 <td className="tnum px-3 py-2 font-display font-black">
                   {row.scoredWods > 0 ? points(row.totalPoints) : '—'}
                 </td>
-                <td className="tnum px-3 py-2 text-xs text-white/45">{row.scoredWods}/3</td>
+                <td className="tnum px-3 py-2 text-xs text-white/45">
+                  {row.scoredWods}/{row.totalWods}
+                </td>
               </tr>
             ))
           )}

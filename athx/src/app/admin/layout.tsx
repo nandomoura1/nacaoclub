@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { BrandLogo } from '@/components/BrandLogo';
 import { AdminNav } from '@/components/admin/AdminNav';
 import { IS_DEMO } from '@/lib/env';
+import { getSnapshot } from '@/services/leaderboard-service';
 
 export const metadata = {
   title: 'Organização',
@@ -15,7 +16,17 @@ export const metadata = {
  * olhando o celular. A pessoa que opera isto está sob pressão. Então:
  * alvos grandes, poucos cliques, nada escondido em menu.
  */
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  // As abas de lançamento são os WODs do evento. Se o banco não responder,
+  // a navegação aparece sem elas em vez de a tela inteira quebrar.
+  let wods: { numero: number; nome: string }[] = [];
+  try {
+    const snapshot = await getSnapshot();
+    wods = snapshot.wods.map((w) => ({ numero: w.numero, nome: w.nome }));
+  } catch {
+    wods = [];
+  }
+
   return (
     <div className="min-h-dvh">
       <header className="sticky top-0 z-40 border-b border-white/[0.08] bg-nacao-abyss/92 backdrop-blur-md">
@@ -41,7 +52,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </Link>
         </div>
 
-        <AdminNav />
+        <AdminNav wods={wods} />
       </header>
 
       {IS_DEMO ? (

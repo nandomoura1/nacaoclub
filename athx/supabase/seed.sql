@@ -47,3 +47,21 @@ from public.events e
 cross join generate_series(1, 20) as n
 where e.slug = 'nacao-celebration-setembro-amarelo'
 on conflict (event_id, team_number) do nothing;
+
+
+-- ---------------------------------------------------------------------------
+-- Os WODs da etapa de setembro.
+--
+-- Uma instalação do zero já vem com um evento completo e editável: a
+-- organização abre /admin/wods e muda o que quiser, em vez de montar três
+-- workouts do nada. Função definida na migration 0012.
+-- ---------------------------------------------------------------------------
+do $$
+declare v_event uuid;
+begin
+  for v_event in select id from public.events loop
+    perform public.athx_montar_etapa_setembro(v_event);
+    perform public.athx_montar_agenda_setembro(v_event);
+  end loop;
+end;
+$$;

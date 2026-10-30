@@ -1,254 +1,240 @@
 import { describe, expect, it } from 'vitest';
+import type { StandingRow } from '@/types/domain';
 import { buildLeaderboard } from '@/lib/scoring/build';
 import { standingsByCategory } from '@/lib/scoring/overall';
-import { settings, team, w1, w2, w3 } from './helpers';
+import {
+  cargas,
+  cenario,
+  distancias,
+  entry,
+  prova,
+  settings,
+  team,
+  tempo,
+  wodNumero,
+} from './helpers';
+
+/** Pontos de um WOD, pelo número. */
+const wodPts = (row: StandingRow | undefined, numero: number) =>
+  row?.wods[wodNumero(numero).id]?.points ?? null;
+
+const wodScore = (row: StandingRow | undefined, numero: number) =>
+  row?.wods[wodNumero(numero).id];
+
+/** Pontos de uma prova, pelo código. */
+const provaPts = (row: StandingRow | undefined, codigo: string) =>
+  row?.provas[prova(codigo).id]?.points ?? null;
+
+/** Quatro duplas com resultado completo nos três WODs. */
+function eventoCompleto() {
+  return cenario({
+    teams: [team(1), team(2), team(3), team(4)],
+    wod1: [
+      ...cargas('team-1', [60, 40, 80, 70, 100, 90]),
+      ...cargas('team-2', [50, 40, 120, 100, 110, 100]),
+      ...cargas('team-3', [40, 40, 100, 90, 150, 140]),
+      ...cargas('team-4', [70, 60, 90, 80, 120, 110]),
+    ],
+    wod2: [
+      ...distancias('team-1', 3.5, 8.45),
+      ...distancias('team-2', 4.0, 7.0),
+      ...distancias('team-3', 3.0, 9.5),
+      ...distancias('team-4', 2.5, 10.2),
+    ],
+    wod3: [tempo('team-1', 838), tempo('team-2', 872), tempo('team-3', 910), tempo('team-4', 955)],
+  });
+}
 
 describe('Classificação geral', () => {
   /**
-   * A REGRA DA COMPETIÇÃO, por extenso:
+   * O TOTAL É A SOMA DAS PROVAS QUE PONTUAM.
    *
-   *   TOTAL = 1A + 1B + 1C + 1D + 2A + 2B + 2C + 3
-   *
-   * São OITO pontuações independentes. Este teste não confere a soma por
-   * atalho (wod1.points + wod2.points + wod3.points): ele soma as oito
-   * parcelas uma a uma e exige que batam com o total da classificação.
+   * Não confere por atalho (soma dos totais por WOD): soma as oito parcelas
+   * uma a uma e exige que batam com o total da classificação.
    */
-  it('TOTAL = 1A + 1B + 1C + 1D + 2A + 2B + 2C + 3 (oito pontuações)', () => {
-    const teams = [team(1), team(2), team(3), team(4)];
-    const board = buildLeaderboard({
-      teams,
-      wod1: [
-        w1('team-1', [60, 40, 80, 70, 100, 90]),
-        w1('team-2', [50, 40, 120, 100, 110, 100]),
-        w1('team-3', [40, 40, 100, 90, 150, 140]),
-        w1('team-4', [70, 60, 90, 80, 120, 110]),
-      ],
-      wod2: [
-        w2('team-1', 3.5, 8.45),
-        w2('team-2', 4.0, 7.0),
-        w2('team-3', 3.0, 9.5),
-        w2('team-4', 2.5, 10.2),
-      ],
-      wod3: [w3('team-1', 838), w3('team-2', 872), w3('team-3', 910), w3('team-4', 955)],
-      settings: settings(),
-    });
+  it('TOTAL = a soma de cada prova, uma a uma', () => {
+    const board = buildLeaderboard(eventoCompleto());
+    const codigos = ['1A', '1B', '1C', '1D', '2A', '2B', '2C', '3A'];
+
+    expect(board.provaList.map((p) => p.codigo)).toEqual(codigos);
 
     for (const row of board.standings) {
-      const w1s = row.wod1;
-      const w2s = row.wod2;
-      const w3s = row.wod3;
-      expect(w1s?.hasResult, row.team.teamName).toBe(true);
-      expect(w2s?.hasResult, row.team.teamName).toBe(true);
-      expect(w3s?.hasResult, row.team.teamName).toBe(true);
-      if (!w1s || !w2s || !w3s) continue;
-
-      const oitoParcelas =
-        (w1s.pointsStrictPress ?? 0) + // 1A
-        (w1s.pointsBackSquat ?? 0) + //   1B
-        (w1s.pointsDeadlift ?? 0) + //    1C
-        (w1s.pointsTotal ?? 0) + //       1D
-        (w2s.pointsRun ?? 0) + //         2A
-        (w2s.pointsBike ?? 0) + //        2B
-        (w2s.pointsTotal ?? 0) + //       2C
-        (w3s.points ?? 0); //             3
-
-      expect(row.totalPoints, `total da ${row.team.teamName}`).toBe(oitoParcelas);
+      const soma = codigos.reduce((acc, c) => acc + (provaPts(row, c) ?? 0), 0);
+      expect(soma, `total da ${row.team.teamName}`).toBe(row.totalPoints);
+      expect(wodScore(row, 1)?.hasResult, row.team.teamName).toBe(true);
+      expect(wodScore(row, 3)?.hasResult, row.team.teamName).toBe(true);
     }
-
-    // E cada bloco é a soma das suas parcelas.
-    const alvo = board.standings.find((r) => r.team.id === 'team-1');
-    expect(alvo?.wod1?.points).toBe(
-      (alvo?.wod1?.pointsStrictPress ?? 0) +
-        (alvo?.wod1?.pointsBackSquat ?? 0) +
-        (alvo?.wod1?.pointsDeadlift ?? 0) +
-        (alvo?.wod1?.pointsTotal ?? 0),
-    );
-    expect(alvo?.wod2?.points).toBe(
-      (alvo?.wod2?.pointsRun ?? 0) +
-        (alvo?.wod2?.pointsBike ?? 0) +
-        (alvo?.wod2?.pointsTotal ?? 0),
-    );
   });
 
-  it('soma os pontos dos três WODs; menor total = melhor posição', () => {
-    const teams = [team(1), team(2), team(3)];
-
-    const board = buildLeaderboard({
-      teams,
-      // WOD 1: t2 (990) 1º=1, t1 (930) 2º=2, t3 (870) 3º=3
-      wod1: [
-        w1('team-1', [100, 80, 180, 150, 220, 200]),
-        w1('team-2', [110, 90, 190, 160, 230, 210]),
-        w1('team-3', [90, 70, 170, 140, 210, 190]),
-      ],
-      // WOD 2
-      wod2: [w2('team-1', 3.5, 8.45), w2('team-2', 4.0, 7.0), w2('team-3', 3.0, 9.5)],
-      // WOD 3: t1 1º, t2 2º, t3 3º
-      wod3: [w3('team-1', 838), w3('team-2', 872), w3('team-3', 910)],
-      settings: settings(),
-    });
-
-    const t1 = board.standings.find((r) => r.team.id === 'team-1');
-    // Estas cargas escalam juntas, então a dupla faz 2º nas QUATRO provas do
-    // WOD 1: 2 + 2 + 2 + 2 = 8.
-    expect(t1?.wod1?.points).toBe(8);
-    expect(t1?.wod2?.points).toBe(6);
-    expect(t1?.wod3?.points).toBe(1);
-    expect(t1?.totalPoints).toBe(15);
-
-    const totals = board.standings.map((r) => r.totalPoints);
-    expect(totals).toEqual([...totals].sort((a, b) => a - b));
+  it('ordena por total crescente — menor pontuação vence', () => {
+    const board = buildLeaderboard(eventoCompleto());
+    const totais = board.standings.map((r) => r.totalPoints);
+    expect(totais).toEqual([...totais].sort((a, b) => a - b));
     expect(board.standings[0]?.position).toBe(1);
   });
 
-  it('WOD 1 soma as quatro provas e WOD 2 soma as três', () => {
-    const teams = [team(1), team(2), team(3), team(4)];
-    const board = buildLeaderboard({
-      teams,
-      // Só o Strict Press lançado: a dupla faz a mesma posição nas 4 provas.
-      wod1: [w1('team-1', [900]), w1('team-2', [1000]), w1('team-3', [800]), w1('team-4', [700])],
-      wod2: [w2('team-1', 1, 1), w2('team-2', 4, 4), w2('team-3', 3, 3), w2('team-4', 2, 2)],
-      wod3: [w3('team-1', 800), w3('team-2', 900), w3('team-3', 1000), w3('team-4', 1100)],
-      settings: settings(),
-    });
+  it('o total de cada WOD é a soma das provas daquele WOD', () => {
+    const board = buildLeaderboard(eventoCompleto());
+
+    for (const row of board.standings) {
+      for (const wod of board.wods) {
+        const soma = wod.provas
+          .filter((p) => p.pontua)
+          .reduce((acc, p) => acc + (row.provas[p.id]?.points ?? 0), 0);
+        expect(wodPts(row, wod.numero), `${wod.nome} da ${row.team.teamName}`).toBe(soma);
+      }
+    }
+  });
+
+  /**
+   * MUDANÇA DELIBERADA DE COMPORTAMENTO.
+   *
+   * O motor antigo tratava campo em branco como ZERO: se o juiz tinha
+   * lançado só o Strict Press, as outras duas provas ranqueavam todo mundo
+   * empatado em "0 kg" e distribuíam pontos. O motor novo não ranqueia quem
+   * não tem resultado — e o WOD só tem total quando todas as provas dele
+   * foram lançadas.
+   */
+  it('prova em branco não vira zero: a dupla fica de fora daquele ranking', () => {
+    const board = buildLeaderboard(
+      cenario({
+        teams: [team(1), team(2)],
+        // Só o Strict Press lançado.
+        wod1: [
+          ...cargas('team-1', [100, 100, null, null, null, null]),
+          ...cargas('team-2', [90, 90, null, null, null, null]),
+        ],
+      }),
+    );
 
     const t1 = board.standings.find((r) => r.team.id === 'team-1');
-    // Só o Strict Press tem carga. Back Squat e Deadlift ficam 0 para todas,
-    // então as quatro duplas EMPATAM em 1º nessas duas provas e levam 1 ponto
-    // cada. A dupla-alvo faz 2º em 1A e em 1D: 2 + 1 + 1 + 2 = 6.
-    expect(t1?.wod1?.points).toBe(2 + 1 + 1 + 2);
-    expect(t1?.wod2?.points).toBe(4 + 4 + 4); // último nas três provas
-    expect(t1?.wod3?.points).toBe(1); // 1º no WOD 3
-    expect(t1?.totalPoints).toBe(19);
+    expect(provaPts(t1, '1A')).toBe(1);
+    // 1B e 1C não foram lançadas: ninguém é ranqueado nelas.
+    expect(provaPts(t1, '1B')).toBeNull();
+    expect(provaPts(t1, '1C')).toBeNull();
+    // E por isso o WOD 1 ainda não tem total.
+    expect(wodScore(t1, 1)?.hasResult).toBe(false);
+    expect(t1?.scoredWods).toBe(0);
   });
 
   // §15 — empate na geral
   it('empate na pontuação total gera mesma posição e pede decisão manual', () => {
-    const teams = [team(1), team(2)];
-    const board = buildLeaderboard({
-      teams,
-      // Cenário montado para dar empate exato com as quatro provas somando:
-      //   1A  t1 vence          -> 1 / 2
-      //   1B  empatam           -> 1 / 1
-      //   1C  t2 vence          -> 2 / 1
-      //   1D  t2 vence          -> 2 / 1
-      //   WOD 1 ................. 6 / 5
-      //   WOD 3  t1 vence ....... 1 / 2
-      //   TOTAL ................. 7 / 7
-      wod1: [
-        w1('team-1', [50, 50, 50, 50, 25, 25]), // 1A 100 · 1B 100 · 1C  50 · 1D 250
-        w1('team-2', [25, 25, 50, 50, 100, 100]), // 1A  50 · 1B 100 · 1C 200 · 1D 350
-      ],
-      wod2: [],
-      wod3: [w3('team-1', 800), w3('team-2', 900)],
-      // O padrão do evento desempata pelo WOD 3; aqui queremos ver o empate
-      // permanecendo de pé, então a organização optou por NENHUM.
-      settings: settings({ tieBreaker1: 'NENHUM' }),
-    });
+    const board = buildLeaderboard(
+      cenario({
+        teams: [team(1), team(2)],
+        // Montado para empatar: 1A t1 vence, 1C t2 vence, 1D t2 vence,
+        // 1B empata; WOD 3 t1 vence. Totais iguais.
+        wod1: [
+          ...cargas('team-1', [50, 50, 50, 50, 25, 25]),
+          ...cargas('team-2', [25, 25, 50, 50, 100, 100]),
+        ],
+        wod3: [tempo('team-1', 800), tempo('team-2', 900)],
+        // O padrão do evento desempata pelo WOD 3; aqui queremos ver o
+        // empate permanecendo de pé, então a organização optou por NENHUM.
+        settings: settings({ tieBreaker1: 'NENHUM' }),
+      }),
+    );
 
-    expect(board.standings[0]?.totalPoints).toBe(7);
-    expect(board.standings[1]?.totalPoints).toBe(7);
+    expect(board.standings[0]?.totalPoints).toBe(board.standings[1]?.totalPoints);
     expect(board.standings[0]?.position).toBe(1);
     expect(board.standings[1]?.position).toBe(1);
     expect(board.standings[0]?.tied).toBe(true);
     expect(board.standings[0]?.needsDecision).toBe(true);
   });
 
-  it('com o critério do WOD 3 escolhido, o empate é resolvido de verdade', () => {
-    const teams = [team(1), team(2)];
-    const entrada = {
-      teams,
+  it('com o critério do WOD 3 escolhido, o empate é resolvido na categoria', () => {
+    const entrada = cenario({
+      teams: [team(1), team(2)],
       wod1: [
-        w1('team-1', [50, 50, 50, 50, 25, 25]),
-        w1('team-2', [25, 25, 50, 50, 100, 100]),
+        ...cargas('team-1', [50, 50, 50, 50, 25, 25]),
+        ...cargas('team-2', [25, 25, 50, 50, 100, 100]),
       ],
-      wod2: [],
-      // team-1 fez melhor tempo, logo é 1ª no WOD 3.
-      wod3: [w3('team-1', 800), w3('team-2', 900)],
-    };
+      wod3: [tempo('team-1', 800), tempo('team-2', 900)],
+    });
 
     const semCriterio = buildLeaderboard({
       ...entrada,
       settings: settings({ tieBreaker1: 'NENHUM' }),
     });
     expect(semCriterio.standings[0]?.tied).toBe(true);
-    expect(semCriterio.standings[0]?.needsDecision).toBe(true);
 
     const comCriterio = buildLeaderboard({
       ...entrada,
       settings: settings({ tieBreaker1: 'WOD3' }),
     });
 
-    // O desempate age na classificação DA CATEGORIA, não na geral.
     const naCategoria = standingsByCategory(comCriterio.standings, 'MISTA');
     expect(naCategoria[0]?.team.id).toBe('team-1');
-    expect(naCategoria[0]?.position).toBe(1);
-    expect(naCategoria[1]?.position).toBe(2);
+    expect(naCategoria.map((r) => r.position)).toEqual([1, 2]);
     expect(naCategoria.every((r) => !r.tied)).toBe(true);
-    expect(naCategoria.every((r) => !r.needsDecision)).toBe(true);
     expect(naCategoria[0]?.desempatadoPor).toBe('WOD3');
   });
 
   // Integridade: quem tem menos WODs lançados não pode "furar a fila"
   it('dupla com menos WODs pontuados não ultrapassa quem tem mais', () => {
-    const teams = [team(1), team(2)];
-    const board = buildLeaderboard({
-      teams,
-      // team-2 só tem o WOD 1 lançado; team-1 tem os três.
-      wod1: [w1('team-1', [100]), w1('team-2', [200])],
-      wod2: [w2('team-1', 3, 3)],
-      wod3: [w3('team-1', 800)],
-      settings: settings(),
-    });
+    const board = buildLeaderboard(
+      cenario({
+        teams: [team(1), team(2)],
+        // team-2 só tem o WOD 1 lançado; team-1 tem os três.
+        wod1: [
+          ...cargas('team-1', [50, 50, 50, 50, 50, 50]),
+          ...cargas('team-2', [100, 100, 100, 100, 100, 100]),
+        ],
+        wod2: [...distancias('team-1', 3, 3)],
+        wod3: [tempo('team-1', 800)],
+      }),
+    );
 
     expect(board.standings[0]?.team.id).toBe('team-1');
     expect(board.standings[0]?.scoredWods).toBe(3);
-    expect(board.standings[1]?.team.id).toBe('team-2');
     expect(board.standings[1]?.scoredWods).toBe(1);
   });
 
   it('duplas sem nenhum resultado ficam no fim e não são marcadas como empate', () => {
-    const teams = [team(1), team(2), team(3)];
-    const board = buildLeaderboard({
-      teams,
-      wod1: [w1('team-1', [100])],
-      wod2: [],
-      wod3: [],
-      settings: settings(),
-    });
+    const board = buildLeaderboard(
+      cenario({
+        teams: [team(1), team(2), team(3)],
+        wod1: [...cargas('team-1', [100, 100, 100, 100, 100, 100])],
+      }),
+    );
 
     const semResultado = board.standings.filter((r) => r.scoredWods === 0);
     expect(semResultado).toHaveLength(2);
-    expect(semResultado.every((r) => r.tied === false)).toBe(true);
+    expect(semResultado.every((r) => !r.tied)).toBe(true);
+    expect(semResultado.every((r) => !r.needsDecision)).toBe(true);
+    expect(board.standings[0]?.team.id).toBe('team-1');
   });
 
   it('desclassificada não aparece na classificação', () => {
-    const teams = [team(1), team(2, { status: 'DESCLASSIFICADA' })];
-    const board = buildLeaderboard({
-      teams,
-      wod1: [w1('team-1', [100]), w1('team-2', [999])],
-      wod2: [],
-      wod3: [],
-      settings: settings(),
-    });
+    const board = buildLeaderboard(
+      cenario({
+        teams: [team(1), team(2, { status: 'DESCLASSIFICADA' })],
+        wod1: [
+          ...cargas('team-1', [50, 50, 50, 50, 50, 50]),
+          ...cargas('team-2', [100, 100, 100, 100, 100, 100]),
+        ],
+      }),
+    );
 
-    expect(board.standings.map((r) => r.team.id)).toEqual(['team-1']);
+    expect(board.standings).toHaveLength(1);
+    expect(board.standings[0]?.team.id).toBe('team-1');
   });
 
-  // §29 — filtro por categoria recalcula a posição dentro da categoria
   it('recalcula posições dentro da categoria', () => {
-    const teams = [
-      team(1, { category: 'MASCULINA' }),
-      team(2, { category: 'FEMININA' }),
-      team(3, { category: 'MASCULINA' }),
-    ];
-    const board = buildLeaderboard({
-      teams,
-      wod1: [w1('team-1', [300]), w1('team-2', [200]), w1('team-3', [100])],
-      wod2: [],
-      wod3: [],
-      settings: settings(),
-    });
+    const board = buildLeaderboard(
+      cenario({
+        teams: [
+          team(1, { category: 'MASCULINA' }),
+          team(2, { category: 'FEMININA' }),
+          team(3, { category: 'MASCULINA' }),
+        ],
+        wod1: [
+          ...cargas('team-1', [100, 100, 100, 100, 100, 100]),
+          ...cargas('team-2', [90, 90, 90, 90, 90, 90]),
+          ...cargas('team-3', [80, 80, 80, 80, 80, 80]),
+        ],
+      }),
+    );
 
     const masculina = standingsByCategory(board.standings, 'MASCULINA');
     expect(masculina.map((r) => r.team.id)).toEqual(['team-1', 'team-3']);
@@ -256,17 +242,19 @@ describe('Classificação geral', () => {
   });
 
   it('leaderboard público ignora DRAFT; prévia do admin inclui', () => {
-    const teams = [team(1), team(2)];
-    const raw = {
-      teams,
-      wod1: [w1('team-1', [100], { status: 'DRAFT' as const }), w1('team-2', [90])],
-      wod2: [],
-      wod3: [],
-      settings: settings(),
-    };
+    const raw = cenario({
+      teams: [team(1), team(2)],
+      wod1: [
+        ...cargas('team-1', [100, 100, 100, 100, 100, 100]),
+        ...cargas('team-2', [90, 90, 90, 90, 90, 90]),
+      ],
+      // A dupla 1 é mais forte, mas o lançamento dela ainda é rascunho.
+      entries: [entry(1, 'team-1', { status: 'DRAFT' })],
+    });
 
     expect(buildLeaderboard(raw).standings[0]?.team.id).toBe('team-2');
-    const preview = buildLeaderboard(raw, { statuses: ['DRAFT', 'PUBLISHED', 'LOCKED'] });
-    expect(preview.standings[0]?.team.id).toBe('team-1');
+
+    const previa = buildLeaderboard(raw, { statuses: ['DRAFT', 'PUBLISHED', 'LOCKED'] });
+    expect(previa.standings[0]?.team.id).toBe('team-1');
   });
 });

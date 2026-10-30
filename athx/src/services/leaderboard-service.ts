@@ -3,12 +3,13 @@ import 'server-only';
 import { EVENT_SLUG, IS_DEMO } from '@/lib/env';
 import { getServerSupabase } from '@/lib/supabase/server';
 import {
+  DEMO_AGENDA,
+  DEMO_ENTRIES,
   DEMO_EVENT,
+  DEMO_RESULTS,
   DEMO_SETTINGS,
   DEMO_TEAMS,
-  DEMO_WOD1,
-  DEMO_WOD2,
-  DEMO_WOD3,
+  DEMO_WODS,
 } from '@/lib/demo/fixtures';
 import type { Snapshot } from './snapshot';
 import type {
@@ -18,11 +19,9 @@ import type {
   ResultStatus,
   Team,
   TeamStatus,
-  Wod1Result,
-  Wod2Result,
-  Wod3Result,
 } from '@/types/domain';
-import { parseTieBreaker, TIE_BREAKERS, TIE_BREAKER_PADRAO } from '@/types/domain';
+import type { Prova, ProvaResult, Wod, WodBloco, WodEntry } from '@/types/wod';
+import { ehTieBreaker, parseTieBreaker, TIE_BREAKER_PADRAO } from '@/types/domain';
 
 /* -------------------------------------------------------------------------
    Linhas cruas do Postgres -> tipos do domínio.
@@ -36,11 +35,128 @@ import { parseTieBreaker, TIE_BREAKERS, TIE_BREAKER_PADRAO } from '@/types/domai
  * isto" em vez de apagar em silêncio.
  */
 function textoLegado(valores: readonly (string | null | undefined)[]): string | null {
-  const codigos = TIE_BREAKERS as readonly string[];
   const sobra = valores
     .map((v) => (v ?? '').trim())
-    .filter((v) => v.length > 0 && !codigos.includes(v.toUpperCase()));
+    .filter((v) => v.length > 0 && !ehTieBreaker(v.toUpperCase()));
   return sobra.length > 0 ? sobra.join(' · ') : null;
+}
+
+interface WodRow {
+  id: string;
+  event_id: string;
+  numero: number;
+  nome: string;
+  formato: string | null;
+  cap_segundos: number | null;
+  resumo: string | null;
+  permite_cap: boolean;
+  regras: string[] | null;
+  pendencias: string[] | null;
+  ordem: number;
+}
+
+interface BlocoRow {
+  wod_id: string;
+  ordem: number;
+  janela: string;
+  movimento: string;
+  detalhe: string | null;
+  masculino: string | null;
+  feminino: string | null;
+}
+
+interface ProvaRow {
+  id: string;
+  wod_id: string;
+  codigo: string;
+  descricao: string;
+  criterio: string | null;
+  unidade: Prova['unidade'];
+  direcao: Prova['direcao'];
+  origem: Prova['origem'];
+  por_atleta: boolean;
+  componentes: string[] | null;
+  pontua: boolean;
+  ordem: number;
+}
+
+interface AgendaRow {
+  id: string;
+  ordem: number;
+  hora: string;
+  titulo: string;
+  detalhe: string | null;
+  itens: string[] | null;
+  nota: string | null;
+  wod_id: string | null;
+  bateria: number | null;
+  destaque: boolean;
+}
+
+interface EntryRow {
+  wod_id: string;
+  team_id: string;
+  status: ResultStatus;
+  concluiu: boolean | null;
+  volume: number | string | null;
+}
+
+interface ResultRow {
+  prova_id: string;
+  team_id: string;
+  valor_atleta_1: number | string | null;
+  valor_atleta_2: number | string | null;
+  valor: number | string | null;
+}
+
+/** Numérico do Postgres chega como string quando passa de certa precisão. */
+function num(v: number | string | null | undefined): number | null {
+  if (v === null || v === undefined) return null;
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Junta as três consultas num objeto Wod completo, com blocos e provas. */
+function montarWods(wods: WodRow[], blocos: BlocoRow[], provas: ProvaRow[]): Wod[] {
+  return wods.map((w) => ({
+    id: w.id,
+    eventId: w.event_id,
+    numero: w.numero,
+    nome: w.nome,
+    formato: w.formato,
+    capSegundos: w.cap_segundos,
+    resumo: w.resumo,
+    permiteCap: w.permite_cap,
+    regras: w.regras ?? [],
+    pendencias: w.pendencias ?? [],
+    ordem: w.ordem,
+    blocos: blocos
+      .filter((b) => b.wod_id === w.id)
+      .map<WodBloco>((b) => ({
+        ordem: b.ordem,
+        janela: b.janela,
+        movimento: b.movimento,
+        detalhe: b.detalhe,
+        masculino: b.masculino,
+        feminino: b.feminino,
+      })),
+    provas: provas
+      .filter((p) => p.wod_id === w.id)
+      .map<Prova>((p) => ({
+        id: p.id,
+        wodId: p.wod_id,
+        codigo: p.codigo,
+        descricao: p.descricao,
+        criterio: p.criterio,
+        unidade: p.unidade,
+        direcao: p.direcao,
+        origem: p.origem,
+        porAtleta: p.por_atleta,
+        componentes: p.componentes ?? [],
+        pontua: p.pontua,
+        ordem: p.ordem,
+      })),
+  }));
 }
 
 interface TeamRow {
@@ -55,37 +171,8 @@ interface TeamRow {
   status: TeamStatus;
 }
 
-interface Wod1Row {
-  team_id: string;
-  strict_press_athlete_1: number | null;
-  strict_press_athlete_2: number | null;
-  back_squat_athlete_1: number | null;
-  back_squat_athlete_2: number | null;
-  deadlift_athlete_1: number | null;
-  deadlift_athlete_2: number | null;
-  status: ResultStatus;
-  updated_at: string;
-}
 
-interface Wod2Row {
-  team_id: string;
-  run_km: number | null;
-  bike_km: number | null;
-  status: ResultStatus;
-  updated_at: string;
-}
 
-interface Wod3Row {
-  team_id: string;
-  time_seconds: number | null;
-  completed: boolean;
-  volume_completed: number | null;
-  status: ResultStatus;
-  updated_at: string;
-}
-
-const num = (v: number | string | null): number | null =>
-  v === null || v === undefined ? null : Number(v);
 
 function toTeam(r: TeamRow): Team {
   return {
@@ -101,37 +188,8 @@ function toTeam(r: TeamRow): Team {
   };
 }
 
-function toWod1(r: Wod1Row): Wod1Result {
-  return {
-    teamId: r.team_id,
-    strictPressAthlete1: num(r.strict_press_athlete_1),
-    strictPressAthlete2: num(r.strict_press_athlete_2),
-    backSquatAthlete1: num(r.back_squat_athlete_1),
-    backSquatAthlete2: num(r.back_squat_athlete_2),
-    deadliftAthlete1: num(r.deadlift_athlete_1),
-    deadliftAthlete2: num(r.deadlift_athlete_2),
-    status: r.status,
-  };
-}
 
-function toWod2(r: Wod2Row): Wod2Result {
-  return {
-    teamId: r.team_id,
-    runKm: num(r.run_km),
-    bikeKm: num(r.bike_km),
-    status: r.status,
-  };
-}
 
-function toWod3(r: Wod3Row): Wod3Result {
-  return {
-    teamId: r.team_id,
-    timeSeconds: num(r.time_seconds),
-    completed: r.completed,
-    volumeCompleted: num(r.volume_completed),
-    status: r.status,
-  };
-}
 
 /* ------------------------------------------------------------------------- */
 
@@ -140,9 +198,10 @@ function demoSnapshot(): Snapshot {
     event: DEMO_EVENT,
     settings: DEMO_SETTINGS,
     teams: DEMO_TEAMS,
-    wod1: DEMO_WOD1,
-    wod2: DEMO_WOD2,
-    wod3: DEMO_WOD3,
+    wods: DEMO_WODS,
+    agenda: DEMO_AGENDA,
+    entries: DEMO_ENTRIES,
+    results: DEMO_RESULTS,
     lastUpdate: new Date().toISOString(),
     demo: true,
   };
@@ -170,17 +229,21 @@ export async function getSnapshot(): Promise<Snapshot> {
     );
   }
 
-  const [settingsRes, teamsRes, w1Res, w2Res, w3Res] = await Promise.all([
+  const [settingsRes, teamsRes, wodsRes, blocosRes, provasRes, entriesRes, resultsRes, agendaRes] =
+    await Promise.all([
     supabase.from('event_settings').select('*').eq('event_id', event.id).maybeSingle(),
     supabase
       .from('teams')
       .select('id, event_id, team_number, team_name, category, athlete_1, athlete_2, battery, status')
       .eq('event_id', event.id)
       .order('team_number'),
-    supabase.from('wod1_results').select('*').eq('event_id', event.id),
-    supabase.from('wod2_results').select('*').eq('event_id', event.id),
-    supabase.from('wod3_results').select('*').eq('event_id', event.id),
-  ]);
+    supabase.from('wods').select('*').eq('event_id', event.id).order('ordem'),
+    supabase.from('wod_blocos').select('*').order('ordem'),
+    supabase.from('provas').select('*').order('ordem'),
+    supabase.from('wod_entries').select('*').eq('event_id', event.id),
+    supabase.from('prova_results').select('*').eq('event_id', event.id),
+    supabase.from('agenda').select('*').eq('event_id', event.id).order('ordem'),
+    ]);
 
   const s = settingsRes.data;
   const settings: EventSettings = {
@@ -198,19 +261,34 @@ export async function getSnapshot(): Promise<Snapshot> {
       s?.tie_breaker_2,
       s?.tie_breaker_3,
     ]),
+    baterias: s?.baterias ?? 2,
     liveMode: s?.live_mode ?? true,
     maintenanceMode: s?.maintenance_mode ?? false,
   };
 
-  const wod1 = (w1Res.data ?? []).map((r) => toWod1(r as Wod1Row));
-  const wod2 = (w2Res.data ?? []).map((r) => toWod2(r as Wod2Row));
-  const wod3 = (w3Res.data ?? []).map((r) => toWod3(r as Wod3Row));
+  const wods = montarWods(
+    (wodsRes.data ?? []) as WodRow[],
+    (blocosRes.data ?? []) as BlocoRow[],
+    (provasRes.data ?? []) as ProvaRow[],
+  );
 
-  const stamps = [
-    ...(w1Res.data ?? []),
-    ...(w2Res.data ?? []),
-    ...(w3Res.data ?? []),
-  ]
+  const entries: WodEntry[] = ((entriesRes.data ?? []) as EntryRow[]).map((r) => ({
+    wodId: r.wod_id,
+    teamId: r.team_id,
+    status: r.status,
+    concluiu: r.concluiu ?? false,
+    volume: num(r.volume),
+  }));
+
+  const results: ProvaResult[] = ((resultsRes.data ?? []) as ResultRow[]).map((r) => ({
+    provaId: r.prova_id,
+    teamId: r.team_id,
+    valorAtleta1: num(r.valor_atleta_1),
+    valorAtleta2: num(r.valor_atleta_2),
+    valor: num(r.valor),
+  }));
+
+  const stamps = [...(entriesRes.data ?? []), ...(resultsRes.data ?? [])]
     .map((r) => (r as { updated_at?: string }).updated_at)
     .filter((v): v is string => Boolean(v));
 
@@ -229,9 +307,21 @@ export async function getSnapshot(): Promise<Snapshot> {
     },
     settings,
     teams: (teamsRes.data ?? []).map((r) => toTeam(r as TeamRow)),
-    wod1,
-    wod2,
-    wod3,
+    wods,
+    agenda: ((agendaRes.data ?? []) as AgendaRow[]).map((a) => ({
+      id: a.id,
+      ordem: a.ordem,
+      hora: a.hora,
+      titulo: a.titulo,
+      detalhe: a.detalhe,
+      itens: a.itens ?? [],
+      nota: a.nota,
+      wodId: a.wod_id,
+      bateria: a.bateria,
+      destaque: a.destaque,
+    })),
+    entries,
+    results,
     lastUpdate,
     demo: false,
   };

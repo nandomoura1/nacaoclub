@@ -3,10 +3,11 @@
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, Lock, Save, Send, TriangleAlert } from 'lucide-react';
-import type { Battery, ResultStatus, Team, WodNumber } from '@/types/domain';
-import { WOD_META } from '@/types/domain';
+import type { ResultStatus, Team } from '@/types/domain';
+import type { Prova, Wod } from '@/types/wod';
+import { capEmTexto, UNIDADE_SUFIXO } from '@/types/wod';
 import type { Snapshot } from '@/services/snapshot';
-import { salvarWod1, salvarWod2, salvarWod3, definirStatus } from '@/app/admin/actions';
+import { definirStatus, salvarLancamentos } from '@/app/admin/actions';
 import type { ActionResult } from '@/app/admin/actions';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -14,446 +15,424 @@ import { Card } from '@/components/ui/Card';
 import { ScoreInput } from '@/components/ui/Input';
 import { Tabs } from '@/components/ui/Tabs';
 import { Modal } from '@/components/ui/Modal';
-import { kg, km, teamNumber } from '@/lib/format';
-import { formatSeconds, parseTimeToSeconds } from '@/lib/time';
-import { WOD3_CAP_SECONDS } from '@/lib/scoring/wod3';
+import { teamNumber, valorDaProva } from '@/lib/format';
+import { formatSeconds } from '@/lib/time';
 
-type BatteryFilter = 'TODAS' | '1' | '2';
+/** O que o juiz digitou numa prova. Tudo string: é o que o input devolve. */
+interface CampoState {
+  valor: string;
+  atleta1: string;
+  atleta2: string;
+}
 
-/** Estado editável de uma linha. Tudo string: é o que o input devolve. */
-interface RowState {
-  sp1: string;
-  sp2: string;
-  bs1: string;
-  bs2: string;
-  dl1: string;
-  dl2: string;
-  runKm: string;
-  bikeKm: string;
-  time: string;
-  completed: boolean;
+interface LinhaState {
+  campos: Record<string, CampoState>;
+  concluiu: boolean;
   volume: string;
 }
 
-const vazio = (): RowState => ({
-  sp1: '', sp2: '', bs1: '', bs2: '', dl1: '', dl2: '',
-  runKm: '', bikeKm: '', time: '', completed: false, volume: '',
-});
+const campoVazio = (): CampoState => ({ valor: '', atleta1: '', atleta2: '' });
 
-const txt = (v: number | null | undefined) =>
-  v === null || v === undefined ? '' : String(v).replace('.', ',');
+const txt = (v: number | null | undefined, unidade: Prova['unidade']) => {
+  if (v === null || v === undefined) return '';
+  if (unidade === 'SEGUNDOS') return formatSeconds(v);
+  return String(v).replace('.', ',');
+};
+
+/** "2,41" -> 2.41 · "14:32" -> 872. Só para o total mostrado na tela. */
+function paraNumero(texto: string, unidade: Prova['unidade']): number | null {
+  const limpo = texto.trim();
+  if (limpo === '') return null;
+
+  if (unidade === 'SEGUNDOS') {
+    const [m = '0', s = '0'] = limpo.split(':');
+    const total = Number(m) * 60 + Number(s);
+    return Number.isFinite(total) ? total : null;
+  }
+
+  const n = Number(limpo.replace(',', '.'));
+  return Number.isFinite(n) ? n : null;
+}
 
 /**
  * WodEntry — lançamento de resultados (§19, §20, §21, §40).
  *
+ * OS CAMPOS SAEM DO CADASTRO DA PROVA.
+ *
+ * Antes esta tela conhecia os três workouts: seis campos de carga para o
+ * WOD 1, dois de distância para o WOD 2, um de tempo para o WOD 3. Um WOD
+ * novo pedia um quarto bloco de código. Agora ela lê as provas do workout e
+ * desenha um campo por prova digitada — dois, quando a prova é por atleta.
+ *
  * FLUXO DO DIA DO EVENTO:
- *   1. escolher a bateria  -> a tela mostra só aquelas 10 duplas
- *   2. digitar             -> total calculado na hora, sem conta na mão
- *   3. SALVAR RESULTADOS   -> grava como rascunho (DRAFT), ninguém vê ainda
- *   4. PUBLICAR RANKING    -> homologa, recalcula e o público vê na hora
+ *   1. escolher a bateria  -> a tela mostra só aquelas duplas
+ *   2. digitar             -> o calculado aparece na hora, sem conta na mão
+ *   3. SALVAR RESULTADOS   -> grava como rascunho, ninguém vê ainda
+ *   4. PUBLICAR RANKING    -> homologa e o público vê na hora
  *
  * Rascunho existe para que um erro de digitação não vá parar no telão.
  */
-export function WodEntry({ snapshot, wod }: { snapshot: Snapshot; wod: WodNumber }) {
+export function WodEntry({ snapshot, wod }: { snapshot: Snapshot; wod: Wod }) {
   const router = useRouter();
   const [pendente, startTransition] = useTransition();
-  const [bateria, setBateria] = useState<BatteryFilter>('1');
+  const [bateria, setBateria] = useState<string>('1');
   const [aviso, setAviso] = useState<ActionResult | null>(null);
   const [confirmarPublicacao, setConfirmarPublicacao] = useState(false);
   const [confirmarTrava, setConfirmarTrava] = useState(false);
+
+  // Só as provas digitadas viram campo. As calculadas aparecem como
+  // resultado, logo abaixo — nunca como campo, para não divergirem.
+  const digitadas = wod.provas.filter((p) => p.origem === 'DIGITADA');
+  const calculadas = wod.provas.filter((p) => p.origem === 'SOMA');
+
+  const baterias = useMemo(() => {
+    const daAgenda = snapshot.agenda
+      .filter((a) => a.wodId === wod.id && a.bateria !== null)
+      .map((a) => a.bateria as number);
+    const dasDuplas = snapshot.teams.map((t) => t.battery);
+    const todas = [...new Set([...daAgenda, ...dasDuplas])].sort((a, b) => a - b);
+    return todas.length > 0 ? todas : [1];
+  }, [snapshot.agenda, snapshot.teams, wod.id]);
 
   const times = useMemo(
     () =>
       snapshot.teams
         .filter((t) => t.status !== 'DESCLASSIFICADA')
-        .filter((t) => bateria === 'TODAS' || t.battery === (Number(bateria) as Battery))
+        .filter((t) => bateria === 'TODAS' || t.battery === Number(bateria))
         .sort((a, b) => a.teamNumber - b.teamNumber),
     [snapshot.teams, bateria],
   );
 
-  // Estado inicial vindo do banco (inclusive rascunhos: o admin enxerga tudo).
-  const [rows, setRows] = useState<Record<string, RowState>>(() => {
-    const inicial: Record<string, RowState> = {};
+  // Estado inicial vindo do banco (inclusive rascunhos: o admin vê tudo).
+  const [rows, setRows] = useState<Record<string, LinhaState>>(() => {
+    const inicial: Record<string, LinhaState> = {};
+
     for (const team of snapshot.teams) {
-      const r1 = snapshot.wod1.find((r) => r.teamId === team.id);
-      const r2 = snapshot.wod2.find((r) => r.teamId === team.id);
-      const r3 = snapshot.wod3.find((r) => r.teamId === team.id);
+      const entrada = snapshot.entries.find((e) => e.wodId === wod.id && e.teamId === team.id);
+      const campos: Record<string, CampoState> = {};
+
+      for (const prova of digitadas) {
+        const lancado = snapshot.results.find(
+          (r) => r.provaId === prova.id && r.teamId === team.id,
+        );
+        campos[prova.id] = {
+          valor: txt(lancado?.valor, prova.unidade),
+          atleta1: txt(lancado?.valorAtleta1, prova.unidade),
+          atleta2: txt(lancado?.valorAtleta2, prova.unidade),
+        };
+      }
+
       inicial[team.id] = {
-        sp1: txt(r1?.strictPressAthlete1),
-        sp2: txt(r1?.strictPressAthlete2),
-        bs1: txt(r1?.backSquatAthlete1),
-        bs2: txt(r1?.backSquatAthlete2),
-        dl1: txt(r1?.deadliftAthlete1),
-        dl2: txt(r1?.deadliftAthlete2),
-        runKm: txt(r2?.runKm),
-        bikeKm: txt(r2?.bikeKm),
-        time: r3?.timeSeconds !== null && r3?.timeSeconds !== undefined && r3.completed
-          ? formatSeconds(r3.timeSeconds)
-          : '',
-        completed: r3?.completed ?? false,
-        volume: txt(r3?.volumeCompleted),
+        campos,
+        concluiu: entrada?.concluiu ?? !wod.permiteCap,
+        volume: entrada?.volume === null || entrada?.volume === undefined
+          ? ''
+          : String(entrada.volume).replace('.', ','),
       };
     }
+
     return inicial;
   });
 
-  const statusPorTime = useMemo(() => {
-    const mapa: Record<string, ResultStatus | null> = {};
-    for (const team of snapshot.teams) {
-      const r =
-        wod === 1
-          ? snapshot.wod1.find((x) => x.teamId === team.id)
-          : wod === 2
-            ? snapshot.wod2.find((x) => x.teamId === team.id)
-            : snapshot.wod3.find((x) => x.teamId === team.id);
-      mapa[team.id] = r?.status ?? null;
-    }
-    return mapa;
-  }, [snapshot, wod]);
+  const statusDe = (teamId: string): ResultStatus | undefined =>
+    snapshot.entries.find((e) => e.wodId === wod.id && e.teamId === team(teamId)?.id)?.status;
 
-  const set = (teamId: string, campo: keyof RowState, valor: string | boolean) =>
+  const team = (id: string): Team | undefined => snapshot.teams.find((t) => t.id === id);
+
+  function atualizar(teamId: string, provaId: string, campo: keyof CampoState, valor: string) {
     setRows((prev) => {
-      const atual = prev[teamId] ?? vazio();
-      return { ...prev, [teamId]: { ...atual, [campo]: valor } };
+      const linha = prev[teamId] ?? { campos: {}, concluiu: !wod.permiteCap, volume: '' };
+      return {
+        ...prev,
+        [teamId]: {
+          ...linha,
+          campos: {
+            ...linha.campos,
+            [provaId]: { ...(linha.campos[provaId] ?? campoVazio()), [campo]: valor },
+          },
+        },
+      };
     });
+  }
 
-  const numero = (v: string) => {
-    const n = Number(v.replace(',', '.'));
-    return Number.isFinite(n) ? n : 0;
-  };
+  function atualizarLinha(teamId: string, campos: Partial<LinhaState>) {
+    setRows((prev) => ({
+      ...prev,
+      [teamId]: {
+        ...(prev[teamId] ?? { campos: {}, concluiu: !wod.permiteCap, volume: '' }),
+        ...campos,
+      },
+    }));
+  }
 
-  const linha = (teamId: string) => rows[teamId] ?? vazio();
+  /** O valor de uma prova para esta dupla, já somado quando é por atleta. */
+  function valorDe(teamId: string, prova: Prova): number | null {
+    const linha = rows[teamId];
+    if (!linha) return null;
 
-  const totalCarga = (teamId: string) => {
-    const r = linha(teamId);
-    return numero(r.sp1) + numero(r.sp2) + numero(r.bs1) + numero(r.bs2) + numero(r.dl1) + numero(r.dl2);
-  };
+    if (prova.origem === 'SOMA') {
+      const partes = prova.componentes
+        .map((codigo) => wod.provas.find((p) => p.codigo === codigo))
+        .filter((p): p is Prova => p !== undefined)
+        .map((p) => valorDe(teamId, p));
+      return partes.some((v) => v !== null)
+        ? Math.round(partes.reduce<number>((a, v) => a + (v ?? 0), 0) * 1000) / 1000
+        : null;
+    }
 
-  const totalKm = (teamId: string) => {
-    const r = linha(teamId);
-    return Math.round((numero(r.runKm) + numero(r.bikeKm)) * 100) / 100;
-  };
+    const campo = linha.campos[prova.id];
+    if (!campo) return null;
+
+    if (prova.porAtleta) {
+      const a = paraNumero(campo.atleta1, prova.unidade);
+      const b = paraNumero(campo.atleta2, prova.unidade);
+      return a === null && b === null ? null : (a ?? 0) + (b ?? 0);
+    }
+    return paraNumero(campo.valor, prova.unidade);
+  }
 
   function salvar() {
     setAviso(null);
     startTransition(async () => {
-      const payload = times.map((t) => {
-        const r = linha(t.id);
-        if (wod === 1) {
-          return {
-            teamId: t.id,
-            strictPressAthlete1: r.sp1 || null,
-            strictPressAthlete2: r.sp2 || null,
-            backSquatAthlete1: r.bs1 || null,
-            backSquatAthlete2: r.bs2 || null,
-            deadliftAthlete1: r.dl1 || null,
-            deadliftAthlete2: r.dl2 || null,
-          };
-        }
-        if (wod === 2) {
-          return { teamId: t.id, runKm: r.runKm || null, bikeKm: r.bikeKm || null };
-        }
+      const linhas = times.map((t) => {
+        const linha = rows[t.id];
         return {
           teamId: t.id,
-          time: r.time,
-          completed: r.completed,
-          volumeCompleted: r.volume || null,
+          concluiu: linha?.concluiu ?? !wod.permiteCap,
+          volume: linha?.volume?.trim() ? linha.volume.replace(',', '.') : null,
+          valores: Object.fromEntries(
+            digitadas.map((p) => [
+              p.id,
+              {
+                valor: linha?.campos[p.id]?.valor ?? null,
+                atleta1: linha?.campos[p.id]?.atleta1 ?? null,
+                atleta2: linha?.campos[p.id]?.atleta2 ?? null,
+              },
+            ]),
+          ),
         };
       });
 
-      const resultado =
-        wod === 1
-          ? await salvarWod1(payload)
-          : wod === 2
-            ? await salvarWod2(payload)
-            : await salvarWod3(payload);
-
+      const resultado = await salvarLancamentos(wod.id, linhas);
       setAviso(resultado);
       if (resultado.ok) router.refresh();
     });
   }
 
-  function mudarStatus(status: ResultStatus) {
+  function homologar(status: ResultStatus) {
     setAviso(null);
-    setConfirmarPublicacao(false);
-    setConfirmarTrava(false);
     startTransition(async () => {
       const resultado = await definirStatus(
-        wod,
+        wod.id,
         times.map((t) => t.id),
         status,
       );
       setAviso(resultado);
+      setConfirmarPublicacao(false);
+      setConfirmarTrava(false);
       if (resultado.ok) router.refresh();
     });
   }
 
-  const meta = WOD_META[wod];
+  const cap = capEmTexto(wod.capSegundos);
 
   return (
     <div className="space-y-5">
-      {/* ---- Bateria ------------------------------------------------------ */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* ---- Cabeçalho ---------------------------------------------------- */}
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="font-display text-[10px] font-bold tracking-kicker text-white/45 uppercase">
-            Escolha a bateria
+          <p className="font-display text-[10px] font-bold tracking-kicker text-nacao-cyan uppercase">
+            {[wod.formato, cap ? `CAP ${cap}` : null].filter(Boolean).join(' · ')}
           </p>
-          <div className="mt-1.5">
-            <Tabs
-              options={[
-                { value: '1' as const, label: 'Bateria 1' },
-                { value: '2' as const, label: 'Bateria 2' },
-                { value: 'TODAS' as const, label: 'Todas' },
-              ]}
-              value={bateria}
-              onChange={setBateria}
-              label="Filtrar por bateria"
-            />
-          </div>
+          <h1 className="mt-1 font-display text-3xl font-black tracking-tight uppercase">
+            WOD {wod.numero} — {wod.nome}
+          </h1>
+          <p className="mt-1 text-sm text-white/50">
+            {digitadas.length} prova{digitadas.length === 1 ? '' : 's'} para lançar
+            {calculadas.length > 0
+              ? ` · ${calculadas.map((p) => p.codigo).join(', ')} ${
+                  calculadas.length === 1 ? 'é calculada' : 'são calculadas'
+                } pelo sistema`
+              : ''}
+          </p>
         </div>
-
-        <p className="font-display text-[11px] font-bold tracking-wider text-white/40 uppercase">
-          {times.length} duplas · {meta.format} · CAP {meta.cap}
-        </p>
       </div>
 
-      {/* ---- Aviso -------------------------------------------------------- */}
+      {/* ---- Bateria ------------------------------------------------------ */}
+      <div>
+        <p className="mb-2 font-display text-[10px] font-bold tracking-kicker text-white/45 uppercase">
+          Escolha a bateria
+        </p>
+        <Tabs
+          options={[
+            ...baterias.map((b) => ({ value: String(b), label: `Bateria ${b}` })),
+            { value: 'TODAS', label: 'Todas' },
+          ]}
+          value={bateria}
+          onChange={setBateria}
+          label="Filtrar por bateria"
+        />
+      </div>
+
       {aviso ? (
         <p
           role="status"
-          className={`flex items-start gap-2 rounded-xl border px-4 py-3 text-sm ${
+          className={`rounded-xl border px-4 py-3 text-sm ${
             aviso.ok
               ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200'
               : 'border-red-400/30 bg-red-500/10 text-red-200'
           }`}
         >
-          {aviso.ok ? (
-            <CheckCircle2 size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
-          ) : (
-            <TriangleAlert size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
-          )}
           {aviso.message}
         </p>
       ) : null}
 
-      {/* ---- Tabela de lançamento ----------------------------------------- */}
-      <Card className="overflow-x-auto">
-        <table className="w-full border-collapse text-left">
-          <thead>
-            <tr className="border-b border-white/12">
-              <th scope="col" className="px-3 py-3 font-display text-[10px] font-bold tracking-wider text-white/45 uppercase">
-                Dupla
-              </th>
-              {wod === 1 ? (
-                <>
-                  <ThGroup>Strict Press</ThGroup>
-                  <ThGroup>Back Squat</ThGroup>
-                  <ThGroup>Deadlift</ThGroup>
-                  <ThRight>Total</ThRight>
-                </>
+      {/* ---- As linhas ---------------------------------------------------- */}
+      <div className="space-y-3">
+        {times.map((t) => {
+          const linha = rows[t.id];
+          const status = statusDe(t.id);
+          const travado = status === 'LOCKED';
+
+          return (
+            <Card key={t.id} className={`p-4 ${travado ? 'opacity-70' : ''}`}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="flex items-center gap-2">
+                  <span className="tnum font-display text-xs font-bold text-nacao-sky">
+                    {teamNumber(t.teamNumber)}
+                  </span>
+                  <span className="font-display text-base font-bold">{t.teamName}</span>
+                  <span className="text-xs text-white/40">
+                    {t.athlete1 || 'Atleta 1'} · {t.athlete2 || 'Atleta 2'}
+                  </span>
+                </p>
+                <span className="flex items-center gap-1.5">
+                  {travado ? <Badge tone="danger">Travado</Badge> : null}
+                  {status === 'PUBLISHED' ? <Badge tone="ok">Publicado</Badge> : null}
+                  {status === 'DRAFT' ? <Badge tone="warn">Rascunho</Badge> : null}
+                </span>
+              </div>
+
+              {/* Um campo por prova digitada — dois quando é por atleta. */}
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {digitadas.map((prova) => (
+                  <div key={prova.id} className="rounded-xl bg-white/[0.04] px-3 py-2.5">
+                    <p className="mb-1.5 font-display text-[10px] font-bold tracking-wider text-nacao-sky uppercase">
+                      {prova.codigo} · {prova.descricao}
+                    </p>
+
+                    {prova.porAtleta ? (
+                      <div className="grid grid-cols-2 gap-2">
+                        <ScoreInput
+                          label="Atleta 1"
+                          suffix={UNIDADE_SUFIXO[prova.unidade]}
+                          disabled={travado}
+                          value={linha?.campos[prova.id]?.atleta1 ?? ''}
+                          onChange={(e) => atualizar(t.id, prova.id, 'atleta1', e.target.value)}
+                        />
+                        <ScoreInput
+                          label="Atleta 2"
+                          suffix={UNIDADE_SUFIXO[prova.unidade]}
+                          disabled={travado}
+                          value={linha?.campos[prova.id]?.atleta2 ?? ''}
+                          onChange={(e) => atualizar(t.id, prova.id, 'atleta2', e.target.value)}
+                        />
+                      </div>
+                    ) : (
+                      <ScoreInput
+                        suffix={UNIDADE_SUFIXO[prova.unidade]}
+                        placeholder={prova.unidade === 'SEGUNDOS' ? 'mm:ss' : undefined}
+                        disabled={travado}
+                        value={linha?.campos[prova.id]?.valor ?? ''}
+                        onChange={(e) => atualizar(t.id, prova.id, 'valor', e.target.value)}
+                      />
+                    )}
+
+                    <p className="tnum mt-1 text-[10px] text-white/40">
+                      {valorDaProva(prova.unidade, valorDe(t.id, prova))}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              {/* O que o sistema calcula, mostrado para conferência. */}
+              {calculadas.length > 0 ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {calculadas.map((prova) => (
+                    <span
+                      key={prova.id}
+                      className="rounded-lg border border-nacao-cyan/25 bg-nacao-cyan/[0.07] px-3 py-1.5 text-xs text-white/75"
+                    >
+                      <strong className="font-display font-bold tracking-wider text-nacao-cyan uppercase">
+                        {prova.codigo}
+                      </strong>{' '}
+                      <span className="tnum">
+                        {valorDaProva(prova.unidade, valorDe(t.id, prova))}
+                      </span>
+                    </span>
+                  ))}
+                </div>
               ) : null}
-              {wod === 2 ? (
-                <>
-                  <ThGroup>Corrida (km)</ThGroup>
-                  <ThGroup>Bike (km)</ThGroup>
-                  <ThRight>Soma</ThRight>
-                </>
+
+              {/* Só workout com CAP pergunta se concluiu. */}
+              {wod.permiteCap ? (
+                <div className="mt-3 flex flex-wrap items-end gap-3">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={linha?.concluiu ?? false}
+                      disabled={travado}
+                      onChange={(e) => atualizarLinha(t.id, { concluiu: e.target.checked })}
+                      className="h-4 w-4 accent-nacao-cyan"
+                    />
+                    Concluiu dentro do CAP
+                  </label>
+
+                  {!linha?.concluiu ? (
+                    <div className="w-32">
+                      <ScoreInput
+                        label="Volume"
+                        disabled={travado}
+                        value={linha?.volume ?? ''}
+                        onChange={(e) => atualizarLinha(t.id, { volume: e.target.value })}
+                      />
+                    </div>
+                  ) : null}
+                </div>
               ) : null}
-              {wod === 3 ? (
-                <>
-                  <ThGroup>Tempo MM:SS</ThGroup>
-                  <ThGroup>Concluiu?</ThGroup>
-                  <ThGroup>Volume no CAP</ThGroup>
-                </>
-              ) : null}
-              <ThRight>Status</ThRight>
-            </tr>
-          </thead>
+            </Card>
+          );
+        })}
+      </div>
 
-          <tbody>
-            {times.map((team) => {
-              const r = linha(team.id);
-              const erro = aviso?.fieldErrors?.[team.id];
-              const status = statusPorTime[team.id] ?? null;
-
-              return (
-                <tr
-                  key={team.id}
-                  className={`border-b border-white/[0.07] ${erro ? 'bg-red-500/[0.07]' : ''}`}
-                >
-                  <td className="px-3 py-2.5">
-                    <TeamCell team={team} />
-                    {erro ? (
-                      <p role="alert" className="mt-1 max-w-xs text-[11px] text-red-300">
-                        {erro}
-                      </p>
-                    ) : null}
-                  </td>
-
-                  {wod === 1 ? (
-                    <>
-                      <Pair>
-                        <ScoreInput
-                          aria-label={`Strict Press de ${team.athlete1 || 'atleta 1'}`}
-                          value={r.sp1}
-                          onChange={(e) => set(team.id, 'sp1', e.target.value)}
-                          suffix="kg"
-                        />
-                        <ScoreInput
-                          aria-label={`Strict Press de ${team.athlete2 || 'atleta 2'}`}
-                          value={r.sp2}
-                          onChange={(e) => set(team.id, 'sp2', e.target.value)}
-                          suffix="kg"
-                        />
-                      </Pair>
-                      <Pair>
-                        <ScoreInput
-                          aria-label={`Back Squat de ${team.athlete1 || 'atleta 1'}`}
-                          value={r.bs1}
-                          onChange={(e) => set(team.id, 'bs1', e.target.value)}
-                          suffix="kg"
-                        />
-                        <ScoreInput
-                          aria-label={`Back Squat de ${team.athlete2 || 'atleta 2'}`}
-                          value={r.bs2}
-                          onChange={(e) => set(team.id, 'bs2', e.target.value)}
-                          suffix="kg"
-                        />
-                      </Pair>
-                      <Pair>
-                        <ScoreInput
-                          aria-label={`Deadlift de ${team.athlete1 || 'atleta 1'}`}
-                          value={r.dl1}
-                          onChange={(e) => set(team.id, 'dl1', e.target.value)}
-                          suffix="kg"
-                        />
-                        <ScoreInput
-                          aria-label={`Deadlift de ${team.athlete2 || 'atleta 2'}`}
-                          value={r.dl2}
-                          onChange={(e) => set(team.id, 'dl2', e.target.value)}
-                          suffix="kg"
-                        />
-                      </Pair>
-                      <td className="px-3 py-2.5 text-right">
-                        <span className="tnum font-display text-lg font-black whitespace-nowrap text-nacao-cyan">
-                          {kg(totalCarga(team.id))}
-                        </span>
-                      </td>
-                    </>
-                  ) : null}
-
-                  {wod === 2 ? (
-                    <>
-                      <td className="px-3 py-2.5">
-                        <ScoreInput
-                          aria-label={`Quilômetros de corrida da dupla ${team.teamName}`}
-                          value={r.runKm}
-                          onChange={(e) => set(team.id, 'runKm', e.target.value)}
-                          suffix="km"
-                          className="w-28"
-                        />
-                        <span className="mt-1 block text-center text-[10px] text-white/35">
-                          km · qualquer valor
-                        </span>
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <ScoreInput
-                          aria-label={`Quilômetros de bike da dupla ${team.teamName}`}
-                          value={r.bikeKm}
-                          onChange={(e) => set(team.id, 'bikeKm', e.target.value)}
-                          suffix="km"
-                          className="w-28"
-                        />
-                      </td>
-                      <td className="px-3 py-2.5 text-right">
-                        <span className="tnum font-display text-lg font-black whitespace-nowrap text-nacao-cyan">
-                          {km(totalKm(team.id))}
-                        </span>
-                      </td>
-                    </>
-                  ) : null}
-
-                  {wod === 3 ? (
-                    <>
-                      <td className="px-3 py-2.5">
-                        <ScoreInput
-                          aria-label={`Tempo da dupla ${team.teamName} em minutos e segundos`}
-                          value={r.time}
-                          onChange={(e) => set(team.id, 'time', e.target.value)}
-                          placeholder="14:32"
-                          disabled={!r.completed}
-                          className="w-28"
-                        />
-                        <span className="mt-1 block text-center text-[10px] text-white/35">
-                          {r.completed
-                            ? r.time
-                              ? `${parseTimeToSeconds(r.time) ?? '—'} s`
-                              : 'MM:SS'
-                            : `CAP ${formatSeconds(WOD3_CAP_SECONDS)}`}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <label className="flex cursor-pointer items-center justify-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={r.completed}
-                            onChange={(e) => set(team.id, 'completed', e.target.checked)}
-                            className="h-5 w-5 accent-[#20C4FA]"
-                          />
-                          <span className="font-display text-xs font-bold uppercase">
-                            {r.completed ? 'Sim' : 'Não'}
-                          </span>
-                        </label>
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <ScoreInput
-                          aria-label={`Volume concluído pela dupla ${team.teamName}`}
-                          value={r.volume}
-                          onChange={(e) => set(team.id, 'volume', e.target.value)}
-                          disabled={r.completed}
-                          placeholder={r.completed ? '—' : '0'}
-                          className="w-24"
-                        />
-                      </td>
-                    </>
-                  ) : null}
-
-                  <td className="px-3 py-2.5 text-right">
-                    <StatusBadge status={status} />
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </Card>
+      {times.length === 0 ? (
+        <Card className="p-6 text-center">
+          <p className="text-sm text-white/50">Nenhuma dupla nesta bateria.</p>
+        </Card>
+      ) : null}
 
       {/* ---- Ações -------------------------------------------------------- */}
-      <div className="sticky bottom-0 flex flex-wrap gap-2.5 border-t border-white/10 bg-nacao-abyss/92 py-3 backdrop-blur-md">
-        <Button type="button" size="xl" onClick={salvar} disabled={pendente}>
-          <Save size={18} aria-hidden="true" />
+      <div className="sticky bottom-0 flex flex-wrap gap-2 border-t border-white/10 bg-nacao-abyss/92 py-3 backdrop-blur-md">
+        <Button size="lg" onClick={salvar} disabled={pendente || times.length === 0}>
+          <Save size={17} aria-hidden="true" />
           {pendente ? 'Salvando…' : 'Salvar resultados'}
         </Button>
-
         <Button
-          type="button"
-          size="xl"
-          variant="cyan"
+          size="lg"
+          variant="secondary"
           onClick={() => setConfirmarPublicacao(true)}
-          disabled={pendente}
+          disabled={pendente || times.length === 0}
         >
-          <Send size={18} aria-hidden="true" />
+          <Send size={17} aria-hidden="true" />
           Publicar ranking
         </Button>
-
         <Button
-          type="button"
-          size="xl"
+          size="lg"
           variant="secondary"
           onClick={() => setConfirmarTrava(true)}
-          disabled={pendente}
+          disabled={pendente || times.length === 0}
         >
-          <Lock size={18} aria-hidden="true" />
+          <Lock size={17} aria-hidden="true" />
           Travar
         </Button>
       </div>
@@ -461,100 +440,47 @@ export function WodEntry({ snapshot, wod }: { snapshot: Snapshot; wod: WodNumber
       <Modal
         open={confirmarPublicacao}
         onClose={() => setConfirmarPublicacao(false)}
-        title={`Publicar o WOD ${wod}?`}
+        title="Publicar o ranking?"
         footer={
           <>
             <Button variant="ghost" onClick={() => setConfirmarPublicacao(false)}>
               Cancelar
             </Button>
-            <Button variant="cyan" onClick={() => mudarStatus('PUBLISHED')}>
-              Publicar agora
+            <Button onClick={() => homologar('PUBLISHED')} disabled={pendente}>
+              <CheckCircle2 size={16} aria-hidden="true" />
+              Publicar
             </Button>
           </>
         }
       >
         <p className="text-sm text-white/70">
-          As <strong>{times.length} duplas</strong>{' '}
-          {bateria === 'TODAS' ? 'do evento' : `da bateria ${bateria}`} passam de rascunho
-          para publicado. A classificação é recalculada e o público vê na hora, sem
-          precisar atualizar a página.
+          Os resultados {bateria === 'TODAS' ? 'do evento' : `da bateria ${bateria}`} passam de
+          rascunho para publicado e aparecem no leaderboard público na hora.
         </p>
       </Modal>
 
       <Modal
         open={confirmarTrava}
         onClose={() => setConfirmarTrava(false)}
-        title={`Travar o WOD ${wod}?`}
+        title="Travar os resultados?"
         footer={
           <>
             <Button variant="ghost" onClick={() => setConfirmarTrava(false)}>
               Cancelar
             </Button>
-            <Button variant="danger" onClick={() => mudarStatus('LOCKED')}>
-              Travar resultados
+            <Button variant="danger" onClick={() => homologar('LOCKED')} disabled={pendente}>
+              <Lock size={16} aria-hidden="true" />
+              Travar
             </Button>
           </>
         }
       >
-        <p className="text-sm text-white/70">
-          Resultado travado não pode mais ser alterado por engano. Para mudar depois será
-          preciso destravar em <strong>Conferência</strong>, informando o motivo — e a
-          alteração fica registrada na auditoria.
+        <p className="flex items-start gap-2 text-sm text-white/70">
+          <TriangleAlert size={18} aria-hidden="true" className="mt-0.5 shrink-0 text-amber-300" />
+          Resultado travado não muda por acidente. Para alterar depois, é preciso destravar
+          informando o motivo — e a ação fica registrada na auditoria.
         </p>
       </Modal>
     </div>
-  );
-}
-
-function TeamCell({ team }: { team: Team }) {
-  return (
-    <>
-      <span className="flex items-center gap-2">
-        <span className="tnum font-display text-[11px] font-bold text-nacao-sky">
-          {teamNumber(team.teamNumber)}
-        </span>
-        <span className="font-display text-sm font-bold">{team.teamName}</span>
-      </span>
-      <span className="block text-[11px] text-white/45">
-        {team.athlete1 || 'Atleta 1'} · {team.athlete2 || 'Atleta 2'}
-      </span>
-    </>
-  );
-}
-
-function StatusBadge({ status }: { status: ResultStatus | null }) {
-  if (status === 'LOCKED') return <Badge tone="danger">Travado</Badge>;
-  if (status === 'PUBLISHED') return <Badge tone="ok">Publicado</Badge>;
-  if (status === 'DRAFT') return <Badge tone="warn">Rascunho</Badge>;
-  return <Badge tone="neutral">Sem lançamento</Badge>;
-}
-
-function ThGroup({ children }: { children: React.ReactNode }) {
-  return (
-    <th
-      scope="col"
-      className="px-3 py-3 text-center font-display text-[10px] font-bold tracking-wider text-white/45 uppercase"
-    >
-      {children}
-    </th>
-  );
-}
-
-function ThRight({ children }: { children: React.ReactNode }) {
-  return (
-    <th
-      scope="col"
-      className="px-3 py-3 text-right font-display text-[10px] font-bold tracking-wider text-white/45 uppercase"
-    >
-      {children}
-    </th>
-  );
-}
-
-function Pair({ children }: { children: React.ReactNode }) {
-  return (
-    <td className="px-3 py-2.5">
-      <div className="flex gap-1.5">{children}</div>
-    </td>
   );
 }
