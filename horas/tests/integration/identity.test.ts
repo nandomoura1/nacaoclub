@@ -95,6 +95,20 @@ describe.skipIf(!hasDb)('E1 · identidade, permissões e auditoria (Postgres rea
       expect(await authenticate({ email: `  ${u.email.toUpperCase()} `, password: 'senha-correta-1' }, META)).toBe(u.principal.id);
     });
 
+    it('bloqueia tentativa e erro: 5 senhas erradas seguidas travam o e-mail por 15 minutos', async () => {
+      const u = await makeUser('COORDENADOR', { password: 'senha-correta-1' });
+      const meta = { ...META, ipAddress: '10.9.9.9' };
+      for (let i = 0; i < 5; i++) await authenticate({ email: u.email, password: `errada-${i}` }, meta).catch(() => undefined);
+      // Nem a senha certa entra enquanto durar o bloqueio (e a mensagem diz o que fazer).
+      const locked = await authenticate({ email: u.email, password: 'senha-correta-1' }, meta).catch((e: AppError) => e);
+      expect(locked).toBeInstanceOf(AppError);
+      expect((locked as AppError).status).toBe(429);
+      expect((locked as AppError).message).toMatch(/Muitas tentativas/);
+      // Outro usuário, do mesmo IP, continua entrando (limite por IP é maior).
+      const other = await makeUser('COORDENADOR', { password: 'senha-correta-2' });
+      expect(await authenticate({ email: other.email, password: 'senha-correta-2' }, meta)).toBe(other.principal.id);
+    });
+
     it('usuário desativado não entra, mesmo com a senha certa', async () => {
       const u = await makeUser('ADMIN', { password: 'senha-correta-1' });
       await prisma.user.update({ where: { id: u.principal.id }, data: { active: false } });

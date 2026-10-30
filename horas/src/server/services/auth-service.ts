@@ -24,11 +24,33 @@ function getDummyHash(): Promise<string> {
 
 const INVALID = 'E-mail ou senha incorretos.';
 
+/** Contra tentativa e erro de senha: por e-mail e por IP, numa janela de 15 minutos. */
+export const LOGIN_WINDOW_MIN = 15;
+export const MAX_FAILS_PER_EMAIL = 5;
+export const MAX_FAILS_PER_IP = 20;
+
+async function tooManyAttempts(email: string, ip: string | null | undefined) {
+  const since = new Date(Date.now() - LOGIN_WINDOW_MIN * 60_000);
+  const [byEmail, byIp] = await Promise.all([
+    prisma.auditLog.count({ where: { action: 'auth.login_failed', at: { gte: since }, after: { path: ['email'], equals: email } } }),
+    ip ? prisma.auditLog.count({ where: { action: 'auth.login_failed', at: { gte: since }, ipAddress: ip } }) : Promise.resolve(0),
+  ]);
+  return byEmail >= MAX_FAILS_PER_EMAIL || byIp >= MAX_FAILS_PER_IP;
+}
+
 /** Valida credenciais. Retorna o id do usuário ou lança AppError genérico. */
 export async function authenticate(input: unknown, meta: RequestMeta): Promise<string> {
   const parsed = loginSchema.safeParse(input);
   if (!parsed.success) throw new AppError(parsed.error.issues[0]?.message ?? INVALID);
   const { email, password } = parsed.data;
+
+  if (await tooManyAttempts(email, meta.ipAddress)) {
+    await audit(prisma, { actorId: null, ...meta }, {
+      action: 'auth.login_failed', entityType: 'user', entityId: null,
+      after: { email, reason: 'locked' }, summary: `Login bloqueado por excesso de tentativas para ${email}`,
+    });
+    throw new AppError(`Muitas tentativas de login. Aguarde ${LOGIN_WINDOW_MIN} minutos e tente de novo (ou peça a troca de senha à administração).`, 429);
+  }
 
   const user = await prisma.user.findUnique({ where: { email } });
   const ok = await verifyPassword(password, user?.passwordHash ?? (await getDummyHash()));
