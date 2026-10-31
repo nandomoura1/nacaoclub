@@ -1,7 +1,7 @@
 import * as React from 'react'; // o renderizador (tsx/vitest) usa JSX clássico
 import { ImageResponse } from 'next/og';
 import sharp from 'sharp';
-import { fitText, noticeBackdrop, noticeTheme, splitClosing, NOTICE_ART_FORMATS, type NoticeArtInput } from '@/domain/marketing/notice-art';
+import { fitParagraphs, fitText, noticeBackdrop, noticeTheme, splitClosing, textParagraphs, NOTICE_ART_FORMATS, type NoticeArtInput } from '@/domain/marketing/notice-art';
 import * as W from '@/server/workouts/assets.generated';
 import * as A from './notice-assets.generated';
 
@@ -57,15 +57,46 @@ async function background(photo: Buffer | null, opacity: number, w: number, h: n
   }
 }
 
+/**
+ * Parágrafo → palavras (cada uma com trechos normais/negrito). Pontuação colada no negrito
+ * ("*piscina*.") fica na mesma palavra, sem espaço antes.
+ */
+function words(p: { bold: boolean; text: string }[]) {
+  const out: { bold: boolean; text: string }[][] = [];
+  let glue = false;
+  for (const seg of p) {
+    const parts = seg.text.split(' ');
+    parts.forEach((t, i) => {
+      if (i > 0) glue = false;
+      if (!t) return;
+      if (glue && out.length) out[out.length - 1]!.push({ bold: seg.bold, text: t });
+      else out.push([{ bold: seg.bold, text: t }]);
+      glue = true;
+    });
+    if (seg.text.endsWith(' ')) glue = false;
+  }
+  return out;
+}
+
 export async function renderNoticeArt(v: NoticeArtInput, photo: Buffer | null): Promise<Buffer> {
   const f = NOTICE_ART_FORMATS.find((x) => x.id === v.format)!;
   const { width, height } = f;
-  const L = layout(v.format, v.rows.length);
+  const L = layout(v.format, v.content === 'texto' ? 3 : v.rows.length);
   const source = v.background === 'nenhuma' ? null : v.background === 'propria' ? photo : buf(A.fundo);
   const T = noticeTheme(v.theme);
   const ACCENT = T.accent, DARK = noticeBackdrop(v.backdrop).color, INK = WHITE;
   const bg = await background(source, v.photoOpacity, width, height, DARK);
-  const tableH = L.rowH * v.rows.length;
+  // Texto livre: caixa no lugar da tabela, do tamanho do texto (letra ajustada para caber).
+  const isText = v.content === 'texto';
+  const textPad = v.format === 'feed' ? 36 : 52;
+  const accentW = v.format === 'feed' ? 18 : 24;
+  const textW = L.tableW - accentW - textPad * 2 - 16;
+  const textMaxH = v.format === 'feed' ? 480 : 560;
+  const fitT = fitParagraphs(v.text, textW, textMaxH, v.format === 'feed' ? 44 : 54, 24);
+  const paraGap = Math.round(fitT.size * 0.45);
+  const paras = textParagraphs(v.text);
+  const textH = Math.round(fitT.lines * fitT.size * 1.32 + paraGap * Math.max(0, paras.length - 1) + textPad * 2);
+  const tableH = isText ? textH : L.rowH * v.rows.length;
   // Frase final no meio do espaço entre a tabela e a palavra NAÇÃO.
   const wordTop = height - L.wordBottom - L.wordH;
   const closingTop = Math.round((L.tableTop + tableH + wordTop) / 2) - (v.format === 'feed' ? 28 : 40);
@@ -94,8 +125,25 @@ export async function renderNoticeArt(v: NoticeArtInput, photo: Buffer | null): 
           <div style={{ fontSize: fitText(v.subtitle, width - 140, L.subS, 24, 1.15), fontWeight: 500, letterSpacing: Math.round(L.subS * 0.42) }}>{v.subtitle.toUpperCase()}</div>
         </div>
       )}
+      {/* Texto livre: barra de destaque + caixa com borda, como a tabela */}
+      {isText && (
+        <div style={{ position: 'absolute', top: L.tableTop, left: L.tableX, width: L.tableW, height: tableH, display: 'flex' }}>
+          <div style={{ width: accentW, height: tableH, background: ACCENT }} />
+          <div style={{ flex: 1, height: tableH, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: textPad, border: `${border}px solid ${INK}`, borderLeft: 'none' }}>
+            {paras.map((p, i) => (
+              <div key={i} style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', marginTop: i ? paraGap : 0, minHeight: p.length ? 0 : Math.round(fitT.size * 0.6), fontSize: fitT.size, lineHeight: 1.32 }}>
+                {words(p).map((w, k) => (
+                  <div key={k} style={{ display: 'flex', marginRight: Math.round(fitT.size * 0.28) }}>
+                    {w.map((x, m) => <span key={m} style={{ fontWeight: x.bold ? 800 : 500 }}>{x.text}</span>)}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {/* Tabela horário × local */}
-      <div style={{ position: 'absolute', top: L.tableTop, left: L.tableX, width: L.tableW, height: tableH, display: 'flex' }}>
+      {!isText && <div style={{ position: 'absolute', top: L.tableTop, left: L.tableX, width: L.tableW, height: tableH, display: 'flex' }}>
         <div style={{ width: L.timeW, height: tableH, background: ACCENT, display: 'flex', flexDirection: 'column' }}>
           {v.rows.map((r, i) => (
             <div key={i} style={{ height: L.rowH, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: fitText(r.time, L.timeW - 20, L.rowFont, 22, 0.55), fontWeight: 800, color: T.onAccent }}>{r.time}</div>
@@ -114,7 +162,7 @@ export async function renderNoticeArt(v: NoticeArtInput, photo: Buffer | null): 
             <div style={{ fontSize: Math.round(L.rowH * 0.26), fontWeight: 500, color: T.onAccent, transform: 'skewX(-12deg)' }}>{r.badge}</div>
           </div>
         ) : null)}
-      </div>
+      </div>}
       {/* Frase final */}
       {(light || bold) && (
         <div style={{ position: 'absolute', top: closingTop, left: 0, width, display: 'flex', justifyContent: 'center', alignItems: 'baseline', fontSize: fitText(v.closing, width - 200, v.format === 'feed' ? 46 : 52, 30, 0.9), letterSpacing: 6, transform: 'skewX(-12deg)' }}>

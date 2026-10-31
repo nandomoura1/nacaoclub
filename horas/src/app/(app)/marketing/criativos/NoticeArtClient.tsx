@@ -6,11 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { FormMessage } from '@/components/ui/alert';
 import { Input, Label } from '@/components/ui/input';
-import { MAX_ROWS, NOTICE_ART_DEFAULTS, NOTICE_ART_FORMATS, NOTICE_ART_BACKDROPS, NOTICE_ART_THEMES, noticeBackdrop, subtitleFrom, type NoticeArtBackdrop, type NoticeArtFormat, type NoticeArtRow, type NoticeArtTheme } from '@/domain/marketing/notice-art';
+import { MAX_ROWS, MAX_TEXT, NOTICE_ART_CONTENTS, NOTICE_ART_DEFAULTS, NOTICE_ART_FORMATS, NOTICE_ART_BACKDROPS, NOTICE_ART_THEMES, noticeBackdrop, subtitleFrom, type NoticeArtBackdrop, type NoticeArtContent, type NoticeArtFormat, type NoticeArtRow, type NoticeArtTheme } from '@/domain/marketing/notice-art';
 import { prepareUpload } from '@/lib/upload';
 import { cn } from '@/lib/cn';
 
-type Form = { format: NoticeArtFormat; titleTop: string; titleBottom: string; date: string; reason: string; rows: NoticeArtRow[]; closing: string; background: 'nacao' | 'propria' | 'nenhuma'; photoOpacity: number; backdrop: NoticeArtBackdrop; theme: NoticeArtTheme };
+type Form = { format: NoticeArtFormat; titleTop: string; titleBottom: string; date: string; reason: string; content: NoticeArtContent; rows: NoticeArtRow[]; text: string; closing: string; background: 'nacao' | 'propria' | 'nenhuma'; photoOpacity: number; backdrop: NoticeArtBackdrop; theme: NoticeArtTheme };
 const KEY = 'nacao.criativo-comunicado';
 
 export function NoticeArtClient({ places, today }: { places: string[]; today: string }) {
@@ -40,7 +40,7 @@ export function NoticeArtClient({ places, today }: { places: string[]; today: st
       try {
         const fd = new FormData();
         const background = f.background === 'propria' && !photo ? 'nacao' : f.background;
-        fd.set('data', JSON.stringify({ format: f.format, titleTop: f.titleTop, titleBottom: f.titleBottom, subtitle, rows: f.rows, closing: f.closing, background, photoOpacity: f.photoOpacity, backdrop: f.backdrop, theme: f.theme }));
+        fd.set('data', JSON.stringify({ format: f.format, titleTop: f.titleTop, titleBottom: f.titleBottom, subtitle, content: f.content, rows: f.rows, text: f.text, closing: f.closing, background, photoOpacity: f.photoOpacity, backdrop: f.backdrop, theme: f.theme }));
         if (photo && background === 'propria') fd.set('photo', photo);
         const res = await fetch('/marketing/criativos/gerar', { method: 'POST', body: fd });
         if (id !== reqId.current) return;
@@ -120,6 +120,25 @@ export function NoticeArtClient({ places, today }: { places: string[]; today: st
         </Card>
 
         <Card className="p-4">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold text-tinta-suave">Conteúdo:</span>
+            {NOTICE_ART_CONTENTS.map((x) => (
+              <button key={x.id} type="button" onClick={() => set('content', x.id)} aria-pressed={f.content === x.id}
+                className={cn('rounded-full border px-3 py-1 text-xs font-semibold', f.content === x.id ? 'border-nacao bg-nacao text-white' : 'border-borda text-tinta-suave hover:border-nacao')}>{x.label}</button>
+            ))}
+          </div>
+          {f.content === 'texto' ? (
+            <div>
+              <div className="mb-1 flex items-center justify-between">
+                <h2 className="font-bold text-navy">Texto do comunicado</h2>
+                <span className="text-xs text-tinta-suave">{f.text.length}/{MAX_TEXT}</span>
+              </div>
+              <textarea value={f.text} maxLength={MAX_TEXT} rows={6} onChange={(e) => set('text', e.target.value)}
+                placeholder={'Ao longo do dia teremos uma obra de manutenção na área da piscina.\nO acesso fica pelo *portão lateral*.\nAgradecemos a compreensão!'}
+                className="w-full resize-y rounded-lg border border-borda p-3 text-sm focus:border-nacao focus:outline-none" />
+              <p className="mt-1 text-xs text-tinta-suave">Cada linha vira um parágrafo. Use <b>*asteriscos*</b> para deixar uma palavra em <b>negrito</b>. A letra se ajusta para caber no criativo.</p>
+            </div>
+          ) : (<>
           <div className="mb-2 flex items-center justify-between">
             <h2 className="font-bold text-navy">Horários</h2>
             <span className="text-xs text-tinta-suave">{f.rows.length}/{MAX_ROWS}</span>
@@ -143,6 +162,7 @@ export function NoticeArtClient({ places, today }: { places: string[]; today: st
             <Button className="mt-2" size="sm" variant="secondary" onClick={() => set('rows', [...f.rows, { time: f.rows.at(-1)?.time ?? '', place: '', badge: '' }])}><Plus /> Adicionar horário</Button>
           )}
           <p className="mt-2 text-xs text-tinta-suave">Dica: use “Fechado” no horário para avisar o que não abre. O selo aparece no canto da linha (preço, “grátis”, “com reserva”…).</p>
+          </>)}
         </Card>
 
         <Card className="grid gap-3 p-4 sm:grid-cols-2">
