@@ -91,3 +91,28 @@ export async function removeObjects(paths: string[]): Promise<void> {
 // ── Modo fake (dev/testes) ──
 export async function fakePut(path: string, data: Buffer) { const f = fakeFile(path); await mkdir(dirname(f), { recursive: true }); await writeFile(f, data); }
 export async function fakeGet(path: string) { return readFile(fakeFile(path)); }
+
+/** Envio feito pelo servidor (ex.: PDF gerado). Não sobrescreve arquivo existente. */
+export async function putObject(path: string, data: Uint8Array, contentType: string): Promise<void> {
+  const c = cfg();
+  if (c.fake) { await fakePut(path, Buffer.from(data)); return; }
+  const res = await fetch(`${c.url}/storage/v1/object/${BUCKET}/${path}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${c.key}`, apikey: c.key, 'Content-Type': contentType, 'x-upsert': 'false' },
+    body: Buffer.from(data),
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    console.error('[storage] put', res.status, (await res.text()).slice(0, 200));
+    throw new AppError('Não foi possível guardar o arquivo. Tente de novo.');
+  }
+}
+
+/** Leitura pelo servidor (para entregar o arquivo sem expor link). */
+export async function getObject(path: string): Promise<Buffer> {
+  const c = cfg();
+  if (c.fake) return fakeGet(path);
+  const res = await fetch(`${c.url}/storage/v1/object/${BUCKET}/${path}`, { headers: { Authorization: `Bearer ${c.key}`, apikey: c.key }, cache: 'no-store' });
+  if (!res.ok) throw new AppError(res.status === 404 ? 'Arquivo não encontrado no armazenamento.' : 'O armazenamento de arquivos não respondeu. Tente de novo.');
+  return Buffer.from(await res.arrayBuffer());
+}

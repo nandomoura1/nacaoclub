@@ -64,6 +64,9 @@ export const PERMISSIONS = {
   'ws.view': 'Escalas de Trabalho 5x2: ver as escalas mensais dos setores que acompanha',
   'ws.edit': 'Escalas de Trabalho 5x2: montar equipe, pré-requisitos e ausências, gerar e editar o rascunho (setores que lidera)',
   'ws.publish': 'Escalas de Trabalho 5x2: aprovar, publicar e reabrir escalas',
+  'contract.view': 'Contratos: ver contratos e baixar os assinados',
+  'contract.edit': 'Contratos: criar, enviar para assinatura e cancelar',
+  'contract.templates': 'Contratos: criar e editar os modelos',
   'ws.all_sectors': 'Escalas de Trabalho 5x2: ver e gerar as escalas de todos os setores (sem aprovar/publicar)',
   'ws.admin': 'Escalas de Trabalho 5x2: todos os setores, funcionamento da Nação e parâmetros legais (DP)',
 } as const;
@@ -129,6 +132,7 @@ export const SYSTEM_ROLES: Record<
       'edu.view',
       // Escalas de Trabalho 5x2: o DP cadastra e valida os parâmetros legais e acompanha todos os setores.
       'ws.view', 'ws.edit', 'ws.publish', 'ws.admin',
+      'contract.view', 'contract.edit', 'contract.templates',
     ],
   },
   PROFESSOR: {

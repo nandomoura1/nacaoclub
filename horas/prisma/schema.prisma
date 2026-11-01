@@ -2726,3 +2726,110 @@ model WsCell {
   @@index([memberId, date])
   @@map("ws_cells")
 }
+
+// ─────────────────────────────────────────────────────────────
+// Contratos: modelos com campos variáveis, assinatura eletrônica própria
+// (link + código pelo WhatsApp) e PDF final com trilha de evidências.
+// ─────────────────────────────────────────────────────────────
+
+/// Modelo de contrato: texto com {{campos}} e a lista dos campos a preencher.
+model ContractTemplate {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique
+  category    String
+  description String?
+  /// Texto do contrato: "# título", "## cláusula", **negrito**, {{campo}}.
+  body        String
+  /// [{ key, label, type, required, help }]
+  fields      Json     @default("[]")
+  /// Papéis das partes que assinam (ex.: ["CONTRATANTE", "CONTRATADO"]).
+  signerRoles String[] @default([]) @map("signer_roles")
+  active      Boolean  @default(true)
+  createdById String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  contracts Contract[]
+
+  @@map("contract_templates")
+}
+
+/// Contrato gerado de um modelo. Ao enviar para assinatura o texto fica congelado (hash).
+model Contract {
+  id           String    @id @default(uuid()) @db.Uuid
+  code         String    @unique
+  templateId   String?   @map("template_id") @db.Uuid
+  companyId    String?   @map("company_id") @db.Uuid
+  title        String
+  category     String
+  /// RASCUNHO, AGUARDANDO, ASSINADO, CANCELADO
+  status       String    @default("RASCUNHO")
+  values       Json      @default("{}")
+  /// Texto final (campos preenchidos), congelado no envio.
+  body         String    @default("")
+  bodyHash     String?   @map("body_hash")
+  finalPath    String?   @map("final_path")
+  finalHash    String?   @map("final_hash")
+  notes        String?
+  createdById  String?   @map("created_by") @db.Uuid
+  sentAt       DateTime? @map("sent_at")
+  completedAt  DateTime? @map("completed_at")
+  cancelledAt  DateTime? @map("cancelled_at")
+  cancelReason String?   @map("cancel_reason")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  template ContractTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  signers  ContractSigner[]
+  events   ContractEvent[]
+
+  @@index([status, createdAt])
+  @@map("contracts")
+}
+
+/// Parte que assina. O link leva um token aleatório; o banco guarda só o hash dele.
+model ContractSigner {
+  id            String    @id @default(uuid()) @db.Uuid
+  contractId    String    @map("contract_id") @db.Uuid
+  role          String
+  name          String
+  document      String?
+  phone         String?
+  email         String?
+  position      Int       @default(0)
+  tokenHash     String?   @unique @map("token_hash")
+  /// PENDENTE, ASSINADO, RECUSADO
+  status        String    @default("PENDENTE")
+  otpHash       String?   @map("otp_hash")
+  otpExpiresAt  DateTime? @map("otp_expires_at")
+  otpSentAt     DateTime? @map("otp_sent_at")
+  otpAttempts   Int       @default(0) @map("otp_attempts")
+  viewedAt      DateTime? @map("viewed_at")
+  signedAt      DateTime? @map("signed_at")
+  signedName    String?   @map("signed_name")
+  ipAddress     String?   @map("ip_address")
+  userAgent     String?   @map("user_agent")
+  refusedReason String?   @map("refused_reason")
+
+  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@index([contractId])
+  @@map("contract_signers")
+}
+
+/// Trilha de evidências do contrato (criação, envio, visualização, código, assinatura).
+model ContractEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  contractId String   @map("contract_id") @db.Uuid
+  signerId   String?  @map("signer_id") @db.Uuid
+  type       String
+  at         DateTime @default(now())
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  detail     Json?
+
+  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@index([contractId, at])
+  @@map("contract_events")
+}

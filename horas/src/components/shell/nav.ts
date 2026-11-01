@@ -8,7 +8,7 @@ export type NavIcon =
   | 'mkt' | 'mkt-campanhas' | 'mkt-kanban' | 'mkt-eventos' | 'mkt-reuniao' | 'mkt-conteudo' | 'mkt-interna' | 'mkt-canais' | 'mkt-leads' | 'mkt-biblioteca' | 'mkt-trafego' | 'mkt-performance' | 'mkt-memoria' | 'mkt-conexoes' | 'mkt-criativo' | 'whatsapp'
   | 'wa-auto' | 'processos' | 'proc-demandas' | 'proc-setores' | 'proc-task' | 'proc-reuniao'
   | 'edu' | 'edu-trilhas' | 'edu-painel' | 'proc-atas' | 'treinos-tv'
-  | 'ws' | 'ws-equipes' | 'ws-regras' | 'ws-funcionamento' | 'ws-feriados' | 'ws-ausencias' | 'ws-legal';
+  | 'ws' | 'ws-equipes' | 'ws-regras' | 'ws-funcionamento' | 'ws-feriados' | 'ws-ausencias' | 'ws-legal' | 'contratos' | 'contratos-modelos';
 
 export interface NavItem {
   href: string;
@@ -130,6 +130,12 @@ export const NAV_ESCALAS: NavItem[] = [
   { href: '/escalas-trabalho/parametros', label: 'Parâmetros legais', icon: 'ws-legal', permission: 'ws.view' },
 ];
 
+/** Contratos: modelos → contrato → assinatura eletrônica própria (link + código no WhatsApp) → PDF assinado. */
+export const NAV_CONTRATOS: NavItem[] = [
+  { href: '/contratos', label: 'Contratos', icon: 'contratos', permission: 'contract.view' },
+  { href: '/contratos/modelos', label: 'Modelos de contrato', icon: 'contratos-modelos', permission: 'contract.view' },
+];
+
 export const NAV_ADMIN: NavItem[] = [
   { href: '/admin/empresas', label: 'Empresas', icon: 'empresas', permission: 'company.view' },
   { href: '/admin/cadastros', label: 'Cadastros', icon: 'cadastros', permission: 'admin.catalog' },
@@ -149,5 +155,6 @@ export const NAV_SECTIONS: NavSection[] = [
   { title: 'Escalas de Trabalho 5x2', items: NAV_ESCALAS },
   { title: 'Gestão de Processos', items: NAV_PROCESSOS, bar: { label: 'Processos', icon: 'processos', order: 6 } },
   { title: 'Universidade Nação', items: NAV_UNIVERSIDADE, bar: { label: 'Universidade', icon: 'edu', order: 7 } },
+  { title: 'Contratos', items: NAV_CONTRATOS },
   { title: 'Administração', items: NAV_ADMIN },
 ];

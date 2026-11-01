@@ -95,3 +95,13 @@ feriado específico (Nação inteira ou setor). Feriado no fim de semana usa o h
 **Kanban de Marketing**: estilo Trello (navegação lateral, colunas com rolagem própria,
 "Adicionar um cartão"), imagens no cartão (PNG/JPG/WEBP/GIF ≤ 10 MB, sem SVG; a primeira é a capa),
 link direto `?tarefa=<id>` e envio pelo WhatsApp (link exige login).
+
+**Contratos** (menu Contratos; permissões `contract.view`/`contract.edit`/`contract.templates`, com Administrador e
+DP/Financeiro): modelos com `{{campos}}` → contrato (rascunho editável) → envio congela o texto (SHA-256) e manda
+um **link pessoal por WhatsApp** a cada parte (`/assinar/<token>`, público, fora do login) → a parte assina com
+**código de 6 dígitos no WhatsApp** + nome completo digitado + "li e concordo" (MP 2.200-2/2001, art. 10 § 2º).
+Banco guarda só HMAC do token e do código (10 min, 5 tentativas, 1 min entre envios); evidências por parte
+(IP, dispositivo, data/hora) e histórico de eventos. Todos assinaram → PDF final com página de evidências no
+bucket privado (`contratos/AAAA-MM/…`), baixável no app e no próprio link. Envio exige empresa contratante
+completa (sem "[CNPJ da empresa]" no texto). Assinado não se cancela (faz-se distrato). Novo link invalida o
+anterior. Modelos-base são ponto de partida: **revisar com o jurídico** antes do primeiro uso.
