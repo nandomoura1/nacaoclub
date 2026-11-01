@@ -8,6 +8,7 @@ import { getServerSupabase } from '@/lib/supabase/server';
 import { cookies } from 'next/headers';
 import {
   agendaSchema,
+  atletasSchema,
   colaboradorSchema,
   eventoSchema,
   lancamentoSchema,
@@ -791,6 +792,38 @@ export async function removerColaborador(email: string): Promise<ActionResult> {
 
     revalidateTudo();
     return { ok: true, message: `Acesso de ${email} removido.` };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+/**
+ * Grava os nomes dos atletas que o juiz preencheu na súmula.
+ *
+ * Separado de salvarLancamentos porque é outra tabela e outro momento: o
+ * nome é do cadastro da dupla, o resultado é do workout. Juntar os dois numa
+ * ação só faria um erro de digitação no nome derrubar o lançamento inteiro
+ * da bateria — com o juiz esperando.
+ */
+export async function salvarAtletas(linhas: unknown[]): Promise<ActionResult> {
+  if (IS_DEMO) return DEMO_BLOCK;
+
+  try {
+    const dados = linhas.map((l) => atletasSchema.parse(l));
+    if (dados.length === 0) return { ok: true, message: 'Nada a atualizar.' };
+
+    const { supabase } = await requireAdmin();
+
+    for (const linha of dados) {
+      const { error } = await supabase
+        .from('teams')
+        .update({ athlete_1: linha.athlete1, athlete_2: linha.athlete2 })
+        .eq('id', linha.teamId);
+      if (error) throw new Error(error.message);
+    }
+
+    revalidateTudo();
+    return { ok: true, message: `Atletas de ${dados.length} dupla(s) atualizados.` };
   } catch (error) {
     return fail(error);
   }

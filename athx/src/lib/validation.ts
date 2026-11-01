@@ -208,3 +208,18 @@ export const colaboradorSchema = z.object({
 
 export type EventoInput = z.input<typeof eventoSchema>;
 export type ColaboradorInput = z.input<typeof colaboradorSchema>;
+
+/**
+ * Os atletas, como o juiz escreve na súmula.
+ *
+ * A dupla pode estar inscrita sem os nomes — acontece quando a inscrição é
+ * feita às pressas, ou quando alguém troca de parceiro na véspera. O juiz é
+ * quem tem a informação correta, com as duas pessoas na frente dele.
+ */
+export const atletasSchema = z.object({
+  teamId: z.string().uuid(),
+  athlete1: z.string().trim().max(120),
+  athlete2: z.string().trim().max(120),
+});
+
+export type AtletasInput = z.input<typeof atletasSchema>;

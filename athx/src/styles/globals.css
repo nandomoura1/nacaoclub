@@ -326,6 +326,15 @@ h1, h2, h3, h4 {
     font-weight: 700;
   }
 
+  /* O nome do atleta é texto corrido, não placar: a regra acima deixaria
+     em negrito e do tamanho de um número de carga. */
+  .sumula-folha input.sumula-nome {
+    font-weight: 400;
+    font-size: 9.5pt !important;
+    min-width: 34mm;
+    text-align: left;
+  }
+
   .sumula-folha input[type='checkbox'] {
     -webkit-appearance: none;
     appearance: none;

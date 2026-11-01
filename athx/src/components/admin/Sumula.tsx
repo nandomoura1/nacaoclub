@@ -8,7 +8,7 @@ import type { Team } from '@/types/domain';
 import { CATEGORY_SHORT } from '@/types/domain';
 import type { Prova, Wod } from '@/types/wod';
 import { UNIDADE_SUFIXO, capEmTexto } from '@/types/wod';
-import { salvarLancamentos } from '@/app/admin/actions';
+import { salvarAtletas, salvarLancamentos } from '@/app/admin/actions';
 import type { ActionResult } from '@/app/admin/actions';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -45,6 +45,9 @@ interface Linha {
   concluiu: boolean;
   volume: string;
   valores: Valores;
+  /** Quem de fato competiu. O juiz confirma com as duas pessoas na frente dele. */
+  atleta1: string;
+  atleta2: string;
 }
 
 /** Monta o estado inicial a partir do que já está lançado. */
@@ -82,6 +85,8 @@ function linhasIniciais(snapshot: Snapshot, wod: Wod, times: readonly Team[]): L
       concluiu: entrada?.concluiu ?? false,
       volume: entrada?.volume === null || entrada?.volume === undefined ? '' : String(entrada.volume),
       valores,
+      atleta1: team.athlete1,
+      atleta2: team.athlete2,
     };
   });
 }
@@ -139,7 +144,20 @@ export function Sumula({ snapshot, wod }: { snapshot: Snapshot; wod: Wod }) {
         valores: l.valores,
       }));
 
+    // Nomes e resultados são tabelas diferentes. Os nomes vão primeiro:
+    // se o lançamento falhar, pelo menos a correção de quem competiu ficou
+    // gravada, e o juiz não redigita tudo.
+    const atletas = linhas
+      .filter((l) => idsVisiveis.has(l.teamId))
+      .map((l) => ({ teamId: l.teamId, athlete1: l.atleta1, athlete2: l.atleta2 }));
+
     startTransition(async () => {
+      const nomes = await salvarAtletas(atletas);
+      if (!nomes.ok) {
+        setAviso(nomes);
+        return;
+      }
+
       const r = await salvarLancamentos(wod.id, payload);
       setAviso(r);
       if (r.ok) router.refresh();
@@ -327,11 +345,24 @@ export function Sumula({ snapshot, wod }: { snapshot: Snapshot; wod: Wod }) {
                                 {CATEGORY_SHORT[team.category]}
                               </span>
                             </span>
-                            {/* Os nomes vêm impressos: o juiz confere quem
-                                está na frente dele, não precisa escrever. */}
-                            <span className="block text-[12px] text-white/55">
-                              {team.athlete1 || '________________'} ·{' '}
-                              {team.athlete2 || '________________'}
+                            {/* O nome é campo, não texto fixo. A dupla pode
+                                estar inscrita sem os nomes, ou ter trocado de
+                                parceiro na véspera — e quem sabe a verdade é o
+                                juiz, com as duas pessoas na frente dele. */}
+                            <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                              <CampoNome
+                                aria-label={`Atleta 1 da dupla ${team.teamName}`}
+                                placeholder="Atleta 1"
+                                value={linha?.atleta1 ?? ''}
+                                onChange={(v) => mexer(team.id, (l) => ({ ...l, atleta1: v }))}
+                              />
+                              <span className="text-white/25">·</span>
+                              <CampoNome
+                                aria-label={`Atleta 2 da dupla ${team.teamName}`}
+                                placeholder="Atleta 2"
+                                value={linha?.atleta2 ?? ''}
+                                onChange={(v) => mexer(team.id, (l) => ({ ...l, atleta2: v }))}
+                              />
                             </span>
                           </Td>
 
@@ -494,6 +525,31 @@ function CampoSumula({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       className="tnum h-9 w-[72px] rounded-lg border border-white/20 bg-white/[0.06] px-2 text-center font-display text-sm font-bold text-white focus:border-nacao-cyan/60 focus:bg-white/[0.1] focus:outline-none"
+    />
+  );
+}
+
+/** Campo de nome: largo, porque nome de gente não cabe em 72 px. */
+function CampoNome({
+  value,
+  onChange,
+  placeholder,
+  ...rest
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  'aria-label': string;
+}) {
+  return (
+    <input
+      {...rest}
+      type="text"
+      autoComplete="off"
+      placeholder={placeholder}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="sumula-nome h-8 w-[136px] rounded-lg border border-white/15 bg-white/[0.04] px-2 text-[12px] text-white/85 placeholder:text-white/30 focus:border-nacao-cyan/60 focus:bg-white/[0.09] focus:outline-none"
     />
   );
 }
