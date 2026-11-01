@@ -10,6 +10,7 @@ import {
   PencilLine,
   Plus,
   Radio,
+  Trash2,
   TriangleAlert,
 } from 'lucide-react';
 import type { EventoResumo } from '@/services/event-context';
@@ -19,6 +20,7 @@ import {
   ativarEvento,
   criarEvento,
   editarEvento,
+  excluirEvento,
 } from '@/app/admin/actions';
 import { Button, ButtonLink } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -80,6 +82,7 @@ export function EventosManager({
   const [pendente, startTransition] = useTransition();
   const [form, setForm] = useState<FormState | null>(null);
   const [arquivando, setArquivando] = useState<EventoResumo | null>(null);
+  const [excluindo, setExcluindo] = useState<EventoResumo | null>(null);
   const [aviso, setAviso] = useState<ActionResult | null>(null);
 
   const noAr = eventos.find((e) => e.noAr) ?? null;
@@ -242,6 +245,21 @@ export function EventosManager({
                     >
                       <ExternalLink size={14} /> Ver
                     </ButtonLink>
+
+                    {/* Excluir só aparece onde faz sentido: fora do ar e sem
+                        nenhum resultado lançado. Um evento que já virou
+                        competição se arquiva, não se apaga — e oferecer o
+                        botão para depois recusar seria pegadinha. */}
+                    {!evento.noAr && evento.lancamentos === 0 ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={pendente}
+                        onClick={() => setExcluindo(evento)}
+                      >
+                        <Trash2 size={14} /> Excluir
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
               </Card>
@@ -337,6 +355,52 @@ export function EventosManager({
             ) : null}
           </div>
         ) : null}
+      </Modal>
+
+      {/* ---------------------------------------------------------------- */}
+      <Modal
+        open={excluindo !== null}
+        onClose={() => setExcluindo(null)}
+        title="Excluir evento"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setExcluindo(null)} disabled={pendente}>
+              Cancelar
+            </Button>
+            <Button
+              variant="danger"
+              disabled={pendente}
+              onClick={() =>
+                excluindo &&
+                rodar(() => excluirEvento(excluindo.id), () => setExcluindo(null))
+              }
+            >
+              {pendente ? 'Excluindo…' : 'Excluir de vez'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3 text-sm text-white/70">
+          <p>
+            <strong>{excluindo?.name}</strong> será apagado de vez. Isto não tem volta.
+          </p>
+          <p>Some junto:</p>
+          <ul className="list-disc space-y-0.5 pl-5 text-white/55">
+            <li>
+              {excluindo?.wods} WOD{excluindo?.wods === 1 ? '' : 's'} com suas provas, prescrição
+              e regras
+            </li>
+            <li>a programação do dia</li>
+            <li>
+              {excluindo?.duplas} dupla{excluindo?.duplas === 1 ? '' : 's'} inscrita
+              {excluindo?.duplas === 1 ? '' : 's'}
+            </li>
+          </ul>
+          <p className="rounded-xl bg-emerald-500/10 px-3.5 py-3 text-[13px] text-emerald-200">
+            Este evento não tem nenhum resultado lançado — nenhuma marca de competição se perde.
+            Se tivesse, o botão nem apareceria: aí o caminho é Arquivar.
+          </p>
+        </div>
       </Modal>
 
       {/* ---------------------------------------------------------------- */}

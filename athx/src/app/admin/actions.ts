@@ -828,3 +828,29 @@ export async function salvarAtletas(linhas: unknown[]): Promise<ActionResult> {
     return fail(error);
   }
 }
+
+/**
+ * Exclui um evento de vez.
+ *
+ * Diferente de arquivar: aqui o evento some. Existe para o caso de criação
+ * por engano — nome errado, data errada, clone duplicado —, que não tem por
+ * que virar item de histórico.
+ *
+ * A função no banco recusa o que está no ar e o que tem resultado lançado.
+ * A tela também esconde o botão nesses casos, mas a decisão que vale é a do
+ * Postgres: é ela que vale para quem chamar a API por fora.
+ */
+export async function excluirEvento(eventId: string): Promise<ActionResult> {
+  if (IS_DEMO) return DEMO_BLOCK;
+
+  try {
+    const { supabase } = await requireAdmin();
+    const { error } = await supabase.rpc('athx_excluir_evento', { p_event: eventId });
+    if (error) throw new Error(error.message);
+
+    revalidateTudo();
+    return { ok: true, message: 'Evento excluído.' };
+  } catch (error) {
+    return fail(error);
+  }
+}

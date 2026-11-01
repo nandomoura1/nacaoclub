@@ -37,6 +37,14 @@ export interface EventoResumo {
   /** Quantas duplas e quantos WODs — o suficiente para a tela de histórico. */
   duplas: number;
   wods: number;
+  /**
+   * Quantos resultados já foram lançados.
+   *
+   * A tela usa isto para saber se o evento PODE ser excluído, em vez de
+   * oferecer o botão e deixar o servidor recusar depois. Zero resultado é
+   * um evento que ainda não virou competição.
+   */
+  lancamentos: number;
 }
 
 /**
@@ -46,8 +54,22 @@ export interface EventoResumo {
  * agrega; são poucas linhas e a tela é de administração, não de competição.
  */
 export async function listarEventos(): Promise<EventoResumo[]> {
+  // Em demonstração, três eventos fictícios (§54) — um por estado. Com um
+  // evento só, a tela não demonstra nada: não dá para ver a diferença entre
+  // no ar, em montagem e arquivado, nem quando Excluir aparece.
   if (IS_DEMO) {
     return [
+      {
+        id: 'demo-montagem',
+        slug: 'demonstracao-proxima-etapa',
+        name: 'Nação Híbrida — Próxima Etapa',
+        date: '2027-03-14',
+        status: 'DRAFT',
+        noAr: false,
+        duplas: 0,
+        wods: 3,
+        lancamentos: 0,
+      },
       {
         id: DEMO_EVENT.id,
         slug: 'demonstracao',
@@ -57,6 +79,18 @@ export async function listarEventos(): Promise<EventoResumo[]> {
         noAr: true,
         duplas: 20,
         wods: 3,
+        lancamentos: 120,
+      },
+      {
+        id: 'demo-arquivada',
+        slug: 'demonstracao-etapa-anterior',
+        name: 'Nação Híbrida — Etapa Anterior',
+        date: '2026-06-20',
+        status: 'FINISHED',
+        noAr: false,
+        duplas: 18,
+        wods: 3,
+        lancamentos: 108,
       },
     ];
   }
@@ -73,9 +107,11 @@ export async function listarEventos(): Promise<EventoResumo[]> {
   const eventos = eventosRes.data ?? [];
   const idAtual = (atualRes.data as string | null) ?? null;
 
-  const [duplasRes, wodsRes] = await Promise.all([
+  const [duplasRes, wodsRes, entriesRes, resultsRes] = await Promise.all([
     supabase.from('teams').select('event_id'),
     supabase.from('wods').select('event_id'),
+    supabase.from('wod_entries').select('event_id'),
+    supabase.from('prova_results').select('event_id'),
   ]);
 
   const contar = (linhas: { event_id: string }[] | null, id: string) =>
@@ -90,6 +126,9 @@ export async function listarEventos(): Promise<EventoResumo[]> {
     noAr: e.id === idAtual,
     duplas: contar(duplasRes.data as { event_id: string }[] | null, e.id as string),
     wods: contar(wodsRes.data as { event_id: string }[] | null, e.id as string),
+    lancamentos:
+      contar(entriesRes.data as { event_id: string }[] | null, e.id as string) +
+      contar(resultsRes.data as { event_id: string }[] | null, e.id as string),
   }));
 }
 
