@@ -19,10 +19,28 @@ export function Modal({
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
 
+  /**
+   * onClose atrás de uma ref, e NÃO na lista de dependências do efeito.
+   *
+   * Quem usa o Modal escreve `onClose={() => setForm(null)}` — uma função
+   * nova a cada render. Com ela nas dependências, o efeito abaixo refazia o
+   * ciclo inteiro a cada renderização: devolvia o foco ao elemento anterior
+   * na limpeza e o jogava no painel ao reentrar.
+   *
+   * Como todo campo é controlado, cada TECLA digitada é uma renderização.
+   * O resultado era o cursor pulando do campo a cada letra, e a pessoa
+   * tendo de clicar de novo para escrever a seguinte. O efeito trata de
+   * "enquanto o modal está aberto"; só `open` deve reiniciá-lo.
+   */
+  const fecharRef = useRef(onClose);
+  useEffect(() => {
+    fecharRef.current = onClose;
+  });
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') fecharRef.current();
     };
     document.addEventListener('keydown', onKey);
     const previous = document.activeElement as HTMLElement | null;
@@ -33,7 +51,7 @@ export function Modal({
       document.body.style.overflow = '';
       previous?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
