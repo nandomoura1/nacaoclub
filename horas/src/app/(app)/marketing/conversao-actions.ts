@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { getPrincipal, requestMeta } from '@/server/auth/session';
 import { assertCan } from '@/server/auth/authz';
 import { runAction, type ActionResult } from '@/server/action-result';
-import { deleteLead, deleteLink, saveLead, saveLink, setLeadStage } from '@/server/services/mkt-leads-service';
+import { deleteLead, deleteLink, saveLead, saveLink, setLeadStage, anonymizeOldLeads } from '@/server/services/mkt-leads-service';
 
 const refresh = () => { revalidatePath('/marketing/leads'); revalidatePath('/marketing/canais'); revalidatePath('/marketing/performance'); };
 
@@ -27,4 +27,7 @@ export async function deleteLinkAction(id: string): Promise<ActionResult> {
 /** QR Code (PNG em data URL) do link curto, para material impresso. */
 export async function linkQrAction(url: string): Promise<ActionResult<string>> {
   return runAction(async () => { assertCan(await getPrincipal(), 'mkt.view'); return QRCode.toDataURL(url, { margin: 1, width: 600, color: { dark: '#022B57', light: '#FFFFFF' } }); });
+}
+export async function anonymizeOldLeadsAction(): Promise<ActionResult<number>> {
+  return runAction(async () => { const n = await anonymizeOldLeads(await getPrincipal(), await requestMeta()); refresh(); return n; });
 }

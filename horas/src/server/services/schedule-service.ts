@@ -137,7 +137,7 @@ export async function slotHistory(principal: Principal | null, slotId: string) {
   }));
 }
 
-function parse<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, input: unknown): T {
+function parse<S extends z.ZodType>(schema: S, input: unknown): z.output<S> {
   const r = schema.safeParse(input);
   if (!r.success) throw new AppError(r.error.issues[0]?.message ?? 'Dados inválidos.');
   return r.data;

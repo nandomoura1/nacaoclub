@@ -19,7 +19,8 @@ Escopo: aplicação Nação ADM (Next.js na Vercel) e banco/arquivos no Supabase
 | Segredos no código/histórico do git | ✅ Nenhum encontrado (só `.env.example`) |
 | Cabeçalhos de segurança | ✅ X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy · ✅ HSTS (novo) |
 | Tentativa e erro de senha | ✅ **Corrigido**: bloqueio após 5 erros por e-mail (ou 20 por IP) em 15 min |
-| Bibliotecas com vulnerabilidade | ✅ **Corrigido**: Next.js 15.5.28 (falha **crítica** de execução remota no otimizador de imagens), sharp, postcss · ⚠️ restam zod e Prisma (ver pendências) |
+| Bibliotecas com vulnerabilidade | ✅ **Corrigido**: Next.js 15.5.28 (falha **crítica** de execução remota no otimizador de imagens), sharp, postcss; **zod 4.6.7**; deepmerge-ts 8 (CLI do Prisma). Zero "high"/"critical". Restam 9 "moderate" dentro da biblioteca de planilhas (exceljs), em funções que o sistema não usa |
+| LGPD — leads | ✅ **Novo**: Leads & Conversão → "Anonimizar agora" (admin do Marketing) apaga nome, telefone, e-mail e observações de leads não matriculados parados há mais de 12 meses; excluir lead não copia mais dado pessoal para o histórico |
 | Aviso do Supabase (função sem `search_path` fixo) | ✅ **Corrigido** |
 
 ## Correções aplicadas nesta auditoria
@@ -45,13 +46,9 @@ Escopo: aplicação Nação ADM (Next.js na Vercel) e banco/arquivos no Supabase
 
 1. **Supabase — backups**: confirmar no painel se o plano tem backup diário e, de preferência,
    *Point-in-Time Recovery*. Testar uma restauração ao menos uma vez.
-2. **Atualizar zod (3 → 4)** — falha "alta" de consumo de memória com listas enormes; o risco é
-   baixo aqui (corpo das requisições limitado a 6 MB e listas com limite), mas é atualização
-   de versão grande: fazer com calma, com a suíte de testes.
-3. **Atualizar Prisma (6 → 7)** — a falha está numa dependência da ferramenta de linha de
-   comando (`deepmerge-ts`), não no acesso ao banco em produção. Atualização grande.
-4. **LGPD — leads**: definir prazo de guarda (ex.: apagar ou anonimizar leads perdidos após
-   12 meses) e registrar a base legal no formulário de captação.
+2. ~~Atualizar zod~~ ✅ feito (01/11/2026). ~~deepmerge-ts~~ ✅ via `overrides`. Prisma 7: quando houver tempo (não é de segurança).
+3. **LGPD — leads**: rodar "Anonimizar agora" a cada mês (Leads & Conversão) e registrar a base
+   legal/aviso de privacidade no formulário de captação do site.
 5. **Usuários**: revisar a cada trimestre quem tem papel Administrador/Consulta e desativar
    quem saiu (Administração → Usuários).
 6. **Content-Security-Policy**: cabeçalho que restringe de onde a página carrega scripts.

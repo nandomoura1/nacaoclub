@@ -62,7 +62,7 @@ export async function listSectors(principal: P | null) {
 const min = z.number().int().min(0).max(1440);
 const win = z.tuple([min, min]).refine(([s, e]) => e > s, 'Horário: o fim precisa ser depois do início.');
 const dayKeys = ['1', '2', '3', '4', '5', '6', '7', 'F'] as const;
-const hoursMapSchema = z.record(z.enum(dayKeys), z.array(win).max(3)).default({});
+const hoursMapSchema = z.partialRecord(z.enum(dayKeys), z.array(win).max(3)).default({});
 const shift3 = z.tuple([min, min, z.number().int().min(0).max(240)]).refine(([s, e]) => e > s, 'Horário do colaborador: a saída precisa ser depois da entrada.');
 const weekSchema = z.array(shift3.nullable()).length(7, 'A grade semanal precisa dos 7 dias.');
 const memberHoursSchema = z.object({ base: shift3.optional(), 6: shift3.optional(), 7: shift3.optional(), F: shift3.optional(), week: z.object({ A: weekSchema, B: weekSchema.optional(), cycle: z.array(weekSchema).min(2, 'O rodízio precisa de pelo menos 2 semanas.').max(12, 'Rodízio de no máximo 12 semanas.').optional() }).optional() }).default({});
@@ -108,7 +108,7 @@ const memberSchema = z.object({
   sortOrder: z.number().int().min(0).max(999).default(0),
   active: z.boolean().default(true),
 });
-const ruleSchema = z.object({ kind: z.string(), label: text(140), params: z.record(z.unknown()), mandatory: z.boolean(), active: z.boolean().default(true) });
+const ruleSchema = z.object({ kind: z.string(), label: text(140), params: z.record(z.string(), z.unknown()), mandatory: z.boolean(), active: z.boolean().default(true) });
 const overrideSchema = z.object({
   date: z.string().refine(isIsoDate, 'Data inválida.'),
   sectorId: z.string().uuid().nullable().or(z.literal('').transform(() => null)).default(null),
@@ -135,7 +135,7 @@ const cellSchema = z.object({
   note: text(120),
 }).refine((c) => c.kind !== 'TRABALHO' || (c.startMin != null && c.endMin != null && c.endMin > c.startMin), 'Informe entrada e saída (a saída depois da entrada).');
 
-function parse<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, input: unknown): T {
+function parse<S extends z.ZodType>(schema: S, input: unknown): z.output<S> {
   const r = schema.safeParse(input);
   if (!r.success) throw new AppError(r.error.issues[0]?.message ?? 'Dados inválidos.');
   return r.data;

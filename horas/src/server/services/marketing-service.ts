@@ -28,7 +28,7 @@ const text = (max: number) => z.string().trim().max(max).transform((v) => v || n
 const uuidOrNull = z.string().uuid().or(z.literal('')).nullable().optional().transform((v) => v || null);
 const isoDate = (msg: string) => z.string().refine(isIsoDate, msg);
 const optIso = z.string().refine((v) => v === '' || isIsoDate(v), 'Data inválida.').nullable().optional().transform((v) => v || null);
-const parse = <T,>(schema: z.ZodType<T>, input: unknown): T => {
+const parse = <S extends z.ZodType>(schema: S, input: unknown): z.output<S> => {
   const p = schema.safeParse(input);
   if (!p.success) throw new AppError(p.error.issues[0]?.message ?? 'Dados inválidos.');
   return p.data;

@@ -40,7 +40,7 @@ const taskSchema = z.object({
 });
 export type TaskInput = z.input<typeof taskSchema>;
 
-const parse = <T,>(s: z.ZodType<T>, v: unknown): T => {
+const parse = <S extends z.ZodType>(s: S, v: unknown): z.output<S> => {
   const p = s.safeParse(v);
   if (!p.success) throw new AppError(p.error.issues[0]?.message ?? 'Dados inválidos.');
   return p.data;

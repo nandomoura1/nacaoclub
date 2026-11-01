@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/server/db';
 import { audit } from '@/server/audit';
 import { assertCan } from '@/server/auth/authz';
@@ -105,7 +105,40 @@ export async function deleteLead(principal: Principal | null, id: string, meta: 
     const l = await tx.mktLead.findUnique({ where: { id } });
     if (!l) throw new NotFoundError('Lead não encontrado.');
     await tx.mktLead.delete({ where: { id } });
-    await audit(tx, { actorId: principal.id, ...meta }, { action: 'mkt.lead_deleted', entityType: 'mkt_lead', entityId: id, before: l, summary: `${principal.name} excluiu o lead ${l.name}` });
+    // O histórico é permanente: guarda só o que não identifica a pessoa (LGPD).
+    await audit(tx, { actorId: principal.id, ...meta }, { action: 'mkt.lead_deleted', entityType: 'mkt_lead', entityId: id, before: { etapa: l.stage, origem: l.source, criado: l.createdAt.toISOString().slice(0, 10) }, summary: `${principal.name} excluiu um lead (${l.source}, ${l.stage})` });
+  });
+}
+
+/** LGPD: prazo de guarda dos dados pessoais de leads que não viraram matrícula. */
+export const LEAD_RETENTION_MONTHS = 12;
+export const ANONYMIZED_NAME = 'Lead anonimizado';
+
+function retentionWhere(now = new Date()) {
+  const cutoff = new Date(now);
+  cutoff.setMonth(cutoff.getMonth() - LEAD_RETENTION_MONTHS);
+  return { stage: { not: 'MATRICULADO' }, updatedAt: { lt: cutoff }, name: { not: ANONYMIZED_NAME } };
+}
+
+/** Quantos leads perdidos/parados há mais de 12 meses ainda guardam dados pessoais. */
+export async function leadRetentionPending(principal: Principal | null) {
+  assertCan(principal, 'mkt.admin');
+  return prisma.mktLead.count({ where: retentionWhere() });
+}
+
+/**
+ * Anonimiza (não exclui) os leads fora do prazo: some nome, telefone, e-mail, observações e
+ * dados brutos do formulário; ficam origem, campanha, etapa e datas (os números continuam certos).
+ */
+export async function anonymizeOldLeads(principal: Principal | null, meta: RequestMeta) {
+  assertCan(principal, 'mkt.admin');
+  return prisma.$transaction(async (tx) => {
+    const r = await tx.mktLead.updateMany({
+      where: retentionWhere(),
+      data: { name: ANONYMIZED_NAME, phone: null, email: null, notes: null, lostReason: null, interest: null, raw: Prisma.DbNull, nextActionAt: null },
+    });
+    await audit(tx, { actorId: principal.id, ...meta }, { action: 'mkt.leads_anonymized', entityType: 'mkt_lead', entityId: null, after: { quantidade: r.count, prazo_meses: LEAD_RETENTION_MONTHS }, summary: `${principal.name} anonimizou ${r.count} lead(s) parados há mais de ${LEAD_RETENTION_MONTHS} meses (LGPD)` });
+    return r.count;
   });
 }
 

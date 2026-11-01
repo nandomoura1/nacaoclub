@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { prisma } from '@/server/db';
 import { AuthorizationError } from '@/server/errors';
-import { clickLink, deleteLead, ingestLead, listLeads, listLinks, saveLink, setLeadStage } from '@/server/services/mkt-leads-service';
+import { anonymizeOldLeads, clickLink, deleteLead, ingestLead, leadRetentionPending, listLeads, listLinks, saveLink, setLeadStage } from '@/server/services/mkt-leads-service';
 import { META, ensureCatalog, hasDb, makeUser } from './helpers';
 
 /** Marketing — Leads (webhook de formulário) e links rastreáveis. Dados fictícios. */
@@ -63,5 +63,27 @@ describe.skipIf(!hasDb)('Marketing — leads e links', () => {
     await expect(listLeads(lider.principal)).rejects.toBeInstanceOf(AuthorizationError);
     await deleteLead(admin.principal, lead.id, META);
     expect(await prisma.mktLead.findUnique({ where: { id: lead.id } })).toBeNull();
+  });
+
+  it('LGPD: anonimiza leads parados há mais de 12 meses (não os matriculados nem os recentes) e o histórico não guarda dado pessoal', async () => {
+    const old = new Date(Date.now() - 400 * 86_400_000);
+    const mk = (name: string, stage: string, updatedAt: Date) => prisma.mktLead.create({ data: { name, stage, source: 'SITE', phone: '61 99999-0000', email: `${name}@teste.dev`, notes: 'obs', createdAt: updatedAt } })
+      .then((l) => prisma.$executeRaw`UPDATE mkt_leads SET updated_at = ${updatedAt} WHERE id = ${l.id}::uuid`.then(() => l.id));
+    const perdido = await mk(`perdido${tag}`, 'PERDIDO', old);
+    const parado = await mk(`parado${tag}`, 'CONTATO', old);
+    const aluno = await mk(`aluno${tag}`, 'MATRICULADO', old);
+    const recente = await mk(`recente${tag}`, 'PERDIDO', new Date());
+    await expect(leadRetentionPending(mkt.principal)).rejects.toBeInstanceOf(AuthorizationError);
+    expect(await leadRetentionPending(admin.principal)).toBeGreaterThanOrEqual(2);
+    await anonymizeOldLeads(admin.principal, META);
+    for (const id of [perdido, parado]) {
+      expect(await prisma.mktLead.findUniqueOrThrow({ where: { id } })).toMatchObject({ name: 'Lead anonimizado', phone: null, email: null, notes: null, source: 'SITE' });
+    }
+    for (const id of [aluno, recente]) expect((await prisma.mktLead.findUniqueOrThrow({ where: { id } })).phone).toBe('61 99999-0000');
+    expect(await leadRetentionPending(admin.principal)).toBe(0);
+    // Excluir um lead não copia nome/telefone/e-mail para o histórico (que é permanente).
+    await deleteLead(admin.principal, recente, META);
+    const log = await prisma.auditLog.findFirstOrThrow({ where: { action: 'mkt.lead_deleted', entityId: recente } });
+    expect(JSON.stringify(log)).not.toMatch(new RegExp(`recente${tag}|99999-0000`));
   });
 });

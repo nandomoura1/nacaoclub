@@ -29,7 +29,7 @@ function fieldSchema(f: FieldDef): z.ZodTypeAny {
     case 'checkbox':
       return z.boolean();
     case 'number': {
-      let n = z.coerce.number({ invalid_type_error: `${f.label}: informe um número.` }).int(`${f.label}: número inteiro.`);
+      let n = z.coerce.number({ error: `${f.label}: informe um número.` }).int(`${f.label}: número inteiro.`);
       if (f.min !== undefined) n = n.min(f.min, `${f.label}: mínimo ${f.min}.`);
       if (f.max !== undefined) n = n.max(f.max, `${f.label}: máximo ${f.max}.`);
       return n;
@@ -38,9 +38,7 @@ function fieldSchema(f: FieldDef): z.ZodTypeAny {
       return z.string().regex(/^#[0-9a-fA-F]{6}$/, `${f.label}: cor inválida.`);
     case 'select':
       if (f.options === 'activityKinds') {
-        return z.enum(ACTIVITY_KINDS.map((k) => k.value) as [string, ...string[]], {
-          errorMap: () => ({ message: `${f.label}: escolha uma opção.` }),
-        });
+        return z.enum(ACTIVITY_KINDS.map((k) => k.value) as [string, ...string[]], { error: `${f.label}: escolha uma opção.` });
       }
       return f.required
         ? z.string().uuid(`${f.label}: escolha uma opção.`)

@@ -332,7 +332,7 @@ export async function uploadFinDocument(principal: Principal | null, month: stri
   });
 }
 
-const lineInputSchema = z.object({
+const lineFields = z.object({
   dataset: z.enum(DATASET_IDS),
   key: z.string().trim().max(80).nullable(),
   label: z.string().trim().min(1, 'Toda linha precisa de um rótulo.').max(200),
@@ -340,11 +340,12 @@ const lineInputSchema = z.object({
   amountCents: z.number().int().min(-100_000_000_000).max(100_000_000_000).nullable(),
   quantity: z.number().min(-1e9).max(1e9).nullable(),
   classification: z.string().trim().max(20).nullable(),
-  meta: z.record(z.unknown()).nullable(),
+  meta: z.record(z.string(), z.unknown()).nullable(),
   sourceRef: z.string().max(200).nullable().optional(),
   sourceValue: z.string().max(300).nullable().optional(),
   rule: z.string().max(300).nullable().optional(),
-}).refine((l) => l.amountCents !== null || l.quantity !== null, 'Linha sem valor nem quantidade.');
+});
+const lineInputSchema = lineFields.refine((l) => l.amountCents !== null || l.quantity !== null, 'Linha sem valor nem quantidade.');
 
 /** Extrai as linhas do documento (troca as ainda não conferidas desse documento). */
 export async function processFinDocument(principal: Principal | null, documentId: string, meta: RequestMeta) {
@@ -447,7 +448,7 @@ export async function confirmFinLines(principal: Principal | null, month: string
   });
 }
 
-const editSchema = lineInputSchema.innerType().partial().extend({ reason: z.string().trim().max(300).optional() });
+const editSchema = lineFields.partial().extend({ reason: z.string().trim().max(300).optional() });
 
 export async function updateFinLine(principal: Principal | null, lineId: string, input: unknown, meta: RequestMeta) {
   assertCan(principal, 'fin.edit');
