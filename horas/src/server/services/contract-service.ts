@@ -16,6 +16,7 @@ import { normalizeDestination } from '@/domain/whatsapp';
 import { contractPdf } from '@/server/contracts/pdf';
 import { getObject, putObject } from '@/server/storage';
 import { deliverWhatsApp } from './whatsapp-service';
+import { zapiStatus } from '@/server/whatsapp/zapi';
 import { DEFAULT_TEMPLATES } from '@/server/contracts/templates';
 
 /**
@@ -231,8 +232,25 @@ function newToken() {
 }
 const linkOf = (origin: string, token: string) => `${appUrl(origin)}/assinar/${token}`;
 
+/**
+ * A Z-API aceita a mensagem mesmo com o celular da Nação desconectado (fica na fila e não
+ * chega). Antes de mandar link/código, confere a conexão; falha na consulta = segue o envio.
+ */
+async function whatsAppOffline(): Promise<string | null> {
+  try {
+    const st = await zapiStatus();
+    if (!st.connected) return 'o WhatsApp da Nação está desconectado da Z-API';
+    if (st.smartphoneConnected === false) return 'o celular do WhatsApp da Nação está sem internet ou desligado';
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 async function sendLink(principal: P, c: { code: string; title: string }, s: { name: string; phone: string | null }, link: string, meta: RequestMeta) {
   if (!s.phone) return 'sem WhatsApp';
+  const off = await whatsAppOffline();
+  if (off) return `não enviado: ${off} — copie o link e envie você mesmo`;
   try {
     const r = await deliverWhatsApp({
       kind: 'CONTRATO', to: s.phone, hasSecret: true, actor: { id: principal.id, name: principal.name }, meta,
@@ -333,6 +351,8 @@ export async function requestSignCode(token: string, meta: RequestMeta) {
   if (s.status !== 'PENDENTE') throw new AppError('Você já respondeu este contrato.');
   if (!s.phone) throw new AppError('Seu WhatsApp não está cadastrado. Fale com a Nação.');
   if (s.otpSentAt && Date.now() - s.otpSentAt.getTime() < OTP_COOLDOWN_S * 1000) throw new AppError('Código enviado há pouco. Aguarde 1 minuto para pedir outro.', 429);
+  const off = await whatsAppOffline();
+  if (off) throw new AppError(`Não conseguimos enviar o código agora: ${off}. Avise a Nação Club e tente de novo em alguns minutos.`, 503);
   const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
   await prisma.$transaction(async (tx) => {
     await tx.contractSigner.update({ where: { id: s.id }, data: { otpHash: signCodeHash(s.id, code), otpExpiresAt: new Date(Date.now() + OTP_TTL_MIN * 60_000), otpSentAt: new Date(), otpAttempts: 0 } });
