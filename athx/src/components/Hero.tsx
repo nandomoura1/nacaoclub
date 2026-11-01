@@ -1,5 +1,7 @@
 import { WaveField, SkyGlow } from '@/components/WaveField';
 import { LiveIndicator } from '@/components/LiveIndicator';
+import type { EventInfo } from '@/types/domain';
+import { dataPorExtenso } from '@/lib/format';
 
 /**
  * Hero — forte, mas compacto (§5). Branding não ocupa meia tela: em 390px
@@ -8,7 +10,15 @@ import { LiveIndicator } from '@/components/LiveIndicator';
  * A construção NAÇÃO / filete / LIVE LEADERBOARD repete o lockup do
  * wordmark do manual (NAÇÃO / filete / C L U B).
  */
-export function Hero({ live, lastUpdate }: { live: boolean; lastUpdate: string }) {
+export function Hero({
+  evento,
+  live,
+  lastUpdate,
+}: {
+  evento: EventInfo;
+  live: boolean;
+  lastUpdate: string;
+}) {
   return (
     <section className="relative overflow-hidden border-b border-white/[0.08]">
       <SkyGlow />
@@ -18,7 +28,7 @@ export function Hero({ live, lastUpdate }: { live: boolean; lastUpdate: string }
         <div className="flex items-center gap-3">
           <span className="h-px w-6 bg-nacao-cyan" aria-hidden="true" />
           <p className="font-display text-[10px] font-bold tracking-kicker text-white/60 uppercase">
-            Nação Celebration · Setembro Amarelo
+            {evento.name}
           </p>
         </div>
 
@@ -39,7 +49,7 @@ export function Hero({ live, lastUpdate }: { live: boolean; lastUpdate: string }
           </span>
           <span className="hidden h-4 w-px bg-white/15 sm:block" aria-hidden="true" />
           <p className="font-display text-[10px] font-bold tracking-wider text-white/60 uppercase sm:text-[11px]">
-            12 de setembro · Nação Club · Brasília
+            {dataPorExtenso(evento.date)} · Nação Club · Brasília
           </p>
         </div>
       </div>

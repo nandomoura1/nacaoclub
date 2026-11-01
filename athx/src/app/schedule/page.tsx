@@ -1,17 +1,18 @@
+import { dataPorExtenso } from '@/lib/format';
 import type { Metadata } from 'next';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SiteFooter } from '@/components/SiteFooter';
 import { PageIntro } from '@/components/PageIntro';
 import { ScheduleTimeline } from '@/components/ScheduleTimeline';
 import { getSnapshot } from '@/services/leaderboard-service';
-import type { Team } from '@/types/domain';
+import type { EventInfo, Team } from '@/types/domain';
 import type { AgendaItem } from '@/types/wod';
 
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Programação',
-  description: 'Cronograma e baterias do Nação Celebration — 12 de setembro, Nação Club.',
+  description: 'Cronograma e baterias da etapa no ar, com os horários de cada workout.',
 };
 
 /** Timeline do evento (§37), com as duplas de cada bateria. */
@@ -21,11 +22,13 @@ export default async function SchedulePage() {
   let teams: Team[] = [];
   let agenda: AgendaItem[] = [];
   let demo = false;
+  let evento: EventInfo | null = null;
   try {
     const snapshot = await getSnapshot();
     teams = snapshot.teams.filter((t) => t.status !== 'DESCLASSIFICADA');
     agenda = snapshot.agenda;
     demo = snapshot.demo;
+    evento = snapshot.event;
   } catch {
     teams = [];
   }
@@ -49,7 +52,7 @@ export default async function SchedulePage() {
     <>
       <SiteHeader />
       <PageIntro
-        kicker="12 de setembro · Nação Club"
+        kicker={evento ? `${dataPorExtenso(evento.date)} · Nação Club` : 'Nação Club'}
         title="Programação"
         subtitle="Horários e baterias"
       />

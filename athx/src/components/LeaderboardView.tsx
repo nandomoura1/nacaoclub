@@ -1,5 +1,6 @@
 'use client';
 
+import { dataPorExtenso } from '@/lib/format';
 import { useMemo, useState } from 'react';
 import { Printer } from 'lucide-react';
 import type { Battery, Category, StandingRow } from '@/types/domain';
@@ -143,7 +144,7 @@ export function LeaderboardView({ initial }: { initial: Snapshot }) {
       {/* Cabeçalho que só existe no papel (§43). */}
       <div className="print-only print-header" aria-hidden="true">
         <p className="font-display text-xs font-bold uppercase">
-          Nação Celebration — Etapa Setembro Amarelo · 12 de setembro · Nação Club
+          {initial.event.name} · {dataPorExtenso(initial.event.date)} · Nação Club
         </p>
         <p className="font-display text-2xl font-black uppercase">NAÇÃO HÍBRIDA — Leaderboard</p>
       </div>

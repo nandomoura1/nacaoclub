@@ -93,3 +93,28 @@ function formatarSegundos(total: number): string {
   const s = Math.round(total % 60);
   return `${m}:${String(s).padStart(2, '0')}`;
 }
+
+/**
+ * A data do evento, por extenso.
+ *
+ * O `T12:00:00` não é enfeite: `new Date('2026-09-12')` é interpretado como
+ * meia-noite UTC, que em Brasília (UTC-3) é dia 11 às 21h — e o site diria
+ * "11 de setembro" num evento do dia 12. Ancorar ao meio-dia tira qualquer
+ * fuso do caminho.
+ */
+export function dataPorExtenso(data: string, opcoes: { comDiaDaSemana?: boolean } = {}): string {
+  const d = new Date(`${data}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return data;
+
+  const texto = d.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' });
+  if (!opcoes.comDiaDaSemana) return texto;
+
+  const semana = d.toLocaleDateString('pt-BR', { weekday: 'long' });
+  return `${semana.charAt(0).toUpperCase()}${semana.slice(1)} · ${texto}`;
+}
+
+/** Data curta, para rodapé e cabeçalho de impressão: "12/09/2026". */
+export function dataCurta(data: string): string {
+  const d = new Date(`${data}T12:00:00`);
+  return Number.isNaN(d.getTime()) ? data : d.toLocaleDateString('pt-BR');
+}

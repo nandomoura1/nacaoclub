@@ -36,11 +36,11 @@ export const metadata: Metadata = {
     template: '%s · NAÇÃO HÍBRIDA',
   },
   description:
-    'Leaderboard ao vivo do Nação Celebration — Etapa Setembro Amarelo. 12 de setembro, Nação Club, Brasília.',
+    'Leaderboard ao vivo das etapas do Nação Híbrida. Nação Club, Brasília.',
   applicationName: 'NAÇÃO HÍBRIDA',
   openGraph: {
     title: 'NAÇÃO HÍBRIDA — Live Leaderboard',
-    description: 'Classificação ao vivo do Nação Celebration. Muitos esportes, muitas paixões, uma Nação!',
+    description: 'Classificação ao vivo. Muitos esportes, muitas paixões, uma Nação!',
     type: 'website',
     locale: 'pt_BR',
   },

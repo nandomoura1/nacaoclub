@@ -300,6 +300,16 @@ h1, h2, h3, h4 {
     border-bottom: 2px solid #000 !important;
   }
 
+  /* A logomarca é branca, com fundo transparente — some no papel branco.
+     Em vez de escondê-la, ganha o navy do manual atrás: é a mesma
+     combinação que ela tem na tela, e continua legível impressa. */
+  img[alt*='Nação'],
+  img[alt*='NAÇÃO'] {
+    background: #022b57 !important;
+    padding: 4px 8px;
+    border-radius: 4px;
+  }
+
   /* ---------------------------------------------------------------------
      A SÚMULA DO ÁRBITRO
 

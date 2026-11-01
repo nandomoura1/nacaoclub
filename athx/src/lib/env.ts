@@ -61,5 +61,10 @@ export function isSupabaseConfigured(): boolean {
   }).success;
 }
 
-/** Slug do evento desta edição. */
-export const EVENT_SLUG = 'nacao-celebration-setembro-amarelo';
+/*
+ * Não existe mais um "slug do evento" no código.
+ *
+ * Qual etapa o site mostra é decisão do banco: athx_evento_atual() devolve a
+ * que está no ar, e a organização troca isso em /admin/eventos. Uma constante
+ * aqui significaria publicar o app para estrear uma etapa nova.
+ */

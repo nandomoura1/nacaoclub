@@ -12,7 +12,7 @@ import { useLiveSnapshot } from '@/hooks/useLiveSnapshot';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { LiveIndicator } from '@/components/LiveIndicator';
-import { categoryLabel, points, teamNumber, valorDaProva } from '@/lib/format';
+import { categoryLabel, points, teamNumber, valorDaProva, dataPorExtenso } from '@/lib/format';
 
 /**
  * Detalhe da dupla (§10) — a tela que o aluno abre para se ver.
@@ -108,7 +108,7 @@ export function TeamDetail({ initial, teamId }: { initial: Snapshot; teamId: str
             </p>
           </div>
           <p className="font-display text-[10px] font-bold tracking-wider text-white/45 uppercase">
-            Sábado · 12 de setembro
+            {dataPorExtenso(snapshot.event.date, { comDiaDaSemana: true })}
           </p>
         </div>
 

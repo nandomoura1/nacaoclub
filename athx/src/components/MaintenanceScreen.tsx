@@ -26,7 +26,7 @@ export function MaintenanceScreen() {
           </p>
         </div>
         <p className="font-display text-[10px] tracking-signature text-white/35 uppercase">
-          Nação Celebration
+          Nação Híbrida
         </p>
       </div>
     </main>

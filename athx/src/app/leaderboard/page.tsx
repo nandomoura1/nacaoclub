@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Leaderboard ao vivo',
-  description: 'Classificação geral do Nação Celebration em tempo real.',
+  description: 'Classificação geral da etapa no ar, em tempo real.',
 };
 
 /**
@@ -50,7 +50,7 @@ export default async function LeaderboardPage({
         <LeaderboardView initial={snapshot} />
       </main>
 
-      <SiteFooter demo={snapshot.demo} />
+      <SiteFooter demo={snapshot.demo} evento={snapshot.event} />
     </>
   );
 }

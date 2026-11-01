@@ -91,7 +91,7 @@ export default async function WodPage({ params }: { params: Promise<{ number: st
         <WodPageView initial={snapshot} numero={numero} />
       </main>
 
-      <SiteFooter demo={snapshot.demo} />
+      <SiteFooter demo={snapshot.demo} evento={snapshot.event} />
     </>
   );
 }

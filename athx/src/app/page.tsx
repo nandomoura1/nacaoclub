@@ -25,7 +25,7 @@ export default async function HomePage() {
   return (
     <>
       <SiteHeader />
-      <Hero live={snapshot.event.liveMode} lastUpdate={snapshot.lastUpdate} />
+      <Hero evento={snapshot.event} live={snapshot.event.liveMode} lastUpdate={snapshot.lastUpdate} />
 
       <main id="conteudo" className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
         <EventSummary teamCount={snapshot.teams.length} live={snapshot.event.liveMode} />
@@ -35,7 +35,7 @@ export default async function HomePage() {
         </div>
       </main>
 
-      <SiteFooter demo={snapshot.demo} />
+      <SiteFooter demo={snapshot.demo} evento={snapshot.event} />
     </>
   );
 }
