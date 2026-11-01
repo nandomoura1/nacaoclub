@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { IS_DEMO } from '@/lib/env';
+import { escolherEventoAtual } from '@/lib/evento/atual';
 import { getServerSupabase } from '@/lib/supabase/server';
 import {
   DEMO_AGENDA,
@@ -208,6 +209,23 @@ function demoSnapshot(): Snapshot {
 }
 
 /**
+ * Traduz a falha de leitura para o que a pessoa precisa FAZER.
+ *
+ * Antes, qualquer erro aqui virava "nenhum evento cadastrado" — e numa
+ * sessão expirada isso mandava a organização recadastrar um evento que
+ * existia. A mensagem errada custa mais que a falha.
+ */
+function traduzirFalhaDeLeitura(mensagem: string): string {
+  if (/JWT|expired|401|Unauthorized/i.test(mensagem)) {
+    return 'Sua sessão expirou. Entre novamente em /login — seus eventos e resultados estão intactos.';
+  }
+  if (/fetch failed|ENOTFOUND|network|timeout/i.test(mensagem)) {
+    return `Não foi possível falar com o banco agora. Tente de novo em instantes. (${mensagem})`;
+  }
+  return `Não foi possível ler os eventos: ${mensagem}`;
+}
+
+/**
  * Busca o estado completo de UM evento.
  *
  * Sem `slug`, pega o evento no ar — a função athx_evento_atual() no banco
@@ -225,25 +243,28 @@ export async function getSnapshot(opts: { slug?: string | null } = {}): Promise<
   const supabase = await getServerSupabase();
   const pedido = opts.slug?.trim() || null;
 
-  const consulta = supabase.from('events').select('id, slug, name, date, status');
+  const { data: eventos, error: eventError } = await supabase
+    .from('events')
+    .select('id, slug, name, date, status, created_at');
 
-  const { data: event, error: eventError } = pedido
-    ? await consulta.eq('slug', pedido).maybeSingle()
-    : await (async () => {
-        const { data: id } = await supabase.rpc('athx_evento_atual');
-        if (!id) return { data: null, error: null };
-        return consulta.eq('id', id as string).maybeSingle();
-      })();
+  // Uma falha de REDE ou de SESSÃO não é "você não tem eventos".
+  // Dizer isso mandaria a organização cadastrar de novo o que já existe.
+  if (eventError) {
+    throw new Error(traduzirFalhaDeLeitura(eventError.message));
+  }
 
-  if (eventError || !event) {
+  const event = pedido
+    ? (eventos ?? []).find((e) => e.slug === pedido)
+    : escolherEventoAtual(
+        (eventos ?? []).map((e) => ({ ...e, createdAt: e.created_at as string })),
+      );
+
+  if (!event) {
     throw new Error(
       pedido
-        ? `Evento "${pedido}" não existe. Veja a lista em /admin/eventos. ` +
-          (eventError?.message ?? '')
+        ? `Evento "${pedido}" não existe. Veja a lista em /admin/eventos.`
         : 'Nenhum evento cadastrado no Supabase. Crie o primeiro em /admin/eventos, ' +
-          `ou rode supabase/seed.sql para começar com a etapa de setembro. ${
-            eventError?.message ?? ''
-          }`,
+          'ou rode supabase/seed.sql para começar com a etapa de setembro.',
     );
   }
 

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { IS_DEMO } from '@/lib/env';
 import { COOKIE_EVENTO, slugEmEdicao } from '@/services/event-context';
+import { escolherEventoAtual } from '@/lib/evento/atual';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { cookies } from 'next/headers';
 import {
@@ -61,13 +62,17 @@ async function requireAdmin() {
   // normal, então toda escrita usa ESTE evento, nunca o do público.
   const slug = await slugEmEdicao();
 
-  const { data: event } = slug
-    ? await supabase.from('events').select('id').eq('slug', slug).maybeSingle()
-    : await (async () => {
-        const { data: id } = await supabase.rpc('athx_evento_atual');
-        if (!id) return { data: null };
-        return supabase.from('events').select('id').eq('id', id as string).maybeSingle();
-      })();
+  const { data: eventos, error: erroEventos } = await supabase
+    .from('events')
+    .select('id, slug, status, date, created_at');
+
+  if (erroEventos) throw new Error(`Não foi possível ler os eventos: ${erroEventos.message}`);
+
+  const event = slug
+    ? (eventos ?? []).find((e) => e.slug === slug)
+    : escolherEventoAtual(
+        (eventos ?? []).map((e) => ({ ...e, createdAt: e.created_at as string })),
+      );
 
   if (!event) {
     throw new Error(

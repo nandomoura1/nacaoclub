@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { IS_DEMO } from '@/lib/env';
 import { DEMO_EVENT } from '@/lib/demo/fixtures';
+import { escolherEventoAtual } from '@/lib/evento/atual';
 import type { EventStatus } from '@/types/domain';
 
 /**
@@ -97,15 +98,20 @@ export async function listarEventos(): Promise<EventoResumo[]> {
 
   const supabase = await getServerSupabase();
 
-  const [eventosRes, atualRes] = await Promise.all([
-    supabase.from('events').select('id, slug, name, date, status').order('date', {
-      ascending: false,
-    }),
-    supabase.rpc('athx_evento_atual'),
-  ]);
+  const eventosRes = await supabase
+    .from('events')
+    .select('id, slug, name, date, status, created_at')
+    .order('date', { ascending: false });
+
+  if (eventosRes.error) throw new Error(`Não foi possível ler os eventos: ${eventosRes.error.message}`);
 
   const eventos = eventosRes.data ?? [];
-  const idAtual = (atualRes.data as string | null) ?? null;
+
+  // Mesma regra do site público, do mesmo lugar — e sem a ida extra à rede
+  // que, com a sessão expirada, devolvia 401 e derrubava a tela inteira.
+  const idAtual =
+    escolherEventoAtual(eventos.map((e) => ({ ...e, createdAt: e.created_at as string })))?.id ??
+    null;
 
   const [duplasRes, wodsRes, entriesRes, resultsRes] = await Promise.all([
     supabase.from('teams').select('event_id'),
