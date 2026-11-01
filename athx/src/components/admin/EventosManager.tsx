@@ -10,6 +10,7 @@ import {
   PencilLine,
   Plus,
   Radio,
+  Settings2,
   Trash2,
   TriangleAlert,
 } from 'lucide-react';
@@ -21,6 +22,7 @@ import {
   criarEvento,
   editarEvento,
   excluirEvento,
+  salvarEvento,
 } from '@/app/admin/actions';
 import { Button, ButtonLink } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -83,6 +85,9 @@ export function EventosManager({
   const [form, setForm] = useState<FormState | null>(null);
   const [arquivando, setArquivando] = useState<EventoResumo | null>(null);
   const [excluindo, setExcluindo] = useState<EventoResumo | null>(null);
+  const [editando, setEditando] = useState<
+    { id: string; nome: string; slug: string; data: string; slugOriginal: string } | null
+  >(null);
   const [aviso, setAviso] = useState<ActionResult | null>(null);
 
   const noAr = eventos.find((e) => e.noAr) ?? null;
@@ -212,9 +217,26 @@ export function EventosManager({
                         disabled={pendente}
                         onClick={() => rodar(() => editarEvento(evento.slug))}
                       >
-                        <PencilLine size={14} /> Editar este
+                        <PencilLine size={14} /> Trabalhar neste
                       </Button>
                     ) : null}
+
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={pendente}
+                      onClick={() =>
+                        setEditando({
+                          id: evento.id,
+                          nome: evento.name,
+                          slug: evento.slug,
+                          data: evento.date,
+                          slugOriginal: evento.slug,
+                        })
+                      }
+                    >
+                      <Settings2 size={14} /> Nome e data
+                    </Button>
 
                     {!evento.noAr ? (
                       <Button
@@ -353,6 +375,77 @@ export function EventosManager({
                 você cadastra as inscrições e coloca no ar.
               </p>
             ) : null}
+          </div>
+        ) : null}
+      </Modal>
+
+      {/* ---------------------------------------------------------------- */}
+      <Modal
+        open={editando !== null}
+        onClose={() => setEditando(null)}
+        title="Nome e data do evento"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setEditando(null)} disabled={pendente}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={pendente || !editando?.nome.trim() || !editando?.slug.trim()}
+              onClick={() =>
+                editando &&
+                rodar(
+                  () =>
+                    salvarEvento({
+                      id: editando.id,
+                      nome: editando.nome,
+                      slug: editando.slug,
+                      data: editando.data,
+                    }),
+                  () => setEditando(null),
+                )
+              }
+            >
+              {pendente ? 'Salvando…' : 'Salvar'}
+            </Button>
+          </>
+        }
+      >
+        {editando ? (
+          <div className="space-y-4">
+            <Input
+              label="Nome do evento"
+              value={editando.nome}
+              onChange={(e) => setEditando({ ...editando, nome: e.target.value })}
+            />
+
+            <Input
+              label="Data"
+              type="date"
+              value={editando.data}
+              onChange={(e) => setEditando({ ...editando, data: e.target.value })}
+            />
+
+            <Input
+              label="Endereço do evento"
+              value={editando.slug}
+              hint="Aparece no link do leaderboard. Só minúsculas, números e hífen."
+              onChange={(e) =>
+                setEditando({ ...editando, slug: slugificar(e.target.value) })
+              }
+            />
+
+            {editando.slug !== editando.slugOriginal ? (
+              <p className="flex items-start gap-2 rounded-xl bg-amber-400/10 px-3.5 py-3 text-[13px] text-amber-200">
+                <TriangleAlert size={15} className="mt-0.5 shrink-0" />
+                Mudar o endereço quebra os links já compartilhados deste leaderboard. Quem tiver
+                o link antigo vai receber &quot;evento não existe&quot;.
+              </p>
+            ) : null}
+
+            <p className="text-[13px] text-white/45">
+              Isto muda só a identificação do evento. Os WODs, as provas e as duplas ficam como
+              estão — eles se editam nas outras abas.
+            </p>
           </div>
         ) : null}
       </Modal>

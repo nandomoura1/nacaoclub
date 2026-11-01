@@ -223,3 +223,27 @@ export const atletasSchema = z.object({
 });
 
 export type AtletasInput = z.input<typeof atletasSchema>;
+
+/**
+ * Edição dos dados do próprio evento: nome, data e endereço.
+ *
+ * Separado de eventoSchema porque criar e editar não pedem a mesma coisa —
+ * na criação existe "copiar as regras de", que na edição não faz sentido.
+ */
+export const edicaoDeEventoSchema = z.object({
+  id: z.string().uuid(),
+  nome: z.string().trim().min(3, 'Dê um nome ao evento').max(120),
+  slug: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(3)
+    .max(60)
+    .regex(
+      /^[a-z0-9]+(-[a-z0-9]+)*$/,
+      'Use só letras minúsculas, números e hífen — por exemplo nacao-hibrida-marco',
+    ),
+  data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Informe a data do evento'),
+});
+
+export type EdicaoDeEventoInput = z.input<typeof edicaoDeEventoSchema>;

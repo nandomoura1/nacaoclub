@@ -10,6 +10,7 @@ import {
   agendaSchema,
   atletasSchema,
   colaboradorSchema,
+  edicaoDeEventoSchema,
   eventoSchema,
   lancamentoSchema,
   provaSchema,
@@ -850,6 +851,68 @@ export async function excluirEvento(eventId: string): Promise<ActionResult> {
 
     revalidateTudo();
     return { ok: true, message: 'Evento excluído.' };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+/**
+ * Muda o nome, a data ou o endereço de um evento.
+ *
+ * Não precisa de função no banco: events já tem política de escrita para a
+ * organização, então o RLS decide. É o caminho mais curto que continua
+ * seguro.
+ */
+export async function salvarEvento(input: unknown): Promise<ActionResult> {
+  if (IS_DEMO) return DEMO_BLOCK;
+
+  try {
+    const dados = edicaoDeEventoSchema.parse(input);
+    const { supabase } = await requireAdmin();
+
+    const { data: antes } = await supabase
+      .from('events')
+      .select('slug')
+      .eq('id', dados.id)
+      .maybeSingle();
+
+    if (!antes) throw new Error('Esse evento já não existe.');
+
+    const { error } = await supabase
+      .from('events')
+      .update({ name: dados.nome, slug: dados.slug, date: dados.data })
+      .eq('id', dados.id);
+
+    if (error) {
+      throw new Error(
+        /duplicate key|unique/i.test(error.message)
+          ? `Já existe um evento no endereço "${dados.slug}". Escolha outro.`
+          : error.message,
+      );
+    }
+
+    // O cookie guarda o SLUG, não o id. Mudar o endereço sem mexer nele
+    // deixaria o cookie apontando para um evento que não existe mais — e
+    // as telas de admin voltariam, em silêncio, a editar o evento no ar.
+    // Lançar resultado na etapa errada por causa disso seria fácil demais.
+    const jar = await cookies();
+    if (jar.get(COOKIE_EVENTO)?.value === antes.slug) {
+      jar.set(COOKIE_EVENTO, dados.slug, {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 60 * 60 * 24 * 365,
+      });
+    }
+
+    revalidateTudo();
+    return {
+      ok: true,
+      message:
+        antes.slug === dados.slug
+          ? 'Evento atualizado.'
+          : `Evento atualizado. O endereço mudou para "${dados.slug}" — links antigos para este leaderboard deixam de funcionar.`,
+    };
   } catch (error) {
     return fail(error);
   }

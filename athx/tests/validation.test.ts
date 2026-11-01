@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   agendaSchema,
   colaboradorSchema,
+  edicaoDeEventoSchema,
   eventoSchema,
   lancamentoSchema,
   provaSchema,
@@ -288,5 +289,35 @@ describe('Autorização de colaborador', () => {
 
   it('nome é opcional', () => {
     expect(colaboradorSchema.safeParse({ email: 'a@b.com.br', nome: null }).success).toBe(true);
+  });
+});
+
+describe('Edição do evento', () => {
+  const base = {
+    id: UUID,
+    nome: 'Nação Hibrida — 4ª Celebration 2026',
+    slug: 'nacao-hibrida-celebration4-2026',
+    data: '2026-11-07',
+  };
+
+  it('aceita renomear mantendo o endereço', () => {
+    expect(edicaoDeEventoSchema.safeParse(base).success).toBe(true);
+  });
+
+  it('exige o id de quem está sendo editado', () => {
+    const { id: _, ...semId } = base;
+    expect(edicaoDeEventoSchema.safeParse(semId).success).toBe(false);
+  });
+
+  it('aplica ao endereço a mesma regra da criação', () => {
+    expect(edicaoDeEventoSchema.safeParse({ ...base, slug: 'Etapa Março' }).success).toBe(false);
+    expect(edicaoDeEventoSchema.parse({ ...base, slug: 'ETAPA-Marco' }).slug).toBe('etapa-marco');
+  });
+
+  // Criar oferece "copiar as regras de"; editar, não. Um evento que já tem
+  // WODs não pode ganhar os de outro por cima no meio da edição.
+  it('não aceita copiarDe, que é só da criação', () => {
+    const r = edicaoDeEventoSchema.parse({ ...base, copiarDe: UUID });
+    expect('copiarDe' in r).toBe(false);
   });
 });
