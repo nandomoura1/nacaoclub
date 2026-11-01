@@ -31,8 +31,19 @@ create unique index if not exists events_um_so_no_ar
 -- ---------------------------------------------------------------------------
 -- Qual evento o site mostra.
 --
--- O que está LIVE. Sem nenhum LIVE — durante a montagem de uma etapa, por
--- exemplo — cai no mais recente por data, para o site nunca ficar órfão.
+-- A ordem de preferência, e o porquê de cada degrau:
+--
+--   1. o que está NO AR  — é a resposta normal
+--   2. o ARQUIVADO mais recente — enquanto a próxima etapa é montada, o
+--      público deve ver o resultado final da anterior, não uma tela vazia
+--   3. qualquer um — só para uma instalação nova, que só tem rascunho, não
+--      quebrar com "nenhum evento cadastrado"
+--
+-- O degrau 2 é o que falta numa regra ingênua. Ordenar só por data faz um
+-- RASCUNHO de etapa futura, ainda sem duplas, roubar o lugar do evento que
+-- acabou de acontecer — e o leaderboard público fica vazio justamente
+-- enquanto a organização monta a etapa seguinte. DRAFT quer dizer "o
+-- público não vê"; a regra tem de respeitar isso.
 -- ---------------------------------------------------------------------------
 create or replace function public.athx_evento_atual()
 returns uuid
@@ -41,7 +52,11 @@ stable
 set search_path = public
 as $$
   select id from public.events
-  order by (status = 'LIVE') desc, date desc, created_at desc
+  order by
+    (status = 'LIVE') desc,
+    (status = 'FINISHED') desc,
+    date desc,
+    created_at desc
   limit 1;
 $$;
 
