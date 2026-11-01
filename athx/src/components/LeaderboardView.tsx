@@ -145,7 +145,7 @@ export function LeaderboardView({ initial }: { initial: Snapshot }) {
         <p className="font-display text-xs font-bold uppercase">
           Nação Celebration — Etapa Setembro Amarelo · 12 de setembro · Nação Club
         </p>
-        <p className="font-display text-2xl font-black uppercase">NAÇÃO ATHX — Leaderboard</p>
+        <p className="font-display text-2xl font-black uppercase">NAÇÃO HÍBRIDA — Leaderboard</p>
       </div>
 
       {/* ---- Título ------------------------------------------------------ */}

@@ -1,4 +1,6 @@
 import { notFound } from 'next/navigation';
+import { ClipboardList } from 'lucide-react';
+import { ButtonLink } from '@/components/ui/Button';
 import { WodEntry } from '@/components/admin/WodEntry';
 import { EventErrorScreen } from '@/components/EventErrorScreen';
 import { getSnapshot } from '@/services/leaderboard-service';
@@ -33,13 +35,21 @@ export default async function AdminWodPage({
 
   return (
     <div className="space-y-6">
-      <header>
-        <p className="font-display text-[10px] font-bold tracking-kicker text-nacao-cyan uppercase">
-          Lançamento de resultados
-        </p>
-        {wod.resumo ? (
-          <p className="mt-1.5 max-w-2xl text-sm text-white/55">{wod.resumo}</p>
-        ) : null}
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="font-display text-[10px] font-bold tracking-kicker text-nacao-cyan uppercase">
+            Lançamento de resultados
+          </p>
+          {wod.resumo ? (
+            <p className="mt-1.5 max-w-2xl text-sm text-white/55">{wod.resumo}</p>
+          ) : null}
+        </div>
+
+        {/* A súmula é o mesmo lançamento em formato de prancheta: dá para
+            imprimir em branco antes da bateria, ou digitar por lá. */}
+        <ButtonLink href={`/admin/wod/${numero}/sumula`} variant="secondary" size="sm">
+          <ClipboardList size={15} /> Súmula do árbitro
+        </ButtonLink>
       </header>
 
       <WodEntry snapshot={snapshot} wod={wod} />

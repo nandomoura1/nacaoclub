@@ -1,7 +1,7 @@
 @import 'tailwindcss';
 
 /* ==========================================================================
-   NAÇÃO ATHX — DESIGN SYSTEM
+   NAÇÃO HÍBRIDA — DESIGN SYSTEM
    Derivado do Manual da Marca Nação Club.
 
    Paleta oficial ............ #022B57 · #0169E9 · #3A86FF · #20C4FA · #FFFFFF
@@ -298,6 +298,48 @@ h1, h2, h3, h4 {
     margin-bottom: 8mm;
     padding-bottom: 3mm;
     border-bottom: 2px solid #000 !important;
+  }
+
+  /* ---------------------------------------------------------------------
+     A SÚMULA DO ÁRBITRO
+
+     Uma bateria por folha: o juiz do equipamento leva a dele e mais nada.
+     Duas baterias na mesma página significaria rasgar papel no meio do
+     evento para dividir entre dois juízes.
+     --------------------------------------------------------------------- */
+  .sumula-folha {
+    break-after: page;
+    border: none !important;
+    padding: 0 !important;
+  }
+  .sumula-folha:last-of-type { break-after: auto; }
+
+  /* O campo precisa IMPRIMIR como campo — uma caixa onde caiba caneta.
+     A regra global acima zera fundos e bordas de tudo; sem esta exceção a
+     súmula sairia com os valores soltos no branco, sem onde escrever. */
+  .sumula-folha input[type='text'] {
+    border: 1px solid #555 !important;
+    border-radius: 2px;
+    min-height: 8mm;
+    min-width: 18mm;
+    font-size: 11pt !important;
+    font-weight: 700;
+  }
+
+  .sumula-folha input[type='checkbox'] {
+    -webkit-appearance: none;
+    appearance: none;
+    border: 1px solid #555 !important;
+    width: 6mm;
+    height: 6mm;
+    border-radius: 2px;
+  }
+
+  /* Linha de assinatura: tracejado some na impressão clara, então vira
+     linha contínua preta. */
+  .sumula-folha .border-dashed {
+    border-style: solid !important;
+    border-color: #555 !important;
   }
 }
 

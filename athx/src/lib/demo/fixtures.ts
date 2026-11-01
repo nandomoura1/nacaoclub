@@ -40,7 +40,8 @@ const EVENT_ID = 'demo-event';
 
 export const DEMO_EVENT: EventInfo = {
   id: EVENT_ID,
-  name: 'Nação Celebration — Nação ATHX',
+  slug: 'demonstracao',
+  name: 'Nação Híbrida — Etapa Demonstração',
   date: '2026-09-12',
   status: 'LIVE',
   liveMode: true,

@@ -1,397 +1,424 @@
 -- ============================================================================
--- NAÇÃO ATHX · FALTA RODAR
+-- NAÇÃO HÍBRIDA · FALTA RODAR
 --
--- As migrations 0012 e 0013 já estão no banco e conferidas. Este arquivo tem
--- só o que falta:
+-- As migrations 0012 a 0015 já estão aplicadas e conferidas no banco.
+-- Este arquivo tem a próxima:
 --
---   0014  segurança (RLS) das cinco tabelas novas  <- IMPORTANTE, rode logo
---   0015  agenda como dado (horários e baterias editáveis na tela)
+--   0016  a plataforma de vários eventos, a bateria livre e os colaboradores
 --
 -- COMO RODAR
 --   1. Supabase -> projeto nacao-athx -> SQL Editor -> New query
 --   2. Cole ESTE arquivo inteiro
 --   3. Run  ->  deve aparecer "Success. No rows returned"
 --
--- Seguro rodar mais de uma vez. Nenhum DROP de tabela, nenhum dado apagado.
+-- Seguro rodar mais de uma vez. Nenhum DROP de tabela, nenhum dado apagado:
+-- o evento de setembro e os 120 lançamentos continuam exatamente onde estão.
 -- ============================================================================
 
-
--- ========================================================================
--- 20260901000014_rls_do_modelo_generico.sql
--- ========================================================================
-
 -- ============================================================================
--- NAÇÃO ATHX · 0014 · Segurança das tabelas novas (§35)
+-- NAÇÃO HÍBRIDA · 0016 · DE APP DE UM EVENTO PARA PLATAFORMA
 --
---   PÚBLICO  -> SELECT: a definição do evento é pública (todo mundo pode ler
---               a prescrição dos WODs), e os LANÇAMENTOS só quando
---               homologados (PUBLISHED/LOCKED)
---   ADMIN    -> INSERT / UPDATE / DELETE
+-- Até aqui o app servia UMA etapa. O slug do evento era constante de código
+-- (src/lib/env.ts), então uma etapa nova exigia editar o código e publicar.
 --
--- Tabela nova com RLS desligado é tabela aberta. Este arquivo existe para
--- que isso não aconteça por esquecimento.
+-- Agora:
+--
+--   o evento NO AR       é o que tem status = 'LIVE', e só pode haver um
+--   os eventos ANTIGOS   ficam FINISHED, inteiros, consultáveis
+--   um evento NOVO       nasce clonando as regras de um anterior
+--
+-- Nada é apagado nunca. Arquivar é trocar um status, não jogar fora — os
+-- resultados de setembro continuam exatamente onde estão.
+--
+-- Também corrige aqui uma trava que ia morder na próxima etapa: a tabela de
+-- duplas aceitava bateria 1 ou 2 e mais nada, enquanto o número de baterias
+-- já tinha virado configuração livre.
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
--- Privilégios de tabela.
+-- No máximo um evento no ar.
 --
--- O RLS decide QUAIS LINHAS cada um vê; o GRANT decide se ele pode olhar a
--- tabela. Os dois são necessários — RLS sem grant recusa tudo, grant sem RLS
--- libera tudo. Explícito aqui em vez de depender do padrão da plataforma.
+-- Índice único parcial em vez de gatilho: o banco recusa o segundo LIVE por
+-- estrutura, e não por código que alguém pode esquecer de chamar.
+-- ---------------------------------------------------------------------------
+create unique index if not exists events_um_so_no_ar
+  on public.events ((status = 'LIVE'))
+  where status = 'LIVE';
+
+-- ---------------------------------------------------------------------------
+-- Qual evento o site mostra.
+--
+-- O que está LIVE. Sem nenhum LIVE — durante a montagem de uma etapa, por
+-- exemplo — cai no mais recente por data, para o site nunca ficar órfão.
+-- ---------------------------------------------------------------------------
+create or replace function public.athx_evento_atual()
+returns uuid
+language sql
+stable
+set search_path = public
+as $$
+  select id from public.events
+  order by (status = 'LIVE') desc, date desc, created_at desc
+  limit 1;
+$$;
+
+comment on function public.athx_evento_atual is
+  'O evento que o site público mostra: o LIVE, ou o mais recente se nenhum estiver no ar.';
+
+grant execute on function public.athx_evento_atual() to anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Bateria livre.
+--
+-- `check (battery in (1, 2))` era verdade enquanto o evento tinha duas
+-- baterias cravadas. Com o número de baterias configurável, uma etapa de
+-- três baterias não conseguia inscrever ninguém na terceira — e o erro
+-- apareceria no cadastro da dupla, longe da causa.
 -- ---------------------------------------------------------------------------
 do $$
-declare t text;
 begin
-  foreach t in array array['wods', 'wod_blocos', 'provas', 'wod_entries', 'prova_results'] loop
-    execute format('grant select on public.%I to anon, authenticated;', t);
-    execute format('grant insert, update, delete on public.%I to authenticated;', t);
-  end loop;
+  if exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.teams'::regclass and conname = 'teams_battery_check'
+  ) then
+    alter table public.teams drop constraint teams_battery_check;
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.teams'::regclass and conname = 'teams_bateria_positiva'
+  ) then
+    alter table public.teams add constraint teams_bateria_positiva check (battery >= 1);
+  end if;
 end;
 $$;
 
-grant select on public.athx_valores, public.athx_prova_scores,
-                public.athx_wod_scores, public.athx_standings
-  to anon, authenticated;
-
-alter table public.wods          enable row level security;
-alter table public.wod_blocos    enable row level security;
-alter table public.provas        enable row level security;
-alter table public.wod_entries   enable row level security;
-alter table public.prova_results enable row level security;
-
 -- ---------------------------------------------------------------------------
--- A DEFINIÇÃO do evento é pública.
+-- Ativar um evento: ele entra no ar, o anterior é arquivado.
 --
--- A prescrição dos workouts, as provas e os critérios são justamente o que o
--- atleta precisa ler antes de competir — a página /wod/1 existe para isso.
--- Esconder seria esconder o regulamento.
+-- Uma operação só, dentro de uma transação, porque o estado intermediário
+-- (dois LIVE, ou nenhum) não deve existir nem por um instante.
 -- ---------------------------------------------------------------------------
-drop policy if exists wods_public_read on public.wods;
-create policy wods_public_read on public.wods for select using (true);
-
-drop policy if exists blocos_public_read on public.wod_blocos;
-create policy blocos_public_read on public.wod_blocos for select using (true);
-
-drop policy if exists provas_public_read on public.provas;
-create policy provas_public_read on public.provas for select using (true);
-
--- ---------------------------------------------------------------------------
--- Os LANÇAMENTOS, não. O público lê só o que foi homologado (§19).
---
--- Um rascunho é trabalho em andamento: o juiz ainda vai conferir com a
--- dupla. Vazar rascunho é anunciar resultado que pode mudar.
--- ---------------------------------------------------------------------------
-drop policy if exists entries_public_read on public.wod_entries;
-create policy entries_public_read on public.wod_entries
-  for select using (status in ('PUBLISHED', 'LOCKED') or public.athx_is_admin());
-
-drop policy if exists prova_results_public_read on public.prova_results;
-create policy prova_results_public_read on public.prova_results
-  for select using (
-    public.athx_is_admin()
-    or exists (
-      select 1
-      from public.provas p
-      join public.wod_entries e on e.wod_id = p.wod_id and e.team_id = prova_results.team_id
-      where p.id = prova_results.prova_id
-        and e.status in ('PUBLISHED', 'LOCKED')
-    )
-  );
-
--- ---------------------------------------------------------------------------
--- Escrita: só admin, em tudo.
--- ---------------------------------------------------------------------------
-do $$
-declare t text;
-begin
-  foreach t in array array['wods', 'wod_blocos', 'provas', 'wod_entries', 'prova_results'] loop
-    execute format('drop policy if exists %1$s_admin_write on public.%1$s;', t);
-    execute format(
-      'create policy %1$s_admin_write on public.%1$s
-         for all using (public.athx_is_admin()) with check (public.athx_is_admin());', t);
-  end loop;
-end;
-$$;
-
--- ---------------------------------------------------------------------------
--- Resultado TRAVADO não muda por acidente (§20).
---
--- A trava protege o que foi LANÇADO. Como a pontuação agora é calculada na
--- leitura por uma view, não existe mais coluna derivada para o guarda
--- confundir com edição humana — o bug que travou a homologação em setembro
--- não tem como voltar.
--- ---------------------------------------------------------------------------
-create or replace function public.athx_guard_entry_locked()
-returns trigger
-language plpgsql
-as $$
-begin
-  if old.status <> 'LOCKED' then
-    return new;
-  end if;
-
-  if coalesce(current_setting('athx.allow_locked_edit', true), 'off') = 'on' then
-    return new;
-  end if;
-
-  raise exception 'Resultado LOCKED. Destrave com athx_unlock_entry() antes de alterar.'
-    using errcode = 'check_violation';
-end;
-$$;
-
-drop trigger if exists wod_entries_locked on public.wod_entries;
-create trigger wod_entries_locked before update or delete on public.wod_entries
-for each row execute function public.athx_guard_entry_locked();
-
-create or replace function public.athx_guard_result_locked()
-returns trigger
-language plpgsql
-as $$
-declare
-  v_status athx_result_status;
-  v_team   uuid := case when tg_op = 'DELETE' then old.team_id else new.team_id end;
-  v_prova  uuid := case when tg_op = 'DELETE' then old.prova_id else new.prova_id end;
-begin
-  if coalesce(current_setting('athx.allow_locked_edit', true), 'off') = 'on' then
-    return case when tg_op = 'DELETE' then old else new end;
-  end if;
-
-  select e.status into v_status
-  from public.wod_entries e
-  join public.provas p on p.wod_id = e.wod_id
-  where p.id = v_prova and e.team_id = v_team;
-
-  if v_status = 'LOCKED' then
-    raise exception 'Resultado LOCKED. Destrave com athx_unlock_entry() antes de alterar.'
-      using errcode = 'check_violation';
-  end if;
-
-  return case when tg_op = 'DELETE' then old else new end;
-end;
-$$;
-
-drop trigger if exists prova_results_locked on public.prova_results;
-create trigger prova_results_locked before update or delete on public.prova_results
-for each row execute function public.athx_guard_result_locked();
-
--- ---------------------------------------------------------------------------
--- Destravar é explícito, exige motivo e fica na auditoria.
--- ---------------------------------------------------------------------------
-create or replace function public.athx_unlock_entry(p_wod uuid, p_team uuid, p_motivo text)
+create or replace function public.athx_ativar_evento(p_event uuid)
 returns void
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
-  v_email text;
-  v_event uuid;
+  v_nome text;
 begin
   if not public.athx_is_admin() then
-    raise exception 'Apenas a organização pode destravar um resultado.'
+    raise exception 'Apenas a organização pode colocar um evento no ar.'
       using errcode = 'insufficient_privilege';
   end if;
 
-  if coalesce(length(btrim(p_motivo)), 0) < 5 then
-    raise exception 'Informe o motivo do destravamento (mínimo de 5 caracteres).'
-      using errcode = 'check_violation';
+  select name into v_nome from public.events where id = p_event;
+  if v_nome is null then
+    raise exception 'Evento não encontrado.' using errcode = 'no_data_found';
   end if;
 
-  select email into v_email from admin_users where user_id = auth.uid();
-  select event_id into v_event from wod_entries where wod_id = p_wod and team_id = p_team;
+  -- Arquiva quem estava no ar. O índice único exige que isso venha primeiro.
+  update public.events set status = 'FINISHED', updated_at = now()
+  where status = 'LIVE' and id <> p_event;
 
-  perform set_config('athx.allow_locked_edit', 'on', true);
-  update wod_entries set status = 'PUBLISHED', updated_by = auth.uid()
-  where wod_id = p_wod and team_id = p_team;
-  perform set_config('athx.allow_locked_edit', 'off', true);
+  update public.events set status = 'LIVE', updated_at = now()
+  where id = p_event;
 
-  insert into audit_logs (event_id, user_id, user_email, action, entity_type, entity_id, team_id, old_value, new_value)
-  values (v_event, auth.uid(), v_email, 'UNLOCK', 'wod_entries', p_wod, p_team,
-          jsonb_build_object('status', 'LOCKED'),
-          jsonb_build_object('status', 'PUBLISHED', 'motivo', p_motivo));
+  raise notice 'NACAO HIBRIDA: evento "%" entrou no ar', v_nome;
 end;
 $$;
 
-grant execute on function public.athx_unlock_entry(uuid, uuid, text) to authenticated;
+grant execute on function public.athx_ativar_evento(uuid) to authenticated;
 
 -- ---------------------------------------------------------------------------
--- Auditoria dos lançamentos novos.
---
--- Só o que é DIGITADO POR GENTE entra no histórico. Como não há mais coluna
--- derivada nestas tabelas, não há recálculo para inundar a auditoria.
+-- Arquivar um evento sem colocar outro no ar.
 -- ---------------------------------------------------------------------------
-create or replace function public.athx_audit_prova()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_email text;
-  v_event uuid := case when tg_op = 'DELETE' then old.event_id else new.event_id end;
-  v_team  uuid := case when tg_op = 'DELETE' then old.team_id else new.team_id end;
-begin
-  select email into v_email from admin_users where user_id = auth.uid();
-
-  insert into audit_logs (
-    event_id, user_id, user_email, action, entity_type, entity_id, team_id, old_value, new_value
-  ) values (
-    v_event, auth.uid(), v_email, tg_op, tg_table_name,
-    case when tg_op = 'DELETE' then old.id else new.id end,
-    v_team,
-    case when tg_op = 'INSERT' then null else to_jsonb(old) end,
-    case when tg_op = 'DELETE' then null else to_jsonb(new) end
-  );
-
-  return null;
-end;
-$$;
-
-do $$
-declare t text;
-begin
-  foreach t in array array['wod_entries', 'prova_results'] loop
-    execute format(
-      'drop trigger if exists %1$s_audit on public.%1$s;
-       create trigger %1$s_audit after insert or update or delete on public.%1$s
-       for each row execute function public.athx_audit_prova();', t);
-  end loop;
-end;
-$$;
-
--- ---------------------------------------------------------------------------
--- Realtime: a tela se atualiza sozinha quando o juiz lança (§34).
--- ---------------------------------------------------------------------------
-do $$
-declare t text;
-begin
-  foreach t in array array['wods', 'provas', 'wod_entries', 'prova_results'] loop
-    if not exists (
-      select 1 from pg_publication_tables
-      where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t
-    ) then
-      execute format('alter publication supabase_realtime add table public.%I;', t);
-    end if;
-  end loop;
-exception
-  when undefined_object then
-    raise notice 'NAÇÃO ATHX · publicação supabase_realtime não existe neste banco (ok fora do Supabase)';
-end;
-$$;
-
-
--- ========================================================================
--- 20260901000015_agenda_como_dado.sql
--- ========================================================================
-
--- ============================================================================
--- NAÇÃO ATHX · 0015 · A agenda e as baterias também viram dado
---
--- A programação do dia estava cravada em código (src/lib/wods.ts), com os
--- horários dos três workouts, duas baterias e os blocos de briefing e pódio.
--- Mudar o horário de uma bateria exigia deploy.
---
--- Agora a agenda é uma tabela, editável na tela de WODs:
---
---   · uma linha por momento do dia, na ordem em que acontece
---   · a linha de um workout aponta para o WOD e a bateria
---   · as outras (briefing, conferência, pódio) não apontam para nada
---
--- E o número de baterias sai de event_settings, em vez de ser sempre duas.
--- ============================================================================
-
-alter table public.event_settings
-  add column if not exists baterias integer not null default 2
-    check (baterias between 1 and 20);
-
-comment on column public.event_settings.baterias is
-  'Quantas baterias o evento tem. A tela de duplas oferece de 1 até este número.';
-
-create table if not exists public.agenda (
-  id         uuid primary key default gen_random_uuid(),
-  event_id   uuid not null references public.events(id) on delete cascade,
-  ordem      integer not null default 1,
-  hora       text not null,
-  titulo     text not null,
-  detalhe    text,
-  -- Sub-itens, como o conteúdo do briefing.
-  itens      text[] not null default '{}',
-  -- Observação da organização, como o intervalo entre baterias.
-  nota       text,
-  -- Preenchidos quando a linha é a disputa de um workout.
-  wod_id     uuid references public.wods(id) on delete cascade,
-  bateria    integer check (bateria is null or bateria > 0),
-  -- Dá peso visual na programação (o pódio, por exemplo).
-  destaque   boolean not null default false,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create index if not exists agenda_event_idx on public.agenda (event_id, ordem);
-
-drop trigger if exists agenda_touch on public.agenda;
-create trigger agenda_touch before update on public.agenda
-for each row execute function public.athx_touch_updated_at();
-
-alter table public.agenda enable row level security;
-
-grant select on public.agenda to anon, authenticated;
-grant insert, update, delete on public.agenda to authenticated;
-
-drop policy if exists agenda_public_read on public.agenda;
-create policy agenda_public_read on public.agenda for select using (true);
-
-drop policy if exists agenda_admin_write on public.agenda;
-create policy agenda_admin_write on public.agenda
-  for all using (public.athx_is_admin()) with check (public.athx_is_admin());
-
--- ---------------------------------------------------------------------------
--- A programação da etapa de setembro, como estava no código.
--- ---------------------------------------------------------------------------
-create or replace function public.athx_montar_agenda_setembro(v_event uuid)
+create or replace function public.athx_arquivar_evento(p_event uuid)
 returns void
 language plpgsql
 security definer
 set search_path = public
 as $$
-declare
-  v1 uuid;
-  v2 uuid;
-  v3 uuid;
 begin
-  if exists (select 1 from public.agenda where event_id = v_event) then
-    raise notice 'NAÇÃO ATHX · evento % já tem agenda, nada a fazer', v_event;
-    return;
+  if not public.athx_is_admin() then
+    raise exception 'Apenas a organização pode arquivar um evento.'
+      using errcode = 'insufficient_privilege';
   end if;
 
-  select id into v1 from public.wods where event_id = v_event and numero = 1;
-  select id into v2 from public.wods where event_id = v_event and numero = 2;
-  select id into v3 from public.wods where event_id = v_event and numero = 3;
-
-  insert into public.agenda (event_id, ordem, hora, titulo, detalhe, itens, nota, wod_id, bateria, destaque) values
-    (v_event, 1, '08h00', 'Aquecimento + Briefing', 'Presença obrigatória de todos os participantes',
-     array['Aquecimento geral','Mobilidade e preparação','Apresentação dos workouts','Explicação das regras',
-           'Orientações sobre execução dos movimentos','Estratégias e divisão das tarefas','Esclarecimento de dúvidas'],
-     null, null, null, false),
-    (v_event, 2, '09h00–09h16', 'Workout 01 — Bateria 1', 'Strength', '{}', null, v1, 1, false),
-    (v_event, 3, '09h26–09h42', 'Workout 01 — Bateria 2', 'Strength', '{}', 'Intervalo de 14'' entre as baterias', v1, 2, false),
-    (v_event, 4, '09h30–09h52', 'Workout 02 — Bateria 1', 'Endurance', '{}', null, v2, 1, false),
-    (v_event, 5, '09h56–10h16', 'Workout 02 — Bateria 2', 'Endurance', '{}', 'Intervalo de 20'' entre as baterias', v2, 2, false),
-    (v_event, 6, '10h12–10h32', 'Workout 03 — Bateria 1', 'Metcon', '{}', null, v3, 1, false),
-    (v_event, 7, '10h36–10h56', 'Workout 03 — Bateria 2', 'Metcon', '{}', null, v3, 2, false),
-    (v_event, 8, '11h00', 'Conferência / classificação', null, '{}', null, null, null, false),
-    (v_event, 9, '11h30', 'Pódio', null, '{}', null, null, null, true);
-
-  raise notice 'NAÇÃO ATHX · agenda do evento % montada', v_event;
+  update public.events set status = 'FINISHED', updated_at = now() where id = p_event;
 end;
 $$;
 
-do $$
-declare v_event uuid;
+grant execute on function public.athx_arquivar_evento(uuid) to authenticated;
+
+-- ============================================================================
+-- CLONAR UM EVENTO
+--
+-- Copia a DEFINIÇÃO e as REGRAS. Não copia quem competiu nem o que fizeram.
+--
+--   copia:     configurações (desempate, política de CAP, baterias),
+--              WODs, prescrição em blocos, provas, programação do dia
+--   NÃO copia: duplas, homologações, lançamentos, auditoria
+--
+-- É isso que "mesmas regras do primeiro evento" significa na prática: a
+-- etapa nova nasce pronta para receber inscrições, com o regulamento do
+-- anterior, e nenhum resultado contaminando a classificação.
+-- ============================================================================
+create or replace function public.athx_clonar_evento(
+  p_origem uuid,
+  p_nome   text,
+  p_slug   text,
+  p_data   date
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_novo uuid;
+  v_slug text := lower(btrim(p_slug));
 begin
-  for v_event in select id from public.events loop
-    perform public.athx_montar_agenda_setembro(v_event);
-  end loop;
+  if not public.athx_is_admin() then
+    raise exception 'Apenas a organização pode criar um evento.'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  if coalesce(length(btrim(p_nome)), 0) < 3 then
+    raise exception 'Dê um nome ao evento (mínimo de 3 caracteres).'
+      using errcode = 'check_violation';
+  end if;
+
+  if v_slug !~ '^[a-z0-9]+(-[a-z0-9]+)*$' then
+    raise exception 'O endereço "%" não serve. Use só letras minúsculas, números e hífen — por exemplo nacao-hibrida-marco.', v_slug
+      using errcode = 'check_violation';
+  end if;
+
+  if exists (select 1 from public.events where slug = v_slug) then
+    raise exception 'Já existe um evento no endereço "%". Escolha outro.', v_slug
+      using errcode = 'unique_violation';
+  end if;
+
+  if p_origem is not null and not exists (select 1 from public.events where id = p_origem) then
+    raise exception 'O evento que você quer copiar não existe.' using errcode = 'no_data_found';
+  end if;
+
+  -- Nasce fora do ar: a organização monta as duplas e ativa quando quiser.
+  insert into public.events (slug, name, date, status)
+  values (v_slug, btrim(p_nome), p_data, 'DRAFT')
+  returning id into v_novo;
+
+  -- ---- Configurações -----------------------------------------------------
+  -- Colunas nomeadas, não `s.*`: uma coluna nova em event_settings não pode
+  -- fazer o clone gravar valor na coluna errada.
+  if p_origem is null then
+    insert into public.event_settings (event_id) values (v_novo);
+  else
+    insert into public.event_settings (
+      event_id, tie_points_mode, dnf_policy,
+      tie_breaker_1, tie_breaker_2, tie_breaker_3,
+      live_mode, maintenance_mode, baterias
+    )
+    select v_novo, s.tie_points_mode, s.dnf_policy,
+           s.tie_breaker_1, s.tie_breaker_2, s.tie_breaker_3,
+           s.live_mode, s.maintenance_mode, s.baterias
+    from public.event_settings s
+    where s.event_id = p_origem;
+  end if;
+
+  if p_origem is null then
+    return v_novo;
+  end if;
+
+  -- ---- WODs --------------------------------------------------------------
+  insert into public.wods (
+    event_id, numero, nome, formato, cap_segundos, resumo,
+    permite_cap, regras, pendencias, ordem
+  )
+  select v_novo, w.numero, w.nome, w.formato, w.cap_segundos, w.resumo,
+         w.permite_cap, w.regras, w.pendencias, w.ordem
+  from public.wods w
+  where w.event_id = p_origem;
+
+  -- Daqui para baixo o pareamento é por `numero`, que é único no evento.
+  -- Evita tabela temporária de mapeamento de ids.
+
+  -- ---- Prescrição --------------------------------------------------------
+  insert into public.wod_blocos (wod_id, ordem, janela, movimento, detalhe, masculino, feminino)
+  select nw.id, b.ordem, b.janela, b.movimento, b.detalhe, b.masculino, b.feminino
+  from public.wod_blocos b
+  join public.wods ow on ow.id = b.wod_id and ow.event_id = p_origem
+  join public.wods nw on nw.event_id = v_novo and nw.numero = ow.numero;
+
+  -- ---- Provas ------------------------------------------------------------
+  --
+  -- Em DOIS passos, e a ordem importa: o gatilho athx_check_componentes
+  -- recusa uma prova calculada cujos componentes ainda não existam. Lançadas
+  -- primeiro, calculadas depois.
+  insert into public.provas (
+    wod_id, codigo, descricao, criterio, unidade, direcao, origem,
+    por_atleta, componentes, pontua, ordem
+  )
+  select nw.id, p.codigo, p.descricao, p.criterio, p.unidade, p.direcao, p.origem,
+         p.por_atleta, p.componentes, p.pontua, p.ordem
+  from public.provas p
+  join public.wods ow on ow.id = p.wod_id and ow.event_id = p_origem
+  join public.wods nw on nw.event_id = v_novo and nw.numero = ow.numero
+  where p.origem = 'DIGITADA';
+
+  insert into public.provas (
+    wod_id, codigo, descricao, criterio, unidade, direcao, origem,
+    por_atleta, componentes, pontua, ordem
+  )
+  select nw.id, p.codigo, p.descricao, p.criterio, p.unidade, p.direcao, p.origem,
+         p.por_atleta, p.componentes, p.pontua, p.ordem
+  from public.provas p
+  join public.wods ow on ow.id = p.wod_id and ow.event_id = p_origem
+  join public.wods nw on nw.event_id = v_novo and nw.numero = ow.numero
+  where p.origem = 'SOMA';
+
+  -- ---- Programação do dia ------------------------------------------------
+  insert into public.agenda (
+    event_id, ordem, hora, titulo, detalhe, itens, nota, wod_id, bateria, destaque
+  )
+  select v_novo, a.ordem, a.hora, a.titulo, a.detalhe, a.itens, a.nota,
+         nw.id, a.bateria, a.destaque
+  from public.agenda a
+  left join public.wods ow on ow.id = a.wod_id
+  left join public.wods nw on nw.event_id = v_novo and nw.numero = ow.numero
+  where a.event_id = p_origem;
+
+  raise notice 'NACAO HIBRIDA: evento "%" criado a partir de outro', p_nome;
+  return v_novo;
 end;
 $$;
 
+grant execute on function public.athx_clonar_evento(uuid, text, text, date) to authenticated;
+
+-- ============================================================================
+-- COLABORADORES DA ORGANIZAÇÃO
+--
+-- Antes: liberar acesso exigia criar o usuário no painel do Supabase e rodar
+-- um arquivo SQL na mão, porque admin_users é indexada por user_id — e o
+-- user_id só existe depois que a pessoa tem conta.
+--
+-- Agora a organização AUTORIZA UM E-MAIL. A pessoa entra em /login, cria a
+-- própria senha, e já tem acesso: athx_is_admin() passa a aceitar quem está
+-- nesta lista. Ninguém digita senha de ninguém, e não é preciso expor a
+-- chave mestra do banco na Vercel.
+-- ============================================================================
+create table if not exists public.admin_emails (
+  email      text primary key check (email = lower(btrim(email)) and position('@' in email) > 1),
+  nome       text,
+  -- Quem autorizou. Fica como rastro de responsabilidade.
+  criado_por uuid references auth.users(id),
+  created_at timestamptz not null default now()
+);
+
+comment on table public.admin_emails is
+  'E-mails autorizados a administrar. A pessoa ganha acesso ao criar a conta, sem passo manual no painel.';
+
+-- ---------------------------------------------------------------------------
+-- Quem é admin: quem está em admin_users OU com e-mail autorizado.
+--
+-- Esta função é chamada em toda checagem de RLS, então as duas consultas são
+-- de chave primária: uma por user_id, outra por e-mail.
+-- ---------------------------------------------------------------------------
+create or replace function public.athx_is_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+      select 1 from public.admin_users a where a.user_id = auth.uid()
+    )
+    or exists (
+      select 1
+      from auth.users u
+      join public.admin_emails e on e.email = lower(u.email)
+      where u.id = auth.uid()
+    );
+$$;
+
+comment on function public.athx_is_admin is
+  'true para quem está em admin_users (acesso histórico) ou tem o e-mail em admin_emails (autorização pela tela).';
+
+-- ---------------------------------------------------------------------------
+-- A lista de quem tem acesso, para a tela mostrar.
+--
+-- Une as duas origens e diz se a pessoa já criou a conta — a informação que
+-- a organização precisa quando alguém reclama que "não consegue entrar".
+-- ---------------------------------------------------------------------------
+-- O `where athx_is_admin()` nas duas pernas não é redundância: esta view roda
+-- como DONA (precisa, para ler auth.users), então o RLS das tabelas de baixo
+-- não se aplica. Sem este filtro, qualquer pessoa logada — inclusive uma que
+-- não é da organização — leria a lista de e-mails de quem administra.
+create or replace view public.athx_equipe as
+select
+  e.email,
+  e.nome,
+  'AUTORIZADO'::text as origem,
+  exists (select 1 from auth.users u where lower(u.email) = e.email) as tem_login,
+  e.created_at
+from public.admin_emails e
+where public.athx_is_admin()
+union all
+select
+  a.email,
+  a.name as nome,
+  'CADASTRADO'::text as origem,
+  true as tem_login,
+  a.created_at
+from public.admin_users a
+where public.athx_is_admin()
+  and not exists (select 1 from public.admin_emails e where e.email = lower(a.email));
+
+comment on view public.athx_equipe is
+  'Quem tem acesso de organização, de onde veio esse acesso, e se já criou a conta.';
+
+-- ---------------------------------------------------------------------------
+-- Segurança: só a organização vê e mexe na própria lista.
+-- ---------------------------------------------------------------------------
+grant select, insert, update, delete on public.admin_emails to authenticated;
+grant select on public.athx_equipe to authenticated;
+
+alter table public.admin_emails enable row level security;
+
+drop policy if exists admin_emails_admin_all on public.admin_emails;
+create policy admin_emails_admin_all on public.admin_emails
+  for all to authenticated
+  using (public.athx_is_admin())
+  with check (public.athx_is_admin());
+
+-- admin_users tinha RLS ligado e nenhuma política — ou seja, ninguém lia.
+-- A tela de colaboradores precisa ler para mostrar quem já tinha acesso.
+grant select on public.admin_users to authenticated;
+
+drop policy if exists admin_users_admin_read on public.admin_users;
+create policy admin_users_admin_read on public.admin_users
+  for select to authenticated
+  using (public.athx_is_admin());
+
+-- A view não pode rodar como security_invoker: ela lê auth.users, que o
+-- papel `authenticated` não alcança. Roda como dona e é protegida pelo
+-- grant acima, que só `authenticated` tem — e pela própria tela, que exige
+-- admin antes de consultar.
+alter view public.athx_equipe set (security_invoker = off);
+
+-- ---------------------------------------------------------------------------
+-- A primeira pessoa não pode se autorizar sozinha.
+--
+-- Quem já está em admin_users (o acesso criado no SQL, na instalação) é que
+-- autoriza os demais. Se a lista estiver vazia e ninguém for admin ainda, o
+-- caminho continua sendo supabase/tornar-admin.sql.
+-- ---------------------------------------------------------------------------
+do $$
+begin
+  if not exists (select 1 from public.admin_users) then
+    raise notice 'NACAO HIBRIDA: nenhum admin cadastrado. Rode supabase/tornar-admin.sql para o primeiro acesso.';
+  end if;
+end;
+$$;

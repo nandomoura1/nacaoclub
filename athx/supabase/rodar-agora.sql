@@ -1,11 +1,11 @@
 -- ============================================================================
--- NAÇÃO ATHX · RODAR AGORA
+-- NAÇÃO HÍBRIDA · RODAR AGORA
 --
 -- Junção das migrations 0012, 0013, 0014 e 0015 — o modelo genérico de
 -- eventos (WODs e provas como dado), o motor em SQL, a segurança e a agenda.
 --
 -- COMO RODAR
---   1. Supabase → seu projeto nacao-athx → SQL Editor → New query
+--   1. Supabase → seu projeto nacao-hibrida → SQL Editor → New query
 --   2. Cole ESTE arquivo inteiro
 --   3. Run
 --
@@ -22,7 +22,7 @@
 -- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 -- ============================================================================
--- NAÇÃO ATHX · 0012 · O EVENTO VIRA DADO
+-- NAÇÃO HÍBRIDA · 0012 · O EVENTO VIRA DADO
 --
 -- Até aqui o evento estava cravado no banco: três tabelas, uma por WOD, com
 -- as colunas daquele workout. wod1_results tinha seis colunas de carga,
@@ -237,7 +237,7 @@ begin
   -- Evento que já tem WODs cadastrados não é tocado: a organização já montou
   -- o dele, e sobrescrever seria apagar trabalho.
   if exists (select 1 from public.wods where event_id = v_event) then
-    raise notice 'NAÇÃO ATHX · evento % já tem WODs cadastrados, nada a fazer', v_event;
+    raise notice 'NAÇÃO HÍBRIDA · evento % já tem WODs cadastrados, nada a fazer', v_event;
     return;
   end if;
 
@@ -389,7 +389,7 @@ begin
     on conflict (prova_id, team_id) do nothing;
 
 
-  raise notice 'NAÇÃO ATHX · evento % montado no modelo de WODs e provas', v_event;
+  raise notice 'NAÇÃO HÍBRIDA · evento % montado no modelo de WODs e provas', v_event;
 end;
 $$;
 
@@ -444,7 +444,7 @@ begin
     raise exception 'Migração do WOD 3 não bateu: % esperados, % migrados', v_antes, v_depois;
   end if;
 
-  raise notice 'NAÇÃO ATHX · conferência da migração: todos os lançamentos passaram';
+  raise notice 'NAÇÃO HÍBRIDA · conferência da migração: todos os lançamentos passaram';
 end;
 $$;
 
@@ -454,7 +454,7 @@ $$;
 -- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 -- ============================================================================
--- NAÇÃO ATHX · 0013 · O motor de pontuação em SQL, para o modelo genérico
+-- NAÇÃO HÍBRIDA · 0013 · O motor de pontuação em SQL, para o modelo genérico
 --
 -- Espelha src/lib/scoring/motor.ts e src/lib/scoring/overall.ts (§25).
 --
@@ -830,7 +830,7 @@ alter view public.athx_standings    set (security_invoker = on);
 -- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 -- ============================================================================
--- NAÇÃO ATHX · 0014 · Segurança das tabelas novas (§35)
+-- NAÇÃO HÍBRIDA · 0014 · Segurança das tabelas novas (§35)
 --
 --   PÚBLICO  -> SELECT: a definição do evento é pública (todo mundo pode ler
 --               a prescrição dos WODs), e os LANÇAMENTOS só quando
@@ -1084,7 +1084,7 @@ begin
   end loop;
 exception
   when undefined_object then
-    raise notice 'NAÇÃO ATHX · publicação supabase_realtime não existe neste banco (ok fora do Supabase)';
+    raise notice 'NAÇÃO HÍBRIDA · publicação supabase_realtime não existe neste banco (ok fora do Supabase)';
 end;
 $$;
 
@@ -1094,7 +1094,7 @@ $$;
 -- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 -- ============================================================================
--- NAÇÃO ATHX · 0015 · A agenda e as baterias também viram dado
+-- NAÇÃO HÍBRIDA · 0015 · A agenda e as baterias também viram dado
 --
 -- A programação do dia estava cravada em código (src/lib/wods.ts), com os
 -- horários dos três workouts, duas baterias e os blocos de briefing e pódio.
@@ -1169,7 +1169,7 @@ declare
   v3 uuid;
 begin
   if exists (select 1 from public.agenda where event_id = v_event) then
-    raise notice 'NAÇÃO ATHX · evento % já tem agenda, nada a fazer', v_event;
+    raise notice 'NAÇÃO HÍBRIDA · evento % já tem agenda, nada a fazer', v_event;
     return;
   end if;
 
@@ -1191,7 +1191,7 @@ begin
     (v_event, 8, '11h00', 'Conferência / classificação', null, '{}', null, null, null, false),
     (v_event, 9, '11h30', 'Pódio', null, '{}', null, null, null, true);
 
-  raise notice 'NAÇÃO ATHX · agenda do evento % montada', v_event;
+  raise notice 'NAÇÃO HÍBRIDA · agenda do evento % montada', v_event;
 end;
 $$;
 

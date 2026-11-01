@@ -29,14 +29,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="min-h-dvh">
-      <header className="sticky top-0 z-40 border-b border-white/[0.08] bg-nacao-abyss/92 backdrop-blur-md">
+      <header className="no-print sticky top-0 z-40 border-b border-white/[0.08] bg-nacao-abyss/92 backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <Link href="/admin" className="flex items-center gap-3">
             <BrandLogo size="sm" />
             <span className="h-7 w-px bg-white/15" aria-hidden="true" />
             <span>
               <span className="block font-display text-sm font-extrabold tracking-tight">
-                NAÇÃO ATHX
+                NAÇÃO HÍBRIDA
               </span>
               <span className="block font-display text-[8px] font-bold tracking-kicker text-nacao-cyan uppercase">
                 Organização
@@ -56,14 +56,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       </header>
 
       {IS_DEMO ? (
-        <p className="border-b border-amber-400/25 bg-amber-400/10 px-4 py-2 text-center text-xs text-amber-100 sm:px-6">
+        <p className="no-print border-b border-amber-400/25 bg-amber-400/10 px-4 py-2 text-center text-xs text-amber-100 sm:px-6">
           <strong className="font-display font-bold uppercase">Modo demonstração.</strong> O
           painel está em somente leitura: não há banco conectado. Configure o Supabase e
           defina NEXT_PUBLIC_DEMO_MODE=false para lançar resultados de verdade.
         </p>
       ) : null}
 
-      <main id="conteudo" className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
+      <main id="conteudo" className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 print:max-w-none print:px-0 print:py-0">
         {children}
       </main>
     </div>

@@ -1,5 +1,5 @@
 /**
- * NAÇÃO ATHX — WODs E PROVAS COMO DADO, NÃO COMO CÓDIGO.
+ * NAÇÃO HÍBRIDA — WODs E PROVAS COMO DADO, NÃO COMO CÓDIGO.
  *
  * Até esta versão o evento estava cravado: três WODs, oito provas, uma
  * tabela por WOD com as colunas daquele workout (seis cargas, corrida e

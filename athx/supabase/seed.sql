@@ -1,5 +1,5 @@
 -- ============================================================================
--- NAÇÃO ATHX · SEED (§36)
+-- NAÇÃO HÍBRIDA · SEED (§36)
 --
 -- Cria o evento e as 20 duplas numeradas.
 --
@@ -21,7 +21,7 @@
 insert into public.events (slug, name, date, status)
 values (
   'nacao-celebration-setembro-amarelo',
-  'Nação Celebration — Nação ATHX',
+  'Nação Celebration — Nação Híbrida',
   date '2026-09-12',
   'LIVE'
 )

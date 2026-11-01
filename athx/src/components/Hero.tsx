@@ -23,7 +23,7 @@ export function Hero({ live, lastUpdate }: { live: boolean; lastUpdate: string }
         </div>
 
         <h1 className="mt-4 font-display text-[40px] leading-[0.92] font-black tracking-[-0.04em] sm:text-6xl lg:text-7xl">
-          NAÇÃO <span className="text-energy">ATHX</span>
+          NAÇÃO <span className="text-energy">HÍBRIDA</span>
         </h1>
 
         <div className="mt-3 flex items-center gap-3">

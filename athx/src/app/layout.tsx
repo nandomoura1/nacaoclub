@@ -32,14 +32,14 @@ const body = Nunito_Sans({
 
 export const metadata: Metadata = {
   title: {
-    default: 'NAÇÃO ATHX — Live Leaderboard',
-    template: '%s · NAÇÃO ATHX',
+    default: 'NAÇÃO HÍBRIDA — Live Leaderboard',
+    template: '%s · NAÇÃO HÍBRIDA',
   },
   description:
     'Leaderboard ao vivo do Nação Celebration — Etapa Setembro Amarelo. 12 de setembro, Nação Club, Brasília.',
-  applicationName: 'NAÇÃO ATHX',
+  applicationName: 'NAÇÃO HÍBRIDA',
   openGraph: {
-    title: 'NAÇÃO ATHX — Live Leaderboard',
+    title: 'NAÇÃO HÍBRIDA — Live Leaderboard',
     description: 'Classificação ao vivo do Nação Celebration. Muitos esportes, muitas paixões, uma Nação!',
     type: 'website',
     locale: 'pt_BR',

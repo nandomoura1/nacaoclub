@@ -165,3 +165,46 @@ export type WodInput = z.input<typeof wodSchema>;
 export type ProvaInput = z.input<typeof provaSchema>;
 export type AgendaInput = z.input<typeof agendaSchema>;
 export type LancamentoInput = z.input<typeof lancamentoSchema>;
+
+/* ==========================================================================
+   A PLATAFORMA: EVENTOS E COLABORADORES
+   ========================================================================== */
+
+/**
+ * O endereço do evento. Vira parte da URL (/leaderboard?evento=...), então
+ * aceita só o que sobrevive a um link: minúsculas, números e hífen.
+ *
+ * A mesma regra existe em athx_clonar_evento, no banco. Duplicada de
+ * propósito: aqui para a pessoa receber o erro antes de enviar o formulário,
+ * lá para ninguém contornar a tela.
+ */
+export const eventoSchema = z.object({
+  nome: z.string().trim().min(3, 'Dê um nome ao evento').max(120),
+  slug: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(3)
+    .max(60)
+    .regex(
+      /^[a-z0-9]+(-[a-z0-9]+)*$/,
+      'Use só letras minúsculas, números e hífen — por exemplo nacao-hibrida-marco',
+    ),
+  data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Informe a data do evento'),
+  /** De qual evento copiar as regras. null = começar em branco. */
+  copiarDe: z.string().uuid().nullable(),
+});
+
+export const colaboradorSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(5)
+    .max(160)
+    .email('Isso não parece um e-mail'),
+  nome: z.string().trim().max(120).nullable(),
+});
+
+export type EventoInput = z.input<typeof eventoSchema>;
+export type ColaboradorInput = z.input<typeof colaboradorSchema>;

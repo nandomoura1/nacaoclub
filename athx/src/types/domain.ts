@@ -1,5 +1,5 @@
 /**
- * NAÇÃO ATHX — modelo de domínio.
+ * NAÇÃO HÍBRIDA — modelo de domínio.
  * Estes tipos espelham exatamente as tabelas do Supabase (supabase/migrations).
  */
 
@@ -50,11 +50,20 @@ export type Battery = number;
  * da tabela `wods`, criada em /admin/wods — ver src/types/wod.ts.
  */
 
+/**
+ * DRAFT    em montagem — existe, mas não é o que o público vê
+ * LIVE     no ar. Só um evento por vez, garantido por índice no banco
+ * FINISHED arquivado. Continua inteiro e consultável; nada é apagado
+ */
+export type EventStatus = 'DRAFT' | 'LIVE' | 'FINISHED';
+
 export interface EventInfo {
   id: string;
+  /** Endereço do evento. Identifica a etapa em links e na troca de contexto. */
+  slug: string;
   name: string;
   date: string;
-  status: 'DRAFT' | 'LIVE' | 'FINISHED';
+  status: EventStatus;
   liveMode: boolean;
   maintenanceMode: boolean;
 }

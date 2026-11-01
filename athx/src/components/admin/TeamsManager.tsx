@@ -29,7 +29,8 @@ interface FormState {
   category: Category;
   athlete1: string;
   athlete2: string;
-  battery: '1' | '2';
+  /** Texto porque vem de um <select>; o servidor converte. */
+  battery: string;
   status: TeamStatus;
 }
 
@@ -75,7 +76,7 @@ export function TeamsManager({ snapshot }: { snapshot: Snapshot }) {
       category: team.category,
       athlete1: team.athlete1,
       athlete2: team.athlete2,
-      battery: team.battery === 2 ? '2' : '1',
+      battery: String(team.battery),
       status: team.status,
     });
 
@@ -250,10 +251,16 @@ export function TeamsManager({ snapshot }: { snapshot: Snapshot }) {
               <Select
                 label="Bateria"
                 value={form.battery}
-                onChange={(e) => setForm({ ...form, battery: e.target.value as '1' | '2' })}
+                onChange={(e) => setForm({ ...form, battery: e.target.value })}
               >
-                <option value="1">Bateria 1</option>
-                <option value="2">Bateria 2</option>
+                {/* Quantas baterias existem é do evento (Configurações),
+                    não do código. Antes eram duas, fixas: uma etapa com três
+                    baterias não conseguia inscrever ninguém na terceira. */}
+                {Array.from({ length: Math.max(1, snapshot.settings.baterias) }, (_, i) => (
+                  <option key={i + 1} value={String(i + 1)}>
+                    Bateria {i + 1}
+                  </option>
+                ))}
               </Select>
             </div>
 

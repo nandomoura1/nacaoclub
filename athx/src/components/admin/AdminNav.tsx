@@ -11,6 +11,8 @@ const FIXOS: readonly { href: string; label: string; exact?: boolean }[] = [
 const FINAIS: readonly { href: string; label: string; exact?: boolean }[] = [
   { href: '/admin/results', label: 'Conferência' },
   { href: '/admin/wods', label: 'WODs' },
+  { href: '/admin/eventos', label: 'Eventos' },
+  { href: '/admin/equipe', label: 'Equipe' },
   { href: '/admin/settings', label: 'Configurações' },
 ];
 

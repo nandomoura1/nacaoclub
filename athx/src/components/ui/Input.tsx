@@ -87,8 +87,8 @@ export const ScoreInput = forwardRef<
 
 export const Select = forwardRef<
   HTMLSelectElement,
-  SelectHTMLAttributes<HTMLSelectElement> & { label?: string; children: ReactNode }
->(function Select({ label, className = '', id, children, ...props }, ref) {
+  SelectHTMLAttributes<HTMLSelectElement> & { label?: string; hint?: string; children: ReactNode }
+>(function Select({ label, hint, className = '', id, children, ...props }, ref) {
   const auto = useId();
   const fieldId = id ?? auto;
 
@@ -105,6 +105,7 @@ export const Select = forwardRef<
       <select
         ref={ref}
         id={fieldId}
+        aria-describedby={hint ? `${fieldId}-hint` : undefined}
         className={`${FIELD} h-11 appearance-none bg-[length:14px] bg-[right_0.85rem_center] bg-no-repeat pr-9 ${className}`}
         style={{
           backgroundImage:
@@ -114,6 +115,11 @@ export const Select = forwardRef<
       >
         {children}
       </select>
+      {hint ? (
+        <p id={`${fieldId}-hint`} className="mt-1 text-xs text-white/45">
+          {hint}
+        </p>
+      ) : null}
     </div>
   );
 });

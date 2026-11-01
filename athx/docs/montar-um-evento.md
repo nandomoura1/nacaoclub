@@ -1,9 +1,53 @@
 # Montar um evento novo
 
-O Nação ATHX deixou de ser um app de uma etapa só. Os workouts, as provas, a
-programação e o número de baterias são **dados cadastrados**, não código — a
-organização monta a próxima etapa em `/admin/wods`, sem deploy e sem
-programador.
+O Nação Híbrida é uma plataforma, não o app de uma etapa só. Cada etapa é um
+**evento** independente, com as próprias duplas e os próprios resultados — e
+uma etapa nova pode nascer **copiando as regras** da anterior.
+
+O caminho mais curto: `/admin/eventos` → **Novo evento** → escolha de qual
+copiar as regras. Pronto, o regulamento inteiro vem junto e você só cadastra
+as inscrições.
+
+---
+
+## 0. O ciclo de uma etapa
+
+| Estado | O que significa |
+|---|---|
+| **Em montagem** | existe, você está cadastrando. O público não vê |
+| **No ar** | é o que aparece no leaderboard público. **Só um por vez** |
+| **Arquivado** | saiu do ar. Continua inteiro e consultável — nada é apagado |
+
+Três ideias que é fácil confundir:
+
+- **No ar** é o que o público vê.
+- **Em edição** é o que *você* está mexendo. Pode ser outro: montar março
+  enquanto setembro ainda roda é o caso normal. A faixa no topo de
+  `/admin/eventos` avisa quando os dois são diferentes.
+- **Arquivar não apaga.** Os resultados de setembro ficam em
+  `/leaderboard?evento=<endereço>` para sempre.
+
+### Criar a etapa copiando a anterior
+
+`/admin/eventos` → **Novo evento**
+
+| Campo | Para que serve |
+|---|---|
+| **Nome** | aparece no cabeçalho e na súmula |
+| **Endereço** | vira o link (`/leaderboard?evento=nacao-hibrida-marco`) |
+| **Data** | dia da competição |
+| **Copiar as regras de** | de qual evento herdar o regulamento |
+
+**O que é copiado:** configurações (critérios de desempate, política de CAP,
+número de baterias), WODs, prescrição em blocos, provas e a programação do dia.
+
+**O que NÃO é copiado:** duplas, homologações e lançamentos. A etapa nasce
+limpa — com o regulamento pronto e nenhum resultado contaminando a
+classificação.
+
+Depois: cadastre as duplas em `/admin/teams`, ajuste o que mudou nos WODs, e
+clique em **Colocar no ar** quando for a hora. O evento anterior é arquivado
+sozinho, na mesma operação.
 
 ---
 
@@ -93,3 +137,55 @@ entre si e sinalizados. As regras pendentes aparecem **declaradas** na página
 do WOD.
 
 É deliberado: um placar que chuta é pior do que um placar que pergunta.
+
+---
+
+## A súmula do árbitro
+
+`/admin/wod/<número>` → **Súmula do árbitro**, ou direto em
+`/admin/wod/<número>/sumula`.
+
+Uma folha **por bateria**, com a prescrição do workout impressa, as duplas
+daquela bateria, os nomes dos atletas e um campo por prova.
+
+Serve a dois momentos, e é o mesmo documento nos dois:
+
+- **Na prancheta** — imprima antes da bateria. Os campos saem vazios, o juiz
+  escreve à mão à beira do equipamento, onde não há tablet nem sinal.
+- **Na tela** — os mesmos campos são editáveis e salvam direto na plataforma,
+  em **Salvar na plataforma**.
+
+Se já houver resultado lançado, ele aparece nos campos. Então a folha impressa
+*depois* do lançamento vira documento de conferência: o juiz confere, a dupla
+assina de acordo, e aquilo encerra a discussão.
+
+No seletor, **Todas as baterias** imprime um bloco por bateria, uma folha
+cada — para distribuir entre os juízes de uma vez.
+
+---
+
+## Quem pode administrar
+
+`/admin/equipe`
+
+A organização **autoriza um e-mail**. A pessoa abre `/login`, clica em
+**Primeiro acesso — criar minha senha** e escolhe a senha dela.
+
+Por que assim: criar a conta de outra pessoa exigiria guardar a chave mestra
+do banco na Vercel — uma chave que dá poder total sobre tudo. Trocar isso por
+economizar um passo de cadastro seria péssimo negócio (§35). E ninguém precisa
+digitar a senha de ninguém.
+
+A coluna de selo mostra em que pé está cada um:
+
+| Selo | O que significa |
+|---|---|
+| **Acesso ativo** | já criou a conta e consegue entrar |
+| **Aguardando 1º acesso** | autorizado, mas ainda não criou a senha |
+
+Se alguém diz que não consegue entrar, olhe aqui primeiro — e confira se o
+e-mail autorizado é **exatamente** o que a pessoa está digitando.
+
+> Criar conta sozinho não dá acesso a nada. Quem decide é o e-mail autorizado,
+> verificado no Postgres a cada gravação. Uma conta de alguém de fora enxerga
+> o mesmo que o público já enxerga.

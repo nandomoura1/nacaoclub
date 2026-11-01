@@ -20,12 +20,12 @@ export function SiteHeader() {
   return (
     <header className="no-print sticky top-0 z-40 border-b border-white/[0.08] bg-nacao-abyss/88 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-        <Link href="/" className="flex items-center gap-3" aria-label="NAÇÃO ATHX — início">
+        <Link href="/" className="flex items-center gap-3" aria-label="NAÇÃO HÍBRIDA — início">
           <BrandLogo size="sm" />
           <span className="hidden h-7 w-px bg-white/15 sm:block" aria-hidden="true" />
           <span className="hidden sm:block">
             <span className="block font-display text-sm font-extrabold tracking-tight text-white">
-              NAÇÃO ATHX
+              NAÇÃO HÍBRIDA
             </span>
             <span className="block font-display text-[8px] font-bold tracking-kicker text-nacao-cyan uppercase">
               Live Leaderboard

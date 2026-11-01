@@ -1,8 +1,8 @@
 {
-  "name": "nacao-athx",
+  "name": "nacao-hibrida",
   "version": "1.0.0",
   "private": true,
-  "description": "NAÇÃO ATHX — Live Leaderboard · Nação Celebration (Setembro Amarelo)",
+  "description": "NAÇÃO HÍBRIDA — Live Leaderboard · Nação Celebration (Setembro Amarelo)",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

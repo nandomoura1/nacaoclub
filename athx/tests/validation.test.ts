@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   agendaSchema,
+  colaboradorSchema,
+  eventoSchema,
   lancamentoSchema,
   provaSchema,
   settingsSchema,
@@ -219,5 +221,72 @@ describe('Programação', () => {
         destaque: false,
       }).success,
     ).toBe(true);
+  });
+});
+
+describe('Cadastro de evento', () => {
+  const base = {
+    nome: 'Nação Híbrida — Etapa Março',
+    slug: 'nacao-hibrida-marco',
+    data: '2027-03-14',
+    copiarDe: UUID,
+  };
+
+  it('aceita um evento clonando outro', () => {
+    expect(eventoSchema.safeParse(base).success).toBe(true);
+  });
+
+  it('aceita um evento começando em branco', () => {
+    expect(eventoSchema.safeParse({ ...base, copiarDe: null }).success).toBe(true);
+  });
+
+  // O endereço vira parte de uma URL. O que não sobrevive a um link é
+  // recusado aqui, antes de a pessoa enviar o formulário.
+  it('recusa endereço que não sobrevive a um link', () => {
+    for (const slug of ['Etapa Março', 'etapa_marco', 'etapa/marco', '-marco', 'marco-', 'a']) {
+      expect(eventoSchema.safeParse({ ...base, slug }).success, slug).toBe(false);
+    }
+  });
+
+  // Maiúscula não é erro, é descuido: o endereço é normalizado em vez de
+  // devolver uma reclamação. A função athx_clonar_evento faz o mesmo
+  // lower() no banco, então os dois lados concordam.
+  it('normaliza maiúsculas em vez de recusar', () => {
+    const r = eventoSchema.parse({ ...base, slug: 'ETAPA-Marco' });
+    expect(r.slug).toBe('etapa-marco');
+  });
+
+  it('aceita endereço com número e hífen', () => {
+    for (const slug of ['etapa-2027', 'marco', 'nacao-hibrida-3a-etapa']) {
+      expect(eventoSchema.safeParse({ ...base, slug }).success, slug).toBe(true);
+    }
+  });
+
+  it('exige nome de verdade', () => {
+    expect(eventoSchema.safeParse({ ...base, nome: 'ab' }).success).toBe(false);
+    expect(eventoSchema.safeParse({ ...base, nome: '   ' }).success).toBe(false);
+  });
+
+  it('exige data no formato do banco', () => {
+    expect(eventoSchema.safeParse({ ...base, data: '14/03/2027' }).success).toBe(false);
+    expect(eventoSchema.safeParse({ ...base, data: '2027-03-14' }).success).toBe(true);
+  });
+});
+
+describe('Autorização de colaborador', () => {
+  it('guarda o e-mail em minúsculas, para bater com o do login', () => {
+    const r = colaboradorSchema.parse({ email: '  Juiz@NacaoClub.com.BR ', nome: ' Juiz ' });
+    expect(r.email).toBe('juiz@nacaoclub.com.br');
+    expect(r.nome).toBe('Juiz');
+  });
+
+  it('recusa o que não é e-mail', () => {
+    for (const email of ['juiz', 'juiz@', '@nacaoclub.com.br', 'juiz nacaoclub.com.br']) {
+      expect(colaboradorSchema.safeParse({ email, nome: null }).success, email).toBe(false);
+    }
+  });
+
+  it('nome é opcional', () => {
+    expect(colaboradorSchema.safeParse({ email: 'a@b.com.br', nome: null }).success).toBe(true);
   });
 });

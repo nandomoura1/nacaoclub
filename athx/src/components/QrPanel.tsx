@@ -34,7 +34,7 @@ export function QrPanel({ target }: { target: string }) {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const link = document.createElement('a');
-    link.download = 'nacao-athx-leaderboard-qrcode.png';
+    link.download = 'nacao-hibrida-leaderboard-qrcode.png';
     link.href = canvas.toDataURL('image/png');
     link.click();
   };

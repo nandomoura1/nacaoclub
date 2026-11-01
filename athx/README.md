@@ -1,4 +1,4 @@
-# NAÇÃO ATHX — LIVE LEADERBOARD
+# NAÇÃO HÍBRIDA — LIVE LEADERBOARD
 
 **Nação Celebration · Etapa Setembro Amarelo · 12 de setembro · Nação Club, Brasília**
 

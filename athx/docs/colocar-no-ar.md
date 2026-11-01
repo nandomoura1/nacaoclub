@@ -1,4 +1,4 @@
-# Colocar o NAÇÃO ATHX no ar
+# Colocar o NAÇÃO HÍBRIDA no ar
 
 Guia direto, do zero até você lançando resultados de verdade.
 **Tempo: ~20 minutos.** Tudo em plano gratuito.
@@ -14,7 +14,7 @@ São duas contas: **Supabase** (guarda os dados) e **Vercel** (hospeda o site).
 1. Entre em **[supabase.com](https://supabase.com)** → *Start your project*
 2. Login com GitHub ou e-mail
 3. **New project**
-   - **Name:** `nacao-athx`
+   - **Name:** `nacao-hibrida`
    - **Database Password:** clique em *Generate a password* e **guarde essa senha**
    - **Region:** `South America (São Paulo)` — o mais perto de Brasília
 4. **Create new project** e espere ~2 minutos
@@ -30,7 +30,7 @@ São duas contas: **Supabase** (guarda os dados) e **Vercel** (hospeda o site).
 Deve aparecer, no rodapé:
 
 ```
-NAÇÃO ATHX — banco instalado com sucesso
+NAÇÃO HÍBRIDA — banco instalado com sucesso
 Duplas cadastradas: 20
 ```
 
@@ -139,7 +139,7 @@ quatro:
 | `NEXT_PUBLIC_DEMO_MODE` | `false` |
 | `NEXT_PUBLIC_SUPABASE_URL` | o *Project URL* do passo 1.5 |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | a chave *anon public* do passo 1.5 |
-| `NEXT_PUBLIC_SITE_URL` | deixe `https://nacao-athx.vercel.app` por enquanto |
+| `NEXT_PUBLIC_SITE_URL` | deixe `https://nacao-hibrida.vercel.app` por enquanto |
 
 > `NEXT_PUBLIC_DEMO_MODE=false` é o que liga os dados reais. Se ficar `true`,
 > o site mostra as 20 duplas fictícias e o painel fica em somente leitura.
@@ -147,7 +147,7 @@ quatro:
 ### 2.4 Deploy
 
 **Deploy** e espere ~2 minutos. A Vercel te dá um endereço parecido com
-`https://nacao-athx.vercel.app`.
+`https://nacao-hibrida.vercel.app`.
 
 ### 2.5 Acertar o endereço do QR Code
 

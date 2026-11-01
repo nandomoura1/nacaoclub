@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
 
     const rows = buildExportRows(board);
     const data = new Date().toISOString().slice(0, 10);
-    const base = `nacao-athx-resultados-${data}`;
+    const base = `nacao-hibrida-resultados-${data}`;
 
     if (formato === 'json') {
       return NextResponse.json(

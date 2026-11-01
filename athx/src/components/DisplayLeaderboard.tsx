@@ -90,7 +90,7 @@ export function DisplayLeaderboard({ initial }: { initial: Snapshot }) {
           <span className="h-[5vh] w-px bg-white/20" aria-hidden="true" />
           <div>
             <h1 className="font-display text-[3.2vw] leading-none font-black tracking-[-0.03em]">
-              NAÇÃO <span className="text-nacao-cyan">ATHX</span>
+              NAÇÃO <span className="text-nacao-cyan">HÍBRIDA</span>
             </h1>
             <p className="mt-[0.4vh] font-display text-[0.85vw] font-bold tracking-signature text-nacao-cyan uppercase">
               {categoriaAtual ? CATEGORY_LABEL[categoriaAtual] : 'Classificação por categoria'}

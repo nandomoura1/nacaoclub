@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { EVENT_SLUG, IS_DEMO } from '@/lib/env';
+import { IS_DEMO } from '@/lib/env';
 import { getServerSupabase } from '@/lib/supabase/server';
 import {
   DEMO_AGENDA,
@@ -208,24 +208,42 @@ function demoSnapshot(): Snapshot {
 }
 
 /**
- * Busca o estado completo do evento.
- * Em modo demo devolve os dados fictícios sem tocar em rede.
+ * Busca o estado completo de UM evento.
+ *
+ * Sem `slug`, pega o evento no ar — a função athx_evento_atual() no banco
+ * decide qual é, e ela é a única dona dessa regra. Perguntar ao banco em vez
+ * de repetir a regra aqui evita que as duas respostas divirjam no dia em que
+ * alguém mudar uma delas.
+ *
+ * Com `slug`, pega aquele evento: é assim que a organização edita a etapa de
+ * março enquanto a de setembro continua no ar, e é assim que o público abre
+ * um evento arquivado.
  */
-export async function getSnapshot(): Promise<Snapshot> {
+export async function getSnapshot(opts: { slug?: string | null } = {}): Promise<Snapshot> {
   if (IS_DEMO) return demoSnapshot();
 
   const supabase = await getServerSupabase();
+  const pedido = opts.slug?.trim() || null;
 
-  const { data: event, error: eventError } = await supabase
-    .from('events')
-    .select('id, name, date, status')
-    .eq('slug', EVENT_SLUG)
-    .maybeSingle();
+  const consulta = supabase.from('events').select('id, slug, name, date, status');
+
+  const { data: event, error: eventError } = pedido
+    ? await consulta.eq('slug', pedido).maybeSingle()
+    : await (async () => {
+        const { data: id } = await supabase.rpc('athx_evento_atual');
+        if (!id) return { data: null, error: null };
+        return consulta.eq('id', id as string).maybeSingle();
+      })();
 
   if (eventError || !event) {
     throw new Error(
-      `Evento "${EVENT_SLUG}" não encontrado no Supabase. Rode supabase/seed.sql. ` +
-        (eventError?.message ?? ''),
+      pedido
+        ? `Evento "${pedido}" não existe. Veja a lista em /admin/eventos. ` +
+          (eventError?.message ?? '')
+        : 'Nenhum evento cadastrado no Supabase. Crie o primeiro em /admin/eventos, ' +
+          `ou rode supabase/seed.sql para começar com a etapa de setembro. ${
+            eventError?.message ?? ''
+          }`,
     );
   }
 
@@ -299,6 +317,7 @@ export async function getSnapshot(): Promise<Snapshot> {
   return {
     event: {
       id: event.id,
+      slug: event.slug,
       name: event.name,
       date: event.date,
       status: event.status,

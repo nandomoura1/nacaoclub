@@ -27,7 +27,7 @@ export default function LoginPage() {
               Área da organização
             </h1>
             <p className="mt-1 font-display text-[10px] font-bold tracking-signature text-nacao-cyan uppercase">
-              Nação ATHX
+              Nação Híbrida
             </p>
           </div>
         </div>

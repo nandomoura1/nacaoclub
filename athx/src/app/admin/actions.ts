@@ -2,10 +2,14 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { EVENT_SLUG, IS_DEMO } from '@/lib/env';
+import { IS_DEMO } from '@/lib/env';
+import { COOKIE_EVENTO, slugEmEdicao } from '@/services/event-context';
 import { getServerSupabase } from '@/lib/supabase/server';
+import { cookies } from 'next/headers';
 import {
   agendaSchema,
+  colaboradorSchema,
+  eventoSchema,
   lancamentoSchema,
   provaSchema,
   settingsSchema,
@@ -45,17 +49,29 @@ async function requireAdmin() {
   const { data: isAdmin } = await supabase.rpc('athx_is_admin');
   if (isAdmin !== true) {
     throw new Error(
-      'Sua conta não está em admin_users. Peça para a organização liberar o acesso.',
+      'Sua conta existe, mas este e-mail não está autorizado a administrar. ' +
+        'Peça para alguém da organização liberar o acesso em Equipe — e confira se o e-mail é exatamente o mesmo.',
     );
   }
 
-  const { data: event } = await supabase
-    .from('events')
-    .select('id')
-    .eq('slug', EVENT_SLUG)
-    .maybeSingle();
+  // O evento em que a organização está trabalhando — que pode não ser o que
+  // está no ar. Montar a etapa de março enquanto setembro roda é o caso
+  // normal, então toda escrita usa ESTE evento, nunca o do público.
+  const slug = await slugEmEdicao();
 
-  if (!event) throw new Error(`Evento "${EVENT_SLUG}" não encontrado. Rode supabase/seed.sql.`);
+  const { data: event } = slug
+    ? await supabase.from('events').select('id').eq('slug', slug).maybeSingle()
+    : await (async () => {
+        const { data: id } = await supabase.rpc('athx_evento_atual');
+        if (!id) return { data: null };
+        return supabase.from('events').select('id').eq('id', id as string).maybeSingle();
+      })();
+
+  if (!event) {
+    throw new Error(
+      'Nenhum evento selecionado. Escolha um em /admin/eventos — ou crie o primeiro lá.',
+    );
+  }
 
   return { supabase, user, eventId: event.id as string };
 }
@@ -90,7 +106,16 @@ function fail(error: unknown): ActionResult {
 }
 
 function revalidateTudo() {
-  for (const path of ['/', '/leaderboard', '/display', '/admin', '/admin/results']) {
+  for (const path of [
+    '/',
+    '/leaderboard',
+    '/display',
+    '/schedule',
+    '/admin',
+    '/admin/results',
+    '/admin/eventos',
+    '/admin/equipe',
+  ]) {
     revalidatePath(path);
   }
 }
@@ -572,6 +597,200 @@ export async function salvarAgenda(itens: unknown[]): Promise<ActionResult> {
 
     revalidateTudo();
     return { ok: true, message: `Programação salva (${dados.length} momentos).` };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+/* ==========================================================================
+   EVENTOS — a plataforma
+   ==========================================================================
+   Criar, clonar, colocar no ar e arquivar. Toda a regra pesada mora em
+   funções do Postgres (athx_clonar_evento, athx_ativar_evento), e não aqui:
+   assim quem rodar o SQL na mão obtém o mesmo resultado que a tela, e a
+   checagem de permissão acontece no banco, não só na interface.
+   ========================================================================== */
+
+/**
+ * Cria um evento, opcionalmente copiando as regras de outro.
+ *
+ * O que é copiado: configurações, WODs, prescrição, provas e programação.
+ * O que NÃO é: duplas, homologações e lançamentos — a etapa nova nasce
+ * limpa, com o regulamento pronto.
+ */
+export async function criarEvento(input: unknown): Promise<ActionResult> {
+  if (IS_DEMO) return DEMO_BLOCK;
+
+  try {
+    const dados = eventoSchema.parse(input);
+    const { supabase } = await requireAdmin();
+
+    const { error } = await supabase.rpc('athx_clonar_evento', {
+      p_origem: dados.copiarDe,
+      p_nome: dados.nome,
+      p_slug: dados.slug,
+      p_data: dados.data,
+    });
+
+    if (error) throw new Error(error.message);
+
+    // Quem acabou de criar quer trabalhar nele. Já troca o contexto para
+    // evitar o erro clássico de cadastrar as duplas no evento anterior.
+    (await cookies()).set(COOKIE_EVENTO, dados.slug, {
+      httpOnly: true,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 365,
+    });
+
+    revalidateTudo();
+    return {
+      ok: true,
+      message: dados.copiarDe
+        ? `Evento "${dados.nome}" criado com as regras do anterior. Agora cadastre as duplas.`
+        : `Evento "${dados.nome}" criado em branco. Comece cadastrando os WODs.`,
+    };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+/** Coloca o evento no ar. O que estava no ar é arquivado na mesma transação. */
+export async function ativarEvento(eventId: string): Promise<ActionResult> {
+  if (IS_DEMO) return DEMO_BLOCK;
+
+  try {
+    const { supabase } = await requireAdmin();
+    const { error } = await supabase.rpc('athx_ativar_evento', { p_event: eventId });
+    if (error) throw new Error(error.message);
+
+    revalidateTudo();
+    return { ok: true, message: 'Evento no ar. É o que o público vê agora.' };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+/**
+ * Arquiva o evento.
+ *
+ * Arquivar NÃO apaga nada: o evento, as duplas, os lançamentos e a
+ * classificação continuam inteiros e consultáveis. Só sai do ar.
+ */
+export async function arquivarEvento(eventId: string): Promise<ActionResult> {
+  if (IS_DEMO) return DEMO_BLOCK;
+
+  try {
+    const { supabase } = await requireAdmin();
+    const { error } = await supabase.rpc('athx_arquivar_evento', { p_event: eventId });
+    if (error) throw new Error(error.message);
+
+    revalidateTudo();
+    return {
+      ok: true,
+      message: 'Evento arquivado. Os resultados continuam guardados e consultáveis.',
+    };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+/**
+ * Escolhe em qual evento a organização vai trabalhar.
+ *
+ * Não muda nada no banco — muda apenas o que as telas de admin editam. É o
+ * que permite montar março sem encostar em setembro.
+ */
+export async function editarEvento(slug: string): Promise<ActionResult> {
+  if (IS_DEMO) return DEMO_BLOCK;
+
+  try {
+    const { supabase } = await requireAdmin();
+
+    const { data: evento } = await supabase
+      .from('events')
+      .select('name')
+      .eq('slug', slug)
+      .maybeSingle();
+
+    if (!evento) throw new Error('Esse evento não existe mais.');
+
+    (await cookies()).set(COOKIE_EVENTO, slug, {
+      httpOnly: true,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 365,
+    });
+
+    revalidateTudo();
+    return {
+      ok: true,
+      message: `Agora você está editando "${evento.name}". As telas de lançamento passaram a apontar para ele.`,
+    };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+/* ==========================================================================
+   COLABORADORES DA ORGANIZAÇÃO
+   ==========================================================================
+   A organização autoriza um E-MAIL. A pessoa entra em /login, cria a própria
+   senha e já tem acesso — athx_is_admin() aceita quem está na lista.
+
+   Por que não criar o login aqui: criar usuário exige a chave de serviço do
+   Supabase, que dá poder total sobre o banco. Deixá-la na Vercel para
+   economizar um passo de cadastro seria trocar segurança por conveniência
+   (§35). Além disso, ninguém precisa digitar a senha de outra pessoa.
+   ========================================================================== */
+
+export async function autorizarColaborador(input: unknown): Promise<ActionResult> {
+  if (IS_DEMO) return DEMO_BLOCK;
+
+  try {
+    const dados = colaboradorSchema.parse(input);
+    const { supabase, user } = await requireAdmin();
+
+    const { error } = await supabase.from('admin_emails').upsert(
+      {
+        email: dados.email,
+        nome: dados.nome,
+        criado_por: user.id,
+      },
+      { onConflict: 'email' },
+    );
+
+    if (error) throw new Error(error.message);
+
+    revalidateTudo();
+    return {
+      ok: true,
+      message: `${dados.email} autorizado. Peça para a pessoa entrar em /login e criar a senha dela — o acesso já estará valendo.`,
+    };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function removerColaborador(email: string): Promise<ActionResult> {
+  if (IS_DEMO) return DEMO_BLOCK;
+
+  try {
+    const { supabase, user } = await requireAdmin();
+
+    // Tirar o próprio acesso tranca a organização fora do sistema, e o
+    // caminho de volta é rodar SQL na mão. Barrado aqui.
+    if (user.email && user.email.toLowerCase() === email.toLowerCase()) {
+      throw new Error(
+        'Você não pode remover o seu próprio acesso. Peça para outra pessoa da organização fazer isso.',
+      );
+    }
+
+    const { error } = await supabase.from('admin_emails').delete().eq('email', email.toLowerCase());
+    if (error) throw new Error(error.message);
+
+    revalidateTudo();
+    return { ok: true, message: `Acesso de ${email} removido.` };
   } catch (error) {
     return fail(error);
   }
