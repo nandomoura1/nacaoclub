@@ -313,35 +313,49 @@ h1, h2, h3, h4 {
   /* ---------------------------------------------------------------------
      A SÚMULA DO ÁRBITRO
 
-     Uma bateria por folha: o juiz do equipamento leva a dele e mais nada.
-     Duas baterias na mesma página significaria rasgar papel no meio do
-     evento para dividir entre dois juízes.
+     Uma DUPLA por folha: o juiz atende uma de cada vez, com a prancheta
+     dela na mão. Duas duplas na mesma página significaria rasgar papel no
+     meio do evento.
      --------------------------------------------------------------------- */
   .sumula-folha {
     break-after: page;
+    page-break-after: always; /* navegadores antigos ainda pedem a forma velha */
+    break-inside: auto;
     border: none !important;
     padding: 0 !important;
+    /* A margem entre folhas vem do espaçamento da tela. No papel ela empurra
+       o conteúdo e faz a próxima folha aparecer como um resto no rodapé. */
+    margin: 0 !important;
   }
-  .sumula-folha:last-of-type { break-after: auto; }
+  .sumula-folha:last-of-type {
+    break-after: auto;
+    page-break-after: auto;
+  }
 
-  /* O campo precisa IMPRIMIR como campo — uma caixa onde caiba caneta.
-     A regra global acima zera fundos e bordas de tudo; sem esta exceção a
-     súmula sairia com os valores soltos no branco, sem onde escrever. */
-  .sumula-folha input[type='text'] {
+  /* As tabelas da súmula são formulário, não listagem: a grade inteira
+     precisa aparecer para o juiz saber onde escrever. A regra global zera
+     fundos e bordas de tudo, então aqui elas voltam. */
+  .sumula-folha th,
+  .sumula-folha td {
     border: 1px solid #555 !important;
+    padding: 4px 6px !important;
+  }
+
+  /* O campo precisa IMPRIMIR como campo — uma caixa onde caiba caneta. */
+  .sumula-folha input[type='text'] {
+    border: 1px solid #777 !important;
     border-radius: 2px;
-    min-height: 8mm;
-    min-width: 18mm;
+    min-height: 7mm;
+    min-width: 16mm;
     font-size: 11pt !important;
     font-weight: 700;
   }
 
-  /* O nome do atleta é texto corrido, não placar: a regra acima deixaria
-     em negrito e do tamanho de um número de carga. */
+  /* O nome do atleta é texto corrido, não placar. */
   .sumula-folha input.sumula-nome {
     font-weight: 400;
-    font-size: 9.5pt !important;
-    min-width: 34mm;
+    font-size: 10pt !important;
+    width: 100% !important;
     text-align: left;
   }
 
@@ -349,13 +363,26 @@ h1, h2, h3, h4 {
     -webkit-appearance: none;
     appearance: none;
     border: 1px solid #555 !important;
-    width: 6mm;
-    height: 6mm;
+    width: 5mm;
+    height: 5mm;
     border-radius: 2px;
   }
 
-  /* Linha de assinatura: tracejado some na impressão clara, então vira
-     linha contínua preta. */
+  /* A caixa de observações é o espaço em branco onde o juiz escreve o
+     no-rep. Sem altura mínima ela imprimiria como uma linha. */
+  .sumula-folha .sumula-obs {
+    border: 1px solid #555 !important;
+    min-height: 18mm;
+    width: 100%;
+    font-size: 10pt !important;
+  }
+
+  /* No papel não há rolagem: a largura mínima que salva o celular viraria
+     uma tabela cortada na folha. */
+  .sumula-rolagem { overflow: visible !important; }
+  .sumula-rolagem > table { min-width: 0 !important; }
+
+  /* Linha de assinatura: tracejado some na impressão clara. */
   .sumula-folha .border-dashed {
     border-style: solid !important;
     border-color: #555 !important;

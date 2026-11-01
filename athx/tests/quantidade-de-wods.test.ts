@@ -60,6 +60,7 @@ function homologar(wods: readonly Wod[], teamIds: readonly string[]): WodEntry[]
       status: 'PUBLISHED' as const,
       concluiu: true,
       volume: null,
+      observacao: null,
     })),
   );
 }

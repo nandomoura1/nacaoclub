@@ -145,22 +145,43 @@ do WOD.
 `/admin/wod/<número>` → **Súmula do árbitro**, ou direto em
 `/admin/wod/<número>/sumula`.
 
-Uma folha **por bateria**, com a prescrição do workout impressa, as duplas
-daquela bateria, os nomes dos atletas e um campo por prova.
+**Uma folha por dupla, por WOD** — no formato da súmula de papel que a
+organização já usava. O juiz atende uma dupla de cada vez, com a prancheta
+dela na mão; uma tabela com as vinte duplas serviria à mesa de controle, não
+a quem está no equipamento.
 
-Serve a dois momentos, e é o mesmo documento nos dois:
+Cada folha traz:
+
+| Bloco | De onde vem |
+|---|---|
+| Cabeçalho | nome do evento, WOD, formato e CAP |
+| Identificação | bateria, dupla, categoria marcada, juiz, atletas |
+| Objetivo | o resumo do WOD |
+| Regras críticas | as regras do WOD |
+| Lançamento | uma linha por prova, com campo por atleta quando a prova é por atleta; a prova calculada mostra a soma |
+| Etapas | os blocos da prescrição, com alvo e caixa de concluído |
+| Controle final | só em WOD com CAP: concluiu? e volume final |
+| Observações | no-reps, penalidades, intercorrências — fica salvo no sistema |
+| Resultado oficial | colocação e pontos, calculados; em branco enquanto não há lançamento |
+| Assinaturas | juiz e os dois atletas |
+
+Serve a dois momentos, e é o mesmo documento:
 
 - **Na prancheta** — imprima antes da bateria. Os campos saem vazios, o juiz
   escreve à mão à beira do equipamento, onde não há tablet nem sinal.
-- **Na tela** — os mesmos campos são editáveis e salvam direto na plataforma,
-  em **Salvar na plataforma**.
+- **Na tela** — os mesmos campos são editáveis e salvam em **Salvar na
+  plataforma**. O juiz que preferir lançar pelo celular não precisa de papel.
 
-Se já houver resultado lançado, ele aparece nos campos. Então a folha impressa
-*depois* do lançamento vira documento de conferência: o juiz confere, a dupla
-assina de acordo, e aquilo encerra a discussão.
+Se já houver resultado lançado, ele aparece nos campos. A folha impressa
+*depois* vira documento de conferência: o juiz confere, a dupla assina de
+acordo, e aquilo encerra a discussão.
 
-No seletor, **Todas as baterias** imprime um bloco por bateria, uma folha
-cada — para distribuir entre os juízes de uma vez.
+No seletor, **Todas as baterias** gera as folhas de todo mundo de uma vez.
+A impressão sai em A4 retrato, uma dupla por página.
+
+> O campo **Juiz** do cabeçalho é uma linha para assinar no papel. Quem lança
+> pela tela já fica registrado na auditoria pelo login — não há dois lugares
+> dizendo quem foi.
 
 ---
 

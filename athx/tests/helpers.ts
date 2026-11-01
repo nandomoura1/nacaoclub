@@ -63,6 +63,7 @@ export function entry(
     status: 'PUBLISHED',
     concluiu: true,
     volume: null,
+    observacao: null,
     ...over,
   };
 }

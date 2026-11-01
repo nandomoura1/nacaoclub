@@ -382,6 +382,7 @@ export async function salvarLancamentos(
       team_id: l.teamId,
       concluiu: l.concluiu,
       volume: l.volume,
+      observacao: l.observacao ?? null,
       updated_by: user.id,
     }));
 

@@ -100,6 +100,7 @@ interface EntryRow {
   status: ResultStatus;
   concluiu: boolean | null;
   volume: number | string | null;
+  observacao: string | null;
 }
 
 interface ResultRow {
@@ -317,6 +318,7 @@ export async function getSnapshot(opts: { slug?: string | null } = {}): Promise<
     status: r.status,
     concluiu: r.concluiu ?? false,
     volume: num(r.volume),
+    observacao: r.observacao ?? null,
   }));
 
   const results: ProvaResult[] = ((resultsRes.data ?? []) as ResultRow[]).map((r) => ({

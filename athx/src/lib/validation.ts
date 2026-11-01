@@ -151,6 +151,8 @@ export const lancamentoSchema = z.object({
   teamId: z.string().uuid(),
   concluiu: z.boolean(),
   volume: numeroOpcional,
+  /** O campo OBSERVAÇÕES da súmula: no-reps, penalidades, intercorrências. */
+  observacao: z.string().trim().max(1000).nullable().optional(),
   valores: z.record(
     z.string().uuid(),
     z.object({

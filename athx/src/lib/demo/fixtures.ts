@@ -151,7 +151,7 @@ export const DEMO_RESULTS: ProvaResult[] = [];
   if (d3 && d4) cargas[3] = { ...d4, press: d3.press, squat: d3.squat, dead: d3.dead };
 
   for (const c of cargas) {
-    DEMO_ENTRIES.push({ wodId: wodId(1), teamId: c.teamId, status: 'PUBLISHED', concluiu: true, volume: null });
+    DEMO_ENTRIES.push({ wodId: wodId(1), teamId: c.teamId, status: 'PUBLISHED', concluiu: true, volume: null , observacao: null});
     push('1A', c.teamId, c.press[0], c.press[1], null);
     push('1B', c.teamId, c.squat[0], c.squat[1], null);
     push('1C', c.teamId, c.dead[0], c.dead[1], null);
@@ -159,7 +159,7 @@ export const DEMO_RESULTS: ProvaResult[] = [];
 
   // ---- WOD 2 · distâncias ----------------------------------------------
   for (const t of DEMO_TEAMS) {
-    DEMO_ENTRIES.push({ wodId: wodId(2), teamId: t.id, status: 'PUBLISHED', concluiu: true, volume: null });
+    DEMO_ENTRIES.push({ wodId: wodId(2), teamId: t.id, status: 'PUBLISHED', concluiu: true, volume: null , observacao: null});
     push('2A', t.id, null, null, (Math.floor(rnd() * 8) + 3) * 0.5);
     push('2B', t.id, null, null, Math.round((6 + rnd() * 6.5) * 100) / 100);
   }
@@ -168,7 +168,7 @@ export const DEMO_RESULTS: ProvaResult[] = [];
   DEMO_TEAMS.forEach((t, i) => {
     // Duplas 15 a 19: ainda sem lançamento -> a tela mostra "aguardando".
     if (i >= 14 && i <= 18) {
-      DEMO_ENTRIES.push({ wodId: wodId(3), teamId: t.id, status: 'DRAFT', concluiu: false, volume: null });
+      DEMO_ENTRIES.push({ wodId: wodId(3), teamId: t.id, status: 'DRAFT', concluiu: false, volume: null , observacao: null});
       push('3A', t.id, null, null, null);
       return;
     }
@@ -181,6 +181,7 @@ export const DEMO_RESULTS: ProvaResult[] = [];
         status: 'PUBLISHED',
         concluiu: false,
         volume: 420 + Math.round(rnd() * 180),
+        observacao: null,
       });
       push('3A', t.id, null, null, 1200);
       return;
@@ -188,7 +189,7 @@ export const DEMO_RESULTS: ProvaResult[] = [];
 
     // Empate proposital de tempo entre as duplas 07 e 08.
     const segundos = i === 7 || i === 6 ? 889 : 760 + Math.round(rnd() * 380);
-    DEMO_ENTRIES.push({ wodId: wodId(3), teamId: t.id, status: 'PUBLISHED', concluiu: true, volume: null });
+    DEMO_ENTRIES.push({ wodId: wodId(3), teamId: t.id, status: 'PUBLISHED', concluiu: true, volume: null , observacao: null});
     push('3A', t.id, null, null, segundos);
   });
 })();

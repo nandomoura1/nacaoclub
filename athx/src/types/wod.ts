@@ -163,6 +163,12 @@ export interface WodEntry {
   concluiu: boolean;
   /** Volume concluído dentro do CAP quando não concluiu. */
   volume: number | null;
+  /**
+   * O que o juiz anotou: no-reps, penalidades, o que não cabe num número.
+   * É o campo OBSERVAÇÕES da súmula de papel — sem ele, o que o juiz
+   * escreve na prancheta não tem para onde ir quando vira digital.
+   */
+  observacao: string | null;
 }
 
 /** O valor de uma dupla em uma prova. */

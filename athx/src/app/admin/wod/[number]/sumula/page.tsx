@@ -36,6 +36,11 @@ export default async function SumulaPage({
         <ArrowLeft size={14} /> Voltar ao lançamento do WOD {numero}
       </Link>
 
+      {/* A súmula é RETRATO; o resto do app imprime em paisagem (a tabela
+          do pódio precisa da largura). Como o @page é global, a folha de
+          estilo desta rota chega depois e vence — sem afetar as outras. */}
+      <style>{'@media print { @page { size: A4 portrait; margin: 10mm; } }'}</style>
+
       <Sumula snapshot={snapshot} wod={wod} />
     </div>
   );
