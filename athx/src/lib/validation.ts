@@ -249,3 +249,24 @@ export const edicaoDeEventoSchema = z.object({
 });
 
 export type EdicaoDeEventoInput = z.input<typeof edicaoDeEventoSchema>;
+
+/**
+ * Um patrocinador. A imagem NÃO passa por aqui — arquivo não é campo de
+ * formulário validável por schema; ela é conferida na ação, por tipo e
+ * tamanho, antes de subir.
+ */
+export const patrocinadorSchema = z.object({
+  id: z.string().uuid().nullable().optional(),
+  nome: z.string().trim().min(2, 'Dê o nome do parceiro').max(80),
+  site: z
+    .string()
+    .trim()
+    .max(300)
+    .nullable()
+    .refine((v) => !v || /^https?:\/\/.+/.test(v), 'O link precisa começar com https://'),
+  cota: z.string().trim().max(40).nullable(),
+  ordem: z.number().int().min(1).max(99),
+  ativo: z.boolean(),
+});
+
+export type PatrocinadorInput = z.input<typeof patrocinadorSchema>;

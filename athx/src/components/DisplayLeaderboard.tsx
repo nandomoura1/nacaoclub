@@ -7,6 +7,7 @@ import type { Snapshot } from '@/services/snapshot';
 import { leaderboardDoSnapshot } from '@/lib/scoring/build';
 import { standingsByCategory } from '@/lib/scoring/overall';
 import { useLiveSnapshot } from '@/hooks/useLiveSnapshot';
+import { Patrocinadores } from '@/components/Patrocinadores';
 import { BrandLogo } from '@/components/BrandLogo';
 import { WaveField, SkyGlow } from '@/components/WaveField';
 import { points, teamNumber } from '@/lib/format';
@@ -232,6 +233,15 @@ export function DisplayLeaderboard({ initial }: { initial: Snapshot }) {
             </tbody>
           </table>
         )}
+      </div>
+
+      {/* ---- Patrocinadores ----------------------------------------------
+          Acima do rodapé, em cor plena: o telão é o que o patrocinador
+          comprou de verdade — fica horas projetado num ginásio cheio. Aqui
+          não há o que poluir, a tela existe para ser olhada.
+          O componente não desenha nada quando não há parceiro ativo. */}
+      <div className="relative mb-[1.2vh]">
+        <Patrocinadores patrocinadores={snapshot.patrocinadores} variante="telao" />
       </div>
 
       {/* ---- Rodapé ------------------------------------------------------- */}

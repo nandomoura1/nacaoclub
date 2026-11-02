@@ -103,6 +103,16 @@ interface EntryRow {
   observacao: string | null;
 }
 
+interface PatrocinadorRow {
+  id: string;
+  nome: string;
+  logo_path: string;
+  site: string | null;
+  cota: string | null;
+  ordem: number;
+  ativo: boolean;
+}
+
 interface ResultRow {
   prova_id: string;
   team_id: string;
@@ -204,9 +214,55 @@ function demoSnapshot(): Snapshot {
     agenda: DEMO_AGENDA,
     entries: DEMO_ENTRIES,
     results: DEMO_RESULTS,
+    // Marcas claramente fictícias (§54): a faixa de parceiros só pode ser
+    // avaliada se houver algo nela, e usar marca real sem autorização não.
+    patrocinadores: [
+      {
+        id: 'demo-p1',
+        nome: 'Cerrado — parceiro fictício',
+        logoPath: 'parceiro-ficticio-1.png',
+        logoUrl: '/parceiro-ficticio-1.png',
+        site: 'https://exemplo.com.br',
+        cota: 'Master',
+        ordem: 1,
+        ativo: true,
+      },
+      {
+        id: 'demo-p2',
+        nome: 'Planalto — parceiro fictício',
+        logoPath: 'parceiro-ficticio-2.png',
+        logoUrl: '/parceiro-ficticio-2.png',
+        site: null,
+        cota: 'Apoio',
+        ordem: 2,
+        ativo: true,
+      },
+      {
+        id: 'demo-p3',
+        nome: 'Buriti — parceiro fictício',
+        logoPath: 'parceiro-ficticio-3.png',
+        logoUrl: '/parceiro-ficticio-3.png',
+        site: 'https://exemplo.com.br',
+        cota: 'Apoio',
+        ordem: 3,
+        ativo: true,
+      },
+    ],
     lastUpdate: new Date().toISOString(),
     demo: true,
   };
+}
+
+/**
+ * A URL pública de um arquivo do bucket.
+ *
+ * Montada aqui, e não guardada no banco: o caminho ("a-marca.png") é estável,
+ * a URL depende do projeto. Trocar de projeto Supabase, ou pôr um domínio
+ * próprio na frente, não deve exigir reescrever cada linha da tabela.
+ */
+function urlDoBucket(balde: string, caminho: string): string {
+  const base = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').replace(/\/+$/, '');
+  return `${base}/storage/v1/object/public/${balde}/${caminho}`;
 }
 
 /**
@@ -269,7 +325,17 @@ export async function getSnapshot(opts: { slug?: string | null } = {}): Promise<
     );
   }
 
-  const [settingsRes, teamsRes, wodsRes, blocosRes, provasRes, entriesRes, resultsRes, agendaRes] =
+  const [
+    settingsRes,
+    teamsRes,
+    wodsRes,
+    blocosRes,
+    provasRes,
+    entriesRes,
+    resultsRes,
+    agendaRes,
+    patrocinadoresRes,
+  ] =
     await Promise.all([
     supabase.from('event_settings').select('*').eq('event_id', event.id).maybeSingle(),
     supabase
@@ -283,6 +349,11 @@ export async function getSnapshot(opts: { slug?: string | null } = {}): Promise<
     supabase.from('wod_entries').select('*').eq('event_id', event.id),
     supabase.from('prova_results').select('*').eq('event_id', event.id),
     supabase.from('agenda').select('*').eq('event_id', event.id).order('ordem'),
+    supabase
+      .from('patrocinadores')
+      .select('*')
+      .eq('event_id', event.id)
+      .order('ordem'),
     ]);
 
   const s = settingsRes.data;
@@ -364,6 +435,16 @@ export async function getSnapshot(opts: { slug?: string | null } = {}): Promise<
     })),
     entries,
     results,
+    patrocinadores: ((patrocinadoresRes.data ?? []) as PatrocinadorRow[]).map((p) => ({
+      id: p.id,
+      nome: p.nome,
+      logoPath: p.logo_path,
+      logoUrl: urlDoBucket('patrocinadores', p.logo_path),
+      site: p.site,
+      cota: p.cota,
+      ordem: p.ordem,
+      ativo: p.ativo,
+    })),
     lastUpdate,
     demo: false,
   };

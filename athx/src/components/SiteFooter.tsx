@@ -1,9 +1,18 @@
 import Link from 'next/link';
 import { BrandLogo } from '@/components/BrandLogo';
-import type { EventInfo } from '@/types/domain';
+import type { EventInfo, Patrocinador } from '@/types/domain';
+import { Patrocinadores } from '@/components/Patrocinadores';
 import { dataCurta } from '@/lib/format';
 
-export function SiteFooter({ demo = false, evento }: { demo?: boolean; evento?: EventInfo }) {
+export function SiteFooter({
+  demo = false,
+  evento,
+  patrocinadores = [],
+}: {
+  demo?: boolean;
+  evento?: EventInfo;
+  patrocinadores?: readonly Patrocinador[];
+}) {
   return (
     <footer className="no-print mt-16 border-t border-white/[0.08] px-4 py-10 sm:px-6">
       <div className="mx-auto flex max-w-6xl flex-col items-center gap-5 text-center">
@@ -37,6 +46,8 @@ export function SiteFooter({ demo = false, evento }: { demo?: boolean; evento?: 
             Modo demonstração — duplas e resultados são fictícios.
           </p>
         ) : null}
+
+        <Patrocinadores patrocinadores={patrocinadores} />
 
         <p className="text-[11px] text-white/25">
           {evento ? `${evento.name} · ${dataCurta(evento.date)} · ` : ''}Nação Club · Brasília

@@ -35,7 +35,11 @@ export default async function HomePage() {
         </div>
       </main>
 
-      <SiteFooter demo={snapshot.demo} evento={snapshot.event} />
+      <SiteFooter
+        demo={snapshot.demo}
+        evento={snapshot.event}
+        patrocinadores={snapshot.patrocinadores}
+      />
     </>
   );
 }

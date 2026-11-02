@@ -1,4 +1,4 @@
-import type { EventInfo, EventSettings, Team } from '@/types/domain';
+import type { EventInfo, EventSettings, Patrocinador, Team } from '@/types/domain';
 import type { AgendaItem, ProvaResult, Wod, WodEntry } from '@/types/wod';
 
 /**
@@ -26,6 +26,8 @@ export interface Snapshot {
   entries: WodEntry[];
   /** Os valores lançados: uma linha por dupla por prova. */
   results: ProvaResult[];
+  /** Quem patrocina esta etapa. Aparece no rodapé e no telão. */
+  patrocinadores: Patrocinador[];
   /** ISO. Alimenta o "Última atualização HH:MM" (§9). */
   lastUpdate: string;
   /** true quando os dados são fictícios (§54). */

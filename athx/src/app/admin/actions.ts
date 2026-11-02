@@ -14,6 +14,7 @@ import {
   edicaoDeEventoSchema,
   eventoSchema,
   lancamentoSchema,
+  patrocinadorSchema,
   provaSchema,
   settingsSchema,
   teamSchema,
@@ -919,6 +920,159 @@ export async function salvarEvento(input: unknown): Promise<ActionResult> {
           ? 'Evento atualizado.'
           : `Evento atualizado. O endereço mudou para "${dados.slug}" — links antigos para este leaderboard deixam de funcionar.`,
     };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+/* ==========================================================================
+   PATROCINADORES
+   ==========================================================================
+   A logomarca vai para o bucket "patrocinadores", que é público — uma marca
+   de patrocinador existe para ser vista, inclusive por quem não tem login.
+   O banco guarda só o CAMINHO do arquivo; a URL pública é montada na leitura.
+   ========================================================================== */
+
+/** O que o Storage aceita. Mantido em sincronia com allowed_mime_types. */
+const TIPOS_DE_IMAGEM = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'];
+const TAMANHO_MAXIMO = 2 * 1024 * 1024;
+
+/** "Padaria do Zé.PNG" -> "padaria-do-ze.png", com carimbo contra colisão. */
+function nomeDeArquivo(nome: string, tipo: string): string {
+  const base = nome
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+
+  const extensao =
+    tipo === 'image/svg+xml'
+      ? 'svg'
+      : tipo === 'image/png'
+        ? 'png'
+        : tipo === 'image/webp'
+          ? 'webp'
+          : 'jpg';
+
+  return `${base || 'parceiro'}-${Date.now().toString(36)}.${extensao}`;
+}
+
+/**
+ * Cria ou atualiza um patrocinador.
+ *
+ * A imagem vem no FormData porque arquivo não atravessa uma Server Action
+ * como objeto comum. Ao editar sem trocar a imagem, o caminho antigo é
+ * mantido — reenviar a mesma logomarca a cada correção de nome seria um
+ * desperdício, e deixaria lixo no bucket.
+ */
+export async function salvarPatrocinador(form: FormData): Promise<ActionResult> {
+  if (IS_DEMO) return DEMO_BLOCK;
+
+  try {
+    const dados = patrocinadorSchema.parse({
+      id: (form.get('id') as string) || null,
+      nome: form.get('nome'),
+      site: (form.get('site') as string)?.trim() || null,
+      cota: (form.get('cota') as string)?.trim() || null,
+      ordem: Number(form.get('ordem') ?? 1),
+      ativo: form.get('ativo') === 'true',
+    });
+
+    const { supabase, eventId } = await requireAdmin();
+    const arquivo = form.get('logo');
+    const temArquivoNovo = arquivo instanceof File && arquivo.size > 0;
+
+    let logoPath = (form.get('logoPath') as string) || null;
+
+    if (temArquivoNovo) {
+      if (!TIPOS_DE_IMAGEM.includes(arquivo.type)) {
+        throw new Error(
+          `Formato não aceito (${arquivo.type || 'desconhecido'}). Use PNG, JPG, WEBP ou SVG.`,
+        );
+      }
+      if (arquivo.size > TAMANHO_MAXIMO) {
+        throw new Error(
+          `A imagem tem ${(arquivo.size / 1024 / 1024).toFixed(1)} MB. O limite é 2 MB — exporte menor.`,
+        );
+      }
+
+      const caminho = `${eventId}/${nomeDeArquivo(dados.nome, arquivo.type)}`;
+      const { error: erroEnvio } = await supabase.storage
+        .from('patrocinadores')
+        .upload(caminho, arquivo, { contentType: arquivo.type, upsert: false });
+
+      if (erroEnvio) throw new Error(`Não foi possível enviar a imagem: ${erroEnvio.message}`);
+      logoPath = caminho;
+    }
+
+    if (!logoPath) throw new Error('Escolha a imagem da logomarca.');
+
+    const linha = {
+      event_id: eventId,
+      nome: dados.nome,
+      logo_path: logoPath,
+      site: dados.site,
+      cota: dados.cota,
+      ordem: dados.ordem,
+      ativo: dados.ativo,
+    };
+
+    const { error } = dados.id
+      ? await supabase.from('patrocinadores').update(linha).eq('id', dados.id)
+      : await supabase.from('patrocinadores').insert(linha);
+
+    if (error) {
+      throw new Error(
+        /duplicate key|unique/i.test(error.message)
+          ? `Já existe um parceiro chamado "${dados.nome}" nesta etapa.`
+          : error.message,
+      );
+    }
+
+    revalidateTudo();
+    return { ok: true, message: `${dados.nome} salvo.` };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+/**
+ * Remove o patrocinador E o arquivo dele.
+ *
+ * O arquivo sai depois da linha, e só se nenhuma outra etapa ainda apontar
+ * para ele: o clone de evento reaproveita o mesmo caminho, e apagar aqui
+ * cegamente deixaria a etapa anterior com a logomarca quebrada.
+ */
+export async function excluirPatrocinador(id: string): Promise<ActionResult> {
+  if (IS_DEMO) return DEMO_BLOCK;
+
+  try {
+    const { supabase } = await requireAdmin();
+
+    const { data: alvo } = await supabase
+      .from('patrocinadores')
+      .select('nome, logo_path')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (!alvo) throw new Error('Esse parceiro já não existe.');
+
+    const { error } = await supabase.from('patrocinadores').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+
+    const { count } = await supabase
+      .from('patrocinadores')
+      .select('id', { count: 'exact', head: true })
+      .eq('logo_path', alvo.logo_path);
+
+    if ((count ?? 0) === 0) {
+      await supabase.storage.from('patrocinadores').remove([alvo.logo_path as string]);
+    }
+
+    revalidateTudo();
+    return { ok: true, message: `${alvo.nome} removido.` };
   } catch (error) {
     return fail(error);
   }

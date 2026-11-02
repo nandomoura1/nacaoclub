@@ -50,7 +50,11 @@ export default async function LeaderboardPage({
         <LeaderboardView initial={snapshot} />
       </main>
 
-      <SiteFooter demo={snapshot.demo} evento={snapshot.event} />
+      <SiteFooter
+        demo={snapshot.demo}
+        evento={snapshot.event}
+        patrocinadores={snapshot.patrocinadores}
+      />
     </>
   );
 }

@@ -13,6 +13,7 @@ const FINAIS: readonly { href: string; label: string; exact?: boolean }[] = [
   { href: '/admin/wods', label: 'WODs' },
   { href: '/admin/eventos', label: 'Eventos' },
   { href: '/admin/equipe', label: 'Equipe' },
+  { href: '/admin/patrocinadores', label: 'Parceiros' },
   { href: '/admin/settings', label: 'Configurações' },
 ];
 

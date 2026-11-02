@@ -42,7 +42,11 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
       <main id="conteudo" className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
         <TeamDetail initial={snapshot} teamId={id} />
       </main>
-      <SiteFooter demo={snapshot.demo} evento={snapshot.event} />
+      <SiteFooter
+        demo={snapshot.demo}
+        evento={snapshot.event}
+        patrocinadores={snapshot.patrocinadores}
+      />
     </>
   );
 }

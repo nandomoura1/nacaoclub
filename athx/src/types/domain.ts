@@ -289,3 +289,22 @@ export interface StandingRow {
   /** Critério que desempatou esta dupla dentro da categoria. */
   desempatadoPor: TieBreaker | null;
 }
+
+/**
+ * Um patrocinador da etapa.
+ *
+ * `logoUrl` já vem montada: o banco guarda só o caminho dentro do bucket, e
+ * quem monta a URL pública é o servidor. Assim trocar de projeto ou de
+ * domínio no Supabase não exige reescrever cada linha da tabela.
+ */
+export interface Patrocinador {
+  id: string;
+  nome: string;
+  logoUrl: string;
+  /** Caminho no bucket — o admin precisa dele para apagar o arquivo. */
+  logoPath: string;
+  site: string | null;
+  cota: string | null;
+  ordem: number;
+  ativo: boolean;
+}
