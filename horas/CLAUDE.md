@@ -92,6 +92,12 @@ feriado específico (Nação inteira ou setor). Feriado no fim de semana usa o h
 **Ausências de professor**: lançadas antes de gerar a competência valem quando ela for gerada
 (a prévia mostra as aulas pendentes e oferece "Gerar competência agora").
 
+**Cronômetro da TV** (Treinos → Cronômetro da TV; permissão `workout.tv_timer`: Professor, Programação de treinos,
+Coordenador, Admin): o professor programa no celular (For Time, AMRAP, EMOM, Tabata/intervalado, regressivo; sugestão
+pelo bloco do treino do dia) e a TV (`/tv/<token>`) mostra WOD + timer. Estado em `tv_screens.timer` (início/pausas);
+a TV consulta `/tv/<token>/timer` a cada 2 s e calcula o tempo localmente (sincroniza o relógio). Com timer, a TV
+não recarrega sozinha (som/ritmo); "Tirar da TV" volta ao modo normal. Bipes exigem "Ativar som" uma vez na TV.
+
 **Kanban de Marketing**: estilo Trello (navegação lateral, colunas com rolagem própria,
 "Adicionar um cartão"), imagens no cartão (PNG/JPG/WEBP/GIF ≤ 10 MB, sem SVG; a primeira é a capa),
 link direto `?tarefa=<id>` e envio pelo WhatsApp (link exige login).

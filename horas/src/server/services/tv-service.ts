@@ -9,6 +9,8 @@ import { AppError, NotFoundError } from '@/server/errors';
 import { addDays, fromUtc, isIsoDate, toUtc, type IsoDate } from '@/domain/dates';
 import type { BlockKind, WorkoutBlockData } from '@/domain/workout';
 import { screenDate } from '@/domain/workout-tv';
+import { applyTimer, normalizeTimer, suggestTimer, type TimerCommand, type TimerConfig, type TimerState } from '@/domain/timer';
+import { Prisma } from '@prisma/client';
 import { getWeek } from './workout-service';
 
 /**
@@ -139,4 +141,64 @@ export async function deleteScreen(principal: Principal | null, id: string, meta
     await tx.tvScreen.delete({ where: { id } });
     await audit(tx, { actorId: principal.id, ...meta }, { action: 'tv.screen_deleted', entityType: 'tv_screen', entityId: id, before: { nome: s.name }, summary: `${principal.name} excluiu a tela de TV “${s.name}”` });
   });
+}
+
+// ── Cronômetro de aula (controle no celular do professor, exibição na TV) ──
+
+const timerConfigSchema = z.object({
+  kind: z.enum(['FOR_TIME', 'AMRAP', 'EMOM', 'INTERVAL', 'COUNTDOWN']),
+  durationSec: z.number().optional(), workSec: z.number().optional(), restSec: z.number().optional(),
+  rounds: z.number().optional(), leadInSec: z.number().optional(), label: z.string().max(80).optional(),
+});
+const commandSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('program'), config: timerConfigSchema }),
+  z.object({ type: z.literal('start') }), z.object({ type: z.literal('pause') }), z.object({ type: z.literal('resume') }),
+  z.object({ type: z.literal('reset') }), z.object({ type: z.literal('clear') }), z.object({ type: z.literal('full'), on: z.boolean() }),
+]);
+
+const asTimer = (v: unknown): TimerState | null => (v && typeof v === 'object' && 'config' in v ? (v as TimerState) : null);
+
+/** Consulta leve da TV (a cada ~2 s): estado do timer + hora do servidor para sincronizar. */
+export async function tvTimerByToken(token: string) {
+  if (!/^[a-z0-9]{8,64}$/.test(token)) return null;
+  const s = await prisma.tvScreen.findUnique({ where: { token }, select: { active: true, timer: true } });
+  if (!s || !s.active) return null;
+  return { now: Date.now(), timer: asTimer(s.timer) };
+}
+
+/** Telas para o cronômetro: todas as ativas (o professor dá aula em qualquer TV), com sugestões do treino do dia. */
+export async function listTimerScreens(principal: Principal | null, today: IsoDate) {
+  assertCan(principal, 'workout.tv_timer');
+  const rows = await prisma.tvScreen.findMany({ where: { active: true }, include: { modality: { select: { name: true } } }, orderBy: [{ modality: { name: 'asc' } }, { name: 'asc' }] });
+  return Promise.all(rows.map(async (s) => {
+    const { date } = screenDate(s.pinnedDate ? fromUtc(s.pinnedDate) : null, today);
+    const d = await dayOf(s.modalityId, date);
+    const suggestions = (d ? blocksOf(d) : []).map((b) => ({ block: `${b.title ?? b.kind}${b.format ? ` · ${b.format}` : ''}`, config: suggestTimer(b) }))
+      .filter((x): x is { block: string; config: TimerConfig } => !!x.config);
+    return { id: s.id, name: s.name, modality: s.modality.name, timer: asTimer(s.timer), suggestions, lastSeenAt: s.lastSeenAt?.toISOString() ?? null };
+  }));
+}
+export type TimerScreen = Awaited<ReturnType<typeof listTimerScreens>>[number];
+
+/** Comando do controle: programar, iniciar, pausar, retomar, zerar, tela cheia, tirar da TV. */
+export async function commandTimer(principal: Principal | null, screenId: string, input: unknown) {
+  assertCan(principal, 'workout.tv_timer');
+  const p = commandSchema.safeParse(input);
+  if (!p.success) throw new AppError('Comando inválido.');
+  const cmd: TimerCommand = p.data.type === 'program' ? { type: 'program', config: normalizeTimer(p.data.config) } : p.data;
+  return prisma.$transaction(async (tx) => {
+    const s = await tx.tvScreen.findUnique({ where: { id: screenId }, select: { id: true, active: true, timer: true } });
+    if (!s || !s.active) throw new NotFoundError('Tela não encontrada.');
+    const next = applyTimer(asTimer(s.timer), cmd, Date.now());
+    await tx.tvScreen.update({ where: { id: s.id }, data: { timer: next === null ? Prisma.DbNull : (next as unknown as Prisma.InputJsonValue) } });
+    return { now: Date.now(), timer: next };
+  });
+}
+
+/** Estado atual do timer de uma tela (para o controle acompanhar comandos de outro professor). */
+export async function timerState(principal: Principal | null, screenId: string) {
+  assertCan(principal, 'workout.tv_timer');
+  const s = await prisma.tvScreen.findUnique({ where: { id: screenId }, select: { timer: true } });
+  if (!s) throw new NotFoundError('Tela não encontrada.');
+  return { now: Date.now(), timer: asTimer(s.timer) };
 }

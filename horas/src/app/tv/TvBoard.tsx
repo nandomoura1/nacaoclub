@@ -2,6 +2,9 @@ import { WEEKDAYS, weekdayOf, type IsoDate } from '@/domain/dates';
 import { ART_LABEL, lines } from '@/domain/workout';
 import { tvLayout } from '@/domain/workout-tv';
 import type { TvDay } from '@/server/services/tv-service';
+import type { TimerState } from '@/domain/timer';
+import { TvTimer } from './TvTimer';
+import { TvTimerWatch } from './TvTimerWatch';
 
 const ddmm = (d: IsoDate) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 const dayLong = (d: IsoDate) => WEEKDAYS[weekdayOf(d) - 1]!.long;
@@ -11,12 +14,16 @@ const nowSP = () => new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/
 const CLOCK = `(function(){var e=document.getElementById('tv-clock');if(!e)return;function t(){var d=new Date();e.textContent=d.toLocaleTimeString('pt-BR',{timeZone:'America/Sao_Paulo',hour:'2-digit',minute:'2-digit'})}setInterval(t,15000)})();`;
 
 /** Treino do dia em tela cheia, para a TV do box (16:9, letra grande, sem cortar). */
-export function TvBoard({ v, refreshSeconds }: { v: TvDay; refreshSeconds: number }) {
-  const layout = tvLayout(v.blocks);
+export function TvBoard({ v, refreshSeconds, live }: { v: TvDay; refreshSeconds: number; live?: { token: string; timer: TimerState | null; serverNow: number } }) {
+  const timer = live?.timer ?? null;
+  // Com cronômetro: a faixa do timer ocupa ~22% da altura e o treino encolhe para caber.
+  const layout = tvLayout(v.blocks, timer ? 21 : 0);
   const chips = (v.footerChips ?? '').split('\n').map((l) => l.split('|')).filter((p) => p[0]?.trim()).slice(0, 4);
   return (
     <div className="fixed inset-0 flex flex-col overflow-hidden bg-[#011d3d] font-titulo text-white" style={{ background: 'radial-gradient(120% 90% at 0% 0%, #0169E9 0%, #022B57 45%, #011a36 100%)' }}>
-      <meta httpEquiv="refresh" content={String(refreshSeconds)} />
+      {/* Com cronômetro a página não recarrega sozinha (perderia o som e o ritmo da aula). */}
+      {!timer && <meta httpEquiv="refresh" content={String(refreshSeconds)} />}
+      {live && !timer && <TvTimerWatch token={live.token} />}
       <header className="flex items-center gap-[2vw] px-[3vw] pt-[2.6vh]" style={{ height: '13vh' }}>
         <div className="min-w-0">
           <p className="font-bold uppercase tracking-[0.3em] text-[#20C4FA]" style={{ fontSize: '1.9vh' }}>Nação Club · Treino do dia</p>
@@ -31,6 +38,8 @@ export function TvBoard({ v, refreshSeconds }: { v: TvDay; refreshSeconds: numbe
           {layout.totalMinutes > 0 && <p className="mt-[0.4vh] font-bold text-white/70" style={{ fontSize: '1.7vh' }}>aula {layout.totalMinutes}&apos;</p>}
         </div>
       </header>
+
+      {live && timer && <TvTimer token={live.token} initial={timer} serverNow={live.serverNow} />}
 
       {v.blocks.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center text-center">

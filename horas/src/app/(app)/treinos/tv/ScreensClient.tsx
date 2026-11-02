@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, Copy, ExternalLink, Pin, PinOff, Plus, RefreshCw, Trash2, Tv } from 'lucide-react';
+import { Check, Copy, ExternalLink, Pin, PinOff, Plus, RefreshCw, Timer, Trash2, Tv } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -66,6 +66,7 @@ export function ScreensClient({ screens, modalities, base, today }: { screens: S
                 <code className="min-w-0 flex-1 break-all rounded-lg bg-fundo px-2 py-1.5 text-sm font-bold text-navy">{url}</code>
                 <Button size="sm" variant="secondary" onClick={() => copy(url, s.id)}>{copied === s.id ? <><Check /> Copiado</> : <><Copy /> Copiar</>}</Button>
                 <a href={url} target="_blank" rel="noopener" className="inline-flex items-center gap-1 text-sm font-semibold text-nacao hover:underline"><ExternalLink className="size-4" /> Ver</a>
+                <a href={`/treinos/cronometro?tela=${s.id}`} className="inline-flex items-center gap-1 text-sm font-semibold text-nacao hover:underline"><Timer className="size-4" /> Cronômetro</a>
               </div>
 
               <div className="mt-3 rounded-lg bg-fundo p-3 text-sm">

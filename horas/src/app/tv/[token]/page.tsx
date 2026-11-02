@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { todayIso } from '@/lib/today';
-import { tvByToken } from '@/server/services/tv-service';
+import { tvByToken, tvTimerByToken } from '@/server/services/tv-service';
 import { TvBoard } from '../TvBoard';
 
 export const metadata: Metadata = { title: 'Treino do dia' };
@@ -17,5 +17,6 @@ export default async function Page({ params }: { params: Promise<{ token: string
       </div>
     );
   }
-  return <TvBoard v={v} refreshSeconds={60} />;
+  const t = await tvTimerByToken(token);
+  return <TvBoard v={v} refreshSeconds={60} live={{ token, timer: t?.timer ?? null, serverNow: t?.now ?? Date.now() }} />;
 }

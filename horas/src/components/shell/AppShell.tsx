@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   BarChart3, CalendarDays, ClipboardCheck, History, LayoutGrid,
   LogOut, Settings2, Sun, TriangleAlert, Users, UserRoundCog, Dumbbell, CalendarClock, Sparkles, Menu, X, Trophy, Dna, ChevronRight, Building2, Receipt, Landmark, LineChart, FileUp, FolderOpen, Briefcase,
-  Megaphone, Flag, Columns3, PartyPopper, MessagesSquare, Clapperboard, Bell, Link2, Target, Library, MousePointerClick, Gauge, Brain, MessageCircle, Workflow, ListTodo, Network, SquareArrowOutUpRight, Users2, Bot, GraduationCap, Route, UserCheck, NotebookPen, Cable, Tv, CalendarRange, UsersRound, ListChecks, Clock, Plane, Scale, CalendarCheck, FileSignature, FileText } from 'lucide-react';
+  Megaphone, Flag, Columns3, PartyPopper, MessagesSquare, Clapperboard, Bell, Link2, Target, Library, MousePointerClick, Gauge, Brain, MessageCircle, Workflow, ListTodo, Network, SquareArrowOutUpRight, Users2, Bot, GraduationCap, Route, UserCheck, NotebookPen, Cable, Tv, CalendarRange, UsersRound, ListChecks, Clock, Plane, Scale, CalendarCheck, FileSignature, FileText, Timer } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { cn } from '@/lib/cn';
 import { initials } from '@/lib/format';
@@ -72,6 +72,7 @@ const ICONS: Record<NavIcon, React.ComponentType<{ className?: string }>> = {
   'ws-legal': Scale,
   contratos: FileSignature,
   'contratos-modelos': FileText,
+  'treinos-timer': Timer,
 };
 
 function isActive(pathname: string, href: string) {

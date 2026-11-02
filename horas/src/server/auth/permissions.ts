@@ -39,6 +39,7 @@ export const PERMISSIONS = {
   'audit.view': 'Ver o histórico de alterações',
   'import.run': 'Importar planilhas',
   'workout.edit': 'Lançar treinos da semana e gerar a arte de divulgação',
+  'workout.tv_timer': 'Controlar o cronômetro de aula nas TVs do box',
   'duty.edit': 'Lançar escalas de fim de semana e feriados',
   'hours.own': 'Ver o próprio extrato de horas (usuário vinculado a um professor)',
   'workout.view': 'Ver os treinos lançados no Cadastro de Treino',
@@ -105,6 +106,7 @@ export const SYSTEM_ROLES: Record<
       'workout.edit',
       'workout.view',
       'workout.personal',
+      'workout.tv_timer',
       'duty.edit',
       'whatsapp.send',
       'edu.view',
@@ -138,7 +140,7 @@ export const SYSTEM_ROLES: Record<
   PROFESSOR: {
     name: 'Professor',
     description: 'Vê o próprio extrato de horas e os treinos; cria treinos de Personal para as próprias aulas.',
-    permissions: ['hours.own', 'workout.view', 'workout.personal', 'edu.view'],
+    permissions: ['hours.own', 'workout.view', 'workout.personal', 'workout.tv_timer', 'edu.view'],
   },
   MARKETING: {
     name: 'Marketing',
@@ -148,7 +150,7 @@ export const SYSTEM_ROLES: Record<
   TREINOS: {
     name: 'Programação de treinos',
     description: 'Cadastra e edita os treinos da semana (com DNA, benchmarks, IA e telas de TV) das modalidades das áreas da pessoa. Combine com o perfil da função (ex.: Líder ou Professor).',
-    permissions: ['workout.view', 'workout.edit', 'workout.personal'],
+    permissions: ['workout.view', 'workout.edit', 'workout.personal', 'workout.tv_timer'],
   },
   LIDER: {
     name: 'Líder de setor',

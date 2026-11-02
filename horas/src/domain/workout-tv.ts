@@ -36,7 +36,8 @@ function split(blocks: WorkoutBlockData[], n: number, cpl: number): WorkoutBlock
   return best;
 }
 
-export function tvLayout(blocks: WorkoutBlockData[]): TvLayout {
+/** `reserveVh`: altura tirada do corpo (ex.: a faixa do cronômetro). */
+export function tvLayout(blocks: WorkoutBlockData[], reserveVh = 0): TvLayout {
   const student = blocks.map(studentBlock);
   const quick = student.filter((b) => !KIND[b.kind].detailed).map((b) => ({ label: KIND[b.kind].label, minutes: b.durationMin, title: b.title }));
   const main = student.filter((b) => KIND[b.kind].detailed);
@@ -49,7 +50,7 @@ export function tvLayout(blocks: WorkoutBlockData[]): TvLayout {
     const groups = split(main, n, cpl);
     const worst = Math.max(0, ...groups.map((g) => linesOf(g, cpl)));
     columns = groups;
-    if (worst * size * 1.3 <= BODY_H_VH) { fontVh = Math.round(size * 10) / 10; break; }
+    if (worst * size * 1.3 <= BODY_H_VH - reserveVh) { fontVh = Math.round(size * 10) / 10; break; }
   }
   return {
     quick,
