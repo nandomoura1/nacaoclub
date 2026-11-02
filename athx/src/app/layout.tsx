@@ -45,6 +45,17 @@ export const metadata: Metadata = {
     locale: 'pt_BR',
   },
   robots: { index: true, follow: true },
+  /**
+   * Salvo na tela inicial do iPhone, o site abre sem a barra do Safari.
+   * `black-translucent` deixa o navy do app subir até atrás do relógio, em
+   * vez de uma faixa branca por cima — a tela de abertura e o app passam a
+   * ser a mesma cor.
+   */
+  appleWebApp: {
+    capable: true,
+    title: 'Nação Híbrida',
+    statusBarStyle: 'black-translucent',
+  },
 };
 
 export const viewport: Viewport = {
