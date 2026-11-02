@@ -105,3 +105,8 @@ Banco guarda só HMAC do token e do código (10 min, 5 tentativas, 1 min entre e
 bucket privado (`contratos/AAAA-MM/…`), baixável no app e no próprio link. Envio exige empresa contratante
 completa (sem "[CNPJ da empresa]" no texto). Assinado não se cancela (faz-se distrato). Novo link invalida o
 anterior. Modelos-base são ponto de partida: **revisar com o jurídico** antes do primeiro uso.
+**Vigência** (`starts_on`/`ends_on`, nulo = indeterminado): lida dos campos `{{inicio}}` + `{{fim}}` ou `{{prazo}}`
+("12 meses", "indeterminado") e ajustável à mão; é controle interno (o texto assinado não muda). Abas: Ativos
+(assinado e no prazo, inclui "a iniciar"/"vence em breve" ≤ 30 dias), Inativos (vencido ou **encerrado antes do
+prazo** com data e motivo — reversível), Em andamento, Lixeira. **Excluir = lixeira** (motivo obrigatório,
+links param, restaurável); aguardando assinatura precisa ser cancelado antes. Sem exclusão definitiva.

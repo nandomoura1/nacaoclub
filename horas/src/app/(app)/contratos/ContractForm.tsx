@@ -8,12 +8,12 @@ import { FormMessage } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input, Label, Select } from '@/components/ui/input';
-import { CONTRACT_CATEGORIES, SIGNER_ROLES, renderContract, type TemplateField } from '@/domain/contracts';
+import { CONTRACT_CATEGORIES, SIGNER_ROLES, guessTerm, renderContract, type TemplateField } from '@/domain/contracts';
 import { previewBuiltinsAction, saveContractAction } from './actions';
 
 export interface FormTemplate { id: string; name: string; category: string; description: string | null; body: string; fields: TemplateField[]; signerRoles: string[] }
 interface Signer { role: string; name: string; document: string; phone: string; email: string }
-export interface FormInitial { id: string; code: string; templateId: string | null; companyId: string | null; title: string; values: Record<string, string>; notes: string | null; signers: { role: string; name: string; document: string | null; phone: string | null; email: string | null }[] }
+export interface FormInitial { id: string; code: string; templateId: string | null; companyId: string | null; title: string; values: Record<string, string>; notes: string | null; startsOn?: string | null; endsOn?: string | null; signers: { role: string; name: string; document: string | null; phone: string | null; email: string | null }[] }
 
 const area = 'min-h-20 w-full rounded-lg border border-borda bg-white px-3 py-2 text-sm text-tinta focus:border-nacao focus:outline-none focus:ring-2 focus:ring-nacao/20';
 const blank = (role: string): Signer => ({ role, name: '', document: '', phone: '', email: '' });
@@ -30,6 +30,13 @@ export function ContractForm({ templates, companies, initial }: { templates: For
   const [signers, setSigners] = useState<Signer[]>(
     initial?.signers.map((s) => ({ role: s.role, name: s.name, document: s.document ?? '', phone: s.phone ?? '', email: s.email ?? '' })) ?? [],
   );
+  // Vigência: segue os campos (início/fim/prazo) até a pessoa mexer à mão.
+  const initialGuess = guessTerm(initial?.values ?? {});
+  const [termTouched, setTermTouched] = useState(!!initial && (initial.startsOn ?? null) !== initialGuess.startsOn || !!initial && (initial.endsOn ?? null) !== initialGuess.endsOn);
+  const [term, setTerm] = useState({ startsOn: initial?.startsOn ?? '', endsOn: initial?.endsOn ?? '', indefinite: !!initial?.startsOn && !initial?.endsOn });
+  const guess = guessTerm(values);
+  const shownTerm = termTouched ? term : { startsOn: guess.startsOn ?? '', endsOn: guess.endsOn ?? '', indefinite: guess.indefinite };
+  const editTerm = (p: Partial<typeof term>) => { setTerm({ ...shownTerm, ...p }); setTermTouched(true); };
   const [builtins, setBuiltins] = useState<Record<string, string>>({});
   const t = templates.find((x) => x.id === templateId);
 
@@ -51,6 +58,7 @@ export function ContractForm({ templates, companies, initial }: { templates: For
   const save = () => start(async () => {
     const r = await saveContractAction(initial?.id ?? null, {
       templateId, companyId: companyId || null, title, values, notes: notes || null,
+      ...(termTouched ? { term: { startsOn: term.startsOn || null, endsOn: term.indefinite ? null : term.endsOn || null } } : {}),
       signers: signers.map((s) => ({ role: s.role, name: s.name, document: s.document || null, phone: s.phone || null, email: s.email || null })),
     });
     if (!r.ok) { setMsg({ error: r.error }); return; }
@@ -110,6 +118,22 @@ export function ContractForm({ templates, companies, initial }: { templates: For
                 );
               })}
             </div>
+          </Card>
+        )}
+
+        {t && (
+          <Card className="space-y-3 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-extrabold text-navy">Vigência</h2>
+              <span className="text-xs text-tinta-suave">{termTouched ? 'ajustada à mão' : 'preenchida pelos campos do contrato'}</span>
+            </div>
+            <div className="flex flex-wrap items-end gap-3">
+              <div><Label>Início</Label><Input type="date" value={shownTerm.startsOn} onChange={(e) => editTerm({ startsOn: e.target.value })} /></div>
+              <div><Label>Término</Label><Input type="date" value={shownTerm.indefinite ? '' : shownTerm.endsOn} disabled={shownTerm.indefinite} onChange={(e) => editTerm({ endsOn: e.target.value })} /></div>
+              <label className="flex h-10 items-center gap-2 text-sm"><input type="checkbox" className="accent-nacao" checked={shownTerm.indefinite} onChange={(e) => editTerm({ indefinite: e.target.checked })} /> Prazo indeterminado</label>
+              {termTouched && <Button size="sm" variant="ghost" onClick={() => setTermTouched(false)}>Usar os campos</Button>}
+            </div>
+            <p className="text-xs text-tinta-suave">Define se o contrato aparece como ativo ou inativo depois de assinado.</p>
           </Card>
         )}
 

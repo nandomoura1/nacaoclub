@@ -4,7 +4,7 @@ import { prisma } from '@/server/db';
 import { AuthorizationError } from '@/server/errors';
 import { objectSize } from '@/server/storage';
 import {
-  cancelContract, draftPdf, getContract, listTemplates, loadDefaultTemplates, openSignLink, refuseSign, requestSignCode, resendLink,
+  cancelContract, contractCounts, deleteContract, draftPdf, getContract, listContracts, restoreContract, setContractTerm, terminateContract, listTemplates, loadDefaultTemplates, openSignLink, refuseSign, requestSignCode, resendLink,
   saveContract, saveTemplate, sendContract, signCodeHash, signerPdf, signWithCode,
 } from '@/server/services/contract-service';
 import { META, ensureCatalog, hasDb, makeUser } from './helpers';
@@ -108,6 +108,38 @@ describe.skipIf(!hasDb)('Contratos com assinatura eletrônica própria', () => {
     expect(s.tokenHash).not.toContain(tProf);
     expect(s).toMatchObject({ ipAddress: '200.1.2.3', status: 'ASSINADO' });
     await expect(cancelContract(admin.principal, id, 'teste', META)).rejects.toThrow(/assinado/);
+
+    // Vigência lida dos campos: início 03/11/2026 + "12 meses" → até 02/11/2027.
+    expect(c).toMatchObject({ startsOn: '2026-11-03', endsOn: '2027-11-02' });
+    expect(['A_INICIAR', 'ATIVO']).toContain(c.termStatus);
+    expect((await listContracts(admin.principal, { view: 'ativos', q: tag })).map((x) => x.id)).toEqual([id]);
+    // Prazo vencido → inativo; ajuste não mexe no texto assinado.
+    await expect(setContractTerm(admin.principal, id, { startsOn: '2025-01-10', endsOn: '2025-01-01' }, META)).rejects.toThrow(/antes do início/);
+    await setContractTerm(admin.principal, id, { startsOn: '2025-01-01', endsOn: '2025-12-31' }, META);
+    expect((await getContract(admin.principal, id)).termStatus).toBe('VENCIDO');
+    expect((await listContracts(admin.principal, { view: 'inativos', q: tag })).map((x) => x.id)).toEqual([id]);
+    expect((await getContract(admin.principal, id)).body).toBe(c.body);
+    // Indeterminado → ativo; encerramento antecipado → inativo; desfazer → ativo.
+    await setContractTerm(admin.principal, id, { startsOn: '2025-01-01', endsOn: null }, META);
+    expect((await getContract(admin.principal, id)).termStatus).toBe('ATIVO');
+    await terminateContract(admin.principal, id, { on: '2026-01-15', reason: 'Distrato assinado' }, META);
+    expect((await getContract(admin.principal, id))).toMatchObject({ termStatus: 'ENCERRADO', terminationReason: 'Distrato assinado' });
+    await terminateContract(admin.principal, id, null, META);
+    expect((await getContract(admin.principal, id)).termStatus).toBe('ATIVO');
+
+    // Lixeira: some das listas, o link do assinante morre, dá para restaurar.
+    await expect(deleteContract(admin.principal, id, 'x', META)).rejects.toThrow(/motivo/);
+    await expect(deleteContract(lider.principal, id, 'duplicado', META)).rejects.toBeInstanceOf(AuthorizationError);
+    const before = await contractCounts(admin.principal);
+    await deleteContract(admin.principal, id, 'Duplicado', META);
+    expect((await listContracts(admin.principal, { view: 'todos', q: tag })).map((x) => x.id)).not.toContain(id);
+    expect((await listContracts(admin.principal, { view: 'excluidos', q: tag })).map((x) => x.id)).toEqual([id]);
+    expect((await contractCounts(admin.principal)).excluidos).toBe(before.excluidos + 1);
+    expect(await signerPdf(tProf)).toBeNull();
+    await expect(setContractTerm(admin.principal, id, { startsOn: null, endsOn: null }, META)).rejects.toThrow(/lixeira/);
+    await restoreContract(admin.principal, id, META);
+    expect((await getContract(admin.principal, id))).toMatchObject({ deletedAt: null, status: 'ASSINADO', hasFinal: true });
+    expect((await getContract(admin.principal, id)).events.map((e) => e.type)).toEqual(expect.arrayContaining(['VIGENCIA', 'ENCERRADO', 'REATIVADO', 'EXCLUIDO', 'RESTAURADO']));
   });
 
   it('recusa e cancelamento: link cancelado para de funcionar', async () => {
@@ -117,7 +149,9 @@ describe.skipIf(!hasDb)('Contratos com assinatura eletrônica própria', () => {
     const { link } = (await sendContract(admin.principal, id, 'https://nacao.test', META))[0]!;
     await refuseSign(tokenOf(link), 'Valor diferente do combinado', META);
     expect((await getContract(admin.principal, id)).signers[0]).toMatchObject({ status: 'RECUSADO', refusedReason: 'Valor diferente do combinado' });
+    await expect(deleteContract(admin.principal, id, 'Renegociar', META)).rejects.toThrow(/cancele antes/);
     await cancelContract(admin.principal, id, 'Renegociar o valor', META);
+    await deleteContract(admin.principal, id, 'Cancelado, não precisa mais', META);
     expect(await openSignLink(tokenOf(link), META)).toBeNull();
     await expect(getContract(lider.principal, id)).rejects.toBeInstanceOf(AuthorizationError);
   });

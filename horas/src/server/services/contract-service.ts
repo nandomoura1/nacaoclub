@@ -9,7 +9,7 @@ import { AppError, NotFoundError } from '@/server/errors';
 import { getEnv } from '@/lib/env';
 import { todayIso } from '@/lib/today';
 import {
-  CONTRACT_CATEGORIES, FIELD_TYPES, SIGNER_ROLES, checkTemplate, contractCode, dateInWords, documentOk, formatDocument, maskPhone, renderContract, roleLabel, templateKeys,
+  CONTRACT_CATEGORIES, FIELD_TYPES, SIGNER_ROLES, checkTemplate, contractCode, dateInWords, documentOk, formatDocument, maskPhone, renderContract, roleLabel, templateKeys, guessTerm, termStatus, TERM_STATUS,
   type TemplateField,
 } from '@/domain/contracts';
 import { normalizeDestination } from '@/domain/whatsapp';
@@ -106,6 +106,7 @@ const signerSchema = z.object({
   phone: z.string().trim().max(30).nullable().optional(),
   email: z.string().trim().max(120).nullable().optional(),
 });
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida.');
 const contractSchema = z.object({
   templateId: z.string().uuid('Escolha o modelo.'),
   companyId: z.string().uuid().nullable().optional(),
@@ -113,6 +114,8 @@ const contractSchema = z.object({
   values: z.record(z.string(), z.string().max(5000)).default({}),
   signers: z.array(signerSchema).min(1, 'Inclua quem vai assinar.').max(8),
   notes: z.string().trim().max(1000).nullable().optional(),
+  /** Vigência informada na tela; sem ela, lida dos campos (início/fim/prazo). */
+  term: z.object({ startsOn: isoDate.nullable(), endsOn: isoDate.nullable() }).optional(),
 });
 
 async function builtins(tx: Tx, companyId: string | null, code: string, today: string) {
@@ -135,6 +138,18 @@ export async function previewBuiltins(principal: P | null, companyId: string | n
   return builtins(prisma, companyId, code ?? 'CT-0000-0000', todayIso());
 }
 
+const toDate = (iso: string | null) => (iso ? new Date(`${iso}T00:00:00Z`) : null);
+const fromDate = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
+function checkTerm(startsOn: string | null, endsOn: string | null) {
+  if (startsOn && endsOn && endsOn < startsOn) throw new AppError('O término não pode ser antes do início.');
+}
+async function liveContract(tx: Tx, id: string) {
+  const c = await tx.contract.findUnique({ where: { id } });
+  if (!c) throw new NotFoundError('Contrato não encontrado.');
+  if (c.deletedAt) throw new AppError('Contrato na lixeira: restaure antes de mexer nele.');
+  return c;
+}
+
 async function nextCode(tx: Tx) {
   const year = Number(todayIso().slice(0, 4));
   const last = await tx.contract.findFirst({ where: { code: { startsWith: `CT-${year}-` } }, orderBy: { code: 'desc' }, select: { code: true } });
@@ -145,14 +160,47 @@ async function event(tx: Tx, contractId: string, type: string, o: { signerId?: s
   await tx.contractEvent.create({ data: { contractId, signerId: o.signerId ?? null, type, ipAddress: o.meta?.ipAddress ?? null, userAgent: o.meta?.userAgent ?? null, detail: o.detail ?? undefined } });
 }
 
-export async function listContracts(principal: P | null, f: { status?: string; q?: string } = {}) {
+export const CONTRACT_VIEWS = ['todos', 'ativos', 'inativos', 'andamento', 'excluidos'] as const;
+export type ContractView = (typeof CONTRACT_VIEWS)[number];
+
+export async function listContracts(principal: P | null, f: { status?: string; q?: string; view?: ContractView } = {}) {
   assertCan(principal, 'contract.view');
+  const view = f.view ?? 'todos';
+  const today = todayIso();
   const rows = await prisma.contract.findMany({
-    where: { ...(f.status ? { status: f.status } : {}), ...(f.q ? { OR: [{ title: { contains: f.q, mode: 'insensitive' } }, { code: { contains: f.q, mode: 'insensitive' } }, { signers: { some: { name: { contains: f.q, mode: 'insensitive' } } } }] } : {}) },
-    orderBy: { createdAt: 'desc' }, take: 300,
+    where: {
+      deletedAt: view === 'excluidos' ? { not: null } : null,
+      ...(view === 'ativos' || view === 'inativos' ? { status: 'ASSINADO' } : view === 'andamento' ? { status: { in: ['RASCUNHO', 'AGUARDANDO'] } } : f.status ? { status: f.status } : {}),
+      ...(f.q ? { OR: [{ title: { contains: f.q, mode: 'insensitive' } }, { code: { contains: f.q, mode: 'insensitive' } }, { signers: { some: { name: { contains: f.q, mode: 'insensitive' } } } }] } : {}),
+    },
+    orderBy: { createdAt: 'desc' }, take: 500,
     include: { signers: { select: { name: true, role: true, status: true }, orderBy: { position: 'asc' } } },
   });
-  return rows.map((c) => ({ id: c.id, code: c.code, title: c.title, category: c.category, status: c.status, createdAt: c.createdAt.toISOString(), sentAt: c.sentAt?.toISOString() ?? null, completedAt: c.completedAt?.toISOString() ?? null, signers: c.signers }));
+  const out = rows.map((c) => {
+    const term = { startsOn: fromDate(c.startsOn), endsOn: fromDate(c.endsOn), terminatedOn: fromDate(c.terminatedOn) };
+    return {
+      id: c.id, code: c.code, title: c.title, category: c.category, status: c.status, createdAt: c.createdAt.toISOString(), sentAt: c.sentAt?.toISOString() ?? null,
+      completedAt: c.completedAt?.toISOString() ?? null, deletedAt: c.deletedAt?.toISOString() ?? null, signers: c.signers, ...term,
+      termStatus: c.status === 'ASSINADO' ? termStatus(term, today) : null,
+    };
+  });
+  if (view === 'ativos') return out.filter((c) => c.termStatus && TERM_STATUS[c.termStatus].active).sort((a, b) => (a.endsOn ?? '9999').localeCompare(b.endsOn ?? '9999'));
+  if (view === 'inativos') return out.filter((c) => c.termStatus && !TERM_STATUS[c.termStatus].active);
+  return out;
+}
+
+/** Quantos contratos em cada aba (para os contadores da lista). */
+export async function contractCounts(principal: P | null) {
+  assertCan(principal, 'contract.view');
+  const today = todayIso();
+  const rows = await prisma.contract.findMany({ select: { status: true, deletedAt: true, startsOn: true, endsOn: true, terminatedOn: true } });
+  const live = rows.filter((r) => !r.deletedAt);
+  const signed = live.filter((r) => r.status === 'ASSINADO').map((r) => termStatus({ startsOn: fromDate(r.startsOn), endsOn: fromDate(r.endsOn), terminatedOn: fromDate(r.terminatedOn) }, today));
+  return {
+    todos: live.length, ativos: signed.filter((t) => TERM_STATUS[t].active).length, inativos: signed.filter((t) => !TERM_STATUS[t].active).length,
+    andamento: live.filter((r) => r.status === 'RASCUNHO' || r.status === 'AGUARDANDO').length, excluidos: rows.length - live.length,
+    venceEmBreve: signed.filter((t) => t === 'VENCE_EM_BREVE').length,
+  };
 }
 
 export async function getContract(principal: P | null, id: string) {
@@ -164,6 +212,9 @@ export async function getContract(principal: P | null, id: string) {
     id: c.id, code: c.code, title: c.title, category: c.category, status: c.status, templateId: c.templateId, companyId: c.companyId,
     values: c.values as Record<string, string>, body: c.body, bodyHash: c.bodyHash, hasFinal: !!c.finalPath, finalHash: c.finalHash, notes: c.notes,
     sentAt: c.sentAt?.toISOString() ?? null, completedAt: c.completedAt?.toISOString() ?? null, cancelReason: c.cancelReason,
+    startsOn: fromDate(c.startsOn), endsOn: fromDate(c.endsOn), terminatedOn: fromDate(c.terminatedOn), terminationReason: c.terminationReason,
+    termStatus: c.status === 'ASSINADO' ? termStatus({ startsOn: fromDate(c.startsOn), endsOn: fromDate(c.endsOn), terminatedOn: fromDate(c.terminatedOn) }, todayIso()) : null,
+    deletedAt: c.deletedAt?.toISOString() ?? null, deleteReason: c.deleteReason,
     template: c.template ? { id: c.template.id, name: c.template.name, body: c.template.body, fields: c.template.fields as unknown as TemplateField[], signerRoles: c.template.signerRoles } : null,
     signers: c.signers.map((s) => ({ id: s.id, role: s.role, name: s.name, document: s.document, phone: s.phone, email: s.email, status: s.status, viewedAt: s.viewedAt?.toISOString() ?? null, signedAt: s.signedAt?.toISOString() ?? null, refusedReason: s.refusedReason })),
     events: c.events.map((e) => ({ at: e.at.toISOString(), type: e.type, who: e.signerId ? names.get(e.signerId) ?? null : null, ip: e.ipAddress, detail: e.detail })),
@@ -181,11 +232,12 @@ export async function saveContract(principal: P | null, id: string | null, input
   return prisma.$transaction(async (tx) => {
     const t = await tx.contractTemplate.findUnique({ where: { id: d.templateId } });
     if (!t) throw new AppError('Modelo não encontrado.');
-    const data = { templateId: t.id, companyId: d.companyId ?? null, title: d.title, category: t.category, values: d.values, notes: d.notes || null };
+    const term = d.term ?? guessTerm(d.values);
+    checkTerm(term.startsOn, term.endsOn);
+    const data = { templateId: t.id, companyId: d.companyId ?? null, title: d.title, category: t.category, values: d.values, notes: d.notes || null, startsOn: toDate(term.startsOn), endsOn: toDate(term.endsOn) };
     let cid = id;
     if (id) {
-      const cur = await tx.contract.findUnique({ where: { id } });
-      if (!cur) throw new NotFoundError('Contrato não encontrado.');
+      const cur = await liveContract(tx, id);
       if (cur.status !== 'RASCUNHO') throw new AppError('Contrato já enviado para assinatura: não dá para alterar. Cancele e crie outro.');
       await tx.contract.update({ where: { id }, data });
       await tx.contractSigner.deleteMany({ where: { contractId: id } });
@@ -268,6 +320,7 @@ export async function sendContract(principal: P | null, id: string, origin: stri
   const prepared = await prisma.$transaction(async (tx) => {
     const c = await tx.contract.findUnique({ where: { id }, include: { signers: { orderBy: { position: 'asc' } } } });
     if (!c) throw new NotFoundError('Contrato não encontrado.');
+    if (c.deletedAt) throw new AppError('Contrato na lixeira: restaure antes de enviar.');
     if (c.status !== 'RASCUNHO') throw new AppError('Este contrato já foi enviado.');
     if (!c.signers.length) throw new AppError('Inclua quem vai assinar.');
     const noPhone = c.signers.filter((s) => !s.phone);
@@ -293,6 +346,7 @@ export async function resendLink(principal: P | null, signerId: string, origin: 
   assertCan(principal, 'contract.edit');
   const s = await prisma.contractSigner.findUnique({ where: { id: signerId }, include: { contract: true } });
   if (!s) throw new NotFoundError('Parte não encontrada.');
+  if (s.contract.deletedAt) throw new AppError('Contrato na lixeira: restaure antes.');
   if (s.contract.status === 'RASCUNHO' || s.contract.status === 'CANCELADO') throw new AppError('Envie o contrato para assinatura primeiro.');
   const t = newToken();
   await prisma.$transaction(async (tx) => {
@@ -308,13 +362,66 @@ export async function cancelContract(principal: P | null, id: string, reason: st
   const r = reason.trim();
   if (r.length < 3) throw new AppError('Diga o motivo do cancelamento.');
   await prisma.$transaction(async (tx) => {
-    const c = await tx.contract.findUnique({ where: { id } });
-    if (!c) throw new NotFoundError('Contrato não encontrado.');
+    const c = await liveContract(tx, id);
     if (c.status === 'ASSINADO') throw new AppError('Contrato já assinado por todos: não dá para cancelar aqui (faça um distrato).');
     await tx.contract.update({ where: { id }, data: { status: 'CANCELADO', cancelledAt: new Date(), cancelReason: r } });
     await tx.contractSigner.updateMany({ where: { contractId: id }, data: { tokenHash: null } });
     await event(tx, id, 'CANCELADO', { meta, detail: { por: principal.name, motivo: r } });
     await audit(tx, { actorId: principal.id, ...meta }, { action: 'contract.cancelled', entityType: 'contract', entityId: id, after: { motivo: r }, summary: `${principal.name} cancelou o contrato ${c.code}` });
+  });
+}
+
+/** Ajusta a vigência (controle interno: o texto assinado não muda). */
+export async function setContractTerm(principal: P | null, id: string, input: { startsOn: string | null; endsOn: string | null }, meta: RequestMeta) {
+  assertCan(principal, 'contract.edit');
+  const d = parse(z.object({ startsOn: isoDate.nullable(), endsOn: isoDate.nullable() }), input);
+  checkTerm(d.startsOn, d.endsOn);
+  await prisma.$transaction(async (tx) => {
+    const c = await liveContract(tx, id);
+    await tx.contract.update({ where: { id }, data: { startsOn: toDate(d.startsOn), endsOn: toDate(d.endsOn) } });
+    await event(tx, id, 'VIGENCIA', { meta, detail: { por: principal.name, inicio: d.startsOn, fim: d.endsOn ?? 'indeterminado' } });
+    await audit(tx, { actorId: principal.id, ...meta }, { action: 'contract.term', entityType: 'contract', entityId: id, before: { inicio: fromDate(c.startsOn), fim: fromDate(c.endsOn) }, after: { inicio: d.startsOn, fim: d.endsOn }, summary: `${principal.name} ajustou a vigência do contrato ${c.code}` });
+  });
+}
+
+/** Encerramento antes do prazo (distrato/rescisão). `null` desfaz o encerramento. */
+export async function terminateContract(principal: P | null, id: string, input: { on: string; reason: string } | null, meta: RequestMeta) {
+  assertCan(principal, 'contract.edit');
+  const d = input ? parse(z.object({ on: isoDate, reason: z.string().trim().min(3, 'Diga o motivo do encerramento.').max(300) }), input) : null;
+  await prisma.$transaction(async (tx) => {
+    const c = await liveContract(tx, id);
+    if (c.status !== 'ASSINADO') throw new AppError('Só contrato assinado pode ser encerrado. Antes da assinatura, use "Cancelar".');
+    if (d && c.startsOn && d.on < fromDate(c.startsOn)!) throw new AppError('O encerramento não pode ser antes do início da vigência.');
+    await tx.contract.update({ where: { id }, data: { terminatedOn: toDate(d?.on ?? null), terminationReason: d?.reason ?? null } });
+    await event(tx, id, d ? 'ENCERRADO' : 'REATIVADO', { meta, detail: { por: principal.name, ...(d ? { em: d.on, motivo: d.reason } : {}) } });
+    await audit(tx, { actorId: principal.id, ...meta }, { action: d ? 'contract.terminated' : 'contract.reactivated', entityType: 'contract', entityId: id, after: d ? { em: d.on, motivo: d.reason } : {}, summary: `${principal.name} ${d ? `encerrou o contrato ${c.code} em ${d.on}` : `desfez o encerramento do contrato ${c.code}`}` });
+  });
+}
+
+/** Lixeira: some das listas e os links de assinatura param de funcionar. Restaurável. */
+export async function deleteContract(principal: P | null, id: string, reason: string, meta: RequestMeta) {
+  assertCan(principal, 'contract.edit');
+  const r = reason.trim();
+  if (r.length < 3) throw new AppError('Diga o motivo da exclusão.');
+  await prisma.$transaction(async (tx) => {
+    const c = await liveContract(tx, id);
+    if (c.status === 'AGUARDANDO') throw new AppError('Contrato aguardando assinaturas: cancele antes de excluir.');
+    await tx.contract.update({ where: { id }, data: { deletedAt: new Date(), deletedById: principal.id, deleteReason: r.slice(0, 300) } });
+    await tx.contractSigner.updateMany({ where: { contractId: id }, data: { tokenHash: null, otpHash: null } });
+    await event(tx, id, 'EXCLUIDO', { meta, detail: { por: principal.name, motivo: r } });
+    await audit(tx, { actorId: principal.id, ...meta }, { action: 'contract.deleted', entityType: 'contract', entityId: id, after: { codigo: c.code, motivo: r }, summary: `${principal.name} moveu o contrato ${c.code} para a lixeira` });
+  });
+}
+
+export async function restoreContract(principal: P | null, id: string, meta: RequestMeta) {
+  assertCan(principal, 'contract.edit');
+  await prisma.$transaction(async (tx) => {
+    const c = await tx.contract.findUnique({ where: { id } });
+    if (!c) throw new NotFoundError('Contrato não encontrado.');
+    if (!c.deletedAt) return;
+    await tx.contract.update({ where: { id }, data: { deletedAt: null, deletedById: null, deleteReason: null } });
+    await event(tx, id, 'RESTAURADO', { meta, detail: { por: principal.name } });
+    await audit(tx, { actorId: principal.id, ...meta }, { action: 'contract.restored', entityType: 'contract', entityId: id, after: { codigo: c.code }, summary: `${principal.name} restaurou o contrato ${c.code} da lixeira` });
   });
 }
 
@@ -410,7 +517,7 @@ export async function refuseSign(token: string, reason: string, meta: RequestMet
 
 const EVENT_TEXT: Record<string, string> = {
   CRIADO: 'contrato criado', ENVIADO: 'enviado para assinatura', VISUALIZADO: 'abriu o contrato', CODIGO_ENVIADO: 'código enviado por WhatsApp',
-  CODIGO_ERRADO: 'código digitado errado', ASSINADO: 'assinou', RECUSADO: 'recusou', LINK_NOVO: 'novo link gerado', CONCLUIDO: 'todas as partes assinaram', CANCELADO: 'contrato cancelado',
+  CODIGO_ERRADO: 'código digitado errado', ASSINADO: 'assinou', RECUSADO: 'recusou', LINK_NOVO: 'novo link gerado', CONCLUIDO: 'todas as partes assinaram', CANCELADO: 'contrato cancelado', VIGENCIA: 'vigência ajustada', ENCERRADO: 'contrato encerrado antes do prazo', REATIVADO: 'encerramento desfeito', EXCLUIDO: 'movido para a lixeira', RESTAURADO: 'restaurado da lixeira',
 };
 
 /** Todas as partes assinaram: PDF com página de evidências, guardado no armazenamento privado. */

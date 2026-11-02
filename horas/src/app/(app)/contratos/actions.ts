@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { getPrincipal, requestMeta } from '@/server/auth/session';
 import { runAction, type ActionResult } from '@/server/action-result';
 import {
-  cancelContract, loadDefaultTemplates, previewBuiltins, resendLink, saveContract, saveTemplate, sendContract,
+  cancelContract, deleteContract, loadDefaultTemplates, restoreContract, setContractTerm, terminateContract, previewBuiltins, resendLink, saveContract, saveTemplate, sendContract,
 } from '@/server/services/contract-service';
 
 const refresh = () => revalidatePath('/contratos', 'layout');
@@ -37,4 +37,16 @@ export async function saveTemplateAction(id: string | null, input: unknown): Pro
 }
 export async function loadDefaultTemplatesAction(): Promise<ActionResult<string[]>> {
   return runAction(async () => { const r = await loadDefaultTemplates(await getPrincipal(), await requestMeta()); refresh(); return r; });
+}
+export async function setContractTermAction(id: string, term: { startsOn: string | null; endsOn: string | null }): Promise<ActionResult> {
+  return runAction(async () => { await setContractTerm(await getPrincipal(), id, term, await requestMeta()); refresh(); return undefined; }, 'Vigência atualizada.');
+}
+export async function terminateContractAction(id: string, input: { on: string; reason: string } | null): Promise<ActionResult> {
+  return runAction(async () => { await terminateContract(await getPrincipal(), id, input, await requestMeta()); refresh(); return undefined; }, input ? 'Contrato encerrado.' : 'Encerramento desfeito.');
+}
+export async function deleteContractAction(id: string, reason: string): Promise<ActionResult> {
+  return runAction(async () => { await deleteContract(await getPrincipal(), id, reason, await requestMeta()); refresh(); return undefined; }, 'Contrato movido para a lixeira.');
+}
+export async function restoreContractAction(id: string): Promise<ActionResult> {
+  return runAction(async () => { await restoreContract(await getPrincipal(), id, await requestMeta()); refresh(); return undefined; }, 'Contrato restaurado.');
 }

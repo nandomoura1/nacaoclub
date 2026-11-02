@@ -240,3 +240,62 @@ export function contractBlocks(text: string): Block[] {
 
 /** Código do contrato: CT-AAAA-0001. */
 export const contractCode = (year: number, seq: number) => `CT-${year}-${String(seq).padStart(4, '0')}`;
+
+// ── Vigência (ativo / inativo pelo prazo) ─────────────────────
+
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
+function addIso(iso: string, n: number, unit: 'd' | 'm' | 'y'): string {
+  const [y, m, d] = iso.split('-').map(Number) as [number, number, number];
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (unit === 'd') dt.setUTCDate(dt.getUTCDate() + n);
+  else {
+    const months = unit === 'y' ? n * 12 : n;
+    const target = new Date(Date.UTC(y, m - 1 + months, 1));
+    const last = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+    dt.setTime(Date.UTC(target.getUTCFullYear(), target.getUTCMonth(), Math.min(d, last)));
+  }
+  return dt.toISOString().slice(0, 10);
+}
+
+/**
+ * Lê a vigência dos campos do contrato: {{inicio}} + {{fim}}, ou {{inicio}} + {{prazo}}
+ * ("12 meses", "2 anos", "90 dias", "indeterminado"). Sem dado → nulo (preencher à mão).
+ */
+export function guessTerm(values: Record<string, string>): { startsOn: string | null; endsOn: string | null; indefinite: boolean } {
+  const startsOn = ISO.test(values.inicio ?? '') ? values.inicio! : null;
+  if (ISO.test(values.fim ?? '')) return { startsOn, endsOn: values.fim!, indefinite: false };
+  const prazo = (values.prazo ?? '').toLowerCase();
+  if (/indetermin/.test(prazo)) return { startsOn, endsOn: null, indefinite: true };
+  const m = prazo.match(/(\d+)\s*(dia|m[eê]s|mes|ano)/);
+  if (startsOn && m) {
+    const n = Number(m[1]);
+    const unit = m[2]!.startsWith('dia') ? 'd' : m[2]!.startsWith('ano') ? 'y' : 'm';
+    return { startsOn, endsOn: addIso(addIso(startsOn, n, unit), -1, 'd'), indefinite: false };
+  }
+  return { startsOn, endsOn: null, indefinite: false };
+}
+
+export const TERM_STATUS = {
+  A_INICIAR: { label: 'A iniciar', tone: 'blue', active: true },
+  ATIVO: { label: 'Ativo', tone: 'green', active: true },
+  VENCE_EM_BREVE: { label: 'Vence em breve', tone: 'amber', active: true },
+  SEM_VIGENCIA: { label: 'Sem vigência', tone: 'neutral', active: true },
+  VENCIDO: { label: 'Vencido', tone: 'red', active: false },
+  ENCERRADO: { label: 'Encerrado', tone: 'red', active: false },
+} as const;
+export type TermStatus = keyof typeof TERM_STATUS;
+
+/** Situação de um contrato ASSINADO na data de hoje. "Vence em breve" = até 30 dias. */
+export function termStatus(c: { startsOn: string | null; endsOn: string | null; terminatedOn: string | null }, today: string): TermStatus {
+  if (c.terminatedOn && c.terminatedOn <= today) return 'ENCERRADO';
+  if (c.endsOn && c.endsOn < today) return 'VENCIDO';
+  if (c.startsOn && c.startsOn > today) return 'A_INICIAR';
+  if (c.endsOn && c.endsOn <= addIso(today, 30, 'd')) return 'VENCE_EM_BREVE';
+  if (!c.startsOn && !c.endsOn) return 'SEM_VIGENCIA';
+  return 'ATIVO';
+}
+
+/** Dias até o fim (negativo = já venceu). */
+export function daysUntil(iso: string, today: string): number {
+  return Math.round((Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) - Date.UTC(+today.slice(0, 4), +today.slice(5, 7) - 1, +today.slice(8, 10))) / 86_400_000);
+}

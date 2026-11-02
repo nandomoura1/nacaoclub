@@ -16,6 +16,7 @@ import { cancelContractAction, resendLinkAction, sendContractAction } from '../a
 const EVENT: Record<string, string> = {
   CRIADO: 'criou o contrato', ENVIADO: 'enviou para assinatura', VISUALIZADO: 'abriu o contrato', CODIGO_ENVIADO: 'pediu o código no WhatsApp',
   CODIGO_ERRADO: 'digitou um código errado', ASSINADO: 'assinou', RECUSADO: 'recusou', LINK_NOVO: 'novo link gerado', CONCLUIDO: 'contrato concluído (todos assinaram)', CANCELADO: 'contrato cancelado',
+  VIGENCIA: 'ajustou a vigência', ENCERRADO: 'encerrou antes do prazo', REATIVADO: 'desfez o encerramento', EXCLUIDO: 'moveu para a lixeira', RESTAURADO: 'restaurou da lixeira',
 };
 const SIGNER: Record<string, { label: string; tone: 'green' | 'amber' | 'red' }> = {
   ASSINADO: { label: 'Assinou', tone: 'green' }, PENDENTE: { label: 'Pendente', tone: 'amber' }, RECUSADO: { label: 'Recusou', tone: 'red' },
