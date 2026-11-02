@@ -97,6 +97,8 @@ Coordenador, Admin): o professor programa no celular (For Time, AMRAP, EMOM, Tab
 pelo bloco do treino do dia) e a TV (`/tv/<token>`) mostra WOD + timer. Estado em `tv_screens.timer` (início/pausas);
 a TV consulta `/tv/<token>/timer` a cada 2 s e calcula o tempo localmente (sincroniza o relógio). Com timer, a TV
 não recarrega sozinha (som/ritmo); "Tirar da TV" volta ao modo normal. Bipes exigem "Ativar som" uma vez na TV.
+**Sequência** (`SEQUENCE`, até 10 partes, um Iniciar só, contagem inicial única): a TV passa de parte em parte e mostra
+"parte X de N · a seguir"; For Time sem cap só pode ser a última; "Próxima parte" pula o restante da atual.
 
 **Kanban de Marketing**: estilo Trello (navegação lateral, colunas com rolagem própria,
 "Adicionar um cartão"), imagens no cartão (PNG/JPG/WEBP/GIF ≤ 10 MB, sem SVG; a primeira é a capa),

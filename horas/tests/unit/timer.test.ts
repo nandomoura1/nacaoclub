@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyTimer, describeTimer, elapsedOf, normalizeTimer, suggestTimer, timerFrame, timerTotalSec } from '@/domain/timer';
+import { applyTimer, describeTimer, elapsedOf, normalizeTimer, sequenceErrors, suggestTimer, timerFrame, timerTotalSec } from '@/domain/timer';
 
 const s = (sec: number, lead = 10) => (lead + sec) * 1000;
 
@@ -57,5 +57,42 @@ describe('cronômetro de aula', () => {
     expect(suggestTimer(b('For time', { timeCapMin: 15 }))).toMatchObject({ kind: 'FOR_TIME', durationSec: 900 });
     expect(suggestTimer(b('Tabata'))).toMatchObject({ kind: 'INTERVAL', workSec: 20, restSec: 10, rounds: 8 });
     expect(suggestTimer(b('3 séries de 10'))).toBeNull();
+  });
+});
+
+describe('sequência de timers', () => {
+  const seq = normalizeTimer({ kind: 'SEQUENCE', label: 'Treino', leadInSec: 10, parts: [
+    { kind: 'EMOM', workSec: 60, rounds: 10, label: 'EMOM', leadInSec: 10 } as never,
+    { kind: 'COUNTDOWN', durationSec: 120, label: 'Descanso' } as never,
+    { kind: 'FOR_TIME', durationSec: 900, label: 'For Time' } as never,
+  ] });
+  it('EMOM 10 → descanso 2 → For Time 15, uma contagem só no começo', () => {
+    expect(seq.parts!.map((p) => p.leadInSec)).toEqual([0, 0, 0]);
+    expect(timerTotalSec(seq)).toBe(600 + 120 + 900);
+    expect(describeTimer(seq)).toBe('EMOM 10 × 01:00 → Descanso 02:00 → For Time · cap 15:00');
+    expect(sequenceErrors(seq)).toEqual([]);
+    expect(timerFrame(seq, null)).toMatchObject({ phase: 'READY', part: 1, parts: 3 });
+    expect(timerFrame(seq, 3_000)).toMatchObject({ phase: 'LEAD', part: 1 });
+    expect(timerFrame(seq, s(61))).toMatchObject({ phase: 'WORK', part: 1, round: 2, clock: '00:59', next: 'Descanso 02:00' });
+    expect(timerFrame(seq, s(600))).toMatchObject({ phase: 'REST', part: 2, clock: '02:00', next: 'For Time · cap 15:00' });
+    expect(timerFrame(seq, s(719.5))).toMatchObject({ phase: 'REST', part: 2, clock: '00:01' });
+    expect(timerFrame(seq, s(720))).toMatchObject({ phase: 'WORK', part: 3, clock: '00:00', next: null });
+    expect(timerFrame(seq, s(720 + 125))).toMatchObject({ part: 3, clock: '02:05' });
+    expect(timerFrame(seq, s(1620))).toMatchObject({ phase: 'DONE', caption: 'TIME CAP' });
+  });
+  it('For Time sem cap só no fim; "próxima parte" pula o restante', () => {
+    const bad = normalizeTimer({ kind: 'SEQUENCE', parts: [{ kind: 'FOR_TIME', durationSec: 0 } as never, { kind: 'COUNTDOWN', durationSec: 60 } as never] });
+    expect(sequenceErrors(bad)[0]).toMatch(/Parte 1/);
+    expect(sequenceErrors(normalizeTimer({ kind: 'SEQUENCE', parts: [{ kind: 'AMRAP', durationSec: 60 } as never] }))[0]).toMatch(/2 partes/);
+    let st = applyTimer(null, { type: 'program', config: seq }, 0)!;
+    st = applyTimer(st, { type: 'start' }, 0)!;
+    st = applyTimer(st, { type: 'next' }, 5_000)!; // na contagem → começa a parte 1
+    expect(timerFrame(seq, elapsedOf(st, 5_000))).toMatchObject({ part: 1, clock: '01:00', round: 1 });
+    st = applyTimer(st, { type: 'next' }, 30_000)!; // no EMOM → vai para o descanso
+    expect(timerFrame(seq, elapsedOf(st, 30_000))).toMatchObject({ part: 2, clock: '02:00' });
+    st = applyTimer(st, { type: 'pause' }, 40_000)!;
+    st = applyTimer(st, { type: 'next' }, 50_000)!; // pausado também funciona
+    expect(timerFrame(seq, elapsedOf(st, 99_000))).toMatchObject({ part: 3, clock: '00:00' });
+    expect(applyTimer(st, { type: 'next' }, 60_000)).toBe(st); // última parte: nada a pular
   });
 });

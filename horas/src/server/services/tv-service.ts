@@ -9,7 +9,7 @@ import { AppError, NotFoundError } from '@/server/errors';
 import { addDays, fromUtc, isIsoDate, toUtc, type IsoDate } from '@/domain/dates';
 import type { BlockKind, WorkoutBlockData } from '@/domain/workout';
 import { screenDate } from '@/domain/workout-tv';
-import { applyTimer, normalizeTimer, suggestTimer, type TimerCommand, type TimerConfig, type TimerState } from '@/domain/timer';
+import { MAX_PARTS, applyTimer, normalizeTimer, sequenceErrors, suggestTimer, type TimerCommand, type TimerConfig, type TimerState } from '@/domain/timer';
 import { Prisma } from '@prisma/client';
 import { getWeek } from './workout-service';
 
@@ -145,15 +145,20 @@ export async function deleteScreen(principal: Principal | null, id: string, meta
 
 // ── Cronômetro de aula (controle no celular do professor, exibição na TV) ──
 
-const timerConfigSchema = z.object({
+const partSchema = z.object({
   kind: z.enum(['FOR_TIME', 'AMRAP', 'EMOM', 'INTERVAL', 'COUNTDOWN']),
   durationSec: z.number().optional(), workSec: z.number().optional(), restSec: z.number().optional(),
   rounds: z.number().optional(), leadInSec: z.number().optional(), label: z.string().max(80).optional(),
+});
+const timerConfigSchema = partSchema.extend({
+  kind: z.enum(['FOR_TIME', 'AMRAP', 'EMOM', 'INTERVAL', 'COUNTDOWN', 'SEQUENCE']),
+  parts: z.array(partSchema).max(MAX_PARTS).optional(),
 });
 const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('program'), config: timerConfigSchema }),
   z.object({ type: z.literal('start') }), z.object({ type: z.literal('pause') }), z.object({ type: z.literal('resume') }),
   z.object({ type: z.literal('reset') }), z.object({ type: z.literal('clear') }), z.object({ type: z.literal('full'), on: z.boolean() }),
+  z.object({ type: z.literal('next') }),
 ]);
 
 const asTimer = (v: unknown): TimerState | null => (v && typeof v === 'object' && 'config' in v ? (v as TimerState) : null);
@@ -185,7 +190,8 @@ export async function commandTimer(principal: Principal | null, screenId: string
   assertCan(principal, 'workout.tv_timer');
   const p = commandSchema.safeParse(input);
   if (!p.success) throw new AppError('Comando inválido.');
-  const cmd: TimerCommand = p.data.type === 'program' ? { type: 'program', config: normalizeTimer(p.data.config) } : p.data;
+  const cmd: TimerCommand = p.data.type === 'program' ? { type: 'program', config: normalizeTimer(p.data.config as TimerConfig) } : p.data;
+  if (cmd.type === 'program') { const errs = sequenceErrors(cmd.config); if (errs.length) throw new AppError(errs[0]!); }
   return prisma.$transaction(async (tx) => {
     const s = await tx.tvScreen.findUnique({ where: { id: screenId }, select: { id: true, active: true, timer: true } });
     if (!s || !s.active) throw new NotFoundError('Tela não encontrada.');

@@ -33,6 +33,14 @@ describe.skipIf(!hasDb)('Cronômetro da TV', () => {
     await commandTimer(prof.principal, screenId, { type: 'full', on: true });
     expect((await timerState(prof.principal, screenId)).timer!.full).toBe(true);
     await expect(commandTimer(prof.principal, screenId, { type: 'explodir' })).rejects.toThrow(/inválido/);
+    // Sequência: EMOM 10 → descanso 2 → For Time 15, com "próxima parte".
+    const seq = { kind: 'SEQUENCE', label: 'Treino', parts: [{ kind: 'EMOM', workSec: 60, rounds: 10 }, { kind: 'COUNTDOWN', durationSec: 120, label: 'Descanso' }, { kind: 'FOR_TIME', durationSec: 900 }] };
+    const r = await commandTimer(prof.principal, screenId, { type: 'program', config: seq });
+    expect(r.timer!.config.parts!.map((x) => x.kind)).toEqual(['EMOM', 'COUNTDOWN', 'FOR_TIME']);
+    await commandTimer(prof.principal, screenId, { type: 'start' });
+    const before = r.timer!.rev;
+    expect((await commandTimer(prof.principal, screenId, { type: 'next' })).timer!.rev).toBeGreaterThan(before);
+    await expect(commandTimer(prof.principal, screenId, { type: 'program', config: { kind: 'SEQUENCE', parts: [{ kind: 'FOR_TIME', durationSec: 0 }, { kind: 'COUNTDOWN', durationSec: 60 }] } })).rejects.toThrow(/sem cap/);
     await commandTimer(prof.principal, screenId, { type: 'clear' });
     expect((await tvTimerByToken(token))!.timer).toBeNull();
     expect(await tvTimerByToken('nao-existe-0000')).toBeNull();

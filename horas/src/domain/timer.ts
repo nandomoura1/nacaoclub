@@ -5,7 +5,7 @@
  * o tempo não atrasa.
  */
 
-export type TimerKind = 'FOR_TIME' | 'AMRAP' | 'EMOM' | 'INTERVAL' | 'COUNTDOWN';
+export type TimerKind = 'FOR_TIME' | 'AMRAP' | 'EMOM' | 'INTERVAL' | 'COUNTDOWN' | 'SEQUENCE';
 
 export interface TimerConfig {
   kind: TimerKind;
@@ -21,7 +21,11 @@ export interface TimerConfig {
   leadInSec: number;
   /** Nome que aparece na TV (ex.: "WOD", "Tabata"). */
   label: string;
+  /** SEQUENCE: partes em seguida (ex.: EMOM 10 → descanso 2 → For Time 15). */
+  parts?: TimerConfig[];
 }
+
+export const MAX_PARTS = 10;
 
 export const TIMER_KINDS: { id: TimerKind; label: string; hint: string }[] = [
   { id: 'FOR_TIME', label: 'For Time', hint: 'Conta para cima até o time cap.' },
@@ -30,8 +34,10 @@ export const TIMER_KINDS: { id: TimerKind; label: string; hint: string }[] = [
   { id: 'INTERVAL', label: 'Tabata / intervalado', hint: 'Trabalho e descanso por N rounds (Tabata = 20s/10s × 8).' },
   { id: 'COUNTDOWN', label: 'Regressivo', hint: 'Contagem regressiva simples (descanso, prancha, etc.).' },
 ];
+/** Sequência não entra na lista de tipos simples (é montada com eles). */
+export const SEQUENCE_LABEL = 'Sequência';
 
-export const kindLabel = (k: TimerKind) => TIMER_KINDS.find((t) => t.id === k)?.label ?? k;
+export const kindLabel = (k: TimerKind) => (k === 'SEQUENCE' ? SEQUENCE_LABEL : TIMER_KINDS.find((t) => t.id === k)?.label ?? k);
 
 const clampInt = (n: unknown, min: number, max: number, dflt: number) => {
   const v = Math.round(Number(n));
@@ -40,6 +46,13 @@ const clampInt = (n: unknown, min: number, max: number, dflt: number) => {
 
 /** Normaliza o que vem da tela (limites sensatos para aula). */
 export function normalizeTimer(raw: Partial<TimerConfig> & { kind: TimerKind }): TimerConfig {
+  if (raw.kind === 'SEQUENCE') {
+    const parts = (raw.parts ?? []).filter((p) => p && p.kind !== 'SEQUENCE').slice(0, MAX_PARTS).map((p) => ({ ...normalizeTimer({ ...p, leadInSec: 0 }) }));
+    return {
+      kind: 'SEQUENCE', durationSec: 0, workSec: 0, restSec: 0, rounds: parts.length, leadInSec: clampInt(raw.leadInSec, 0, 30, 10),
+      label: String(raw.label ?? '').trim().slice(0, 40) || 'Treino', parts,
+    };
+  }
   const kind = TIMER_KINDS.some((t) => t.id === raw.kind) ? raw.kind : 'COUNTDOWN';
   return {
     kind,
@@ -59,7 +72,30 @@ export function timerTotalSec(c: TimerConfig): number | null {
     case 'AMRAP': case 'COUNTDOWN': return c.durationSec;
     case 'EMOM': return c.workSec * c.rounds;
     case 'INTERVAL': return (c.workSec + c.restSec) * c.rounds - c.restSec;
+    case 'SEQUENCE': {
+      let sum = 0;
+      for (const p of c.parts ?? []) { const t = timerTotalSec(p); if (t === null) return null; sum += t; }
+      return sum;
+    }
   }
+}
+
+/** Problemas da sequência (For Time sem cap só pode ser a última parte: senão não sabe quando seguir). */
+export function sequenceErrors(c: TimerConfig): string[] {
+  if (c.kind !== 'SEQUENCE') return [];
+  const parts = c.parts ?? [];
+  const e: string[] = [];
+  if (parts.length < 2) e.push('Monte pelo menos 2 partes.');
+  parts.forEach((p, i) => { if (i < parts.length - 1 && timerTotalSec(p) === null) e.push(`Parte ${i + 1} (For Time sem cap): dê um time cap ou deixe por último.`); });
+  return e;
+}
+
+/** Início (em segundos, sem a contagem inicial) de cada parte da sequência. */
+export function partStarts(c: TimerConfig): number[] {
+  const starts: number[] = [];
+  let acc = 0;
+  for (const p of c.parts ?? []) { starts.push(acc); acc += timerTotalSec(p) ?? Infinity; }
+  return starts;
 }
 
 export type Phase = 'READY' | 'LEAD' | 'WORK' | 'REST' | 'DONE';
@@ -73,6 +109,11 @@ export interface Frame {
   caption: string;
   /** 0–1 do trecho atual (barra de progresso). */
   progress: number;
+  /** Sequência: parte atual (1…N), total, nome da parte e o que vem depois. */
+  part?: number;
+  parts?: number;
+  partLabel?: string;
+  next?: string | null;
 }
 
 export function fmtClock(totalSec: number): string {
@@ -87,6 +128,7 @@ export function fmtClock(totalSec: number): string {
  * Contagens regressivas arredondam para cima (mostra 0:01 até o último segundo acabar).
  */
 export function timerFrame(c: TimerConfig, elapsedMs: number | null): Frame {
+  if (c.kind === 'SEQUENCE') return sequenceFrame(c, elapsedMs);
   const total = timerTotalSec(c);
   if (elapsedMs === null) {
     const show = c.kind === 'FOR_TIME' ? 0 : c.kind === 'EMOM' || c.kind === 'INTERVAL' ? c.workSec : c.durationSec;
@@ -123,6 +165,27 @@ export function timerFrame(c: TimerConfig, elapsedMs: number | null): Frame {
   }
 }
 
+function sequenceFrame(c: TimerConfig, elapsedMs: number | null): Frame {
+  const parts = c.parts ?? [];
+  const n = parts.length;
+  const info = (i: number) => ({ part: i + 1, parts: n, partLabel: parts[i] ? describeTimer(parts[i]!) : '', next: parts[i + 1] ? describeTimer(parts[i + 1]!) : null });
+  if (!n) return { phase: 'DONE', clock: '00:00', round: null, rounds: null, caption: 'Sequência vazia', progress: 1 };
+  if (elapsedMs === null) {
+    const f = timerFrame(parts[0]!, null);
+    return { ...f, caption: describeTimer(c), ...info(0) };
+  }
+  const lead = c.leadInSec * 1000;
+  if (elapsedMs < lead) return { phase: 'LEAD', clock: String(Math.ceil((lead - elapsedMs) / 1000)), round: null, rounds: null, caption: 'Prepare-se', progress: elapsedMs / lead, ...info(0) };
+  const t = (elapsedMs - lead) / 1000;
+  const starts = partStarts(c);
+  let i = 0;
+  while (i < n - 1 && t >= starts[i + 1]!) i++;
+  const f = timerFrame(parts[i]!, (t - starts[i]!) * 1000);
+  // Fim de uma parte do meio não aparece: a próxima já começou. Só a última termina a sequência.
+  const isRest = parts[i]!.kind === 'COUNTDOWN' && /descanso|rest/i.test(parts[i]!.label);
+  return { ...f, phase: f.phase === 'WORK' && isRest ? 'REST' : f.phase, caption: f.phase === 'DONE' || f.caption.startsWith(parts[i]!.label) ? f.caption : `${parts[i]!.label} · ${f.caption}`, ...info(i) };
+}
+
 /** Resumo curto ("AMRAP 12:00", "EMOM 10 × 1:00", "Tabata 8 × 0:20/0:10"). */
 export function describeTimer(c: TimerConfig): string {
   switch (c.kind) {
@@ -131,6 +194,7 @@ export function describeTimer(c: TimerConfig): string {
     case 'COUNTDOWN': return `${c.label} ${fmtClock(c.durationSec)}`;
     case 'EMOM': return `EMOM ${c.rounds} × ${fmtClock(c.workSec)}`;
     case 'INTERVAL': return `${c.label} ${c.rounds} × ${fmtClock(c.workSec)}/${fmtClock(c.restSec)}`;
+    case 'SEQUENCE': return (c.parts ?? []).map(describeTimer).join(' → ') || 'Sequência vazia';
   }
 }
 
@@ -183,7 +247,7 @@ export function elapsedOf(s: TimerState, now: number): number | null {
 export type TimerCommand =
   | { type: 'program'; config: TimerConfig }
   | { type: 'start' } | { type: 'pause' } | { type: 'resume' } | { type: 'reset' }
-  | { type: 'full'; on: boolean } | { type: 'clear' };
+  | { type: 'full'; on: boolean } | { type: 'clear' } | { type: 'next' };
 
 /** Aplica um comando do controle (celular do professor). `null` = sem timer na TV. */
 export function applyTimer(s: TimerState | null, cmd: TimerCommand, now: number): TimerState | null {
@@ -197,5 +261,17 @@ export function applyTimer(s: TimerState | null, cmd: TimerCommand, now: number)
     case 'resume': return s.pausedAt !== null ? { ...s, pausedMs: s.pausedMs + (now - s.pausedAt), pausedAt: null, rev } : s;
     case 'reset': return { ...s, startedAt: null, pausedAt: null, pausedMs: 0, rev };
     case 'full': return { ...s, full: cmd.on, rev };
+    case 'next': {
+      // Pula para o começo da próxima parte (turma terminou o For Time antes do cap).
+      if (s.config.kind !== 'SEQUENCE' || s.startedAt === null) return s;
+      const el = elapsedOf(s, now)!;
+      const lead = s.config.leadInSec * 1000;
+      const t = (el - lead) / 1000;
+      // Na contagem inicial, "próxima" = começar já a primeira parte.
+      const nextStart = el < lead ? 0 : partStarts(s.config).find((st) => st > t + 1e-6);
+      if (nextStart === undefined || !Number.isFinite(nextStart)) return s;
+      const target = lead + nextStart * 1000;
+      return { ...s, startedAt: s.startedAt - (target - el), rev };
+    }
   }
 }
