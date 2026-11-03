@@ -104,6 +104,34 @@ export async function contractPdf(input: ContractPdfInput): Promise<Uint8Array> 
       y -= 6;
       for (const l of lines) { drawLine(l, M, 11); y -= LEAD; }
       y -= 2;
+    } else if (b.kind === 'hr') {
+      ensure(14);
+      page.drawLine({ start: { x: M, y: y + 4 }, end: { x: W - M, y: y + 4 }, thickness: 0.6, color: LINE });
+      y -= 12;
+    } else if (b.kind === 'table') {
+      // Tabela simples: colunas iguais, cabeçalho em negrito com fundo claro, linhas com borda.
+      const cols = Math.max(...b.rows.map((r) => r.length));
+      const cw = (W - 2 * M) / cols, pad = 6;
+      y -= 2;
+      b.rows.forEach((row, ri) => {
+        const cells = Array.from({ length: cols }, (_, ci) => layoutRuns((row[ci] ?? []).map((r) => (ri === 0 ? { ...r, bold: true } : r)), regular, bold, BODY - 0.5, cw - 2 * pad));
+        const h = Math.max(1, ...cells.map((c) => c.length)) * (LEAD - 2) + 8;
+        ensure(h + 4);
+        const top = y + LEAD - 4;
+        if (ri === 0) page.drawRectangle({ x: M, y: top - h, width: W - 2 * M, height: h, color: C.blueBg });
+        page.drawRectangle({ x: M, y: top - h, width: W - 2 * M, height: h, borderColor: LINE, borderWidth: 0.6 });
+        for (let ci = 1; ci < cols; ci++) page.drawLine({ start: { x: M + ci * cw, y: top }, end: { x: M + ci * cw, y: top - h }, thickness: 0.6, color: LINE });
+        cells.forEach((lines, ci) => {
+          let ly = top - 4 - (BODY - 0.5);
+          for (const l of lines) {
+            let cx = M + ci * cw + pad;
+            for (const w of l) { const f = w.bold ? bold : regular; page.drawText(w.text, { x: cx, y: ly, size: BODY - 0.5, font: f, color: INK }); cx += f.widthOfTextAtSize(w.text, BODY - 0.5) + regular.widthOfTextAtSize(' ', BODY - 0.5); }
+            ly -= LEAD - 2;
+          }
+        });
+        y -= h;
+      });
+      y -= 10;
     } else {
       const indent = b.kind === 'li' ? 16 : 0;
       const lines = layoutRuns(b.runs, regular, bold, BODY, W - 2 * M - indent);

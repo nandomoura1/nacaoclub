@@ -12,6 +12,23 @@ export function ContractText({ text, className }: { text: string; className?: st
   blocks.forEach((b, i) => {
     if (b.kind === 'li') { list.push(<li key={i}>{runs(b.runs)}</li>); return; }
     flush();
+    if (b.kind === 'hr') { out.push(<hr key={i} className="border-borda" />); return; }
+    if (b.kind === 'table') {
+      out.push(
+        <div key={i} className="overflow-x-auto">
+          <table className="w-full border-collapse text-left text-sm">
+            <tbody>
+              {b.rows.map((row, ri) => (
+                <tr key={ri} className={ri === 0 ? 'bg-fundo font-semibold' : ''}>
+                  {row.map((cell, ci) => <td key={ci} className="border border-borda px-2 py-1 align-top">{runs(cell)}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>,
+      );
+      return;
+    }
     if (b.kind === 'h1') out.push(<h2 key={i} className="pt-1 text-center text-base font-extrabold uppercase text-navy">{runs(b.runs)}</h2>);
     else if (b.kind === 'h2') out.push(<h3 key={i} className="pt-2 font-bold text-tinta">{runs(b.runs)}</h3>);
     else out.push(<p key={i}>{runs(b.runs)}</p>);

@@ -15,7 +15,7 @@ export default async function Page() {
   if (!can(principal, 'contract.edit')) redirect('/contratos');
   const [templates, companies] = await Promise.all([
     listTemplates(principal),
-    prisma.company.findMany({ where: { active: true }, orderBy: [{ sortOrder: 'asc' }, { legalName: 'asc' }], select: { id: true, legalName: true, tradeName: true } }),
+    prisma.company.findMany({ where: { active: true }, orderBy: [{ sortOrder: 'asc' }, { legalName: 'asc' }], select: { id: true, legalName: true, tradeName: true, cnpj: true } }),
   ]);
   return (
     <>
@@ -25,7 +25,7 @@ export default async function Page() {
           Nenhum modelo ativo. {can(principal, 'contract.templates') ? <Link href="/contratos/modelos" className="font-semibold text-nacao">Cadastre ou carregue os modelos iniciais</Link> : 'Peça a quem cuida dos modelos para cadastrar.'}
         </Card>
       ) : (
-        <ContractForm templates={templates} companies={companies.map((c) => ({ id: c.id, name: c.tradeName ?? c.legalName }))} initial={null} />
+        <ContractForm templates={templates} companies={companies.map((c) => ({ id: c.id, name: c.tradeName ?? c.legalName, legalName: c.legalName, cnpj: c.cnpj }))} initial={null} />
       )}
     </>
   );

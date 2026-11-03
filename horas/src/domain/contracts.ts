@@ -75,6 +75,8 @@ export function checkTemplate(body: string, fields: TemplateField[]): string[] {
     if (!/^[a-z0-9_]{2,40}$/.test(f.key)) errors.push(`Chave inválida: "${f.key}" (use letras minúsculas, números e _).`);
     if (BUILTIN.has(f.key)) errors.push(`"${f.key}" é variável do sistema: escolha outra chave.`);
   }
+  const bad = [...body.matchAll(/\{\{([^}]*)\}\}/g)].map((m) => m[1]!.trim()).filter((k) => !/^[a-z0-9_]+$/.test(k));
+  if (bad.length) errors.push(`Entre {{ }} vai só o nome do campo (letras minúsculas, números e _), não o valor: ${[...new Set(bad)].slice(0, 3).map((k) => `{{${k.slice(0, 30)}}}`).join(', ')}. O valor é preenchido em cada contrato.`);
   const unknown = templateKeys(body).filter((k) => !keys.has(k) && !BUILTIN.has(k));
   if (unknown.length) errors.push(`Variáveis sem campo: ${unknown.map((k) => `{{${k}}}`).join(', ')}. Crie o campo ou corrija o texto.`);
   return errors;
@@ -217,24 +219,91 @@ export function renderContract(body: string, fields: TemplateField[], values: Re
 // ── Estrutura do texto ────────────────────────────────────────
 
 export type Run = { text: string; bold: boolean };
-export type Block = { kind: 'h1' | 'h2' | 'p' | 'li'; runs: Run[] };
+export type Block =
+  | { kind: 'h1' | 'h2' | 'p' | 'li'; runs: Run[] }
+  /** Tabela "| a | b |" — a 1ª linha é o cabeçalho; a linha "|---|---|" é ignorada. */
+  | { kind: 'table'; runs: Run[]; rows: Run[][][] }
+  /** Linha "---": separador. */
+  | { kind: 'hr'; runs: Run[] };
 
-/** "# Título", "## Cláusula", "- item", parágrafos (linha em branco) e **negrito**. */
+/** Trechos normais e **negrito** (o *itálico* simples sai sem os asteriscos). */
+function toRuns(s: string): Run[] {
+  return s.split(/(\*\*[^*]+\*\*)/).filter(Boolean).map((p) => (/^\*\*[^*]+\*\*$/.test(p)
+    ? { text: p.slice(2, -2), bold: true }
+    : { text: p.replace(/(^|[^*])\*([^*\s][^*]*?)\*(?!\*)/g, '$1$2'), bold: false }));
+}
+
+/** "# Título", "## Cláusula", "- item", "| tabela |", "---", parágrafos (linha em branco) e **negrito**. */
 export function contractBlocks(text: string): Block[] {
-  const runs = (s: string): Run[] => s.split(/(\*\*[^*]+\*\*)/).filter(Boolean).map((p) => (/^\*\*[^*]+\*\*$/.test(p) ? { text: p.slice(2, -2), bold: true } : { text: p, bold: false }));
   const out: Block[] = [];
   let para: string[] = [];
-  const flush = () => { if (para.length) { out.push({ kind: 'p', runs: runs(para.join(' ')) }); para = []; } };
+  let table: Run[][][] | null = null;
+  const flush = () => {
+    if (para.length) { out.push({ kind: 'p', runs: toRuns(para.join(' ')) }); para = []; }
+    if (table) { if (table.length) out.push({ kind: 'table', runs: [], rows: table }); table = null; }
+  };
   for (const raw of text.replace(/\r\n/g, '\n').split('\n')) {
     const line = raw.trim();
     if (!line) { flush(); continue; }
+    if (/^\|.*\|$/.test(line)) {
+      if (para.length) { out.push({ kind: 'p', runs: toRuns(para.join(' ')) }); para = []; }
+      const cells = line.slice(1, -1).split('|').map((c) => c.trim());
+      if (cells.every((c) => /^:?-{2,}:?$/.test(c))) continue; // |---|---|
+      (table ??= []).push(cells.map(toRuns));
+      continue;
+    }
+    if (table) flush();
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(line)) { flush(); out.push({ kind: 'hr', runs: [] }); continue; }
     const h = /^(#{1,2})\s+(.*)$/.exec(line);
-    if (h) { flush(); out.push({ kind: h[1]!.length === 1 ? 'h1' : 'h2', runs: runs(h[2]!) }); continue; }
+    if (h) { flush(); out.push({ kind: h[1]!.length === 1 ? 'h1' : 'h2', runs: toRuns(h[2]!) }); continue; }
     const li = /^[-•]\s+(.*)$/.exec(line);
-    if (li) { flush(); out.push({ kind: 'li', runs: runs(li[1]!) }); continue; }
+    if (li) { flush(); out.push({ kind: 'li', runs: toRuns(li[1]!) }); continue; }
     para.push(line);
   }
   flush();
+  return out;
+}
+
+// ── Dados da empresa escritos à mão no modelo ─────────────────
+
+const fold = (c: string) => c.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+
+/** Procura `needle` em `hay` ignorando acento e maiúscula; devolve [início, fim) no texto original. */
+function findLoose(hay: string, needle: string): [number, number][] {
+  const map: number[] = [];
+  let norm = '';
+  for (let i = 0; i < hay.length; i++) { const f = fold(hay[i]!); for (const ch of f) { norm += ch; map.push(i); } }
+  const n = fold(needle).replace(/\s+/g, ' ').trim();
+  if (n.length < 4) return [];
+  const out: [number, number][] = [];
+  const flat = norm.replace(/\s/g, ' ');
+  for (let at = flat.indexOf(n); at >= 0; at = flat.indexOf(n, at + n.length)) out.push([map[at]!, map[at + n.length - 1]! + 1]);
+  return out;
+}
+
+export interface CompanyLike { legalName: string; tradeName: string | null; cnpj: string | null }
+
+/**
+ * Nome/CNPJ de empresa cadastrada escrito à mão no texto do modelo: ao trocar a empresa no
+ * contrato, esses trechos não mudariam. Devolve o que achou (para avisar na tela).
+ */
+export function companyLiterals(body: string, companies: CompanyLike[]): string[] {
+  const found = new Set<string>();
+  for (const c of companies) {
+    if (findLoose(body, c.legalName).length) found.add(c.legalName);
+    if (c.cnpj) { const d = c.cnpj.replace(/\D/g, ''); if (body.includes(formatDocument(d)) || body.includes(d)) found.add(`CNPJ ${formatDocument(d)}`); }
+  }
+  return [...found];
+}
+
+/** Troca nome e CNPJ das empresas cadastradas pelas variáveis {{empresa_razao_social}} e {{empresa_cnpj}}. */
+export function replaceCompanyLiterals(body: string, companies: CompanyLike[]): string {
+  let out = body;
+  for (const c of companies) {
+    if (c.cnpj) { const d = c.cnpj.replace(/\D/g, ''); out = out.split(formatDocument(d)).join('{{empresa_cnpj}}').split(d).join('{{empresa_cnpj}}'); }
+    const hits = findLoose(out, c.legalName);
+    for (const [a, b] of hits.reverse()) out = out.slice(0, a) + '{{empresa_razao_social}}' + out.slice(b);
+  }
   return out;
 }
 

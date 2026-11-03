@@ -8,7 +8,7 @@ import { FormMessage } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input, Label, Select } from '@/components/ui/input';
-import { CONTRACT_CATEGORIES, SIGNER_ROLES, guessTerm, renderContract, type TemplateField } from '@/domain/contracts';
+import { CONTRACT_CATEGORIES, SIGNER_ROLES, companyLiterals, guessTerm, renderContract, type TemplateField } from '@/domain/contracts';
 import { previewBuiltinsAction, saveContractAction } from './actions';
 
 export interface FormTemplate { id: string; name: string; category: string; description: string | null; body: string; fields: TemplateField[]; signerRoles: string[] }
@@ -18,7 +18,7 @@ export interface FormInitial { id: string; code: string; templateId: string | nu
 const area = 'min-h-20 w-full rounded-lg border border-borda bg-white px-3 py-2 text-sm text-tinta focus:border-nacao focus:outline-none focus:ring-2 focus:ring-nacao/20';
 const blank = (role: string): Signer => ({ role, name: '', document: '', phone: '', email: '' });
 
-export function ContractForm({ templates, companies, initial }: { templates: FormTemplate[]; companies: { id: string; name: string }[]; initial: FormInitial | null }) {
+export function ContractForm({ templates, companies, initial }: { templates: FormTemplate[]; companies: { id: string; name: string; legalName: string; cnpj: string | null }[]; initial: FormInitial | null }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<{ error?: string; success?: string }>({});
@@ -90,6 +90,9 @@ export function ContractForm({ templates, companies, initial }: { templates: For
             </div>
           </div>
           {t?.description && <p className="text-xs text-tinta-suave">{t.description}</p>}
+          {t && companyLiterals(t.body, companies.map((c) => ({ legalName: c.legalName, tradeName: c.name, cnpj: c.cnpj }))).length > 0 && (
+            <p className="rounded-lg bg-atencao/10 px-3 py-2 text-xs text-atencao">Este modelo tem o nome/CNPJ de uma empresa escrito no próprio texto: trocar a empresa aqui não muda esses trechos. Ajuste o modelo em <b>Modelos de contrato</b> (botão &quot;Trocar nome e CNPJ por variáveis&quot;).</p>
+          )}
           <div>
             <Label htmlFor="title">Título do contrato</Label>
             <Input id="title" value={title} maxLength={160} onChange={(e) => setTitle(e.target.value)} placeholder="Ex.: João Silva — aulas de Beach Tennis" />

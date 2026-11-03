@@ -122,3 +122,6 @@ anterior. Modelos-base são ponto de partida: **revisar com o jurídico** antes 
 (assinado e no prazo, inclui "a iniciar"/"vence em breve" ≤ 30 dias), Inativos (vencido ou **encerrado antes do
 prazo** com data e motivo — reversível), Em andamento, Lixeira. **Excluir = lixeira** (motivo obrigatório,
 links param, restaurável); aguardando assinatura precisa ser cancelado antes. Sem exclusão definitiva.
+**Modelos**: dados da contratante sempre por variável (`{{empresa_razao_social}}`, `{{empresa_cnpj}}`, `{{empresa_endereco}}`,
+`{{empresa_nome}}`) — o editor avisa e troca nome/CNPJ escritos à mão; `{{ }}` só aceita chave de campo (não valor).
+Texto aceita `| tabela |` e `---` (tela e PDF).

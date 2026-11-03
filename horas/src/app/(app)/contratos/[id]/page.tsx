@@ -30,7 +30,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   const [templates, companies] = draft
     ? await Promise.all([
         listTemplates(principal, { all: true }),
-        prisma.company.findMany({ where: { active: true }, orderBy: [{ sortOrder: 'asc' }, { legalName: 'asc' }], select: { id: true, legalName: true, tradeName: true } }),
+        prisma.company.findMany({ where: { active: true }, orderBy: [{ sortOrder: 'asc' }, { legalName: 'asc' }], select: { id: true, legalName: true, tradeName: true, cnpj: true } }),
       ])
     : [[], []];
   return (
@@ -44,7 +44,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
           <h2 className="mb-3 text-lg font-extrabold text-navy">Editar rascunho</h2>
           <ContractForm
             templates={templates.filter((t) => t.active || t.id === c.templateId)}
-            companies={companies.map((x) => ({ id: x.id, name: x.tradeName ?? x.legalName }))}
+            companies={companies.map((x) => ({ id: x.id, name: x.tradeName ?? x.legalName, legalName: x.legalName, cnpj: x.cnpj }))}
             initial={{ id: c.id, code: c.code, templateId: c.templateId, companyId: c.companyId, title: c.title, values: c.values, notes: c.notes, startsOn: c.startsOn, endsOn: c.endsOn, signers: c.signers }}
           />
         </div>

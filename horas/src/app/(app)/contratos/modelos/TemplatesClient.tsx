@@ -8,19 +8,20 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input, Label, Select } from '@/components/ui/input';
-import { BUILTIN_VARS, CONTRACT_CATEGORIES, FIELD_TYPES, SIGNER_ROLES, checkTemplate, roleLabel, suggestFields, type FieldType, type TemplateField } from '@/domain/contracts';
+import { BUILTIN_VARS, CONTRACT_CATEGORIES, companyLiterals, replaceCompanyLiterals, type CompanyLike, FIELD_TYPES, SIGNER_ROLES, checkTemplate, roleLabel, suggestFields, type FieldType, type TemplateField } from '@/domain/contracts';
 import type { TemplateRow } from '@/server/services/contract-service';
 import { loadDefaultTemplatesAction, saveTemplateAction } from '../actions';
 
 interface Draft { id: string | null; name: string; category: string; description: string; body: string; fields: TemplateField[]; signerRoles: string[]; active: boolean }
 const empty: Draft = { id: null, name: '', category: 'PRESTADOR', description: '', body: '# CONTRATO DE …\n\n**CONTRATANTE:** {{empresa_razao_social}}, CNPJ {{empresa_cnpj}}…\n\n## Cláusula 1ª — Objeto\n\n…', fields: [], signerRoles: ['CONTRATANTE', 'CONTRATADO'], active: true };
 
-export function TemplatesClient({ templates, canEdit }: { templates: TemplateRow[]; canEdit: boolean }) {
+export function TemplatesClient({ templates, companies, canEdit }: { templates: TemplateRow[]; companies: CompanyLike[]; canEdit: boolean }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<{ error?: string; success?: string }>({});
   const [d, setD] = useState<Draft | null>(null);
   const problems = useMemo(() => (d ? checkTemplate(d.body, d.fields) : []), [d]);
+  const literals = useMemo(() => (d ? companyLiterals(d.body, companies) : []), [d, companies]);
   const set = (p: Partial<Draft>) => setD((x) => (x ? { ...x, ...p } : x));
   const setField = (i: number, p: Partial<TemplateField>) => set({ fields: d!.fields.map((f, j) => (j === i ? { ...f, ...p } : f)) });
 
@@ -62,8 +63,14 @@ export function TemplatesClient({ templates, canEdit }: { templates: TemplateRow
         <Card className="space-y-2 p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-extrabold text-navy">Texto do contrato</h2>
-            <span className="text-xs text-tinta-suave"># título · ## cláusula · - item · **negrito** · {'{{campo}}'}</span>
+            <span className="text-xs text-tinta-suave"># título · ## cláusula · - item · **negrito** · | tabela | · --- · {'{{campo}}'}</span>
           </div>
+          {literals.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg bg-atencao/10 px-3 py-2 text-xs text-atencao">
+              <span className="flex-1"><b>Dados de empresa escritos à mão:</b> {literals.join(' · ')}. Assim, trocar a empresa no contrato não muda o texto. Use {'{{empresa_razao_social}}'}, {'{{empresa_cnpj}}'}, {'{{empresa_endereco}}'} e {'{{empresa_nome}}'}.</span>
+              <Button size="sm" variant="secondary" onClick={() => set({ body: replaceCompanyLiterals(d.body, companies) })}>Trocar nome e CNPJ por variáveis</Button>
+            </div>
+          )}
           <textarea className="min-h-[28rem] w-full rounded-lg border border-borda p-3 font-mono text-xs leading-relaxed focus:border-nacao focus:outline-none" value={d.body} onChange={(e) => set({ body: e.target.value })} />
           <p className="text-xs text-tinta-suave">Variáveis do sistema (preenchidas sozinhas): {BUILTIN_VARS.map((b) => <code key={b.key} className="mr-1 rounded bg-fundo px-1">{`{{${b.key}}}`}</code>)}</p>
         </Card>
