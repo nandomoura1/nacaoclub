@@ -18,6 +18,7 @@ import { leaderboardDoSnapshot } from '@/lib/scoring/build';
 import { standingsByCategory } from '@/lib/scoring/overall';
 import { matchesQuery } from '@/lib/search';
 import { useLiveSnapshot } from '@/hooks/useLiveSnapshot';
+import { criterioPorExtenso } from '@/lib/evento/conferencia';
 import { LiveIndicator } from '@/components/LiveIndicator';
 import { RankingTable } from '@/components/RankingTable';
 import { WodRanking } from '@/components/WodRanking';
@@ -171,7 +172,9 @@ export function LeaderboardView({ initial }: { initial: Snapshot }) {
             {criterios.map((c, i) => (
               <span key={c}>
                 {i > 0 ? ', depois no ' : ''}
-                <strong className="text-white/70">{tieBreakerCurto(c)}</strong>
+                <strong className="text-white/70">
+                  {criterioPorExtenso(c, snapshot.wods) ?? tieBreakerCurto(c)}
+                </strong>
               </span>
             ))}
           </p>

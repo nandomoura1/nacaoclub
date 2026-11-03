@@ -9,6 +9,7 @@ import { capEmTexto, horariosDaBateria } from '@/types/wod';
 import { leaderboardDoSnapshot } from '@/lib/scoring/build';
 import { standingsByCategory } from '@/lib/scoring/overall';
 import { useLiveSnapshot } from '@/hooks/useLiveSnapshot';
+import { criterioPorExtenso } from '@/lib/evento/conferencia';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { LiveIndicator } from '@/components/LiveIndicator';
@@ -166,7 +167,8 @@ export function TeamDetail({ initial, teamId }: { initial: Snapshot; teamId: str
             {row.desempatadoPor ? (
               <p className="mt-1 text-xs text-nacao-sky">
                 Empate de pontos resolvido pela melhor colocação no{' '}
-                {tieBreakerCurto(row.desempatadoPor)}
+                {criterioPorExtenso(row.desempatadoPor, snapshot.wods) ??
+                  tieBreakerCurto(row.desempatadoPor)}
               </p>
             ) : null}
           </div>

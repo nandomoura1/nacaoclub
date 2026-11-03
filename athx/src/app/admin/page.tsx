@@ -7,6 +7,8 @@ import { ADMIN_STATUSES } from '@/lib/scoring/eligibility';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { EventErrorScreen } from '@/components/EventErrorScreen';
+import { ConferenciaDoEvento } from '@/components/admin/ConferenciaDoEvento';
+import { conferirEvento } from '@/lib/evento/conferencia';
 import type { Snapshot } from '@/services/snapshot';
 
 export const dynamic = 'force-dynamic';
@@ -21,6 +23,10 @@ export default async function AdminDashboard() {
   }
 
   const publico = leaderboardDoSnapshot(snapshot);
+
+  // O que está torto na configuração. Um problema aqui não dá erro durante
+  // o evento — decide o pódio em silêncio.
+  const achados = conferirEvento(snapshot.wods, snapshot.settings, snapshot.teams.length);
 
   const previa = leaderboardDoSnapshot(snapshot, { statuses: ADMIN_STATUSES });
 
@@ -58,6 +64,8 @@ export default async function AdminDashboard() {
           ) : null}
         </div>
       </header>
+
+      <ConferenciaDoEvento achados={achados} />
 
       {/* ---- Fluxo do dia ------------------------------------------------- */}
       <section>
