@@ -107,10 +107,34 @@ function pontuarProva(args: ArgsProva): Map<string, ProvaScore> {
 
   const scores = new Map<string, ProvaScore>();
   for (const team of teams) {
+    /**
+     * O valor só é exposto se ESTA visão aceita o lançamento.
+     *
+     * Antes o valor cru era atribuído a todo mundo e só o ranking era
+     * filtrado. Uma dupla com lançamento em RASCUNHO ficava sem posição e
+     * sem pontos — correto — mas carregando o número para dentro do placar
+     * público, que o desenha na coluna da prova. Resultado homologado é o
+     * único que o público pode ver (§19).
+     *
+     * Na prática o banco já barrava antes: o RLS de prova_results não
+     * entrega rascunho a quem não é da organização. Mas a regra passava a
+     * depender de uma camada só, e quem abrisse o leaderboard logado como
+     * organização veria o rascunho numa tela pública — inclusive no telão.
+     *
+     * Com ADMIN_STATUSES o lançamento conta e o valor aparece, que é
+     * exatamente o que a tela de conferência precisa.
+     */
+    const contado = contaNaProva(
+      buscarEntrada(entradas, wod.id, team.id),
+      doProva.get(team.id) ?? null,
+      statuses,
+      wod,
+    );
+
     scores.set(team.id, {
       provaId: prova.id,
       teamId: team.id,
-      valor: doProva.get(team.id) ?? null,
+      valor: contado ? (doProva.get(team.id) ?? null) : null,
       rank: null,
       points: null,
       tied: false,
