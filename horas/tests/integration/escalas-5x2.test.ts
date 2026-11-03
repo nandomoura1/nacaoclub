@@ -104,6 +104,16 @@ describe.skipIf(!hasDb)('Escalas de Trabalho 5x2', () => {
       await setScheduleStatus(admin.principal, view.schedule!.id, 'PUBLICADA', META);
       await expect(generateSchedule(lider.principal, sector, 2026, 11, META)).rejects.toThrow(/Reabra/);
       await expect(editCell(lider.principal, view.schedule!.id, members[0]!, '2026-11-04', { kind: 'FOLGA' }, META)).rejects.toThrow(/reabra/);
+      // O líder reabre para edição (com motivo no histórico); aprovar/publicar de novo continua com a gestão.
+      await expect(setScheduleStatus(lider.principal, view.schedule!.id, 'RASCUNHO', META)).rejects.toThrow(/motivo/);
+      await setScheduleStatus(lider.principal, view.schedule!.id, 'RASCUNHO', META, { reason: 'Trocar folga do dia 15' });
+      const reopened = await loadMonth(lider.principal, sector, 2026, 11);
+      expect(reopened.schedule!.status).toBe('RASCUNHO');
+      const log = await prisma.auditLog.findFirst({ where: { entityId: view.schedule!.id, action: 'ws.schedule.rascunho' }, orderBy: { at: 'desc' } });
+      expect(log!.summary).toMatch(/Trocar folga do dia 15/);
+      await expect(setScheduleStatus(lider.principal, view.schedule!.id, 'APROVADA', META)).rejects.toBeInstanceOf(AuthorizationError);
+      await setScheduleStatus(admin.principal, view.schedule!.id, 'APROVADA', META);
+      await setScheduleStatus(admin.principal, view.schedule!.id, 'PUBLICADA', META);
     }
 
     // Ausência lançada depois: a escala publicada não muda, mas a análise mostra o conflito e sugere substituto.

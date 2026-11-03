@@ -88,6 +88,11 @@ export function ScheduleClient({ view }: { view: MonthView }) {
   const conflictCount = a.alerts.filter((x) => x.level === 'CONFLITO').length;
   const status = (to: 'RASCUNHO' | 'APROVADA' | 'PUBLICADA') => {
     let accept: { reason: string } | undefined;
+    if (to === 'RASCUNHO' && !view.can.publish) {
+      const reason = prompt(`Reabrir a escala ${s.status === 'PUBLICADA' ? 'publicada' : 'aprovada'} para edição? Ela volta a rascunho e a gestão precisa aprovar de novo. Motivo (fica no histórico):`);
+      if (reason === null) return;
+      accept = { reason };
+    }
     if (to !== 'RASCUNHO' && conflictCount) {
       const reason = prompt(`A escala tem ${conflictCount} conflito(s) (veja os alertas). Para ${to === 'PUBLICADA' ? 'publicar' : 'aprovar'} mesmo assim, escreva a justificativa (ex.: "abertura das 05h coberta à mão"):`);
       if (reason === null) return;
@@ -127,8 +132,9 @@ export function ScheduleClient({ view }: { view: MonthView }) {
         {view.can.publish && s.status === 'RASCUNHO' && <Button disabled={pending} onClick={() => status('APROVADA')}><CheckCircle2 /> {conflictCount ? 'Aprovar com conflito' : 'Aprovar'}</Button>}
         {view.can.publish && s.status === 'APROVADA' && <Button disabled={pending} onClick={() => status('PUBLICADA')}><Send /> {conflictCount ? 'Publicar com conflito' : 'Publicar'}</Button>}
         {view.can.publish && s.status !== 'RASCUNHO' && <Button variant="secondary" disabled={pending} onClick={() => confirm('Reabrir volta a escala para rascunho (dá para editar e gerar de novo). Continuar?') && status('RASCUNHO')}><Unlock /> Reabrir para edição</Button>}
+        {!view.can.publish && view.can.edit && s.status !== 'RASCUNHO' && <Button variant="secondary" disabled={pending} onClick={() => status('RASCUNHO')}><Unlock /> Reabrir para edição</Button>}
         {!editable && s.status === 'RASCUNHO' && !view.can.edit && <span className="text-xs text-tinta-suave">Só leitura.</span>}
-        {s.status !== 'RASCUNHO' && <span className="inline-flex items-center gap-1 text-xs text-tinta-suave"><Lock className="size-3" /> {s.status === 'PUBLICADA' ? 'Publicada' : 'Aprovada'}: ausências novas aparecem nos alertas sem mudar a escala.</span>}
+        {s.status !== 'RASCUNHO' && <span className="inline-flex items-center gap-1 text-xs text-tinta-suave"><Lock className="size-3" /> {s.status === 'PUBLICADA' ? 'Publicada' : 'Aprovada'}: travada para edição{view.can.edit ? ' — para gerar de novo ou mudar um dia, use "Reabrir para edição"' : ''}. Ausências novas aparecem nos alertas.</span>}
         <div className="flex-1" />
         <Link href={`/escalas-trabalho/${s.id}/imprimir`} target="_blank" className={buttonVariants({ variant: 'secondary', size: 'sm' })}><Printer /> Imprimir / PDF</Link>
         <a href={`/escalas-trabalho/${s.id}/planilha`} className={buttonVariants({ variant: 'secondary', size: 'sm' })}><FileSpreadsheet /> Planilha</a>

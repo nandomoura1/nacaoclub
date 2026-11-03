@@ -67,7 +67,8 @@ Commits: mensagem em português, explicando o porquê. Sem identificador de mode
 
 **Permissões das Escalas 5x2**: Líder e Coordenador veem e **geram** escalas de **todos os setores**
 (`ws.all_sectors`); aprovar/publicar (`ws.publish`), funcionamento da Nação e parâmetros legais
-(`ws.admin`) ficam com a gestão (Administrador, DP/Financeiro). Henrique (líder comercial) está na
+(`ws.admin`) ficam com a gestão (Administrador, DP/Financeiro). Escala aprovada/publicada fica travada; **Líder e
+Coordenador podem "Reabrir para edição"** (motivo obrigatório, vai para o histórico) e a gestão aprova/publica de novo. Henrique (líder comercial) está na
 equipe da Recepção sem horário fixo e fora da geração automática: escalado à mão para cobrir furos.
 
 **Colaboradores**: `Teacher.team` = `PROFESSOR` (área fim, horista, grade de aulas) ou `ESCALA`

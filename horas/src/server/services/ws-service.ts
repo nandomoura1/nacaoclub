@@ -794,7 +794,11 @@ export async function swapCells(principal: P | null, scheduleId: string, a: { me
  * (ex.: "abertura 05h coberta à mão"): fica no histórico e aparece na escala.
  */
 export async function setScheduleStatus(principal: P | null, scheduleId: string, status: 'RASCUNHO' | 'APROVADA' | 'PUBLICADA', meta: RequestMeta, accept?: { reason: string }) {
-  assertCan(principal, 'ws.publish');
+  // Aprovar/publicar = gestão (ws.publish). Reabrir para edição = também quem monta a escala (líder/coordenador),
+  // com motivo no histórico; depois a gestão aprova de novo.
+  assertCan(principal, status === 'RASCUNHO' ? 'ws.edit' : 'ws.publish');
+  const reopenReason = status === 'RASCUNHO' && !can(principal, 'ws.publish') ? (accept?.reason ?? '').trim() : null;
+  if (reopenReason !== null && reopenReason.length < 5) throw new AppError('Diga o motivo para reabrir a escala (ex.: "trocar folga da Brenda no dia 15").');
   return prisma.$transaction(async (tx) => {
     const sch = await tx.wsSchedule.findUnique({ where: { id: scheduleId }, include: { sector: { select: { name: true } } } });
     if (!sch) throw new NotFoundError('Escala não encontrada.');
@@ -810,6 +814,7 @@ export async function setScheduleStatus(principal: P | null, scheduleId: string,
       await tx.wsSchedule.update({ where: { id: scheduleId }, data: { analysis: { ...a, accepted } as object } });
       if (accepted) await audit(tx, ctx(principal, meta), { action: 'ws.schedule.conflicts_accepted', entityType: 'ws_schedule', entityId: scheduleId, after: { conflitos: conflicts.map((x) => x.message), justificativa: accepted.reason }, summary: `${principal.name} ${status === 'PUBLICADA' ? 'publicou' : 'aprovou'} a escala de ${sch.sector.name} com ${conflicts.length} conflito(s): ${accepted.reason}` });
     }
+    if (status === 'RASCUNHO' && sch.status === 'RASCUNHO') return;
     const label = { RASCUNHO: 'reabriu para edição', APROVADA: 'aprovou', PUBLICADA: 'publicou' }[status];
     await tx.wsSchedule.update({
       where: { id: scheduleId },
@@ -820,7 +825,7 @@ export async function setScheduleStatus(principal: P | null, scheduleId: string,
       },
     });
     const mi = monthInfo(sch.year, sch.month);
-    await audit(tx, ctx(principal, meta), { action: `ws.schedule.${status.toLowerCase()}`, entityType: 'ws_schedule', entityId: scheduleId, before: { status: sch.status }, after: { status }, summary: `${principal.name} ${label} a escala de ${sch.sector.name} — ${mi.label}` });
+    await audit(tx, ctx(principal, meta), { action: `ws.schedule.${status.toLowerCase()}`, entityType: 'ws_schedule', entityId: scheduleId, before: { status: sch.status }, after: { status, ...(reopenReason ? { motivo: reopenReason } : {}) }, summary: `${principal.name} ${label} a escala de ${sch.sector.name} — ${mi.label}${reopenReason ? `: ${reopenReason}` : ''}` });
   }, { timeout: 60_000, maxWait: 10_000 });
 }
 
