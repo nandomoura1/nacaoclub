@@ -186,6 +186,19 @@ function sequenceFrame(c: TimerConfig, elapsedMs: number | null): Frame {
   return { ...f, phase: f.phase === 'WORK' && isRest ? 'REST' : f.phase, caption: f.phase === 'DONE' || f.caption.startsWith(parts[i]!.label) ? f.caption : `${parts[i]!.label} · ${f.caption}`, ...info(i) };
 }
 
+/** Etiqueta curta da parte para a TV ("EMOM 10'", "Descanso 2'", "For Time 15'", "Tabata 8×"). */
+export function shortTimer(c: TimerConfig): string {
+  const min = (sec: number) => (sec % 60 ? fmtClock(sec) : `${sec / 60}'`);
+  switch (c.kind) {
+    case 'FOR_TIME': return c.durationSec ? `${c.label === 'For Time' || !c.label ? 'For Time' : c.label} ${min(c.durationSec)}` : c.label || 'For Time';
+    case 'AMRAP': return `${/amrap/i.test(c.label) ? c.label : `AMRAP`} ${min(c.durationSec)}`;
+    case 'COUNTDOWN': return `${c.label} ${min(c.durationSec)}`;
+    case 'EMOM': return `EMOM ${min(c.workSec * c.rounds)}`;
+    case 'INTERVAL': return `${c.label} ${c.rounds}×`;
+    case 'SEQUENCE': return c.label;
+  }
+}
+
 /** Resumo curto ("AMRAP 12:00", "EMOM 10 × 1:00", "Tabata 8 × 0:20/0:10"). */
 export function describeTimer(c: TimerConfig): string {
   switch (c.kind) {

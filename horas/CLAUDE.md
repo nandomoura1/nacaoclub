@@ -99,6 +99,9 @@ a TV consulta `/tv/<token>/timer` a cada 2 s e calcula o tempo localmente (sincr
 não recarrega sozinha (som/ritmo); "Tirar da TV" volta ao modo normal. Bipes exigem "Ativar som" uma vez na TV.
 **Sequência** (`SEQUENCE`, até 10 partes, um Iniciar só, contagem inicial única): a TV passa de parte em parte e mostra
 "parte X de N · a seguir"; For Time sem cap só pode ser a última; "Próxima parte" pula o restante da atual.
+**Layout da TV com cronômetro** (aprovado em 03/11): relógio à **esquerda** (44%: tempo, fase, "a seguir", barra,
+bolinhas dos rounds, partes da sequência) e treino à **direita** numa coluna (warm-up/mobilidade/core só com o tempo;
+força e WOD completos; o bloco do timer ganha borda azul + "AGORA"). "Tela cheia" mostra só o relógio.
 
 **Kanban de Marketing**: estilo Trello (navegação lateral, colunas com rolagem própria,
 "Adicionar um cartão"), imagens no cartão (PNG/JPG/WEBP/GIF ≤ 10 MB, sem SVG; a primeira é a capa),

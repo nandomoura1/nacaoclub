@@ -31,3 +31,20 @@ describe('Treino na TV', () => {
     expect(screenDate('2026-10-20', '2026-10-21')).toEqual({ date: '2026-10-21', pinned: false });
   });
 });
+
+describe('treino ao lado do cronômetro', () => {
+  it('uma coluna só, com letra menor que na tela inteira', () => {
+    const blocks = [
+      { kind: 'AQUECIMENTO', title: null, durationMin: 10, format: null, timeCapMin: null, content: '2 rounds', notes: null },
+      { kind: 'FORCA', title: 'Back squat', durationMin: 15, format: '5x3', timeCapMin: null, content: 'Back squat 5x3 @ 80%\nDescanso 2 min', notes: null },
+      { kind: 'WOD', title: 'Fran', durationMin: 12, format: 'For time', timeCapMin: 12, content: '21-15-9\nThrusters\nPull-ups', notes: null },
+    ] as never;
+    const full = tvLayout(blocks);
+    const side = tvLayout(blocks, { widthVh: 92, bodyVh: 70, maxColumns: 1 });
+    expect(full.columns).toHaveLength(2);
+    expect(side.columns).toHaveLength(1);
+    expect(side.columns[0]!.blocks.map((b) => b.kind)).toEqual(['FORCA', 'WOD']);
+    expect(side.quick.map((q) => q.label)).toEqual(['Warm-up']);
+    expect(side.fontVh).toBeLessThanOrEqual(full.fontVh + 0.5);
+  });
+});

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { elapsedOf, timerFrame, type Frame, type TimerState } from '@/domain/timer';
+import { elapsedOf, shortTimer, timerFrame, type Frame, type TimerState } from '@/domain/timer';
 
 /**
  * Cronômetro na TV. Consulta o estado a cada 2 s e calcula o tempo localmente a partir
@@ -85,9 +85,10 @@ export function TvTimer({ token, initial, serverNow }: { token: string; initial:
   const bg = f.phase === 'REST' ? 'rgba(32,196,250,0.16)' : f.phase === 'DONE' ? 'rgba(255,107,107,0.18)' : f.phase === 'LEAD' ? 'rgba(255,194,75,0.14)' : 'rgba(255,255,255,0.08)';
   const status = paused ? 'PAUSADO' : f.phase === 'READY' ? 'PRONTO · aguardando o professor' : f.caption;
   const bar = <div className="overflow-hidden rounded-full bg-white/15" style={{ height: '1.2vh' }}><div className="h-full rounded-full" style={{ width: `${Math.round(Math.min(1, Math.max(0, f.progress)) * 100)}%`, background: tone, transition: 'width .25s linear' }} /></div>;
-  const soundBtn = needsSound && (
+  // Tela cheia: botão flutuando embaixo; no painel lateral: dentro do painel, sem cobrir o treino.
+  const soundBtn = (floating: boolean) => needsSound && (
     // eslint-disable-next-line jsx-a11y/no-autofocus
-    <button autoFocus onClick={enableSound} className="fixed bottom-[8vh] left-1/2 z-[60] -translate-x-1/2 rounded-full bg-[#FFC24B] px-[1.4vw] py-[0.8vh] font-extrabold text-[#022B57] shadow-2xl" style={{ fontSize: '2.2vh' }}>🔊 Ativar som (OK no controle)</button>
+    <button autoFocus onClick={enableSound} className={`${floating ? 'fixed bottom-[8vh] left-1/2 z-[60] -translate-x-1/2' : 'mt-[1.4vh] self-center'} rounded-full bg-[#FFC24B] px-[1.4vw] py-[0.8vh] font-extrabold text-[#022B57] shadow-2xl`} style={{ fontSize: '2.2vh' }}>🔊 Ativar som (OK no controle)</button>
   );
 
   if (state.full) {
@@ -99,20 +100,43 @@ export function TvTimer({ token, initial, serverNow }: { token: string; initial:
         {f.round && f.rounds && <p className="font-bold text-white/80" style={{ fontSize: '4vh' }}>Round {f.round} / {f.rounds}</p>}
         {f.next && f.phase !== 'DONE' && <p className="font-bold text-white/70" style={{ fontSize: '3.2vh' }}>A seguir: {f.next}</p>}
         <div style={{ width: '70vw' }}>{bar}</div>
-        {soundBtn}
+        {soundBtn(true)}
       </div>
     );
   }
+  // Painel à esquerda da tela (o treino fica à direita): relógio grande, fase, rounds e as partes da sequência.
+  const parts = state.config.kind === 'SEQUENCE' ? state.config.parts ?? [] : [];
+  const cur = (f.part ?? 1) - 1;
+  const panelBg = f.phase === 'REST' ? 'linear-gradient(160deg, rgba(32,196,250,0.32), rgba(32,196,250,0.08))'
+    : f.phase === 'DONE' ? 'linear-gradient(160deg, rgba(255,107,107,0.30), rgba(255,107,107,0.08))'
+    : f.phase === 'LEAD' ? 'linear-gradient(160deg, rgba(255,194,75,0.26), rgba(255,194,75,0.06))' : bg;
   return (
-    <div className="mx-[3vw] mt-[1.4vh] flex items-center gap-[2.4vw] rounded-[1.8vh] px-[2vw] ring-1 ring-white/20" style={{ height: '20vh', background: bg }}>
-      <p className="font-extrabold tabular-nums leading-none" style={{ fontSize: '15vh', color: tone, opacity: paused ? 0.55 : 1, minWidth: '34vw' }}>{f.clock}</p>
-      <div className="min-w-0 flex-1 space-y-[1vh]">
-        <p className="truncate font-bold uppercase tracking-[0.2em] text-[#20C4FA]" style={{ fontSize: '2.4vh' }}>⏱ {state.config.label}{f.part ? ` · parte ${f.part} de ${f.parts}` : ''}{f.next && f.phase !== 'DONE' ? <span className="normal-case tracking-normal text-white/70"> · a seguir: {f.next}</span> : null}</p>
-        <p className="truncate font-extrabold uppercase" style={{ fontSize: '4.6vh', color: f.phase === 'DONE' ? tone : undefined }}>{status}</p>
-        {bar}
+    <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-[2.4vh] px-[2vw] pb-[2.6vh] pt-[3vh] ring-[0.25vh] ring-white/20" style={{ background: panelBg }}>
+      <p className="truncate font-bold uppercase tracking-[0.25em] text-[#20C4FA]" style={{ fontSize: '2.3vh' }}>⏱ {state.config.label}{f.part ? ` · parte ${f.part} de ${f.parts}` : ''}</p>
+      <div className="flex min-h-0 flex-1 flex-col justify-center">
+        <p className="text-center font-extrabold tabular-nums leading-[0.9] tracking-[-0.02em]" style={{ fontSize: f.phase === 'LEAD' ? '26vh' : f.clock.length > 5 ? '15vh' : '19.5vh', color: tone, opacity: paused ? 0.55 : 1 }}>{f.clock}</p>
+        <p className="mt-[1.6vh] text-center font-extrabold uppercase leading-tight" style={{ fontSize: '4.4vh', color: f.phase === 'DONE' ? tone : undefined }}>{status}</p>
+        {f.next && f.phase !== 'DONE' && <p className="mt-[0.8vh] text-center font-bold text-white/75" style={{ fontSize: '2.6vh' }}>A seguir: {f.next}</p>}
+        <div className="mt-[2.6vh]">{bar}</div>
+        {f.round && f.rounds && f.rounds <= 20 ? (
+          <div className="mt-[2vh] flex justify-center gap-[0.6vw]">
+            {Array.from({ length: f.rounds }, (_, i) => (
+              <span key={i} className="rounded-full" style={{ width: '2.4vh', height: '2.4vh', background: i + 1 < f.round! ? '#fff' : i + 1 === f.round ? '#20C4FA' : 'rgba(255,255,255,0.18)', boxShadow: i + 1 === f.round ? '0 0 0 0.5vh rgba(32,196,250,0.35)' : undefined }} />
+            ))}
+          </div>
+        ) : null}
       </div>
-      {f.round && f.rounds ? <p className="text-center font-extrabold leading-none" style={{ fontSize: '9vh' }}>{f.round}<span className="block text-white/60" style={{ fontSize: '2.2vh' }}>de {f.rounds}</span></p> : null}
-      {soundBtn}
-    </div>
+      {parts.length > 1 && (
+        <div className="flex gap-[0.8vw]">
+          {parts.map((p, i) => (
+            <div key={i} className={`min-w-0 flex-1 rounded-[1.4vh] px-[0.9vw] py-[1.2vh] ${i === cur ? 'bg-white text-[#022B57]' : 'bg-white/[0.06] ring-[0.2vh] ring-white/15'} ${i < cur ? 'opacity-45' : ''}`}>
+              <p className={`font-extrabold uppercase tracking-[0.15em] ${i === cur ? 'text-[#0169E9]' : 'text-white/55'}`} style={{ fontSize: '1.6vh' }}>Parte {i + 1}</p>
+              <p className="truncate font-extrabold" style={{ fontSize: parts.length > 4 ? '1.9vh' : '2.3vh' }}>{shortTimer(p)}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      {soundBtn(false)}
+    </section>
   );
 }

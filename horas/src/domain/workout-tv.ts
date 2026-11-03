@@ -36,13 +36,20 @@ function split(blocks: WorkoutBlockData[], n: number, cpl: number): WorkoutBlock
   return best;
 }
 
-/** `reserveVh`: altura tirada do corpo (ex.: a faixa do cronômetro). */
-export function tvLayout(blocks: WorkoutBlockData[], reserveVh = 0): TvLayout {
+/**
+ * Opções da área do treino. Padrão = tela inteira em até 3 colunas.
+ * Com cronômetro: `{ widthVh: 92, bodyVh: 70, maxColumns: 1 }` (coluna da direita, ao lado do relógio).
+ */
+export interface TvLayoutOptions { widthVh?: number; bodyVh?: number; maxColumns?: number }
+
+export function tvLayout(blocks: WorkoutBlockData[], opts: TvLayoutOptions = {}): TvLayout {
+  const width = opts.widthVh ?? SCREEN_W_VH - 8;
+  const bodyH = opts.bodyVh ?? BODY_H_VH;
   const student = blocks.map(studentBlock);
   const quick = student.filter((b) => !KIND[b.kind].detailed).map((b) => ({ label: KIND[b.kind].label, minutes: b.durationMin, title: b.title }));
   const main = student.filter((b) => KIND[b.kind].detailed);
-  const n = Math.max(1, Math.min(MAX_COLUMNS, main.length));
-  const colW = (SCREEN_W_VH - 8 - 3 * (n - 1)) / n;
+  const n = Math.max(1, Math.min(opts.maxColumns ?? MAX_COLUMNS, main.length));
+  const colW = (width - 3 * (n - 1)) / n;
   let fontVh = 1.8;
   let columns: WorkoutBlockData[][] = [main];
   for (let size = 4.6; size >= 1.8; size -= 0.1) {
@@ -50,7 +57,7 @@ export function tvLayout(blocks: WorkoutBlockData[], reserveVh = 0): TvLayout {
     const groups = split(main, n, cpl);
     const worst = Math.max(0, ...groups.map((g) => linesOf(g, cpl)));
     columns = groups;
-    if (worst * size * 1.3 <= BODY_H_VH - reserveVh) { fontVh = Math.round(size * 10) / 10; break; }
+    if (worst * size * 1.3 <= bodyH) { fontVh = Math.round(size * 10) / 10; break; }
   }
   return {
     quick,
