@@ -89,15 +89,25 @@ export function teacherGradeText(input: {
       out.push(`• ${WEEKDAYS[weekdayOf(d.date) - 1]!.short.toLowerCase()} ${formatDateBR(d.date).slice(0, 5)} ${formatClock(d.startMin)}–${formatClock(d.endMin)} ${d.sector}`);
     }
   }
+  const g = guidelinesBlock(input.groups, input.specific, name);
+  if (g) out.push('', g);
+  return out.join('\n');
+}
+
+/**
+ * Mensagem geral do gênero (Musculação × Aulas Coletivas) + orientações do professor — a parte
+ * de baixo do balão de Colaboradores. Usada também na automação de WhatsApp ({orientacoes}).
+ */
+export function guidelinesBlock(groups: Pick<ShareGroup, 'name' | 'guidelines'>[], specific: string, name: string): string {
   // Uma mensagem por gênero do professor (quem dá Musculação e Coletivas recebe as duas).
   // Texto já formatado para o WhatsApp (com *negrito*) vai como está; texto simples ganha título.
-  const specific = input.specific.trim();
-  for (const g of input.groups.filter((x) => x.guidelines.trim())) {
+  const out: string[] = [];
+  for (const g of groups.filter((x) => x.guidelines.trim())) {
     const t = g.guidelines.trim();
     out.push('', ...(t.includes('*') ? [t] : [`*Atribuições e orientações — ${g.name}*`, boldTitles(t)]));
   }
-  if (specific) out.push('', `*Para você, ${name.split(' ')[0]}*`, specific);
-  return out.join('\n');
+  if (specific.trim()) out.push('', `*Para você, ${name.split(' ')[0]}*`, specific.trim());
+  return out.join('\n').trim();
 }
 
 /** Linhas curtas sem marcador ("Conduta", "Rotina:") viram títulos em negrito. */

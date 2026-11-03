@@ -9,7 +9,7 @@ import { PERMISSION_KEYS } from '@/server/auth/permissions';
 import { AppError, NotFoundError } from '@/server/errors';
 import { addDays, fromUtc, toUtc, type IsoDate } from '@/domain/dates';
 import { demandOrder, isLate, OPEN_STATUSES } from '@/domain/processos';
-import { teacherGradeText } from '@/domain/teacher-share';
+import { guidelinesBlock, teacherGradeText } from '@/domain/teacher-share';
 import { AUDIENCES, audienceOf, baseVars, demandsBlock, describeWhen, FREQUENCIES, isDue, periodOf, renderTemplate, shiftsBlock, unknownVariables, type VariableKey } from '@/domain/wa-automations';
 import { monthName, nextSaturday, type LeaderDemand, type PersonalShift } from '@/domain/wa-jobs';
 import { maskDestination, normalizeDestination, phoneKey } from '@/domain/whatsapp';
@@ -94,7 +94,10 @@ async function teachers(today: IsoDate, f: Filter, withGrade: boolean): Promise<
     if (!d.slots.length) continue;
     // A grade sem o título (o modelo já tem o seu).
     const grade = teacherGradeText({ name: d.name, date: today, slots: d.slots, duties: [], groups: [], specific: '' }).split('\n').slice(3).join('\n');
-    out.push({ key: `t:${t.id}`, teacherId: t.id, name, phone: d.phone, vars: { ...baseVars(name, today, appUrl()), grade } });
+    // Igual ao balão de Colaboradores: mensagem geral do gênero + orientações do professor (+ escalas na completa).
+    const orientacoes = guidelinesBlock(d.groups, d.specific, d.name);
+    const completa = teacherGradeText({ name: d.name, date: today, slots: d.slots, duties: d.duties, groups: d.groups, specific: d.specific });
+    out.push({ key: `t:${t.id}`, teacherId: t.id, name, phone: d.phone, vars: { ...baseVars(name, today, appUrl()), grade, orientacoes, mensagem_completa: completa } });
   }
   return out;
 }

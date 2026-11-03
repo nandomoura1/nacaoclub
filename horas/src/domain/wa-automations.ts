@@ -23,6 +23,8 @@ export const VARIABLES = {
   demandas: 'Lista de demandas atrasadas e da semana do líder',
   escala: 'Turnos da pessoa no fim de semana',
   grade: 'Grade semanal de aulas do professor',
+  orientacoes: 'Mensagem geral do gênero (Musculação/Aulas Coletivas) + orientações do professor',
+  mensagem_completa: 'A mesma mensagem do balão de Colaboradores (grade, escalas e orientações)',
 } as const;
 export type VariableKey = keyof typeof VARIABLES;
 const BASE: VariableKey[] = ['nome', 'primeiro_nome', 'data', 'mes', 'link'];
@@ -31,7 +33,7 @@ export const AUDIENCES = [
   { id: 'LIDERES_PENDENCIAS', label: 'Líderes com demandas pendentes', detail: 'Cada líder de setor com demandas atrasadas ou vencendo em 7 dias. Quem não tem nada pendente não recebe.', vars: [...BASE, 'demandas'], filter: null },
   { id: 'LIDERES', label: 'Todos os líderes de setor', detail: 'Todos os líderes definidos em Gestão de Processos → Setores e líderes.', vars: BASE, filter: null },
   { id: 'ESCALADOS_FDS', label: 'Escalados no fim de semana', detail: 'Quem tem turno no sábado, domingo ou na segunda feriado seguinte.', vars: [...BASE, 'escala'], filter: null },
-  { id: 'PROFESSORES_GRADE', label: 'Professores com aulas fixas', detail: 'Professores ativos que têm aulas na grade semanal.', vars: [...BASE, 'grade'], filter: 'modality' },
+  { id: 'PROFESSORES_GRADE', label: 'Professores com aulas fixas', detail: 'Professores ativos que têm aulas na grade semanal.', vars: [...BASE, 'grade', 'orientacoes', 'mensagem_completa'], filter: 'modality' },
   { id: 'PROFESSORES', label: 'Todos os professores ativos', detail: 'Todos os professores ativos com WhatsApp no cadastro.', vars: BASE, filter: 'modality' },
   { id: 'PERFIL', label: 'Usuários de um perfil', detail: 'Usuários ativos de um perfil de acesso (ex.: Coordenador), com WhatsApp no cadastro.', vars: BASE, filter: 'role' },
   { id: 'NUMEROS', label: 'Números ou grupos específicos', detail: 'Lista fixa de números (um por linha) ou IDs de grupo do WhatsApp.', vars: BASE.filter((v) => v !== 'nome' && v !== 'primeiro_nome'), filter: 'numbers' },
@@ -110,6 +112,8 @@ export function sampleVars(today: IsoDate): Record<VariableKey, string> {
     demandas: demandsBlock([{ title: 'Inventário do freezer', sector: 'Lanchonete', dueDate: addDays(today, -3), late: true, priority: 'ALTA' }, { title: 'Cotação de açaí', sector: 'Lanchonete', dueDate: addDays(today, 3), late: false, priority: 'MEDIA' }]),
     escala: shiftsBlock([{ date: sat, startMin: 420, endMin: 1020, sector: 'Recepção' }]),
     grade: '*Segunda*\n• 07:00–08:00 CrossFit\n\n*Quarta*\n• 19:00–20:00 Funcional\n\nTotal: 2 aula(s) · 2h por semana',
+    orientacoes: '*Atribuições e orientações — Aulas Coletivas*\n*Conduta*\n• Chegar 10 min antes da aula…\n\n*Para você, Ana*\nResponsável por abrir o box às 5h.',
+    mensagem_completa: '*Sua grade na Nação — Ana Souza*\nValendo a partir de 01/12/2026\n\n*Segunda*\n• 07:00–08:00 CrossFit\n\nTotal: 1 aula(s) · 1h por semana\n\n*Atribuições e orientações — Aulas Coletivas*\n• Chegar 10 min antes da aula…',
   } as Record<VariableKey, string>;
 }
 

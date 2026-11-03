@@ -55,3 +55,16 @@ describe('grade do professor no WhatsApp', () => {
     expect(whatsappLink(null, 'oi')).toBe('https://wa.me/?text=oi');
   });
 });
+
+describe('orientações na automação de WhatsApp', () => {
+  it('{orientacoes} é exatamente a parte de baixo do balão (mensagem geral + orientações do professor)', async () => {
+    const { guidelinesBlock } = await import('@/domain/teacher-share');
+    const groups = [{ name: 'Aulas Coletivas', guidelines: 'Conduta\n- Chegar 10 min antes.' }];
+    const g = guidelinesBlock(groups, 'Abrir o box às 5h.', 'Ana Souza');
+    expect(g).toContain('*Atribuições e orientações — Aulas Coletivas*');
+    expect(g).toContain('*Para você, Ana*\nAbrir o box às 5h.');
+    const full = teacherGradeText({ name: 'Ana Souza', date: '2026-12-01', slots: [{ weekday: 1, startMin: 420, durationMin: 60, modality: 'CrossFit', label: null, space: null, role: 'TITULAR', counts: true }] as never, duties: [], groups, specific: 'Abrir o box às 5h.' });
+    expect(full.endsWith(g)).toBe(true);
+    expect(guidelinesBlock([{ name: 'X', guidelines: '  ' }], '', 'Ana')).toBe('');
+  });
+});
