@@ -48,3 +48,16 @@ describe('treino ao lado do cronômetro', () => {
     expect(side.fontVh).toBeLessThanOrEqual(full.fontVh + 0.5);
   });
 });
+
+describe('com cronômetro, só Força e WOD detalhados', () => {
+  const b = (kind: string, durationMin: number, title: string | null = null) => ({ kind, title, durationMin, format: null, timeCapMin: null, content: 'x', notes: null }) as never;
+  it('skill, específico e core viram etiqueta com o tempo', () => {
+    const l = tvLayout([b('MOBILIDADE', 5), b('AQUECIMENTO', 10), b('SKILL', 10), b('FORCA', 15), b('CORE', 5), b('WOD', 12), b('OUTRO', 5, 'Alongamento')], { maxColumns: 1, detailedKinds: ['FORCA', 'WOD'] });
+    expect(l.columns.flatMap((c) => c.blocks.map((x) => x.kind))).toEqual(['FORCA', 'WOD']);
+    expect(l.quick.map((q) => `${q.label} ${q.minutes}`)).toEqual(['Mobilidade 5', 'Warm-up 10', 'Skill / Técnica 10', 'Core 5', 'Alongamento 5']);
+  });
+  it('dia sem Força nem WOD (Futevôlei) mantém os blocos detalhados', () => {
+    const l = tvLayout([b('AQUECIMENTO', 10), b('FUNDAMENTO', 20), b('JOGO', 25)], { maxColumns: 1, detailedKinds: ['FORCA', 'WOD'] });
+    expect(l.columns.flatMap((c) => c.blocks.map((x) => x.kind))).toEqual(['FUNDAMENTO', 'JOGO']);
+  });
+});

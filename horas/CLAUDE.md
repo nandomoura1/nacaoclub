@@ -100,7 +100,7 @@ não recarrega sozinha (som/ritmo); "Tirar da TV" volta ao modo normal. Bipes ex
 **Sequência** (`SEQUENCE`, até 10 partes, um Iniciar só, contagem inicial única): a TV passa de parte em parte e mostra
 "parte X de N · a seguir"; For Time sem cap só pode ser a última; "Próxima parte" pula o restante da atual.
 **Layout da TV com cronômetro** (aprovado em 03/11): relógio à **esquerda** (44%: tempo, fase, "a seguir", barra,
-bolinhas dos rounds, partes da sequência) e treino à **direita** numa coluna (warm-up/mobilidade/core só com o tempo;
+bolinhas dos rounds, partes da sequência) e treino à **direita** numa coluna (**só Força e WOD detalhados**; os demais blocos só com o tempo, como o warm-up — dia sem Força/WOD, ex. Futevôlei, mantém os blocos;
 força e WOD completos; o bloco do timer ganha borda azul + "AGORA"). "Tela cheia" mostra só o relógio.
 
 **Kanban de Marketing**: estilo Trello (navegação lateral, colunas com rolagem própria,

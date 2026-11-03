@@ -16,8 +16,8 @@ const CLOCK = `(function(){var e=document.getElementById('tv-clock');if(!e)retur
 /** Treino do dia em tela cheia, para a TV do box (16:9, letra grande, sem cortar). */
 export function TvBoard({ v, refreshSeconds, live }: { v: TvDay; refreshSeconds: number; live?: { token: string; timer: TimerState | null; serverNow: number } }) {
   const timer = live?.timer ?? null;
-  // Com cronômetro: relógio à esquerda (44%) e o treino numa coluna só à direita (warm-up etc. só com o tempo).
-  const layout = tvLayout(v.blocks, timer ? { widthVh: 87, bodyVh: 66, maxColumns: 1 } : {});
+  // Com cronômetro: relógio à esquerda (44%) e o treino à direita: só Força e WOD detalhados; o resto só com o tempo.
+  const layout = tvLayout(v.blocks, timer ? { widthVh: 87, bodyVh: 66, maxColumns: 1, detailedKinds: ['FORCA', 'WOD'] } : {});
   // Bloco em destaque: o que gerou este timer (mesmo formato) ou, na dúvida, o WOD.
   const mainBlocks = layout.columns.flatMap((c) => c.blocks);
   const sug = timer ? describeTimer(timer.config) : null;

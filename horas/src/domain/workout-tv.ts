@@ -1,4 +1,4 @@
-import { estimateDayLines, KIND, studentBlock, type WorkoutBlockData } from './workout';
+import { estimateDayLines, KIND, studentBlock, type BlockKind, type WorkoutBlockData } from './workout';
 
 /**
  * Treino na TV do box (puro): versão do aluno, com as fases rápidas
@@ -40,14 +40,23 @@ function split(blocks: WorkoutBlockData[], n: number, cpl: number): WorkoutBlock
  * Opções da área do treino. Padrão = tela inteira em até 3 colunas.
  * Com cronômetro: `{ widthVh: 92, bodyVh: 70, maxColumns: 1 }` (coluna da direita, ao lado do relógio).
  */
-export interface TvLayoutOptions { widthVh?: number; bodyVh?: number; maxColumns?: number }
+export interface TvLayoutOptions {
+  widthVh?: number; bodyVh?: number; maxColumns?: number;
+  /**
+   * Só estes tipos aparecem detalhados; os demais viram etiqueta com o tempo (como o warm-up).
+   * Se o dia não tiver nenhum deles (ex.: Futevôlei), vale o padrão — a tela não fica vazia.
+   */
+  detailedKinds?: BlockKind[];
+}
 
 export function tvLayout(blocks: WorkoutBlockData[], opts: TvLayoutOptions = {}): TvLayout {
   const width = opts.widthVh ?? SCREEN_W_VH - 8;
   const bodyH = opts.bodyVh ?? BODY_H_VH;
   const student = blocks.map(studentBlock);
-  const quick = student.filter((b) => !KIND[b.kind].detailed).map((b) => ({ label: KIND[b.kind].label, minutes: b.durationMin, title: b.title }));
-  const main = student.filter((b) => KIND[b.kind].detailed);
+  const only = opts.detailedKinds && student.some((b) => opts.detailedKinds!.includes(b.kind)) ? opts.detailedKinds : null;
+  const isDetailed = (b: WorkoutBlockData) => (only ? only.includes(b.kind) : KIND[b.kind].detailed);
+  const quick = student.filter((b) => !isDetailed(b)).map((b) => ({ label: b.kind === 'OUTRO' && b.title ? b.title : KIND[b.kind].label, minutes: b.durationMin, title: b.title }));
+  const main = student.filter(isDetailed);
   const n = Math.max(1, Math.min(opts.maxColumns ?? MAX_COLUMNS, main.length));
   const colW = (width - 3 * (n - 1)) / n;
   let fontVh = 1.8;
