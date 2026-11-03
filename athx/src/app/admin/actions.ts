@@ -1077,3 +1077,85 @@ export async function excluirPatrocinador(id: string): Promise<ActionResult> {
     return fail(error);
   }
 }
+
+/* ==========================================================================
+   PADRONIZAR OS CÓDIGOS DAS PROVAS
+   ==========================================================================
+   A conferência do painel aponta código repetido entre WODs e provas com a
+   mesma ordem. Os dois são mecânicos — o código certo é o número do WOD
+   mais uma letra —, e corrigir prova por prova é digitação com chance de
+   erro. Aqui sai de uma vez.
+
+   NÃO mexe em resultado: lançamento aponta para o identificador da prova,
+   não para o código. Renomear 2A para 3A troca o rótulo da coluna e mais
+   nada — verificado comparando a classificação antes e depois.
+   ========================================================================== */
+
+export interface MudancaDeCodigo {
+  wod: number;
+  de: string;
+  para: string;
+  ordemDe: number;
+  ordemPara: number;
+}
+
+export interface PlanoDeCodigos extends ActionResult {
+  mudancas: MudancaDeCodigo[];
+}
+
+async function rodarPadronizacao(aplicar: boolean): Promise<PlanoDeCodigos> {
+  const { supabase, eventId } = await requireAdmin();
+
+  const { data, error } = await supabase.rpc('athx_padronizar_codigos', {
+    p_event: eventId,
+    p_aplicar: aplicar,
+  });
+
+  if (error) throw new Error(error.message);
+
+  const mudancas: MudancaDeCodigo[] = (
+    (data ?? []) as {
+      wod: number;
+      de: string;
+      para: string;
+      ordem_de: number;
+      ordem_para: number;
+    }[]
+  ).map((m) => ({
+    wod: m.wod,
+    de: m.de,
+    para: m.para,
+    ordemDe: m.ordem_de,
+    ordemPara: m.ordem_para,
+  }));
+
+  return { ok: true, message: '', mudancas };
+}
+
+/** O que mudaria, sem gravar nada. É o que a tela mostra antes de perguntar. */
+export async function simularPadronizacao(): Promise<PlanoDeCodigos> {
+  if (IS_DEMO) return { ...DEMO_BLOCK, mudancas: [] };
+  try {
+    return await rodarPadronizacao(false);
+  } catch (error) {
+    return { ...fail(error), mudancas: [] };
+  }
+}
+
+export async function padronizarCodigos(): Promise<PlanoDeCodigos> {
+  if (IS_DEMO) return { ...DEMO_BLOCK, mudancas: [] };
+
+  try {
+    const plano = await rodarPadronizacao(true);
+    revalidateTudo();
+    return {
+      ...plano,
+      message:
+        plano.mudancas.length === 0
+          ? 'Os códigos já estavam padronizados.'
+          : `${plano.mudancas.length} prova(s) renumerada(s). Nenhum resultado foi alterado.`,
+    };
+  } catch (error) {
+    return { ...fail(error), mudancas: [] };
+  }
+}

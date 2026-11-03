@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { CheckCircle2, CircleAlert, TriangleAlert } from 'lucide-react';
 import type { Achado } from '@/lib/evento/conferencia';
 import { Card } from '@/components/ui/Card';
+import { PadronizarCodigos } from '@/components/admin/PadronizarCodigos';
 
 /**
  * O que está torto na configuração, antes de o evento começar.
@@ -63,6 +64,17 @@ export function ConferenciaDoEvento({ achados }: { achados: readonly Achado[] })
           </li>
         ))}
       </ul>
+
+      {/* Código repetido e ordem repetida são mecânicos: um botão resolve
+          os dois de uma vez, e sem tocar em resultado. */}
+      {achados.some((a) => /se repete|mesma ordem/.test(a.titulo)) ? (
+        <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-3">
+          <PadronizarCodigos />
+          <span className="text-[12px] text-white/45">
+            Resolve os códigos repetidos e as ordens de uma vez.
+          </span>
+        </div>
+      ) : null}
     </Card>
   );
 }
