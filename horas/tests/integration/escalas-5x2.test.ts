@@ -5,7 +5,7 @@ import { saveSector as saveProcSector } from '@/server/services/proc-service';
 import {
   sendMemberSchedule, sendTeamSchedules,
   cancelAbsence, editCell, generateSchedule, listSectors, loadMonth, saveAbsence, saveLegal, saveMember, saveOverride, savePost, saveRule, saveSector,
-  setScheduleStatus, swapCells,
+  removeMember, setScheduleStatus, swapCells,
 } from '@/server/services/ws-service';
 import { META, ensureCatalog, hasDb, makeUser } from './helpers';
 
@@ -131,6 +131,17 @@ describe.skipIf(!hasDb)('Escalas de Trabalho 5x2', () => {
     const sat = '2026-12-05';
     const nov28 = after.grid[members[1]!]!['2026-11-28']!.kind;
     expect(dec.grid[members[1]!]![sat]!.kind).not.toBe(nov28 === 'TRABALHO' ? 'TRABALHO' : 'FOLGA');
+
+    // Tirar alguém da equipe e gerar de novo: a pessoa sai da escala do mês (antes ficava porque já tinha dias salvos).
+    const gone = await saveMember(lider.principal, sector, null, { bond: 'CLT', functionName: 'Cozinheira', hours: { base: [H(7), H(15, 20), 60] }, newName: `Temporária ${Date.now()}`, fixedOff: [5] }, META);
+    await generateSchedule(lider.principal, sector, 2026, 12, META);
+    expect((await loadMonth(lider.principal, sector, 2026, 12)).members.some((m) => m.id === gone)).toBe(true);
+    await removeMember(lider.principal, sector, gone, META);
+    expect((await loadMonth(lider.principal, sector, 2026, 12)).members.some((m) => m.id === gone)).toBe(true); // rascunho salvo ainda mostra
+    await generateSchedule(lider.principal, sector, 2026, 12, META);
+    const dec2 = await loadMonth(lider.principal, sector, 2026, 12);
+    expect(dec2.members.some((m) => m.id === gone)).toBe(false);
+    expect(dec2.grid[gone]).toBeUndefined();
   });
 
   it('evento pede reforço sem mudar a escala; Nação inteira só a gestão altera', async () => {

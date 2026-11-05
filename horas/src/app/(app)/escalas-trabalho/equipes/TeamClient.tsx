@@ -32,7 +32,7 @@ export function TeamClient({ sectorId, members, people, canEdit, cycleRef }: { s
   const [open, setOpen] = useState<TeamMember | 'new' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
-  const remove = (m: TeamMember) => confirm(`Tirar ${m.name} da equipe? (Se já está numa escala salva, fica só desativado.)`) && start(async () => {
+  const remove = (m: TeamMember) => confirm(`Tirar ${m.name} da equipe?\n\nNos meses que ainda vão ser gerados, ${m.name.split(' ')[0]} não entra mais. Se já está numa escala em rascunho, abra o mês e clique em GERAR DE NOVO para sair dela (escala aprovada/publicada: reabra para edição antes). O histórico fica guardado.`) && start(async () => {
     const r = await removeMemberAction(sectorId, m.id);
     if (!r.ok) setError(r.error); else router.refresh();
   });

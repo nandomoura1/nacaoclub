@@ -720,6 +720,10 @@ export async function generateSchedule(principal: P | null, sectorId: string, ye
     const s = await assertSector(principal, sectorId, tx);
     const c = await context(tx, sectorId, year, month);
     if (c.schedule && c.schedule.status !== 'RASCUNHO') throw new AppError('A escala deste mês já foi aprovada/publicada. Reabra para edição antes de gerar de novo.');
+    // Gerar de novo = só a equipe ativa: quem foi tirado da equipe sai da escala (o histórico fica na auditoria).
+    const activeIds = new Set(c.membersDb.filter((m) => m.active).map((m) => m.id));
+    c.members = c.members.filter((m) => activeIds.has(m.id));
+    c.membersDb = c.membersDb.filter((m) => m.active);
     if (!c.members.some((m) => m.mode === 'FIXO' && m.autoSchedule && (m.hours.base || m.hours.week))) throw new AppError('Nenhum colaborador com horário habitual na equipe: cadastre a equipe antes de gerar.');
     const out = generate({ month: c.mi, days: c.days, members: c.members, posts: c.posts, rules: c.rules, absences: c.absences, cycleRef: c.cycleRef, prior: c.prior, holidayRotate: c.sector.holidayRotate, holidayHistory: c.holidayHistory, holidayLast: c.holidayLast, holidayStaff: c.sector.holidayStaff });
     const sched = c.schedule ?? await tx.wsSchedule.create({ data: { sectorId, year, month } });
