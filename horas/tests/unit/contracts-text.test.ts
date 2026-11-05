@@ -32,3 +32,25 @@ describe('dados de empresa escritos à mão no modelo', () => {
     expect(checkTemplate('Pago a {{Fulano de Tal}} — {{nome}}', [{ key: 'nome', label: 'Nome', type: 'texto', required: true }])[0]).toMatch(/não o valor: \{\{Fulano de Tal\}\}/);
   });
 });
+
+describe('R$ antes de campo do tipo Valor', () => {
+  it('avisa (o campo já escreve R$ e o valor por extenso)', () => {
+    const f = [{ key: 'valor_cobertura', label: 'Cobertura', type: 'moeda' as const, required: true }];
+    expect(checkTemplate('Cobertura: R$ {{valor_cobertura}}', f).join()).toMatch(/Tire o "R\$" antes de \{\{valor_cobertura\}\}/);
+    expect(checkTemplate('Cobertura: {{valor_cobertura}}', f)).toEqual([]);
+    expect(renderContract('Cobertura: {{valor_cobertura}}', f, { valor_cobertura: '10.000' }, {}).text).toBe('Cobertura: R$ 10.000,00 (dez mil reais)');
+  });
+});
+
+describe('valor em reais digitado no padrão brasileiro', () => {
+  it('ponto é milhar; vírgula é centavo', async () => {
+    const { parseMoney } = await import('@/domain/contracts');
+    expect(parseMoney('10.000')).toBe(1_000_000);
+    expect(parseMoney('1.500')).toBe(150_000);
+    expect(parseMoney('1.234.567')).toBe(123_456_700);
+    expect(parseMoney('1.500,50')).toBe(150_050);
+    expect(parseMoney('R$ 800')).toBe(80_000);
+    expect(parseMoney('1500.5')).toBe(150_050);
+    expect(parseMoney('99.90')).toBe(9_990);
+  });
+});

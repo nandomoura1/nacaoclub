@@ -77,6 +77,8 @@ export function checkTemplate(body: string, fields: TemplateField[]): string[] {
   }
   const bad = [...body.matchAll(/\{\{([^}]*)\}\}/g)].map((m) => m[1]!.trim()).filter((k) => !/^[a-z0-9_]+$/.test(k));
   if (bad.length) errors.push(`Entre {{ }} vai só o nome do campo (letras minúsculas, números e _), não o valor: ${[...new Set(bad)].slice(0, 3).map((k) => `{{${k.slice(0, 30)}}}`).join(', ')}. O valor é preenchido em cada contrato.`);
+  const money = fields.filter((f) => f.type === 'moeda' && new RegExp(`R\\$\\s*\\{\\{\\s*${f.key}\\s*\\}\\}`).test(body));
+  if (money.length) errors.push(`Tire o "R$" antes de ${money.map((f) => `{{${f.key}}}`).join(', ')}: campo do tipo Valor já escreve "R$ 1.500,00 (por extenso)".`);
   const unknown = templateKeys(body).filter((k) => !keys.has(k) && !BUILTIN.has(k));
   if (unknown.length) errors.push(`Variáveis sem campo: ${unknown.map((k) => `{{${k}}}`).join(', ')}. Crie o campo ou corrija o texto.`);
   return errors;
@@ -143,7 +145,11 @@ export function moneyText(cents: number): string {
 export function parseMoney(raw: string): number | null {
   const s = raw.replace(/[R$\s]/g, '');
   if (!s) return null;
-  const normalized = s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s;
+  // Padrão brasileiro: vírgula = centavos, ponto = milhar ("1.500", "10.000", "1.500,50").
+  // Sem vírgula, ponto com 1–2 casas no fim é decimal digitado à americana ("1500.5", "99.90").
+  const normalized = s.includes(',') ? s.replace(/\./g, '').replace(',', '.')
+    : /^\d{1,3}(\.\d{3})+$/.test(s) ? s.replace(/\./g, '')
+    : s;
   const n = Number(normalized);
   return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : null;
 }
