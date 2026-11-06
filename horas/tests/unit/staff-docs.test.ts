@@ -42,3 +42,23 @@ describe('Documentos da equipe — contador do estágio', () => {
     expect(docChecklist(false, docs, T).map((c) => [c.kind, c.state])).toEqual([['IDENTIDADE', 'ok'], ['CREF', 'vencido'], ['CONTRATO_TRABALHO', 'ok']]);
   });
 });
+
+describe('CREF só para professor de Educação Física', () => {
+  it('regra pelo cargo e pela equipe', async () => {
+    const { crefRule } = await import('@/domain/staff-docs');
+    expect(crefRule({ team: 'PROFESSOR', position: 'Professor', intern: false })).toBe('obrigatorio');
+    expect(crefRule({ team: 'PROFESSOR', position: 'Professor', intern: true })).toBe('opcional');
+    expect(crefRule({ team: 'PROFESSOR', position: 'Estagiário', intern: true })).toBe('opcional');
+    expect(crefRule({ team: 'PROFESSOR', position: 'Instrutor', intern: false })).toBe('opcional');
+    expect(crefRule({ team: 'PROFESSOR', position: null, intern: false })).toBe('opcional');
+    expect(crefRule({ team: 'ESCALA', position: null, intern: false })).toBe('nao_se_aplica');
+  });
+  it('checklist: obrigatório cobra, opcional não cobra, "não se aplica" some (a não ser que tenha mandado)', () => {
+    const states = (rule: 'obrigatorio' | 'opcional' | 'nao_se_aplica', docs = [] as { kind: 'CREF'; validFrom: null; validUntil: null }[]) =>
+      docChecklist(false, docs, T, rule).map((c) => [c.kind, c.state]);
+    expect(states('obrigatorio')).toContainEqual(['CREF', 'faltando']);
+    expect(states('opcional')).toContainEqual(['CREF', 'opcional']);
+    expect(states('nao_se_aplica').map((x) => x[0])).toEqual(['IDENTIDADE', 'CONTRATO_TRABALHO']);
+    expect(states('nao_se_aplica', [{ kind: 'CREF', validFrom: null, validUntil: null }])).toContainEqual(['CREF', 'ok']);
+  });
+});

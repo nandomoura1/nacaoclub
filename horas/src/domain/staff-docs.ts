@@ -71,11 +71,24 @@ export function internshipStatus(docs: DatedDoc[], today: string): InternStatus 
 export type ChecklistState = 'ok' | 'faltando' | 'vencido' | 'opcional';
 export interface ChecklistItem { kind: StaffDocKind; label: string; state: ChecklistState; until: string | null }
 
-/** O que a pasta precisa ter: identidade; CREF (estagiário: opcional); contrato de trabalho ou de estágio. */
-export function docChecklist(intern: boolean, docs: DatedDoc[], today: string): ChecklistItem[] {
+export type CrefRule = 'obrigatorio' | 'opcional' | 'nao_se_aplica';
+
+/**
+ * CREF só é obrigatório para professor de Educação Física (cargo "Professor", não estagiário).
+ * Instrutor, estagiário e professor sem cargo: opcional. Equipe de escala (área meio): não se aplica.
+ */
+export function crefRule(p: { team: string | null | undefined; position: string | null | undefined; intern: boolean }): CrefRule {
+  if (p.team === 'ESCALA') return 'nao_se_aplica';
+  if (!p.intern && /professor/i.test(p.position ?? '')) return 'obrigatorio';
+  return 'opcional';
+}
+
+/** O que a pasta precisa ter: identidade; CREF (conforme o cargo); contrato de trabalho ou de estágio. */
+export function docChecklist(intern: boolean, docs: DatedDoc[], today: string, cref: CrefRule = intern ? 'opcional' : 'obrigatorio'): ChecklistItem[] {
   const need: { kind: StaffDocKind; required: boolean }[] = [
     { kind: 'IDENTIDADE', required: true },
-    { kind: 'CREF', required: !intern },
+    // Quem não precisa de CREF só vê o item se tiver mandado a carteira mesmo assim.
+    ...(cref === 'nao_se_aplica' && !docs.some((d) => d.kind === 'CREF') ? [] : [{ kind: 'CREF' as const, required: cref === 'obrigatorio' }]),
     { kind: intern ? 'CONTRATO_ESTAGIO' : 'CONTRATO_TRABALHO', required: true },
   ];
   return need.map(({ kind, required }) => {

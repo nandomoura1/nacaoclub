@@ -8,7 +8,7 @@ import type { RequestMeta } from '@/server/auth/session';
 import { AppError, NotFoundError } from '@/server/errors';
 import { formatDateBR, isIsoDate } from '@/domain/dates';
 import {
-  docChecklist, internshipStatus, isIntern, STAFF_DOC_KINDS, staffDocLabel, type InternStatus, type StaffDocKind,
+  crefRule, docChecklist, internshipStatus, isIntern, STAFF_DOC_KINDS, staffDocLabel, type InternStatus, type StaffDocKind,
 } from '@/domain/staff-docs';
 
 /**
@@ -35,7 +35,7 @@ async function teamRows(today: string, where: { active?: boolean; id?: string } 
     where,
     orderBy: { name: 'asc' },
     select: {
-      id: true, name: true, displayName: true, active: true,
+      id: true, name: true, displayName: true, active: true, team: true,
       contractType: { select: { name: true } }, position: { select: { name: true } },
       documents: { select: { kind: true, validFrom: true, validUntil: true } },
     },
@@ -43,7 +43,7 @@ async function teamRows(today: string, where: { active?: boolean; id?: string } 
   return teachers.map((t) => {
     const intern = isIntern(t.contractType?.name, t.position?.name);
     const docs = t.documents.map((d) => ({ kind: d.kind, validFrom: iso(d.validFrom), validUntil: iso(d.validUntil) }));
-    const checklist = docChecklist(intern, docs, today);
+    const checklist = docChecklist(intern, docs, today, crefRule({ team: t.team, position: t.position?.name, intern }));
     return {
       id: t.id, name: t.name, displayName: t.displayName, active: t.active,
       contractType: t.contractType?.name ?? null, position: t.position?.name ?? null,

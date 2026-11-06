@@ -73,6 +73,8 @@ equipe da Recepção sem horário fixo e fora da geração automática: escalado
 
 **Colaboradores**: `Teacher.team` = `PROFESSOR` (área fim, horista, grade de aulas) ou `ESCALA`
 (área meio, escala 5x2). Listas da Gestão de Horas mostram só PROFESSOR.
+**Documentos da equipe — CREF**: obrigatório só para cargo **Professor** (não estagiário); Instrutor, estagiário e
+sem cargo = opcional; equipe ESCALA = não se aplica (`crefRule` em `domain/staff-docs.ts`).
 
 **Escalas 5x2 — Recepção**
 - Cada pessoa tem **horário fixo** de seg–sex; o **rodízio é só das folgas** ("Montar rodízio das folgas"):

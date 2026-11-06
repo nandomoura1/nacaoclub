@@ -8,7 +8,7 @@ import { buttonVariants } from '@/components/ui/button';
 import { WEEKDAYS, formatClock, formatDateBR, isIsoDate } from '@/domain/dates';
 import { printDensity, printLines, type PrintMode, type TeacherInfo } from '@/domain/grade-print';
 import { LEAVE_LABEL, type LeaveType } from '@/domain/leave';
-import { isIntern } from '@/domain/staff-docs';
+import { crefRule, isIntern } from '@/domain/staff-docs';
 import { filterGrade, gradeParams } from '@/lib/grade-filter';
 import { cn } from '@/lib/cn';
 import { formatDateTime, formatMinutes } from '@/lib/format';
@@ -52,15 +52,16 @@ export default async function ImprimirGradePage({ searchParams }: { searchParams
   const ids = [...new Set(grade.flatMap((g) => g.people.map((p) => p.teacherId)))];
   const teachers = await prisma.teacher.findMany({
     where: { id: { in: ids } },
-    select: { id: true, name: true, displayName: true, contractType: { select: { name: true } }, position: { select: { name: true } }, documents: { where: { kind: 'CREF', number: { not: null } }, select: { number: true, validUntil: true, createdAt: true } } },
+    select: { id: true, name: true, displayName: true, team: true, contractType: { select: { name: true } }, position: { select: { name: true } }, documents: { where: { kind: 'CREF', number: { not: null } }, select: { number: true, validUntil: true, createdAt: true } } },
   });
-  const info = new Map<string, TeacherInfo>(teachers.map((t) => {
+  const info = new Map<string, TeacherInfo & { crefRequired: boolean }>(teachers.map((t) => {
     const doc = [...t.documents].sort((a, b) => (b.validUntil?.getTime() ?? 0) - (a.validUntil?.getTime() ?? 0) || b.createdAt.getTime() - a.createdAt.getTime())[0];
-    return [t.id, { intern: isIntern(t.contractType?.name, t.position?.name), cref: doc?.number ?? null }];
+    const intern = isIntern(t.contractType?.name, t.position?.name);
+    return [t.id, { intern, cref: doc?.number ?? null, crefRequired: crefRule({ team: t.team, position: t.position?.name, intern }) === 'obrigatorio' }];
   }));
   const leaveLabel = (t: string) => LEAVE_LABEL[t as LeaveType] ?? t;
   const missingCref = mode === 'professores'
-    ? teachers.filter((t) => !info.get(t.id)!.intern && !info.get(t.id)!.cref && grade.some((g) => g.people.some((p) => p.teacherId === t.id && p.role === 'TITULAR'))).map((t) => t.displayName || t.name).sort()
+    ? teachers.filter((t) => info.get(t.id)!.crefRequired && !info.get(t.id)!.cref && grade.some((g) => g.people.some((p) => p.teacherId === t.id && p.role === 'TITULAR'))).map((t) => t.displayName || t.name).sort()
     : [];
 
   const days = WEEKDAYS.filter((w) => w.n <= 6 || grade.some((g) => g.weekday === 7));
