@@ -478,7 +478,7 @@ const COVER_STATE: Record<NonNullable<LeaveClassRow['state']>, { label: string; 
 /** Cobertura em lote: escolhe a ausência de outro professor e marca as aulas que este professor assume. */
 function CoverLeavePanel({ teacherId, leaves, onClose, onDone }: { teacherId: string; leaves: CoverableLeave[]; onClose: () => void; onDone: (msg: string) => void }) {
   const [leaveId, setLeaveId] = useState('');
-  const [data, setData] = useState<{ teacher: string; rows: LeaveClassRow[]; ungenerated: { count: number; periods: string[] } | null } | null>(null);
+  const [data, setData] = useState<{ teacher: string; rows: LeaveClassRow[]; ungenerated: { count: number; periods: { year: number; month: number; label: string }[]; canGenerate: boolean } | null } | null>(null);
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string>();
   const [pending, start] = useTransition();
@@ -539,8 +539,17 @@ function CoverLeavePanel({ teacherId, leaves, onClose, onDone }: { teacherId: st
         <div className="mt-3">
           {data.ungenerated && (
             <p className="mb-2 rounded-md bg-amber-50 p-2 text-sm text-amber-900">
-              {data.ungenerated.count} aula(s) desta ausência ainda não existem porque a competência {data.ungenerated.periods.join(', ')} não foi gerada.
-              Gere a competência (Calendário) para poder cobrir essas aulas.
+              {data.ungenerated.count} aula(s) desta ausência ainda não estão no calendário (competência {data.ungenerated.periods.map((x) => x.label).join(', ')} ainda não gerada).
+              Gerar só cria as aulas do mês a partir da grade — a competência continua aberta para lançamentos.
+              {data.ungenerated.canGenerate ? (
+                <Button type="button" size="sm" variant="secondary" className="mt-2" disabled={pending} onClick={() => start(async () => {
+                  for (const x of data.ungenerated!.periods) {
+                    const g = await generatePeriodAction(x.year, x.month);
+                    if (!g.ok) return setError(g.error);
+                  }
+                  load(leaveId);
+                })}>Gerar agora e mostrar as aulas</Button>
+              ) : <span className="mt-1 block">Peça a quem gera as competências (Calendário).</span>}
             </p>
           )}
           {rows.length === 0 ? <p className="text-sm text-tinta-suave">Nenhuma aula gerada desta ausência.</p> : (

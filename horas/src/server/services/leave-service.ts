@@ -406,7 +406,7 @@ export async function listLeaveClasses(principal: Principal | null, leaveId: str
 
   const { ungeneratedClasses } = await import('./period-service');
   const pending = await ungeneratedClasses(leave.teacherId, fromUtc(leave.startDate), fromUtc(leave.endDate));
-  return { teacher: leave.teacher.name, rows, ungenerated: pending.count ? { count: pending.count, periods: pending.periods.map((p) => p.label) } : null };
+  return { teacher: leave.teacher.name, rows, ungenerated: pending.count ? { count: pending.count, periods: pending.periods.map((p) => ({ year: p.year, month: p.month, label: p.label })), canGenerate: can(principal, 'period.generate') } : null };
 }
 export type LeaveClassRow = Awaited<ReturnType<typeof listLeaveClasses>>['rows'][number];
 
