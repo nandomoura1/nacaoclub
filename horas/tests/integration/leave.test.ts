@@ -5,6 +5,7 @@ import { createSlots, listGrade, removeTeacherFromSlot } from '@/server/services
 import { generatePeriod, periodOverview } from '@/server/services/period-service';
 import { cancelLeave, coverLeaveClasses, listCoverableLeaves, listCoveredByTeacher, listLeaveClasses, listLeaves, previewLeave, saveLeave, setLeaveDeducts, uncoverLeaveClasses } from '@/server/services/leave-service';
 import { AppError } from '@/server/errors';
+import { defaultDeducts } from '@/domain/leave';
 import { META, hasDb, makeUser } from './helpers';
 
 /**
@@ -75,9 +76,10 @@ describe.skipIf(!hasDb)('E5 · ausências lançadas na ficha do professor', () =
     expect(cancelled.cancellationReason?.name).toBe('Falta de professor');
   });
 
-  it('atestado e folga não descontam por padrão (abonadas); dá para trocar depois, e anular devolve', async () => {
+  it('atestado desconta por padrão e folga não; atestado abonado à mão; dá para trocar depois, e anular devolve', async () => {
     const { ana, bia, hours } = await setup(2034, 9); // 26/08 a 25/09/2034
-    const atestado = await saveLeave(admin.principal, ana.id, { type: 'ATESTADO', startDate: '2034-09-05', endDate: '2034-09-05', coverage: 'SUBSTITUIR', substituteId: bia.id }, META);
+    const atestado = await saveLeave(admin.principal, ana.id, { type: 'ATESTADO', startDate: '2034-09-05', endDate: '2034-09-05', coverage: 'SUBSTITUIR', substituteId: bia.id, deductsHours: false }, META);
+    expect(defaultDeducts('ATESTADO')).toBe(true);
     await saveLeave(admin.principal, ana.id, { type: 'FOLGA', startDate: '2034-09-07', endDate: '2034-09-07', coverage: 'CANCELAR' }, META);
     await saveLeave(admin.principal, ana.id, { type: 'FALTA', startDate: '2034-09-12', endDate: '2034-09-12', coverage: 'PENDENTE' }, META);
     let me = (await hours()).find((t) => t.teacherId === ana.id)!;
@@ -228,7 +230,7 @@ describe.skipIf(!hasDb)('E5 · ausências lançadas na ficha do professor', () =
 
   it('cobertura de atestado que cancelou a aula: a aula volta a acontecer com o substituto', async () => {
     const { ana, bia, hours } = await setup(2034, 8); // 26/07 a 25/08/2034
-    const leave = await saveLeave(admin.principal, ana.id, { type: 'ATESTADO', startDate: '2034-08-01', endDate: '2034-08-01', coverage: 'CANCELAR' }, META);
+    const leave = await saveLeave(admin.principal, ana.id, { type: 'ATESTADO', startDate: '2034-08-01', endDate: '2034-08-01', coverage: 'CANCELAR', deductsHours: false }, META);
     const [row] = (await listLeaveClasses(admin.principal, leave.id, bia.id)).rows;
     expect(row).toMatchObject({ state: 'cancelada' });
     await coverLeaveClasses(admin.principal, bia.id, { leaveId: leave.id, assignmentIds: [row!.assignmentId] }, META);

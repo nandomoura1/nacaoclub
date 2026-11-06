@@ -98,7 +98,7 @@ massa), compara horas atual × simulada (semana e competência 26→25, sem desc
 uma data** com as mesmas operações da grade (`createSlotsTx`/`changeSlotTx`/`endSlotTx`, numa transação só, realinha
 competências abertas; competência fechada bloqueia; aula mexida na grade real depois da simulação exige confirmação).
 
-**Ausências de professor**: lançadas antes de gerar a competência valem quando ela for gerada
+**Ausências de professor**: padrão "desconta" para tudo, menos **folga** (abonada); atestado desconta e o líder abona à mão quando for o caso. Lançadas antes de gerar a competência valem quando ela for gerada
 (a prévia mostra as aulas pendentes e oferece "Gerar competência agora").
 
 **Cobertura de ausência** (ficha do professor → Horas → "Cobrir férias / atestado"; `occurrence.exception`): escolhe a

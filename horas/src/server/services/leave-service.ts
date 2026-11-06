@@ -29,7 +29,7 @@ export const leaveSchema = z.object({
   /** Só esta aula da grade (substituição por aula). */
   slotId: z.string().uuid().nullable().or(z.literal('').transform(() => null)).optional(),
   notes: z.string().trim().max(500).optional().transform((v) => v || null),
-  /** Desconta das horas? Vazio = padrão do tipo (atestado/folga não descontam). */
+  /** Desconta das horas? Vazio = padrão do tipo (só folga não desconta). */
   deductsHours: z.boolean().optional(),
 });
 

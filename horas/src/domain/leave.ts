@@ -14,11 +14,11 @@ export const COVERAGE_LABEL: Record<LeaveCoverage, string> = {
 };
 
 /**
- * Desconta das horas? Padrão por tipo: atestado e folga são abonados (as aulas
- * seguem contando para o professor); falta, férias e afastamento descontam.
- * Quem lança pode trocar caso a caso.
+ * Desconta das horas? Padrão por tipo: só a folga é abonada (as aulas seguem
+ * contando para o professor); falta, férias, afastamento e atestado descontam.
+ * Quem lança pode trocar caso a caso (ex.: abonar um atestado).
  */
-export const defaultDeducts = (t: LeaveType): boolean => !(t === 'ATESTADO' || t === 'FOLGA');
+export const defaultDeducts = (t: LeaveType): boolean => t !== 'FOLGA';
 
 export const absenceReasonOf = (t: LeaveType): AbsenceReason =>
   t === 'AFASTAMENTO' || t === 'INDISPONIVEL' ? 'OUTRO' : t;

@@ -202,7 +202,7 @@ export function AusenciasTab({ teacherId, leaves, substitutes, canManage, today 
   const [preview, setPreview] = useState<Preview | null>(null);
   const [msg, setMsg] = useState<{ error?: string; ok?: string }>({});
   const [pending, start] = useTransition();
-  // Trocar o tipo traz o padrão dele (atestado/folga não descontam); dá para mudar depois.
+  // Trocar o tipo traz o padrão dele (só folga não desconta); dá para mudar depois.
   const set = <K extends keyof typeof v>(k: K, val: (typeof v)[K]) => { setV((p) => ({ ...p, [k]: val, ...(k === 'type' ? { deductsHours: defaultDeducts(val as LeaveType) } : {}) })); setPreview(null); };
   const payload = () => ({ ...v, endDate: v.type === 'FALTA' ? v.startDate : v.endDate });
 
