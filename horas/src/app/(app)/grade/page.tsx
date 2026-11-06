@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { Upload } from 'lucide-react';
+import { FlaskConical, Upload } from 'lucide-react';
 import { buttonVariants } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/card';
 import { isIsoDate } from '@/domain/dates';
@@ -53,8 +53,11 @@ export default async function GradePage({ searchParams }: { searchParams: Promis
       <PageHeader
         title="Grade semanal"
         description="A grade padrão que se repete toda semana. Toda mudança vale a partir de uma data — o passado nunca é reescrito. A escala de fim de semana e feriados da semana vista aparece em azul, por cima da grade."
-        actions={can(principal, 'import.run') ? (
-          <Link href="/grade/importar" className={buttonVariants({ variant: 'secondary' })}><Upload /> Importar planilha</Link>
+        actions={(can(principal, 'schedule.edit') || can(principal, 'import.run')) ? (
+          <>
+            {can(principal, 'schedule.edit') && <Link href="/grade/simulacao" className={buttonVariants({ variant: 'secondary' })}><FlaskConical /> Simular nova grade</Link>}
+            {can(principal, 'import.run') && <Link href="/grade/importar" className={buttonVariants({ variant: 'secondary' })}><Upload /> Importar planilha</Link>}
+          </>
         ) : undefined}
       />
       <GradeClient

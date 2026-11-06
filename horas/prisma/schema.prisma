@@ -2846,3 +2846,30 @@ model ContractEvent {
   @@index([contractId, at])
   @@map("contract_events")
 }
+
+/// Simulação de grade: rascunho da grade (itens em JSON) para comparar horas e, se aprovado,
+/// implantar a partir de uma data (vira criar/alterar/encerrar na grade real).
+model GradeSimulation {
+  id             String    @id @default(uuid()) @db.Uuid
+  name           String
+  /// RASCUNHO, IMPLANTADA, DESCARTADA
+  status         String    @default("RASCUNHO")
+  /// Área da simulação (null = todas as áreas que a pessoa edita).
+  areaId         String?   @map("area_id") @db.Uuid
+  /// Data da grade copiada para começar a simulação.
+  baseDate       DateTime  @map("base_date") @db.Date
+  /// Data planejada para valer (pode mudar até implantar).
+  effectiveFrom  DateTime? @map("effective_from") @db.Date
+  /// SimItem[] (domain/grade-sim.ts)
+  items          Json      @default("[]")
+  notes          String?
+  createdById    String?   @map("created_by") @db.Uuid
+  appliedAt      DateTime? @map("applied_at")
+  appliedById    String?   @map("applied_by") @db.Uuid
+  appliedSummary Json?     @map("applied_summary")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@index([status, createdAt])
+  @@map("grade_simulations")
+}

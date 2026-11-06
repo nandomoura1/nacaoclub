@@ -92,6 +92,12 @@ Lanchonete, Cozinha e Limpeza = como sábado. Todo feriado pede confirmação; d
 feriado específico (Nação inteira ou setor). Feriado no fim de semana usa o horário do próprio dia.
 **FUNAP** (6x1, 44h, até 2h de intervalo) trabalha o feriado normalmente e só folga nos dias fixos.
 
+**Simulação de grade** (Grade semanal → "Simular nova grade"; `schedule.edit`, nas áreas da pessoa): copia a grade de
+uma data para um rascunho (`grade_simulations.items`, sem tocar na grade real), edita (aulas, troca de professor em
+massa), compara horas atual × simulada (semana e competência 26→25, sem descontar feriados) e **implanta a partir de
+uma data** com as mesmas operações da grade (`createSlotsTx`/`changeSlotTx`/`endSlotTx`, numa transação só, realinha
+competências abertas; competência fechada bloqueia; aula mexida na grade real depois da simulação exige confirmação).
+
 **Ausências de professor**: lançadas antes de gerar a competência valem quando ela for gerada
 (a prévia mostra as aulas pendentes e oferece "Gerar competência agora").
 

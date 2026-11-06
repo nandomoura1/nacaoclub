@@ -147,7 +147,16 @@ function parse<S extends z.ZodType>(schema: S, input: unknown): z.output<S> {
 export async function createSlots(principal: Principal | null, input: unknown, meta: RequestMeta): Promise<string[]> {
   assertCan(principal, 'schedule.edit');
   const data = parse(createSlotsSchema, input);
+  return prisma.$transaction(async (tx) => {
+    const ids = await createSlotsTx(tx, principal, data, meta);
+    // Uma realinhada só para todas as aulas novas (turno com vários blocos × dias).
+    await onScheduleChanged(tx, ids, data.validFrom);
+    return ids;
+  }, { timeout: 120_000, maxWait: 10_000 });
+}
 
+/** Cria aulas dentro de uma transação (sem realinhar a competência: quem chama realinha). */
+export async function createSlotsTx(tx: Tx, principal: Principal, data: z.infer<typeof createSlotsSchema>, meta: RequestMeta, note = ''): Promise<string[]> {
   let blocks = [{ startMin: data.startMin, durationMin: data.durationMin }];
   if (data.endMin) {
     try {
@@ -157,41 +166,36 @@ export async function createSlots(principal: Principal | null, input: unknown, m
       throw e;
     }
   }
-
-  return prisma.$transaction(async (tx) => {
-    const modality = await assertModalityInScope(tx, principal, data.modalityId);
-    const ids: string[] = [];
-    for (const weekday of [...new Set(data.weekdays)].sort()) for (const block of blocks) {
-      const slot = await tx.scheduleSlot.create({ data: { createdById: principal.id } });
-      const v = await tx.scheduleSlotVersion.create({
-        data: {
-          slotId: slot.id,
-          weekday,
-          startMin: block.startMin,
-          durationMin: block.durationMin,
-          modalityId: data.modalityId,
-          activityTypeId: data.activityTypeId,
-          spaceId: data.spaceId,
-          label: data.label,
-          validFrom: toUtc(data.validFrom),
-          createdById: principal.id,
-          teachers: { create: data.people.map((p) => ({ teacherId: p.teacherId, role: p.role })) },
-        },
-        include: versionInclude,
-      });
-      ids.push(slot.id);
-      await audit(tx, { actorId: principal.id, ...meta }, {
-        action: 'schedule.created',
-        entityType: 'schedule_slot',
-        entityId: slot.id,
-        after: { ...data, weekday, weekdays: undefined, startMin: block.startMin, durationMin: block.durationMin },
-        summary: `${principal.name} criou a aula ${describeVersion({ ...v, modality })} (${peopleNames(v)}), valendo a partir de ${formatDateBR(data.validFrom)}${blocks.length > 1 ? ` — turno ${formatClock(data.startMin)}–${formatClock(data.endMin!)}` : ''}`,
-      });
-    }
-    // Uma realinhada só para todas as aulas novas (turno com vários blocos × dias).
-    await onScheduleChanged(tx, ids, data.validFrom);
-    return ids;
-  }, { timeout: 120_000, maxWait: 10_000 });
+  const modality = await assertModalityInScope(tx, principal, data.modalityId);
+  const ids: string[] = [];
+  for (const weekday of [...new Set(data.weekdays)].sort()) for (const block of blocks) {
+    const slot = await tx.scheduleSlot.create({ data: { createdById: principal.id } });
+    const v = await tx.scheduleSlotVersion.create({
+      data: {
+        slotId: slot.id,
+        weekday,
+        startMin: block.startMin,
+        durationMin: block.durationMin,
+        modalityId: data.modalityId,
+        activityTypeId: data.activityTypeId,
+        spaceId: data.spaceId,
+        label: data.label,
+        validFrom: toUtc(data.validFrom),
+        createdById: principal.id,
+        teachers: { create: data.people.map((p) => ({ teacherId: p.teacherId, role: p.role })) },
+      },
+      include: versionInclude,
+    });
+    ids.push(slot.id);
+    await audit(tx, { actorId: principal.id, ...meta }, {
+      action: 'schedule.created',
+      entityType: 'schedule_slot',
+      entityId: slot.id,
+      after: { ...data, weekday, weekdays: undefined, startMin: block.startMin, durationMin: block.durationMin },
+      summary: `${principal.name} criou a aula ${describeVersion({ ...v, modality })} (${peopleNames(v)}), valendo a partir de ${formatDateBR(data.validFrom)}${blocks.length > 1 ? ` — turno ${formatClock(data.startMin)}–${formatClock(data.endMin!)}` : ''}${note}`,
+    });
+  }
+  return ids;
 }
 
 async function loadSpans(tx: Tx, slotId: string) {
@@ -205,61 +209,65 @@ async function loadSpans(tx: Tx, slotId: string) {
 export async function changeSlot(principal: Principal | null, slotId: string, input: unknown, meta: RequestMeta): Promise<void> {
   assertCan(principal, 'schedule.edit');
   const data = parse(changeSlotSchema, input);
-
   await prisma.$transaction(async (tx) => {
-    const { versions, spans } = await loadSpans(tx, slotId);
-    let plan;
-    try {
-      plan = planChange(spans, data.from);
-    } catch (e) {
-      if (e instanceof ScheduleRuleError) throw new AppError(e.message);
-      throw e;
-    }
-    const current = versions.find((v) => v.id === (plan.kind === 'replace' ? plan.versionId : plan.closeVersionId))!;
-    assertAreaAccess(principal, current.modality.areaId);
-    const modality = await assertModalityInScope(tx, principal, data.modalityId);
-
-    const content = {
-      weekday: data.weekday,
-      startMin: data.startMin,
-      durationMin: data.durationMin,
-      modalityId: data.modalityId,
-      activityTypeId: data.activityTypeId,
-      spaceId: data.spaceId,
-      label: data.label,
-      changeReason: data.reason || null,
-    };
-
-    let versionId: string;
-    if (plan.kind === 'replace') {
-      await tx.slotVersionTeacher.deleteMany({ where: { versionId: plan.versionId } });
-      await tx.scheduleSlotVersion.update({ where: { id: plan.versionId }, data: content });
-      versionId = plan.versionId;
-    } else {
-      await tx.scheduleSlotVersion.update({ where: { id: plan.closeVersionId }, data: { validTo: toUtc(plan.closeAt) } });
-      const v = await tx.scheduleSlotVersion.create({
-        data: {
-          ...content,
-          slotId,
-          validFrom: toUtc(plan.newValidFrom),
-          validTo: plan.newValidTo ? toUtc(plan.newValidTo) : null,
-          createdById: principal.id,
-        },
-      });
-      versionId = v.id;
-    }
-    await tx.slotVersionTeacher.createMany({ data: data.people.map((p) => ({ versionId, teacherId: p.teacherId, role: p.role })) });
-
-    const after = await tx.scheduleSlotVersion.findUniqueOrThrow({ where: { id: versionId }, include: versionInclude });
-    await audit(tx, { actorId: principal.id, ...meta }, {
-      action: 'schedule.changed',
-      entityType: 'schedule_slot',
-      entityId: slotId,
-      before: { aula: describeVersion(current), duracao: current.durationMin, pessoas: peopleNames(current) },
-      after: { aula: describeVersion({ ...after, modality }), duracao: after.durationMin, pessoas: peopleNames(after), a_partir_de: data.from },
-      summary: `${principal.name} alterou a aula ${describeVersion(current)} a partir de ${formatDateBR(data.from)}: ${describeVersion({ ...after, modality })} · ${after.durationMin} min · ${peopleNames(after)}${data.reason ? ` — ${data.reason}` : ''}`,
-    });
+    await changeSlotTx(tx, principal, slotId, data, meta);
     await onScheduleChanged(tx, slotId, data.from);
+  });
+}
+
+/** Alteração a partir de uma data dentro de uma transação (sem realinhar a competência). */
+export async function changeSlotTx(tx: Tx, principal: Principal, slotId: string, data: z.infer<typeof changeSlotSchema>, meta: RequestMeta, note = ''): Promise<void> {
+  const { versions, spans } = await loadSpans(tx, slotId);
+  let plan;
+  try {
+    plan = planChange(spans, data.from);
+  } catch (e) {
+    if (e instanceof ScheduleRuleError) throw new AppError(e.message);
+    throw e;
+  }
+  const current = versions.find((v) => v.id === (plan.kind === 'replace' ? plan.versionId : plan.closeVersionId))!;
+  assertAreaAccess(principal, current.modality.areaId);
+  const modality = await assertModalityInScope(tx, principal, data.modalityId);
+
+  const content = {
+    weekday: data.weekday,
+    startMin: data.startMin,
+    durationMin: data.durationMin,
+    modalityId: data.modalityId,
+    activityTypeId: data.activityTypeId,
+    spaceId: data.spaceId,
+    label: data.label,
+    changeReason: data.reason || null,
+  };
+
+  let versionId: string;
+  if (plan.kind === 'replace') {
+    await tx.slotVersionTeacher.deleteMany({ where: { versionId: plan.versionId } });
+    await tx.scheduleSlotVersion.update({ where: { id: plan.versionId }, data: content });
+    versionId = plan.versionId;
+  } else {
+    await tx.scheduleSlotVersion.update({ where: { id: plan.closeVersionId }, data: { validTo: toUtc(plan.closeAt) } });
+    const v = await tx.scheduleSlotVersion.create({
+      data: {
+        ...content,
+        slotId,
+        validFrom: toUtc(plan.newValidFrom),
+        validTo: plan.newValidTo ? toUtc(plan.newValidTo) : null,
+        createdById: principal.id,
+      },
+    });
+    versionId = v.id;
+  }
+  await tx.slotVersionTeacher.createMany({ data: data.people.map((p) => ({ versionId, teacherId: p.teacherId, role: p.role })) });
+
+  const after = await tx.scheduleSlotVersion.findUniqueOrThrow({ where: { id: versionId }, include: versionInclude });
+  await audit(tx, { actorId: principal.id, ...meta }, {
+    action: 'schedule.changed',
+    entityType: 'schedule_slot',
+    entityId: slotId,
+    before: { aula: describeVersion(current), duracao: current.durationMin, pessoas: peopleNames(current) },
+    after: { aula: describeVersion({ ...after, modality }), duracao: after.durationMin, pessoas: peopleNames(after), a_partir_de: data.from },
+    summary: `${principal.name} alterou a aula ${describeVersion(current)} a partir de ${formatDateBR(data.from)}: ${describeVersion({ ...after, modality })} · ${after.durationMin} min · ${peopleNames(after)}${data.reason ? ` — ${data.reason}` : ''}${note}`,
   });
 }
 
@@ -276,38 +284,42 @@ async function assertOpenFrom(tx: Tx, slotId: string, from: IsoDate) {
 export async function endSlot(principal: Principal | null, slotId: string, from: string, reason: string | undefined, meta: RequestMeta) {
   assertCan(principal, 'schedule.edit');
   if (!isIsoDate(from)) throw new AppError('Data inválida.');
-
   await prisma.$transaction(async (tx) => {
-    const { versions, spans } = await loadSpans(tx, slotId);
-    const last = versions[versions.length - 1]!;
-    assertAreaAccess(principal, last.modality.areaId);
-    await assertOpenFrom(tx, slotId, from);
-    let plan;
-    try {
-      plan = planEnd(spans, from);
-    } catch (e) {
-      if (e instanceof ScheduleRuleError) throw new AppError(e.message);
-      throw e;
-    }
-    if (plan.kind === 'close') {
-      await tx.scheduleSlotVersion.update({ where: { id: plan.versionId }, data: { validTo: toUtc(plan.closeAt) } });
-    }
-    // Versões que somem: as aulas geradas delas saem antes (FK); as que alguém
-    // mexeu ficam soltas, para revisão. Só depois o período é realinhado —
-    // senão ele recriaria as aulas a partir das versões que vão sumir.
-    if (plan.dropVersionIds.length) {
-      const dropped = { slotVersionId: { in: plan.dropVersionIds } };
-      await tx.classOccurrence.deleteMany({ where: { ...dropped, touched: false } });
-      await tx.classOccurrence.updateMany({ where: dropped, data: { slotVersionId: null, needsReview: true } });
-      await tx.scheduleSlotVersion.deleteMany({ where: { id: { in: plan.dropVersionIds } } });
-    }
+    await endSlotTx(tx, principal, slotId, from, reason, meta);
     await onScheduleChanged(tx, slotId, from, { ending: true });
-    await audit(tx, { actorId: principal.id, ...meta }, {
-      action: 'schedule.ended',
-      entityType: 'schedule_slot',
-      entityId: slotId,
-      summary: `${principal.name} encerrou a aula ${describeVersion(last)} a partir de ${formatDateBR(from)}${reason ? ` — ${reason}` : ''}`,
-    });
+  });
+}
+
+/** Encerramento dentro de uma transação (sem realinhar a competência). */
+export async function endSlotTx(tx: Tx, principal: Principal, slotId: string, from: IsoDate, reason: string | undefined, meta: RequestMeta): Promise<void> {
+  const { versions, spans } = await loadSpans(tx, slotId);
+  const last = versions[versions.length - 1]!;
+  assertAreaAccess(principal, last.modality.areaId);
+  await assertOpenFrom(tx, slotId, from);
+  let plan;
+  try {
+    plan = planEnd(spans, from);
+  } catch (e) {
+    if (e instanceof ScheduleRuleError) throw new AppError(e.message);
+    throw e;
+  }
+  if (plan.kind === 'close') {
+    await tx.scheduleSlotVersion.update({ where: { id: plan.versionId }, data: { validTo: toUtc(plan.closeAt) } });
+  }
+  // Versões que somem: as aulas geradas delas saem antes (FK); as que alguém
+  // mexeu ficam soltas, para revisão. Só depois o período é realinhado —
+  // senão ele recriaria as aulas a partir das versões que vão sumir.
+  if (plan.dropVersionIds.length) {
+    const dropped = { slotVersionId: { in: plan.dropVersionIds } };
+    await tx.classOccurrence.deleteMany({ where: { ...dropped, touched: false } });
+    await tx.classOccurrence.updateMany({ where: dropped, data: { slotVersionId: null, needsReview: true } });
+    await tx.scheduleSlotVersion.deleteMany({ where: { id: { in: plan.dropVersionIds } } });
+  }
+  await audit(tx, { actorId: principal.id, ...meta }, {
+    action: 'schedule.ended',
+    entityType: 'schedule_slot',
+    entityId: slotId,
+    summary: `${principal.name} encerrou a aula ${describeVersion(last)} a partir de ${formatDateBR(from)}${reason ? ` — ${reason}` : ''}`,
   });
 }
 
