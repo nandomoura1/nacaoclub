@@ -20,7 +20,9 @@ describe.skipIf(!hasDb)('Documentos da equipe', () => {
     const est = await prisma.contractType.upsert({ where: { name: 'Estágio' }, create: { name: 'Estágio' }, update: {} });
     const clt = await prisma.contractType.upsert({ where: { name: 'CLT' }, create: { name: 'CLT' }, update: {} });
     internId = (await prisma.teacher.create({ data: { name: `Estagiária Teste ${randomUUID().slice(0, 6)}`, contractTypeId: est.id } })).id;
-    cltId = (await prisma.teacher.create({ data: { name: `Professor Teste ${randomUUID().slice(0, 6)}`, contractTypeId: clt.id } })).id;
+    // Cargo "Professor" (Educação Física): é quem precisa de CREF.
+    const prof = await prisma.position.upsert({ where: { name: 'Professor' }, update: {}, create: { name: 'Professor' } });
+    cltId = (await prisma.teacher.create({ data: { name: `Professor Teste ${randomUUID().slice(0, 6)}`, contractTypeId: clt.id, positionId: prof.id } })).id;
   });
 
   it('estagiário sem contrato aparece no alerta; contrato exige início e fim; vencido bloqueia', async () => {
