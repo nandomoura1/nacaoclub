@@ -3,7 +3,7 @@ import { prisma } from '@/server/db';
 import { bootstrapStructure } from '@/server/services/bootstrap';
 import { createSlots, listGrade, removeTeacherFromSlot } from '@/server/services/schedule-service';
 import { generatePeriod, periodOverview } from '@/server/services/period-service';
-import { cancelLeave, listLeaves, previewLeave, saveLeave, setLeaveDeducts } from '@/server/services/leave-service';
+import { cancelLeave, coverLeaveClasses, listCoverableLeaves, listCoveredByTeacher, listLeaveClasses, listLeaves, previewLeave, saveLeave, setLeaveDeducts, uncoverLeaveClasses } from '@/server/services/leave-service';
 import { AppError } from '@/server/errors';
 import { META, hasDb, makeUser } from './helpers';
 
@@ -185,5 +185,60 @@ describe.skipIf(!hasDb)('E5 · ausências lançadas na ficha do professor', () =
     expect(h.find((t) => t.teacherId === bia.id)).toBeUndefined();
     expect(h.find((t) => t.teacherId === ana.id)).toMatchObject({ ownMin: 480, absenceMin: 0 });
     expect((await listLeaves(admin.principal, ana.id)).find((l) => l.id === s.id)).toMatchObject({ slot: 'CrossFit · Terça 22:00', cancelled: true });
+  });
+  it('cobertura em lote: outro professor assume aulas do atestado; horas vão para ele, desfazer e anular devolvem', async () => {
+    const { ana, bia, hours } = await setup(2034, 7); // 26/06 a 25/07/2034: terças 27/06, 04, 11, 18, 25/07; quintas 29/06, 06, 13, 20/07
+    const leave = await saveLeave(admin.principal, ana.id, { type: 'FERIAS', startDate: '2034-07-03', endDate: '2034-07-16', coverage: 'PENDENTE' }, META);
+    expect(leave.applied).toBe(4);
+    const leaves = await listCoverableLeaves(admin.principal, bia.id, '2034-06-26', '2034-07-25');
+    expect(leaves.map((l) => l.id)).toContain(leave.id);
+    expect((await listCoverableLeaves(admin.principal, ana.id, '2034-06-26', '2034-07-25')).map((l) => l.id)).not.toContain(leave.id);
+
+    const list = await listLeaveClasses(admin.principal, leave.id, bia.id);
+    expect(list.rows.map((r) => [r.date, r.state])).toEqual([
+      ['2034-07-04', 'pendente'], ['2034-07-06', 'pendente'], ['2034-07-11', 'pendente'], ['2034-07-13', 'pendente'],
+    ]);
+    const ids = list.rows.slice(0, 3).map((r) => r.assignmentId);
+    const r = await coverLeaveClasses(admin.principal, bia.id, { leaveId: leave.id, assignmentIds: ids }, META);
+    expect(r).toMatchObject({ covered: 3, minutes: 180, skipped: [] });
+    let h = await hours();
+    expect(h.find((t) => t.teacherId === bia.id)).toMatchObject({ substitutionMin: 180, totalMin: 180 });
+    expect(h.find((t) => t.teacherId === ana.id)).toMatchObject({ absenceMin: 240 });
+    expect((await listCoveredByTeacher(admin.principal, bia.id, '2034-06-26', '2034-07-25')).map((c) => c.date)).toEqual(['2034-07-04', '2034-07-06', '2034-07-11']);
+
+    // De novo nas mesmas: nada a fazer. Ana não cobre a si mesma.
+    await expect(coverLeaveClasses(admin.principal, bia.id, { leaveId: leave.id, assignmentIds: ids }, META)).rejects.toThrow(/já coberta/);
+    await expect(coverLeaveClasses(admin.principal, ana.id, { leaveId: leave.id, assignmentIds: [list.rows[3]!.assignmentId] }, META)).rejects.toThrow(/próprio professor/);
+    const after = await listLeaveClasses(admin.principal, leave.id, bia.id);
+    expect(after.rows.map((x) => x.state)).toEqual(['coberta_por_mim', 'coberta_por_mim', 'coberta_por_mim', 'pendente']);
+
+    // Desfazer uma: volta a aguardar substituto.
+    expect((await uncoverLeaveClasses(admin.principal, bia.id, { leaveId: leave.id, assignmentIds: [ids[2]!] }, META)).undone).toBe(1);
+    h = await hours();
+    expect(h.find((t) => t.teacherId === bia.id)).toMatchObject({ substitutionMin: 120 });
+
+    // Anular a ausência devolve tudo ao previsto, inclusive as cobertas.
+    expect((await cancelLeave(admin.principal, leave.id, META)).restored).toBeGreaterThanOrEqual(4);
+    h = await hours();
+    expect(h.find((t) => t.teacherId === ana.id)).toMatchObject({ absenceMin: 0, ownMin: 540 });
+    expect(h.find((t) => t.teacherId === bia.id)).toBeUndefined();
+    const statuses = await prisma.classAssignment.findMany({ where: { plannedTeacherId: ana.id, occurrence: { date: { gte: new Date('2034-07-03'), lte: new Date('2034-07-16') } } }, select: { status: true, executingTeacherId: true } });
+    expect(statuses.every((x) => x.status === 'PREVISTA' && x.executingTeacherId === ana.id)).toBe(true);
+  });
+
+  it('cobertura de atestado que cancelou a aula: a aula volta a acontecer com o substituto', async () => {
+    const { ana, bia, hours } = await setup(2034, 8); // 26/07 a 25/08/2034
+    const leave = await saveLeave(admin.principal, ana.id, { type: 'ATESTADO', startDate: '2034-08-01', endDate: '2034-08-01', coverage: 'CANCELAR' }, META);
+    const [row] = (await listLeaveClasses(admin.principal, leave.id, bia.id)).rows;
+    expect(row).toMatchObject({ state: 'cancelada' });
+    await coverLeaveClasses(admin.principal, bia.id, { leaveId: leave.id, assignmentIds: [row!.assignmentId] }, META);
+    const occ = await prisma.classAssignment.findUniqueOrThrow({ where: { id: row!.assignmentId }, include: { occurrence: true } });
+    expect(occ).toMatchObject({ status: 'SUBSTITUIDA', executingTeacherId: bia.id, absencePaid: true });
+    expect(occ.occurrence.status).toBe('PREVISTA');
+    const h = await hours();
+    expect(h.find((t) => t.teacherId === bia.id)).toMatchObject({ substitutionMin: 60 });
+    expect(h.find((t) => t.teacherId === ana.id)).toMatchObject({ paidLeaveMin: 60, absenceMin: 0 });
+    await uncoverLeaveClasses(admin.principal, bia.id, { leaveId: leave.id, assignmentIds: [row!.assignmentId] }, META);
+    expect((await prisma.classOccurrence.findUniqueOrThrow({ where: { id: occ.occurrenceId } })).status).toBe('CANCELADA');
   });
 });

@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { getPrincipal, requestMeta } from '@/server/auth/session';
 import { runAction, type ActionResult } from '@/server/action-result';
 import { removeTeacherFromSlot } from '@/server/services/schedule-service';
-import { cancelLeave, previewLeave, saveLeave, setLeaveDeducts } from '@/server/services/leave-service';
+import { cancelLeave, coverLeaveClasses, listLeaveClasses, previewLeave, saveLeave, setLeaveDeducts, uncoverLeaveClasses } from '@/server/services/leave-service';
 import { saveGuidelines } from '@/server/services/teacher-share-service';
 import { removeExtraHours, saveExtraHours } from '@/server/services/extra-hours-service';
 
@@ -68,4 +68,24 @@ export async function removeExtraHoursAction(id: string): Promise<ActionResult> 
     refresh(); revalidatePath('/relatorios');
     return undefined;
   }, 'Hora extra removida.');
+}
+
+export async function listLeaveClassesAction(leaveId: string, substituteId: string) {
+  return runAction(async () => listLeaveClasses(await getPrincipal(), leaveId, substituteId));
+}
+
+export async function coverLeaveClassesAction(substituteId: string, leaveId: string, assignmentIds: string[]) {
+  return runAction(async () => {
+    const r = await coverLeaveClasses(await getPrincipal(), substituteId, { leaveId, assignmentIds }, await requestMeta());
+    refresh(); revalidatePath('/relatorios');
+    return r;
+  });
+}
+
+export async function uncoverLeaveClassesAction(substituteId: string, leaveId: string, assignmentIds: string[]) {
+  return runAction(async () => {
+    const r = await uncoverLeaveClasses(await getPrincipal(), substituteId, { leaveId, assignmentIds }, await requestMeta());
+    refresh(); revalidatePath('/relatorios');
+    return r;
+  });
 }

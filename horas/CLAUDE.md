@@ -101,6 +101,11 @@ competências abertas; competência fechada bloqueia; aula mexida na grade real 
 **Ausências de professor**: lançadas antes de gerar a competência valem quando ela for gerada
 (a prévia mostra as aulas pendentes e oferece "Gerar competência agora").
 
+**Cobertura de ausência** (ficha do professor → Horas → "Cobrir férias / atestado"; `occurrence.exception`): escolhe a
+ausência de outro professor e marca **em lote** as aulas que este cobre → cadeira vira SUBSTITUIDA (horas de substituição
+para quem cobriu; quem faltou segue a regra da ausência). Registro `SUBSTITUICAO` com `after.cover = true`, desfazível;
+aula cancelada pela ausência volta a acontecer. Só aulas já geradas (competência por gerar: avisa).
+
 **Cronômetro da TV** (Treinos → Cronômetro da TV; permissão `workout.tv_timer`: Professor, Programação de treinos,
 Coordenador, Admin): o professor programa no celular (For Time, AMRAP, EMOM, Tabata/intervalado, regressivo; sugestão
 pelo bloco do treino do dia) e a TV (`/tv/<token>`) mostra WOD + timer. Estado em `tv_screens.timer` (início/pausas);

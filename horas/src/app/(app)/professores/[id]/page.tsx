@@ -16,7 +16,7 @@ import { todayIso } from '@/lib/today';
 import { can } from '@/server/auth/authz';
 import { requirePrincipal } from '@/server/auth/session';
 import { prisma } from '@/server/db';
-import { listLeaves } from '@/server/services/leave-service';
+import { listCoverableLeaves, listCoveredByTeacher, listLeaves } from '@/server/services/leave-service';
 import { periodStartDay } from '@/server/services/period-service';
 import { hoursReport, parseReportFilter } from '@/server/services/report-service';
 import { listGrade } from '@/server/services/schedule-service';
@@ -223,12 +223,14 @@ async function EscalaSection({ principal, teacherId, today }: { principal: P; te
 async function HorasSection({ principal, teacherId, competencia, base }: { principal: P; teacherId: string; competencia?: string; base: string }) {
   const filter = await parseReportFilter({ competencia, professor: teacherId });
   const canExtra = can(principal, 'occurrence.exception');
-  const [r, extras, mods, types, teacher] = await Promise.all([
+  const [r, extras, mods, types, teacher, leaves, covered] = await Promise.all([
     hoursReport(principal, filter),
     listExtraHours(principal, teacherId, filter.start, filter.end),
     prisma.modality.findMany({ where: { active: true, ...(principal.areaIds === null ? {} : { areaId: { in: [...principal.areaIds] } }) }, orderBy: { sortOrder: 'asc' }, select: { id: true, name: true } }),
     prisma.activityType.findMany({ where: { active: true }, orderBy: { sortOrder: 'asc' }, select: { id: true, name: true, kind: true } }),
     prisma.teacher.findUnique({ where: { id: teacherId }, select: { primaryModalityId: true, modalities: { select: { modalityId: true } } } }),
+    canExtra ? listCoverableLeaves(principal, teacherId, filter.start, filter.end) : Promise.resolve([]),
+    listCoveredByTeacher(principal, teacherId, filter.start, filter.end),
   ]);
   const mine = new Set([teacher?.primaryModalityId, ...(teacher?.modalities.map((m) => m.modalityId) ?? [])]);
   const startDay = await periodStartDay();
@@ -250,7 +252,7 @@ async function HorasSection({ principal, teacherId, competencia, base }: { princ
       <ExtraHoursCard teacherId={teacherId} items={extras} canEdit={canExtra}
         defaultDate={todayIso() >= filter.start && todayIso() <= filter.end ? todayIso() : filter.start}
         modalities={[...mods.filter((m) => mine.has(m.id)), ...mods.filter((m) => !mine.has(m.id))]}
-        activityTypes={types.filter((t) => t.kind !== 'PERSONAL')} />
+        activityTypes={types.filter((t) => t.kind !== 'PERSONAL')} leaves={leaves} covered={covered} />
       <HoursStatement r={r} teacherId={teacherId} />
     </>
   );

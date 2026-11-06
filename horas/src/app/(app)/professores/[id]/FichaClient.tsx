@@ -9,14 +9,14 @@ import { Card } from '@/components/ui/card';
 import { FormMessage } from '@/components/ui/alert';
 import { Sheet } from '@/components/ui/sheet';
 import { Input, Label, Select } from '@/components/ui/input';
-import { WEEKDAYS, addDays, formatClock, formatDateBR } from '@/domain/dates';
+import { WEEKDAYS, addDays, formatClock, formatDateBR, weekdayOf } from '@/domain/dates';
 import { COVERAGE_LABEL, LEAVE_LABEL, defaultDeducts, type LeaveCoverage, type LeaveType } from '@/domain/leave';
 import { cn } from '@/lib/cn';
 import { formatMinutes } from '@/lib/format';
 import type { GradeItem } from '@/server/services/schedule-service';
-import type { LeaveItem } from '@/server/services/leave-service';
+import type { CoverableLeave, CoveredItem, LeaveClassRow, LeaveItem } from '@/server/services/leave-service';
 import { RemoveSlotSheet, SlotCard, SlotSheet, type Editing, type SheetProps } from '../../grade/GradeClient';
-import { cancelLeaveAction, previewLeaveAction, removeExtraHoursAction, saveExtraHoursAction, saveLeaveAction, setLeaveDeductsAction } from './actions';
+import { cancelLeaveAction, coverLeaveClassesAction, listLeaveClassesAction, previewLeaveAction, removeExtraHoursAction, saveExtraHoursAction, saveLeaveAction, setLeaveDeductsAction, uncoverLeaveClassesAction } from './actions';
 import type { ExtraHoursItem } from '@/server/services/extra-hours-service';
 import { generatePeriodAction } from '../../calendario/actions';
 
@@ -367,27 +367,35 @@ export function AusenciasTab({ teacherId, leaves, substitutes, canManage, today 
 /* ───────────────────────── Horas extras ───────────────────────── */
 
 /** Horas extras do professor na competência: lançar e remover (competência aberta). */
-export function ExtraHoursCard({ teacherId, items, canEdit, defaultDate, modalities, activityTypes }: {
+export function ExtraHoursCard({ teacherId, items, canEdit, defaultDate, modalities, activityTypes, leaves, covered }: {
   teacherId: string; items: ExtraHoursItem[]; canEdit: boolean; defaultDate: string;
   modalities: { id: string; name: string }[]; activityTypes: { id: string; name: string; kind: string }[];
+  leaves: CoverableLeave[]; covered: CoveredItem[];
 }) {
   const router = useRouter();
   const aula = activityTypes.find((t) => t.kind === 'AULA') ?? activityTypes[0];
   const [v, setV] = useState({ date: defaultDate, start: '', end: '', modalityId: modalities[0]?.id ?? '', activityTypeId: aula?.id ?? '', description: '' });
   const [open, setOpen] = useState(false);
+  const [covering, setCovering] = useState(false);
   const [msg, setMsg] = useState<{ error?: string; ok?: string }>({});
   const [pending, start] = useTransition();
   const total = items.reduce((s, i) => s + i.minutes, 0);
+  const coveredTotal = covered.reduce((s, i) => s + i.minutes, 0);
   const set = <K extends keyof typeof v>(k: K, val: (typeof v)[K]) => setV((p) => ({ ...p, [k]: val }));
 
   return (
     <Card className="mb-4 p-4">
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="font-extrabold text-navy">Horas extras</h3>
-        <span className="text-sm text-tinta-suave">{items.length ? `${items.length} lançamento(s) · ${formatMinutes(total)} nesta competência` : 'nenhuma nesta competência'}</span>
+        <span className="text-sm text-tinta-suave">
+          {items.length ? `${items.length} lançamento(s) · ${formatMinutes(total)} nesta competência` : 'nenhuma avulsa nesta competência'}
+          {covered.length > 0 && ` · ${covered.length} aula(s) cobrindo ausência (${formatMinutes(coveredTotal)})`}
+        </span>
         <span className="flex-1" />
-        {canEdit && !open && <Button size="sm" onClick={() => { setMsg({}); setOpen(true); }}><Plus /> Lançar hora extra</Button>}
+        {canEdit && !open && !covering && <Button size="sm" variant="secondary" onClick={() => { setMsg({}); setCovering(true); }}><Repeat /> Cobrir férias / atestado</Button>}
+        {canEdit && !open && !covering && <Button size="sm" onClick={() => { setMsg({}); setOpen(true); }}><Plus /> Lançar hora extra</Button>}
       </div>
+      {covering && <CoverLeavePanel teacherId={teacherId} leaves={leaves} onClose={() => setCovering(false)} onDone={(ok) => { setMsg({ ok }); router.refresh(); }} />}
       {open && (
         <form className="mt-3 grid gap-3 rounded-lg bg-fundo p-3 sm:grid-cols-2 lg:grid-cols-6" onSubmit={(e) => {
           e.preventDefault();
@@ -442,6 +450,134 @@ export function ExtraHoursCard({ teacherId, items, canEdit, defaultDate, modalit
           ))}
         </ul>
       )}
+      {covered.length > 0 && (
+        <details className="mt-3 text-sm">
+          <summary className="cursor-pointer font-semibold text-navy">Aulas cobrindo ausência de outro professor ({covered.length} · {formatMinutes(coveredTotal)})</summary>
+          <ul className="mt-2 divide-y divide-borda">
+            {covered.map((c) => (
+              <li key={c.assignmentId} className="flex flex-wrap gap-x-3 py-1.5">
+                <span className="tabular w-24 font-semibold text-navy">{formatDateBR(c.date)}</span>
+                <span className="tabular">{c.start}–{c.end} · {formatMinutes(c.minutes)}</span>
+                <span className="text-tinta-suave">{c.modality} · no lugar de {c.absent}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </Card>
+  );
+}
+
+const COVER_STATE: Record<NonNullable<LeaveClassRow['state']>, { label: string; tone: 'amber' | 'red' | 'green' | 'neutral' }> = {
+  pendente: { label: 'aguardando substituto', tone: 'amber' },
+  cancelada: { label: 'cancelada', tone: 'red' },
+  coberta_por_mim: { label: 'coberta por este professor', tone: 'green' },
+  coberta_por_outro: { label: 'coberta', tone: 'neutral' },
+};
+
+/** Cobertura em lote: escolhe a ausência de outro professor e marca as aulas que este professor assume. */
+function CoverLeavePanel({ teacherId, leaves, onClose, onDone }: { teacherId: string; leaves: CoverableLeave[]; onClose: () => void; onDone: (msg: string) => void }) {
+  const [leaveId, setLeaveId] = useState('');
+  const [data, setData] = useState<{ teacher: string; rows: LeaveClassRow[]; ungenerated: { count: number; periods: string[] } | null } | null>(null);
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [error, setError] = useState<string>();
+  const [pending, start] = useTransition();
+
+  const load = (id: string) => {
+    setLeaveId(id); setData(null); setSel(new Set()); setError(undefined);
+    if (!id) return;
+    start(async () => {
+      const r = await listLeaveClassesAction(id, teacherId);
+      if (!r.ok) return setError(r.error);
+      setData(r.data);
+      // Já vem marcado o que está aguardando substituto e sem choque de horário.
+      setSel(new Set(r.data.rows.filter((x) => coverable(x) && x.state === 'pendente' && !x.clash).map((x) => x.assignmentId)));
+    });
+  };
+  const coverable = (r: LeaveClassRow) => !r.closed && (r.state === 'pendente' || r.state === 'cancelada');
+  const undoable = (r: LeaveClassRow) => !r.closed && r.state === 'coberta_por_mim' && r.undoable;
+  const rows = data?.rows ?? [];
+  const toCover = rows.filter((r) => sel.has(r.assignmentId) && coverable(r));
+  const toUndo = rows.filter((r) => sel.has(r.assignmentId) && undoable(r));
+  const toggle = (id: string) => setSel((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const run = (kind: 'cover' | 'undo') => {
+    const list = kind === 'cover' ? toCover : toUndo;
+    if (!list.length) return;
+    if (kind === 'undo' && !confirm(`Desfazer ${list.length} cobertura(s)? As aulas voltam a aguardar substituto.`)) return;
+    setError(undefined);
+    start(async () => {
+      const ids = list.map((r) => r.assignmentId);
+      const r = kind === 'cover' ? await coverLeaveClassesAction(teacherId, leaveId, ids) : await uncoverLeaveClassesAction(teacherId, leaveId, ids);
+      if (!r.ok) return setError(r.error);
+      if ('covered' in r.data) {
+        const skipped = r.data.skipped.length ? ` ${r.data.skipped.length} ignorada(s): ${r.data.skipped.slice(0, 3).join('; ')}.` : '';
+        onDone(`Cobertura lançada: ${r.data.covered} aula(s), ${formatMinutes(r.data.minutes)}. Já entra no quadro de horas.${skipped}`);
+      } else onDone(`${r.data.undone} cobertura(s) desfeita(s).`);
+      load(leaveId);
+    });
+  };
+
+  return (
+    <div className="mt-3 rounded-lg bg-fundo p-3">
+      <p className="mb-2 text-sm text-tinta-suave">
+        Escolha a ausência (férias, atestado…) de outro professor e marque as aulas que este professor vai cobrir. As horas entram para quem cobriu;
+        para quem faltou vale a regra da ausência (desconta ou abonada).
+      </p>
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="min-w-64 flex-1">
+          <Label htmlFor="cv-leave">Ausência</Label>
+          <Select id="cv-leave" value={leaveId} onChange={(e) => load(e.target.value)}>
+            <option value="">{leaves.length ? 'Escolha…' : 'Nenhuma ausência lançada no período'}</option>
+            {leaves.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
+          </Select>
+        </div>
+        <Button type="button" variant="ghost" onClick={onClose}>Fechar</Button>
+      </div>
+      <FormMessage error={error} />
+      {pending && !data && leaveId && <p className="mt-2 text-sm text-tinta-suave">Carregando aulas…</p>}
+      {data && (
+        <div className="mt-3">
+          {data.ungenerated && (
+            <p className="mb-2 rounded-md bg-amber-50 p-2 text-sm text-amber-900">
+              {data.ungenerated.count} aula(s) desta ausência ainda não existem porque a competência {data.ungenerated.periods.join(', ')} não foi gerada.
+              Gere a competência (Calendário) para poder cobrir essas aulas.
+            </p>
+          )}
+          {rows.length === 0 ? <p className="text-sm text-tinta-suave">Nenhuma aula gerada desta ausência.</p> : (
+            <>
+              <div className="mb-2 flex flex-wrap gap-2 text-sm">
+                <Button type="button" size="sm" variant="ghost" onClick={() => setSel(new Set(rows.filter(coverable).map((r) => r.assignmentId)))}>Marcar todas a cobrir ({rows.filter(coverable).length})</Button>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setSel(new Set())}>Desmarcar</Button>
+              </div>
+              <ul className="max-h-96 divide-y divide-borda overflow-y-auto rounded-md border border-borda bg-white text-sm">
+                {rows.map((r) => {
+                  const enabled = coverable(r) || undoable(r);
+                  const st = COVER_STATE[r.state!];
+                  return (
+                    <li key={r.assignmentId}>
+                      <label className={cn('flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2', enabled ? 'cursor-pointer hover:bg-fundo' : 'opacity-60')}>
+                        <input type="checkbox" className="size-4" disabled={!enabled} checked={sel.has(r.assignmentId)} onChange={() => toggle(r.assignmentId)} />
+                        <span className="tabular w-28 font-semibold text-navy">{WEEKDAYS[weekdayOf(r.date) - 1]!.short} {formatDateBR(r.date)}</span>
+                        <span className="tabular">{r.start}–{r.end}</span>
+                        <span className="min-w-0 flex-1 text-tinta-suave">{r.modality}</span>
+                        <Badge tone={st.tone}>{r.state === 'coberta_por_outro' ? `coberta por ${r.by}` : st.label}</Badge>
+                        {r.closed && <Badge tone="neutral">competência fechada</Badge>}
+                        {r.clash && coverable(r) && <Badge tone="red">choque: {r.clash}</Badge>}
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button type="button" disabled={pending || !toCover.length} onClick={() => run('cover')}>
+                  {pending ? 'Salvando…' : `Lançar cobertura · ${toCover.length} aula(s) · ${formatMinutes(toCover.reduce((s, r) => s + r.minutes, 0))}`}
+                </Button>
+                {toUndo.length > 0 && <Button type="button" variant="ghost" disabled={pending} onClick={() => run('undo')}><Undo2 /> Desfazer {toUndo.length} cobertura(s)</Button>}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
