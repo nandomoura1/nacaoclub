@@ -64,10 +64,14 @@ export function CalendarClient({ view, anchor, today, entries, options, filters,
   };
   const step = (n: number) => qs({ d: view === 'semana' ? addDays(anchor, 7 * n) : view === 'ano' ? `${Number(anchor.slice(0, 4)) + n}-01-01` : `${shiftMonth(anchor.slice(0, 7), n)}-01` });
   const title = view === 'semana' ? `Semana de ${fmtDate(mondayOf(anchor))} a ${fmtDate(addDays(mondayOf(anchor), 6))}` : view === 'ano' ? anchor.slice(0, 4) : monthName(anchor.slice(0, 7));
-  const movable = (e: CalEntry) => canEdit && e.kind !== 'feriado';
+  const movable = (e: CalEntry) => canEdit && e.kind !== 'feriado' && !e.pinned;
   // Itens de uma semana ou mais (tema do mês, mês de saúde, campanha longa, colônia) vão para a faixa do período, não para cada dia.
   const isLong = (e: CalEntry) => e.kind !== 'tarefa' && (Date.parse(e.end) - Date.parse(e.start)) / 86_400_000 >= 6;
-  const longOnes = entries.filter(isLong).sort((a, b) => a.start.localeCompare(b.start));
+  // No mês: o que vale o mês inteiro (tema do mês, Novembro Azul) fica numa faixa só, em cima — não repete em toda semana.
+  const ms = `${anchor.slice(0, 7)}-01`, me = monthEnd(anchor.slice(0, 7));
+  const wholeMonth = (e: CalEntry) => view === 'mes' && isLong(e) && e.start <= ms && e.end >= me;
+  const monthWide = entries.filter(wholeMonth).sort((a, b) => a.title.localeCompare(b.title));
+  const longOnes = entries.filter((e) => isLong(e) && !wholeMonth(e)).sort((a, b) => a.start.localeCompare(b.start));
   const dayEntries = entries.filter((e) => !isLong(e));
 
   const open = (e: CalEntry) => {
@@ -171,6 +175,16 @@ export function CalendarClient({ view, anchor, today, entries, options, filters,
             ))}
           </div>
         </Card>
+      )}
+
+      {view === 'mes' && monthWide.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] font-bold uppercase tracking-wide text-tinta-suave">O mês todo</span>
+          {monthWide.map((e) => (
+            <button key={`mw${e.kind}${e.id}`} type="button" onClick={() => open(e)} title={`${fmtDate(e.start)} a ${fmtDate(e.end)}`}
+              className={cn('max-w-full truncate rounded-full px-2.5 py-0.5 text-left text-xs font-semibold', kindCls(e.kind))}>{e.title}</button>
+          ))}
+        </div>
       )}
 
       {view === 'mes' && (

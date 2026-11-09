@@ -120,6 +120,9 @@ força e WOD completos; o bloco do timer ganha borda azul + "AGORA"). "Tela chei
 **Calendário de Marketing → "Texto para WhatsApp"**: texto do período visível (com os filtros), por tipo — campanhas, eventos,
 datas e avisos, feriados (tarefas opcional), sem cancelados; editável; copiar, abrir no WhatsApp ou Z-API (`COMUNICADO`).
 `calendarWhatsAppText` em `domain/marketing/calendar.ts`. Itens de vários dias (≥ 7) viram **faixas contínuas na grade** (mês e semana; `weekBars`), com ◂ ▸ quando continuam.
+**Campanha de evento** (ligada a um evento, mesmo nome de um evento, ou tipo Evento) **não ocupa o período de divulgação**:
+o evento aparece só no dia dele (sem evento cadastrado: a campanha aparece só no último dia, sem arrastar — `eventCampaignDay`).
+Itens que cobrem o mês inteiro (tema do mês, Novembro Azul) ficam numa linha "O mês todo" acima da grade.
 
 **Kanban de Marketing**: estilo Trello (navegação lateral, colunas com rolagem própria,
 "Adicionar um cartão"), imagens no cartão (PNG/JPG/WEBP/GIF ≤ 10 MB, sem SVG; a primeira é a capa),

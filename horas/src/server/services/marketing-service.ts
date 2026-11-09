@@ -14,7 +14,7 @@ import {
 import type { BoardColumn } from '@/domain/marketing/board';
 import { commercialGate, milestoneAlerts, readiness, type CampaignFacts, type TaskFacts } from '@/domain/marketing/readiness';
 import { attention, type AgendaCampaign, type AgendaTask } from '@/domain/marketing/agenda';
-import { mondayOf, moveRange, type CalEntry } from '@/domain/marketing/calendar';
+import { mondayOf, moveRange, type CalEntry, eventCampaignDay, eventNameKey } from '@/domain/marketing/calendar';
 
 /**
  * Marketing Nação — campanhas, eventos, calendário e Command Center.
@@ -325,10 +325,16 @@ export async function calendarEntries(principal: Principal | null, from: string,
     prisma.holiday.findMany({ where: { date: { gte: F, lte: T } } }),
   ]);
   const types = Object.fromEntries(CAMPAIGN_TYPES.map((t) => [t.id, t.label]));
+  // Nomes de todos os eventos (não só do período): a campanha some mesmo se o evento cai em outro mês.
+  const eventNames = new Set((await prisma.mktEvent.findMany({ select: { name: true } })).map((e) => eventNameKey(e.name)));
   return [
     ...holidays.map((h): CalEntry => ({ kind: 'feriado', id: h.id, title: h.name, start: iso(h.date)!, end: iso(h.date)!, tag: 'Feriado' })),
     ...events.map((e): CalEntry => ({ kind: 'evento', id: e.id, title: e.name, start: iso(e.startDate)!, end: iso(e.endDate) ?? iso(e.startDate)!, tag: 'Evento', href: '/marketing/eventos', ownerId: e.ownerId, modalityId: e.modalityId, status: e.status })),
-    ...camps.map((c): CalEntry => ({ kind: 'campanha', id: c.id, title: c.name, start: iso(c.startDate)!, end: iso(c.endDate) ?? iso(c.startDate)!, tag: types[c.type], href: `/marketing/campanhas/${c.id}`, ownerId: c.ownerId, modalityId: c.modalityId, status: c.status, campaignId: c.id })),
+    ...camps.flatMap((c): CalEntry[] => {
+      const d = eventCampaignDay({ eventId: c.eventId, type: c.type, name: c.name, start: iso(c.startDate)!, end: iso(c.endDate) ?? iso(c.startDate)! }, eventNames);
+      if (d.skip || d.end < from || d.start > to) return [];
+      return [{ kind: 'campanha', id: c.id, title: c.name, start: d.start, end: d.end, pinned: d.pinned, tag: types[c.type], href: `/marketing/campanhas/${c.id}`, ownerId: c.ownerId, modalityId: c.modalityId, status: c.status, campaignId: c.id }];
+    }),
     ...items.map((i): CalEntry => ({ kind: 'item', id: i.id, title: i.title, start: iso(i.startDate)!, end: iso(i.endDate) ?? iso(i.startDate)!, tag: labelOf(CALENDAR_KINDS, i.kind), ownerId: i.ownerId, modalityId: i.modalityId })),
     ...tasks.map((t): CalEntry => ({ kind: 'tarefa', id: t.id, title: t.title, start: iso(t.dueDate)!, end: iso(t.dueDate)!, tag: t.campaign?.name ?? 'Tarefa', color: t.area?.color, ownerId: t.assigneeId, areaKey: t.area?.key ?? null, status: t.column, campaignId: t.campaignId })),
   ];

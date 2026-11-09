@@ -54,3 +54,17 @@ describe('barras de vários dias na semana', () => {
     ]);
   });
 });
+
+import { eventCampaignDay, eventNameKey } from '@/domain/marketing/calendar';
+describe('campanha de evento no calendário', () => {
+  const names = new Set([eventNameKey('4ª Edição NAÇÃO CELEBRATION 2026')]);
+  const c = (o: Partial<{ eventId: string | null; type: string; name: string }>) => ({ eventId: null, type: 'EVENTO', name: 'X', start: '2026-10-21', end: '2026-11-07', ...o });
+  it('some quando o evento já está no calendário (ligada ou mesmo nome)', () => {
+    expect(eventCampaignDay(c({ eventId: 'e1' }), names)).toEqual({ skip: true });
+    expect(eventCampaignDay(c({ name: '4ª edição Nação Celebration 2026 ' }), names)).toEqual({ skip: true });
+  });
+  it('tipo Evento sem evento cadastrado: só no dia do evento, sem arrastar; outras campanhas mantêm o período', () => {
+    expect(eventCampaignDay(c({ name: 'Confraternização' }), names)).toEqual({ skip: false, start: '2026-11-07', end: '2026-11-07', pinned: true });
+    expect(eventCampaignDay(c({ type: 'RENOVACAO', name: 'Black November' }), names)).toEqual({ skip: false, start: '2026-10-21', end: '2026-11-07', pinned: false });
+  });
+});

@@ -21,6 +21,8 @@ export interface CalEntry {
   modalityId?: string | null;
   status?: string | null;
   campaignId?: string | null;
+  /** Não arrasta (ex.: campanha de evento mostrada só no dia do evento). */
+  pinned?: boolean;
 }
 
 export const mondayOf = (d: string) => addDays(d, 1 - weekdayOf(d));
@@ -120,3 +122,23 @@ export function weekBars(entries: CalEntry[], week: string[]): WeekBar[] {
     return { ...s, lane };
   });
 }
+
+// ── Campanha de evento: só o dia do evento ─────────────────────
+
+const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+/**
+ * Campanha de divulgação de um evento não ocupa o calendário desde o início da
+ * divulgação: o que importa é o dia do evento. Ligada a um evento (ou com o
+ * mesmo nome de um) → sai, o evento já aparece no dia dele. Tipo "Evento" sem
+ * evento cadastrado → aparece só no último dia (o dia do evento), sem arrastar.
+ */
+export function eventCampaignDay(
+  c: { eventId: string | null; type: string; name: string; start: string; end: string },
+  eventNames: Set<string>,
+): { skip: true } | { skip: false; start: string; end: string; pinned: boolean } {
+  if (c.eventId || eventNames.has(norm(c.name))) return { skip: true };
+  if (c.type === 'EVENTO') return { skip: false, start: c.end, end: c.end, pinned: true };
+  return { skip: false, start: c.start, end: c.end, pinned: false };
+}
+export const eventNameKey = norm;
