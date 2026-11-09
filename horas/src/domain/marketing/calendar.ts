@@ -54,3 +54,46 @@ export function moveRange(start: string, end: string | null, newStart: string) {
   const days = Math.round((Date.parse(end) - Date.parse(start)) / 86_400_000);
   return { start: newStart, end: addDays(newStart, days) };
 }
+
+// ── Texto para WhatsApp ─────────────────────────────────────────
+
+const WA_SECTIONS: { kind: CalKind; title: string }[] = [
+  { kind: 'campanha', title: '🎯 *Campanhas*' },
+  { kind: 'evento', title: '🎉 *Eventos*' },
+  { kind: 'item', title: '📌 *Datas e avisos*' },
+  { kind: 'feriado', title: '🏖️ *Feriados*' },
+  { kind: 'tarefa', title: '✅ *Tarefas*' },
+];
+const WD = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom'];
+const dm = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
+/** "sáb 15/11" ou "01/11 a 30/11". */
+export function waWhen(start: string, end: string) {
+  return end > start ? `${dm(start)} a ${dm(end)}` : `${WD[weekdayOf(start) - 1]} ${dm(start)}`;
+}
+
+/** Itens que não vão para o texto (cancelados). */
+const hidden = (e: CalEntry) => e.status === 'CANCELADO' || e.status === 'CANCELADA';
+
+/**
+ * Texto pronto para colar no WhatsApp: agrupado por tipo, em ordem de data,
+ * só o que cruza o período [from, to]. Usa *negrito* e _itálico_ do WhatsApp.
+ */
+export function calendarWhatsAppText(entries: CalEntry[], opts: { from: string; to: string; title: string; kinds: CalKind[]; tags?: boolean }): string {
+  const lines = [`📅 *Calendário de Marketing — ${opts.title}*`];
+  let any = false;
+  for (const s of WA_SECTIONS) {
+    if (!opts.kinds.includes(s.kind)) continue;
+    const list = entries
+      .filter((e) => e.kind === s.kind && !hidden(e) && e.start <= opts.to && e.end >= opts.from)
+      .sort((a, b) => a.start.localeCompare(b.start) || a.title.localeCompare(b.title));
+    if (!list.length) continue;
+    any = true;
+    lines.push('', s.title);
+    for (const e of list) {
+      const tag = opts.tags !== false && e.tag && s.kind !== 'feriado' && s.kind !== 'evento' ? ` _(${e.tag})_` : '';
+      lines.push(`• ${waWhen(e.start, e.end)} — ${e.title.trim()}${tag}`);
+    }
+  }
+  if (!any) lines.push('', '_Nada marcado neste período._');
+  return lines.join('\n');
+}

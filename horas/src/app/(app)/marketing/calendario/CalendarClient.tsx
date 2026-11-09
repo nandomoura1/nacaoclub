@@ -3,13 +3,14 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Copy, MessageCircle, Plus, Trash2, X } from 'lucide-react';
+import { SendWhatsApp } from '@/components/whatsapp/SendWhatsApp';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { FormMessage } from '@/components/ui/alert';
 import { Input, Label, Select } from '@/components/ui/input';
 import { addDays } from '@/domain/dates';
-import { type CalEntry, mondayOf, monthGrid, onDay, overlaps, shiftMonth } from '@/domain/marketing/calendar';
+import { type CalEntry, type CalKind, calendarWhatsAppText, mondayOf, monthEnd, monthGrid, onDay, overlaps, shiftMonth } from '@/domain/marketing/calendar';
 import { CALENDAR_KINDS, CAMPAIGN_STATUSES, TASK_COLUMNS } from '@/domain/marketing/constants';
 import { cn } from '@/lib/cn';
 import type { MktOptions } from '@/server/services/marketing-service';
@@ -54,6 +55,7 @@ export function CalendarClient({ view, anchor, today, entries, options, filters,
   const [form, setForm] = useState({ title: '', kind: 'DATA_COMEMORATIVA', startDate: '', endDate: '', description: '', audience: '' });
   const [over, setOver] = useState<string | null>(null);
   const [selected, setSelected] = useState<CalEntry | null>(null);
+  const [sharing, setSharing] = useState(false);
 
   const qs = (patch: Record<string, string | undefined>) => {
     const p = new URLSearchParams();
@@ -105,8 +107,13 @@ export function CalendarClient({ view, anchor, today, entries, options, filters,
             <Link key={v} href={qs({ v: v === 'mes' ? undefined : v })} className={cn('rounded-md px-3 py-1 text-xs font-semibold', view === v ? 'bg-white text-navy shadow-sm' : 'text-tinta-suave')}>{v === 'mes' ? 'Mês' : v === 'semana' ? 'Semana' : 'Ano'}</Link>
           ))}
         </div>
+        <Button size="sm" variant="secondary" onClick={() => setSharing(true)}><MessageCircle /> Texto para WhatsApp</Button>
         {canEdit && <Button size="sm" variant="secondary" onClick={() => setItem({ startDate: today })}><Plus /> Data / aviso</Button>}
       </div>
+      {sharing && <ShareText entries={entries} title={title} range={
+        view === 'semana' ? [mondayOf(anchor), addDays(mondayOf(anchor), 6)]
+        : view === 'ano' ? [`${anchor.slice(0, 4)}-01-01`, `${anchor.slice(0, 4)}-12-31`]
+        : [`${anchor.slice(0, 7)}-01`, monthEnd(anchor.slice(0, 7))]} onClose={() => setSharing(false)} />}
 
       <form className="flex flex-wrap items-center gap-2 text-sm">
         {view !== 'mes' && <input type="hidden" name="v" value={view} />}
@@ -227,6 +234,62 @@ export function CalendarClient({ view, anchor, today, entries, options, filters,
       )}
 
       {task && <TaskSheet taskId={task} options={options} canEdit={canEdit} onClose={() => setTask(null)} />}
+    </div>
+  );
+}
+
+const SHARE_KINDS: { id: CalKind; label: string }[] = [
+  { id: 'campanha', label: 'Campanhas' }, { id: 'evento', label: 'Eventos' }, { id: 'item', label: 'Datas e avisos' },
+  { id: 'feriado', label: 'Feriados' }, { id: 'tarefa', label: 'Tarefas' },
+];
+
+/** Monta o texto do período visível (respeita os filtros da tela) para copiar ou mandar no WhatsApp. */
+function ShareText({ entries, title, range, onClose }: { entries: CalEntry[]; title: string; range: [string, string]; onClose: () => void }) {
+  const [from, setFrom] = useState(range[0]);
+  const [to, setTo] = useState(range[1]);
+  const [kinds, setKinds] = useState<CalKind[]>(['campanha', 'evento', 'item', 'feriado']);
+  const [tags, setTags] = useState(true);
+  const custom = from !== range[0] || to !== range[1];
+  const label = custom ? `${fmtDate(from)} a ${fmtDate(to)}` : title.charAt(0).toUpperCase() + title.slice(1);
+  const generated = calendarWhatsAppText(entries, { from, to, title: label, kinds, tags });
+  const [text, setText] = useState<string | null>(null);
+  const body = text ?? generated;
+  const [copied, setCopied] = useState(false);
+  const regen = () => setText(null);
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-navy/40 p-4" onClick={onClose}>
+      <div className="flex max-h-[92vh] w-full max-w-2xl flex-col rounded-2xl bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-2">
+          <h3 className="flex-1 font-extrabold text-navy">Texto para WhatsApp</h3>
+          <button type="button" aria-label="Fechar" onClick={onClose} className="text-tinta-fraca hover:text-tinta"><X className="size-4" /></button>
+        </div>
+        <p className="mt-1 text-xs text-tinta-suave">Período da tela (dá para encurtar; para outro mês, navegue no calendário) e filtros aplicados. Cancelados ficam de fora. Dá para editar o texto antes de mandar.</p>
+        <div className="mt-3 flex flex-wrap items-end gap-3 text-sm">
+          <div><Label>De</Label><Input type="date" value={from} min={range[0]} max={to} onChange={(e) => { setFrom(e.target.value || range[0]); regen(); }} className="h-9" /></div>
+          <div><Label>Até</Label><Input type="date" value={to} min={from} max={range[1]} onChange={(e) => { setTo(e.target.value || range[1]); regen(); }} className="h-9" /></div>
+          <div className="flex flex-wrap gap-x-3 gap-y-1 pb-2">
+            {SHARE_KINDS.map((k) => (
+              <label key={k.id} className="inline-flex items-center gap-1.5">
+                <input type="checkbox" className="size-4" checked={kinds.includes(k.id)}
+                  onChange={() => { setKinds((p) => (p.includes(k.id) ? p.filter((x) => x !== k.id) : [...p, k.id])); regen(); }} />{k.label}
+              </label>
+            ))}
+            <label className="inline-flex items-center gap-1.5 text-tinta-suave"><input type="checkbox" className="size-4" checked={tags} onChange={() => { setTags(!tags); regen(); }} />mostrar tipo</label>
+          </div>
+        </div>
+        <textarea value={body} onChange={(e) => setText(e.target.value)} rows={14}
+          className="mt-3 min-h-48 w-full flex-1 resize-y rounded-lg border border-borda bg-fundo p-3 font-mono text-[13px] leading-relaxed text-tinta" />
+        {text !== null && <button type="button" onClick={regen} className="mt-1 self-start text-xs font-semibold text-nacao">desfazer edições e gerar de novo</button>}
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button type="button" onClick={async () => {
+            try { await navigator.clipboard.writeText(body); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { prompt('Copie o texto:', body); }
+          }}><Copy /> {copied ? 'Copiado!' : 'Copiar'}</Button>
+          <a href={`https://wa.me/?text=${encodeURIComponent(body)}`} target="_blank" rel="noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-borda bg-white px-3 py-1.5 text-sm font-semibold text-[#128C7E] hover:bg-fundo"><MessageCircle className="size-4" /> Abrir no WhatsApp</a>
+          <SendWhatsApp kind="COMUNICADO" text={body} label="Enviar pela Z-API" variant="ghost" />
+        </div>
+      </div>
     </div>
   );
 }

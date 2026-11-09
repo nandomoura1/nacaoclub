@@ -117,6 +117,10 @@ não recarrega sozinha (som/ritmo); "Tirar da TV" volta ao modo normal. Bipes ex
 bolinhas dos rounds, partes da sequência) e treino à **direita** numa coluna (**só Força e WOD detalhados**; os demais blocos só com o tempo, como o warm-up — dia sem Força/WOD, ex. Futevôlei, mantém os blocos;
 força e WOD completos; o bloco do timer ganha borda azul + "AGORA"). "Tela cheia" mostra só o relógio.
 
+**Calendário de Marketing → "Texto para WhatsApp"**: texto do período visível (com os filtros), por tipo — campanhas, eventos,
+datas e avisos, feriados (tarefas opcional), sem cancelados; editável; copiar, abrir no WhatsApp ou Z-API (`COMUNICADO`).
+`calendarWhatsAppText` em `domain/marketing/calendar.ts`.
+
 **Kanban de Marketing**: estilo Trello (navegação lateral, colunas com rolagem própria,
 "Adicionar um cartão"), imagens no cartão (PNG/JPG/WEBP/GIF ≤ 10 MB, sem SVG; a primeira é a capa),
 link direto `?tarefa=<id>` e envio pelo WhatsApp (link exige login).
