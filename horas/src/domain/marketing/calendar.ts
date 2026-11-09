@@ -97,3 +97,26 @@ export function calendarWhatsAppText(entries: CalEntry[], opts: { from: string; 
   if (!any) lines.push('', '_Nada marcado neste período._');
   return lines.join('\n');
 }
+
+// ── Barras de vários dias na grade (estilo agenda) ──────────────
+
+export interface WeekBar { entry: CalEntry; col: number; span: number; lane: number; fromBefore: boolean; goesAfter: boolean }
+
+/**
+ * Corta os itens longos na semana (7 dias, seg→dom) e empilha em faixas sem
+ * sobreposição: quem começa antes e dura mais fica em cima. Puro.
+ */
+export function weekBars(entries: CalEntry[], week: string[]): WeekBar[] {
+  const ws = week[0]!, we = week[week.length - 1]!;
+  const segs = entries.filter((e) => e.start <= we && e.end >= ws).map((e) => {
+    const s = e.start < ws ? ws : e.start, f = e.end > we ? we : e.end;
+    return { entry: e, col: week.indexOf(s), span: week.indexOf(f) - week.indexOf(s) + 1, fromBefore: e.start < ws, goesAfter: e.end > we };
+  }).sort((a, b) => a.col - b.col || b.span - a.span || a.entry.title.localeCompare(b.entry.title));
+  const lanesEnd: number[] = []; // última coluna ocupada em cada faixa
+  return segs.map((s) => {
+    let lane = lanesEnd.findIndex((end) => end < s.col);
+    if (lane < 0) { lane = lanesEnd.length; lanesEnd.push(0); }
+    lanesEnd[lane] = s.col + s.span - 1;
+    return { ...s, lane };
+  });
+}

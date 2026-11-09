@@ -34,7 +34,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<SP>
   );
   return (
     <>
-      <PageHeader title="Calendário de Marketing" description="Campanhas, eventos, tarefas, datas e feriados num só lugar. Arraste para remarcar." />
+      <PageHeader title="Calendário de Marketing" description="Campanhas, eventos, tarefas, datas e feriados num só lugar. O que dura vários dias aparece como faixa na grade. Arraste para remarcar." />
       <CalendarClient view={view} anchor={anchor} today={today} entries={entries} options={options} filters={sp} canEdit={can(principal, 'mkt.edit')} />
     </>
   );

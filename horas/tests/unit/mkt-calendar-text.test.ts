@@ -40,3 +40,17 @@ describe('calendário de marketing → texto de WhatsApp', () => {
     expect(calendarWhatsAppText(entries, { from: '2027-01-01', to: '2027-01-31', title: 'x', kinds: ['evento'] })).toContain('Nada marcado');
   });
 });
+
+import { weekBars } from '@/domain/marketing/calendar';
+describe('barras de vários dias na semana', () => {
+  const week = ['2026-11-09', '2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13', '2026-11-14', '2026-11-15'];
+  const e = (title: string, start: string, end: string): CalEntry => ({ kind: 'campanha', id: title, title, start, end });
+  it('corta na semana, marca continuação e empilha sem sobrepor', () => {
+    const bars = weekBars([e('Mês da saúde', '2026-11-01', '2026-11-30'), e('Colônia', '2026-11-12', '2026-11-20'), e('Fora', '2026-12-01', '2026-12-10'), e('Curta', '2026-11-09', '2026-11-10')], week);
+    expect(bars.map((b) => [b.entry.title, b.col, b.span, b.lane, b.fromBefore, b.goesAfter])).toEqual([
+      ['Mês da saúde', 0, 7, 0, true, true],
+      ['Curta', 0, 2, 1, false, false],
+      ['Colônia', 3, 4, 1, false, true],
+    ]);
+  });
+});

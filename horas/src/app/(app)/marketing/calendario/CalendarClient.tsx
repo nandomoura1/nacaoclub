@@ -10,7 +10,7 @@ import { Card } from '@/components/ui/card';
 import { FormMessage } from '@/components/ui/alert';
 import { Input, Label, Select } from '@/components/ui/input';
 import { addDays } from '@/domain/dates';
-import { type CalEntry, type CalKind, calendarWhatsAppText, mondayOf, monthEnd, monthGrid, onDay, overlaps, shiftMonth } from '@/domain/marketing/calendar';
+import { type CalEntry, type CalKind, calendarWhatsAppText, mondayOf, monthEnd, monthGrid, onDay, overlaps, shiftMonth, weekBars } from '@/domain/marketing/calendar';
 import { CALENDAR_KINDS, CAMPAIGN_STATUSES, TASK_COLUMNS } from '@/domain/marketing/constants';
 import { cn } from '@/lib/cn';
 import type { MktOptions } from '@/server/services/marketing-service';
@@ -159,8 +159,8 @@ export function CalendarClient({ view, anchor, today, entries, options, filters,
         </Card>
       )}
 
-      {view !== 'ano' && longOnes.length > 0 && (
-        <Card className="p-3">
+      {view === 'semana' && longOnes.length > 0 && (
+        <Card className="p-3 md:hidden">
           <p className="text-[11px] font-bold uppercase tracking-wide text-tinta-suave">Neste período</p>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {longOnes.map((e) => (
@@ -175,27 +175,68 @@ export function CalendarClient({ view, anchor, today, entries, options, filters,
 
       {view === 'mes' && (
         <TopScroll>
-          <div className="grid min-w-[44rem] grid-cols-7 overflow-hidden rounded-2xl border border-borda bg-borda [gap:1px]">
-            {WEEKDAYS.map((w) => <div key={w} className="bg-fundo px-2 py-1 text-center text-[11px] font-bold uppercase text-tinta-suave">{w}</div>)}
-            {monthGrid(anchor.slice(0, 7)).flat().map((day) => {
-              const list = onDay(dayEntries, day);
-              const out = day.slice(0, 7) !== anchor.slice(0, 7);
+          <div className="min-w-[44rem] overflow-hidden rounded-2xl border border-borda bg-borda">
+            <div className="grid grid-cols-7 [gap:1px]">
+              {WEEKDAYS.map((w) => <div key={w} className="bg-fundo px-2 py-1 text-center text-[11px] font-bold uppercase text-tinta-suave">{w}</div>)}
+            </div>
+            {monthGrid(anchor.slice(0, 7)).map((week) => {
+              const bars = weekBars(longOnes, week);
+              const lanes = bars.reduce((n, b) => Math.max(n, b.lane + 1), 0);
               return (
-                <div key={day} {...dayProps(day)} className={cn('group min-h-28 bg-white p-1', out && 'bg-fundo/60', over === day && 'bg-nacao/10 ring-2 ring-inset ring-nacao')}>
-                  <div className="mb-0.5 flex items-center justify-between">
-                    <span className={cn('grid size-6 place-items-center rounded-full text-xs font-semibold', day === today ? 'bg-nacao text-white' : out ? 'text-tinta-fraca' : 'text-tinta')}>{Number(day.slice(8))}</span>
-                    {canEdit && <button type="button" aria-label="Adicionar data" className="text-tinta-fraca opacity-0 hover:text-nacao group-hover:opacity-100 focus:opacity-100" onClick={() => { setForm({ ...form, startDate: day }); setItem({ startDate: day }); }}><Plus className="size-3" /></button>}
-                  </div>
-                  <div className="space-y-0.5">
-                    {list.slice(0, 4).map((e) => <Chip key={`${e.kind}${e.id}`} e={e} day={day} draggable={movable(e)} onOpen={open} />)}
-                    {list.length > 4 && <Link href={qs({ v: 'semana', d: day })} className="block px-1 text-[10px] font-semibold text-nacao">+{list.length - 4} mais</Link>}
-                  </div>
+                <div key={week[0]} className="mt-px grid min-h-28 grid-cols-7 [column-gap:1px]" style={{ gridTemplateRows: `auto ${lanes ? `repeat(${lanes}, 1.375rem) ` : ''}1fr` }}>
+                  {week.map((day, i) => {
+                    const out = day.slice(0, 7) !== anchor.slice(0, 7);
+                    return <div key={`bg${day}`} {...dayProps(day)} style={{ gridColumn: i + 1, gridRow: '1 / -1' }} className={cn('group bg-white', out && 'bg-fundo/60', over === day && 'bg-nacao/10 ring-2 ring-inset ring-nacao')} />;
+                  })}
+                  {week.map((day, i) => {
+                    const out = day.slice(0, 7) !== anchor.slice(0, 7);
+                    return (
+                      <div key={`n${day}`} {...dayProps(day)} style={{ gridColumn: i + 1, gridRow: 1 }} className="group relative flex items-center justify-between px-1 pt-1">
+                        <span className={cn('grid size-6 place-items-center rounded-full text-xs font-semibold', day === today ? 'bg-nacao text-white' : out ? 'text-tinta-fraca' : 'text-tinta')}>{Number(day.slice(8))}</span>
+                        {canEdit && <button type="button" aria-label="Adicionar data" className="text-tinta-fraca opacity-0 hover:text-nacao group-hover:opacity-100 focus:opacity-100" onClick={() => { setForm({ ...form, startDate: day }); setItem({ startDate: day }); }}><Plus className="size-3" /></button>}
+                      </div>
+                    );
+                  })}
+                  {bars.map((b) => (
+                    <button key={`bar${b.entry.kind}${b.entry.id}`} type="button" onClick={() => open(b.entry)}
+                      title={`${b.entry.title} · ${fmtDate(b.entry.start)} a ${fmtDate(b.entry.end)}${b.entry.tag ? ` · ${b.entry.tag}` : ''}`}
+                      style={{ gridColumn: `${b.col + 1} / span ${b.span}`, gridRow: b.lane + 2 }}
+                      className={cn('relative z-10 my-px flex min-w-0 items-center gap-1 px-1.5 text-left text-[11px] font-semibold leading-5', kindCls(b.entry.kind),
+                        b.fromBefore ? 'ml-0 rounded-l-none' : 'ml-1 rounded-l', b.goesAfter ? 'mr-0 rounded-r-none' : 'mr-1 rounded-r')}>
+                      {b.fromBefore && <span aria-hidden>◂</span>}<span className="min-w-0 flex-1 truncate">{b.entry.title}</span>{b.goesAfter && <span aria-hidden>▸</span>}
+                    </button>
+                  ))}
+                  {week.map((day, i) => {
+                    const list = onDay(dayEntries, day);
+                    return (
+                      <div key={`l${day}`} {...dayProps(day)} style={{ gridColumn: i + 1, gridRow: lanes + 2 }} className="relative min-w-0 space-y-0.5 p-1 pt-0.5">
+                        {list.slice(0, 4).map((e) => <Chip key={`${e.kind}${e.id}`} e={e} day={day} draggable={movable(e)} onOpen={open} />)}
+                        {list.length > 4 && <Link href={qs({ v: 'semana', d: day })} className="block px-1 text-[10px] font-semibold text-nacao">+{list.length - 4} mais</Link>}
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })}
           </div>
         </TopScroll>
       )}
+
+      {view === 'semana' && longOnes.length > 0 && (() => {
+        const week = Array.from({ length: 7 }, (_, i) => addDays(mondayOf(anchor), i));
+        const bars = weekBars(longOnes, week);
+        return (
+          <div className="hidden gap-x-2 gap-y-1 md:grid md:grid-cols-7">
+            {bars.map((b) => (
+              <button key={`wbar${b.entry.kind}${b.entry.id}`} type="button" onClick={() => open(b.entry)} title={`${fmtDate(b.entry.start)} a ${fmtDate(b.entry.end)}`}
+                style={{ gridColumn: `${b.col + 1} / span ${b.span}`, gridRow: b.lane + 1 }}
+                className={cn('flex min-w-0 items-center gap-1 rounded px-2 py-0.5 text-left text-xs font-semibold', kindCls(b.entry.kind), b.fromBefore && 'rounded-l-none', b.goesAfter && 'rounded-r-none')}>
+                {b.fromBefore && <span aria-hidden>◂</span>}<span className="min-w-0 flex-1 truncate">{b.entry.title} <span className="font-normal opacity-80">· {fmtDate(b.entry.start)}–{fmtDate(b.entry.end)}</span></span>{b.goesAfter && <span aria-hidden>▸</span>}
+              </button>
+            ))}
+          </div>
+        );
+      })()}
 
       {view === 'semana' && (
         <div className="grid gap-2 md:grid-cols-7">
