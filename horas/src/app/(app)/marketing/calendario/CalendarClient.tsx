@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Copy, MessageCircle, Plus, Trash2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Copy, MessageCircle, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { SendWhatsApp } from '@/components/whatsapp/SendWhatsApp';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -51,7 +51,8 @@ export function CalendarClient({ view, anchor, today, entries, options, filters,
   const router = useRouter();
   const { msg, pending, run } = useRun();
   const [task, setTask] = useState<string | null>(null);
-  const [item, setItem] = useState<{ startDate: string } | null>(null);
+  /** Formulário de data/aviso: `id` presente = editando um existente. */
+  const [item, setItem] = useState<{ startDate: string; id?: string; ownerId?: string | null; modalityId?: string | null } | null>(null);
   const [form, setForm] = useState({ title: '', kind: 'DATA_COMEMORATIVA', startDate: '', endDate: '', description: '', audience: '' });
   const [over, setOver] = useState<string | null>(null);
   const [selected, setSelected] = useState<CalEntry | null>(null);
@@ -75,6 +76,7 @@ export function CalendarClient({ view, anchor, today, entries, options, filters,
     if (e.kind === 'tarefa') return setTask(e.id);
     if (e.href) return router.push(e.href);
     setSelected(e);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
   const drop = (day: string, raw: string) => {
     setOver(null);
@@ -92,7 +94,17 @@ export function CalendarClient({ view, anchor, today, entries, options, filters,
     onDragLeave: () => setOver((o) => (o === day ? null : o)),
     onDrop: (ev: React.DragEvent) => { ev.preventDefault(); drop(day, ev.dataTransfer.getData('text/plain')); },
   } : {};
-  const saveItem = () => run(() => saveCalendarItemAction(null, { ...form, startDate: form.startDate || item?.startDate || today, endDate: form.endDate || null, description: form.description || null, audience: form.audience || null }), () => { setItem(null); setForm({ ...form, title: '', description: '' }); });
+  const saveItem = () => run(() => saveCalendarItemAction(item?.id ?? null, {
+    ...form, startDate: form.startDate || item?.startDate || today, endDate: form.endDate || null, description: form.description || null, audience: form.audience || null,
+    // Editando: mantém responsável e modalidade que o item já tinha.
+    ...(item?.id ? { ownerId: item.ownerId ?? null, modalityId: item.modalityId ?? null } : {}),
+  }), () => { setItem(null); setSelected(null); setForm({ title: '', kind: 'DATA_COMEMORATIVA', startDate: '', endDate: '', description: '', audience: '' }); });
+  const editItem = (e: CalEntry) => {
+    setForm({ title: e.title, kind: e.item?.kind ?? 'OUTRO', startDate: e.start, endDate: e.end !== e.start ? e.end : '', description: e.item?.description ?? '', audience: e.item?.audience ?? '' });
+    setItem({ startDate: e.start, id: e.id, ownerId: e.ownerId, modalityId: e.modalityId });
+    setSelected(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   return (
     <div className="space-y-3">
@@ -135,7 +147,7 @@ export function CalendarClient({ view, anchor, today, entries, options, filters,
 
       {item && (
         <Card className="p-4">
-          <h3 className="font-bold text-navy">Nova data no calendário</h3>
+          <h3 className="font-bold text-navy">{item.id ? 'Editar data / aviso' : 'Nova data no calendário'}</h3>
           <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 [&>*]:min-w-0">
             <div className="sm:col-span-2"><Label>Título</Label><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="ex.: Dia das Mães" /></div>
             <div><Label>Tipo</Label><Select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>{CALENDAR_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}</Select></div>
@@ -146,7 +158,7 @@ export function CalendarClient({ view, anchor, today, entries, options, filters,
           </div>
           <div className="mt-3 flex gap-2">
             <Button size="sm" disabled={pending} onClick={saveItem}>Salvar</Button>
-            <Button size="sm" variant="secondary" onClick={() => setItem(null)}>Cancelar</Button>
+            <Button size="sm" variant="secondary" onClick={() => { setItem(null); if (item.id) setForm({ title: '', kind: 'DATA_COMEMORATIVA', startDate: '', endDate: '', description: '', audience: '' }); }}>Cancelar</Button>
           </div>
         </Card>
       )}
@@ -155,6 +167,8 @@ export function CalendarClient({ view, anchor, today, entries, options, filters,
         <Card className="flex flex-wrap items-center gap-2 p-3 text-sm">
           <span className={cn('rounded px-1.5 py-0.5 text-[11px] font-semibold', kindCls(selected.kind))}>{selected.tag}</span>
           <span className="min-w-0 flex-1 font-semibold">{selected.title} <span className="font-normal text-tinta-suave">· {fmtDate(selected.start)}{selected.end !== selected.start && ` a ${fmtDate(selected.end)}`}</span></span>
+          {selected.item?.description && <span className="basis-full text-tinta-suave">{selected.item.description}</span>}
+          {selected.kind === 'item' && canEdit && <Button size="sm" disabled={pending} onClick={() => editItem(selected)}><Pencil /> Editar</Button>}
           {selected.kind === 'item' && canEdit && <Button size="sm" variant="secondary" disabled={pending} onClick={() => confirm('Remover esta data do calendário?') && run(() => deleteCalendarItemAction(selected.id), () => setSelected(null))}><Trash2 /> Remover</Button>}
           <Button size="sm" variant="secondary" onClick={() => setSelected(null)}>Fechar</Button>
         </Card>

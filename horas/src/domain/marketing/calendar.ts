@@ -23,6 +23,8 @@ export interface CalEntry {
   campaignId?: string | null;
   /** Não arrasta (ex.: campanha de evento mostrada só no dia do evento). */
   pinned?: boolean;
+  /** Data/aviso avulso: o que a tela precisa para editar. */
+  item?: { kind: string; description: string | null; audience: string | null };
 }
 
 export const mondayOf = (d: string) => addDays(d, 1 - weekdayOf(d));

@@ -335,7 +335,7 @@ export async function calendarEntries(principal: Principal | null, from: string,
       if (d.skip || d.end < from || d.start > to) return [];
       return [{ kind: 'campanha', id: c.id, title: c.name, start: d.start, end: d.end, pinned: d.pinned, tag: types[c.type], href: `/marketing/campanhas/${c.id}`, ownerId: c.ownerId, modalityId: c.modalityId, status: c.status, campaignId: c.id }];
     }),
-    ...items.map((i): CalEntry => ({ kind: 'item', id: i.id, title: i.title, start: iso(i.startDate)!, end: iso(i.endDate) ?? iso(i.startDate)!, tag: labelOf(CALENDAR_KINDS, i.kind), ownerId: i.ownerId, modalityId: i.modalityId })),
+    ...items.map((i): CalEntry => ({ kind: 'item', id: i.id, title: i.title, start: iso(i.startDate)!, end: iso(i.endDate) ?? iso(i.startDate)!, tag: labelOf(CALENDAR_KINDS, i.kind), ownerId: i.ownerId, modalityId: i.modalityId, item: { kind: i.kind, description: i.description, audience: i.audience } })),
     ...tasks.map((t): CalEntry => ({ kind: 'tarefa', id: t.id, title: t.title, start: iso(t.dueDate)!, end: iso(t.dueDate)!, tag: t.campaign?.name ?? 'Tarefa', color: t.area?.color, ownerId: t.assigneeId, areaKey: t.area?.key ?? null, status: t.column, campaignId: t.campaignId })),
   ];
 }
