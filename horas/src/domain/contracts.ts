@@ -386,6 +386,11 @@ const signerKey = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLo
  * RECREAÇÕES ESPORTIVAS LTDA"), só o que vem depois. Acento, maiúsculas e
  * pontuação não contam.
  */
+/** Nome da parte como aparece para assinar: sem o rótulo antes de dois-pontos, se houver. */
+export function signerDisplayName(name: string): string {
+  return (name.includes(':') ? name.slice(name.lastIndexOf(':') + 1) : name).replace(/\s+/g, ' ').trim() || name.trim();
+}
+
 export function signerNameMatches(typed: string, expected: string): boolean {
   const t = signerKey(typed);
   if (!t) return false;

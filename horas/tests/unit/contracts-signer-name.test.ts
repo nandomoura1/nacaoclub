@@ -15,3 +15,11 @@ describe('nome digitado na assinatura', () => {
     expect(signerNameMatches('', 'Gustavo de Lima')).toBe(false);
   });
 });
+
+import { signerDisplayName } from '@/domain/contracts';
+describe('nome fixo na página de assinatura', () => {
+  it('tira o rótulo antes de dois-pontos', () => {
+    expect(signerDisplayName('NAÇÃO CLUB: NAÇÃO CLUB RECREAÇÕES ESPORTIVAS LTDA')).toBe('NAÇÃO CLUB RECREAÇÕES ESPORTIVAS LTDA');
+    expect(signerDisplayName('Gustavo de Lima')).toBe('Gustavo de Lima');
+  });
+});

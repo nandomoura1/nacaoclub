@@ -84,7 +84,7 @@ describe.skipIf(!hasDb)('Contratos com assinatura eletrônica própria', () => {
     await code(tProf, prof!.id);
     await expect(requestSignCode(tProf, META)).rejects.toThrow(/Aguarde 1 minuto/);
     await expect(signWithCode(tProf, { code: '000000', name: `Professor ${tag}`, agree: true }, META)).rejects.toThrow(/incorreto/);
-    await expect(signWithCode(tProf, { code: '123456', name: 'Outra Pessoa', agree: true }, META)).rejects.toThrow(/nome completo/);
+    await expect(signWithCode(tProf, { code: '123456', name: 'Outra Pessoa', agree: true }, META)).rejects.toThrow(/nome não confere/);
     expect(await signWithCode(tProf, { code: '123456', name: `  professor ${tag.toUpperCase()} `, agree: true }, { ipAddress: '200.1.2.3', userAgent: 'Mozilla/5.0 (iPhone) Safari/604' })).toEqual({ completed: false });
     await expect(signWithCode(tProf, { code: '123456', name: `Professor ${tag}`, agree: true }, META)).rejects.toThrow(/já respondeu/);
 

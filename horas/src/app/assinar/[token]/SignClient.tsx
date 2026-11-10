@@ -1,5 +1,6 @@
 'use client';
 
+import { signerDisplayName } from '@/domain/contracts';
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { CircleCheck, Clock, Download, ShieldCheck, XCircle } from 'lucide-react';
@@ -23,7 +24,7 @@ export function SignClient({ token, view }: { token: string; view: SignView }) {
   const [msg, setMsg] = useState<{ error?: string; success?: string }>({});
   const [codeSent, setCodeSent] = useState(false);
   const [code, setCode] = useState('');
-  const [name, setName] = useState('');
+  const signer = signerDisplayName(view.me.name);
   const [agree, setAgree] = useState(false);
   const [refusing, setRefusing] = useState(false);
   const [reason, setReason] = useState('');
@@ -92,17 +93,17 @@ export function SignClient({ token, view }: { token: string; view: SignView }) {
               <Input id="code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="000000" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} className="font-mono tracking-[0.3em]" />
             </div>
             <div>
-              <Label htmlFor="name">3. Seu nome completo</Label>
-              <Input id="name" autoComplete="name" placeholder={view.me.name} value={name} onChange={(e) => setName(e.target.value)} />
-              <p className="mt-1 text-xs text-tinta-suave">Digite como está no contrato: <b className="text-tinta">{view.me.name.includes(':') ? view.me.name.slice(view.me.name.lastIndexOf(':') + 1).trim() : view.me.name}</b> (acentos e maiúsculas não importam).</p>
+              <Label>3. Quem assina</Label>
+              <p className="flex h-10 items-center rounded-lg border border-borda bg-fundo px-3 text-sm font-semibold text-tinta" aria-readonly>{signer}</p>
+              <p className="mt-1 text-xs text-tinta-suave">Nome conforme o contrato. Se não for você, não assine e avise quem enviou.</p>
             </div>
           </div>
           <label className="flex items-start gap-2 text-sm text-tinta">
             <input type="checkbox" className="mt-1 size-4 accent-nacao" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
-            <span>Li e concordo com todos os termos deste contrato e reconheço esta assinatura eletrônica como válida (MP 2.200-2/2001, art. 10, § 2º).</span>
+            <span>Eu, <b>{signer}</b>, li e concordo com todos os termos deste contrato e reconheço esta assinatura eletrônica como válida (MP 2.200-2/2001, art. 10, § 2º).</span>
           </label>
           <div className="flex flex-wrap gap-2">
-            <Button disabled={pending || code.length !== 6 || name.trim().length < 3 || !agree} onClick={() => run(() => signAction(token, { code, name, agree }), () => router.refresh())}>
+            <Button disabled={pending || code.length !== 6 || !agree} onClick={() => run(() => signAction(token, { code, name: signer, agree }), () => router.refresh())}>
               Assinar contrato
             </Button>
             <Button variant="ghost" disabled={pending} onClick={() => setRefusing((v) => !v)}>Não concordo / recusar</Button>
