@@ -94,6 +94,7 @@ export function SignClient({ token, view }: { token: string; view: SignView }) {
             <div>
               <Label htmlFor="name">3. Seu nome completo</Label>
               <Input id="name" autoComplete="name" placeholder={view.me.name} value={name} onChange={(e) => setName(e.target.value)} />
+              <p className="mt-1 text-xs text-tinta-suave">Digite como está no contrato: <b className="text-tinta">{view.me.name.includes(':') ? view.me.name.slice(view.me.name.lastIndexOf(':') + 1).trim() : view.me.name}</b> (acentos e maiúsculas não importam).</p>
             </div>
           </div>
           <label className="flex items-start gap-2 text-sm text-tinta">

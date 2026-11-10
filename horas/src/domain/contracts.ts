@@ -374,3 +374,21 @@ export function termStatus(c: { startsOn: string | null; endsOn: string | null; 
 export function daysUntil(iso: string, today: string): number {
   return Math.round((Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) - Date.UTC(+today.slice(0, 4), +today.slice(5, 7) - 1, +today.slice(8, 10))) / 86_400_000);
 }
+
+// ── Nome digitado na assinatura ─────────────────────────────────
+
+/** Sem acento, sem maiúscula, pontuação vira espaço ("LTDA." = "LTDA"; "S/A" = "S A"). */
+const signerKey = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+/**
+ * O nome digitado confere com o da parte? Aceita o nome inteiro ou, quando o
+ * cadastro tem um rótulo antes de dois-pontos ("NAÇÃO CLUB: NAÇÃO CLUB
+ * RECREAÇÕES ESPORTIVAS LTDA"), só o que vem depois. Acento, maiúsculas e
+ * pontuação não contam.
+ */
+export function signerNameMatches(typed: string, expected: string): boolean {
+  const t = signerKey(typed);
+  if (!t) return false;
+  const options = [expected, expected.includes(':') ? expected.slice(expected.lastIndexOf(':') + 1) : ''].map(signerKey).filter(Boolean);
+  return options.includes(t);
+}

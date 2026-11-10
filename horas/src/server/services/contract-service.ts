@@ -9,7 +9,7 @@ import { AppError, NotFoundError } from '@/server/errors';
 import { getEnv } from '@/lib/env';
 import { todayIso } from '@/lib/today';
 import {
-  CONTRACT_CATEGORIES, FIELD_TYPES, SIGNER_ROLES, checkTemplate, contractCode, dateInWords, documentOk, formatDocument, maskPhone, renderContract, roleLabel, templateKeys, guessTerm, termStatus, TERM_STATUS,
+  CONTRACT_CATEGORIES, FIELD_TYPES, SIGNER_ROLES, checkTemplate, contractCode, dateInWords, documentOk, formatDocument, maskPhone, renderContract, roleLabel, templateKeys, guessTerm, termStatus, TERM_STATUS, signerNameMatches,
   type TemplateField,
 } from '@/domain/contracts';
 import { normalizeDestination } from '@/domain/whatsapp';
@@ -473,8 +473,6 @@ export async function requestSignCode(token: string, meta: RequestMeta) {
   return { to: maskPhone(s.phone) };
 }
 
-const normName = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
-
 /** Assina com o código. Quando todos assinam, gera e guarda o PDF final. */
 export async function signWithCode(token: string, input: { code: string; name: string; agree: boolean }, meta: RequestMeta) {
   const s = await signerByToken(token);
@@ -482,7 +480,7 @@ export async function signWithCode(token: string, input: { code: string; name: s
   if (s.status !== 'PENDENTE') throw new AppError('Você já respondeu este contrato.');
   if (!input.agree) throw new AppError('Marque que leu e concorda com o contrato.');
   const typed = input.name.replace(/\s+/g, ' ').trim();
-  if (normName(typed) !== normName(s.name)) throw new AppError(`Digite seu nome completo como está no contrato: ${s.name}.`);
+  if (!signerNameMatches(typed, s.name)) throw new AppError(`Digite o nome completo como está no contrato: ${s.name.includes(':') ? s.name.slice(s.name.lastIndexOf(':') + 1).trim() : s.name}.`);
   if (!s.otpHash || !s.otpExpiresAt) throw new AppError('Peça o código primeiro.');
   if (s.otpAttempts >= OTP_MAX_TRIES) throw new AppError('Muitas tentativas. Peça um novo código.', 429);
   if (s.otpExpiresAt < new Date()) throw new AppError('Código vencido. Peça um novo.');
