@@ -1,6 +1,7 @@
 import { after, NextResponse } from 'next/server';
 import { todayIso } from '@/lib/today';
 import { runTecnofitSync } from '@/server/services/crm-sync-service';
+import { tecnofitConfig } from '@/server/tecnofit/client';
 
 /**
  * Sincronização diária com a Tecnofit (Vercel Cron, 05h17 de Brasília): débitos e casos
@@ -15,6 +16,8 @@ const MAX_PARTS = 20;
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || req.headers.get('authorization') !== `Bearer ${secret}`) return NextResponse.json({ error: 'não autorizado' }, { status: 401 });
+  // Sem as chaves na Vercel ainda: não há o que sincronizar (não é erro).
+  if (!tecnofitConfig().configured) return NextResponse.json({ skipped: 'Tecnofit não configurada (TECNOFIT_API_KEY/SECRET).' });
   const url = new URL(req.url);
   const today = url.searchParams.get('dia') ?? todayIso();
   const part = Number(url.searchParams.get('parte') ?? '1') || 1;
