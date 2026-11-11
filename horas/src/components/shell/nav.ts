@@ -8,7 +8,7 @@ export type NavIcon =
   | 'mkt' | 'mkt-campanhas' | 'mkt-kanban' | 'mkt-eventos' | 'mkt-reuniao' | 'mkt-conteudo' | 'mkt-interna' | 'mkt-canais' | 'mkt-leads' | 'mkt-biblioteca' | 'mkt-trafego' | 'mkt-performance' | 'mkt-memoria' | 'mkt-conexoes' | 'mkt-criativo' | 'whatsapp'
   | 'wa-auto' | 'processos' | 'proc-demandas' | 'proc-setores' | 'proc-task' | 'proc-reuniao'
   | 'edu' | 'edu-trilhas' | 'edu-painel' | 'proc-atas' | 'treinos-tv'
-  | 'ws' | 'ws-equipes' | 'ws-regras' | 'ws-funcionamento' | 'ws-feriados' | 'ws-ausencias' | 'ws-legal' | 'contratos' | 'contratos-modelos' | 'treinos-timer';
+  | 'ws' | 'ws-equipes' | 'ws-regras' | 'ws-funcionamento' | 'ws-feriados' | 'ws-ausencias' | 'ws-legal' | 'contratos' | 'contratos-modelos' | 'treinos-timer' | 'crm';
 
 export interface NavItem {
   href: string;
@@ -137,6 +137,12 @@ export const NAV_CONTRATOS: NavItem[] = [
   { href: '/contratos/modelos', label: 'Modelos de contrato', icon: 'contratos-modelos', permission: 'contract.view' },
 ];
 
+/** Cobrança e CRM: alunos da Tecnofit com venda em aberto/pendência, fila por consultor (Tecnofit só leitura). */
+export const NAV_COBRANCA: NavItem[] = [
+  { href: '/cobranca', label: 'Fila de cobrança', short: 'Cobrança', icon: 'crm', permission: 'crm.view' },
+  { href: '/cobranca/configuracoes', label: 'Configurações', icon: 'cadastros', permission: 'crm.admin' },
+];
+
 export const NAV_ADMIN: NavItem[] = [
   { href: '/admin/empresas', label: 'Empresas', icon: 'empresas', permission: 'company.view' },
   { href: '/admin/cadastros', label: 'Cadastros', icon: 'cadastros', permission: 'admin.catalog' },
@@ -157,5 +163,6 @@ export const NAV_SECTIONS: NavSection[] = [
   { title: 'Gestão de Processos', items: NAV_PROCESSOS, bar: { label: 'Processos', icon: 'processos', order: 6 } },
   { title: 'Universidade Nação', items: NAV_UNIVERSIDADE, bar: { label: 'Universidade', icon: 'edu', order: 7 } },
   { title: 'Contratos', items: NAV_CONTRATOS },
+  { title: 'Cobrança e CRM', items: NAV_COBRANCA },
   { title: 'Administração', items: NAV_ADMIN },
 ];

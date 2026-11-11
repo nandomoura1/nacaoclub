@@ -144,3 +144,18 @@ links param, restaurável); aguardando assinatura precisa ser cancelado antes. S
 **Modelos**: dados da contratante sempre por variável (`{{empresa_razao_social}}`, `{{empresa_cnpj}}`, `{{empresa_endereco}}`,
 `{{empresa_nome}}`) — o editor avisa e troca nome/CNPJ escritos à mão; `{{ }}` só aceita chave de campo (não valor).
 Texto aceita `| tabela |` e `---` (tela e PDF).
+
+**Cobrança e CRM — Tecnofit** (menu Cobrança e CRM; `crm.view`/`work`/`view_all`/`view_personal`/`dashboard`/`admin`;
+papéis **CRM / Cobrança** e **Líder de CRM**). API externa da Tecnofit **só leitura** (`src/server/tecnofit/client.ts`;
+login `POST /v1/auth/login` com as chaves no corpo → Bearer; ≤ 200 req/min, o cliente espaça; `TECNOFIT_FAKE=1` simula).
+Chaves só na Vercel (`TECNOFIT_API_KEY`/`TECNOFIT_API_SECRET`). Sincronização **1×/dia** (cron 05h17, `/api/cron/tecnofit`,
+retoma de onde parou): vendas não recebidas (12 meses) + bloqueados/restritos + quem já tem caso → por aluno, vendas
+(`openValue`/`dueDate`) e celular. Débito = venda com valor em aberto vencida ou vencendo em ≤ 3 dias. Caso **COBRANCA**
+(1 aberto por aluno e tipo, índice parcial); `blocked`/`restricted` sem venda em aberto = **PENDENCIA** ("Pendência na
+recepção", fora dos números de inadimplência). Pagou na Tecnofit → caso RESOLVIDO na rodada seguinte (valores recalculados
+dos débitos, sem duplicar). **Responsável = consultor da Tecnofit** (o da ligação de CRM mais recente — o cadastro do aluno na
+API não traz consultor) vinculado **à mão** ao usuário em Configurações; sem vínculo = "Sem responsável", o **líder distribui**
+e vê tudo. Responsável é fixo até o caso fechar. Régua decidida: automáticas em **D-3, D0, D+3, D+5, D+7** (a partir do D+3
+também tarefa do consultor; D+15 escala para o líder); pagar = app da Tecnofit, Pix ou recepção; recuperado = último contato
+nos 7 dias antes do pagamento; histórico de cobrança 5 anos. **F1 no ar = só leitura, sem mensagens** (régua/contatos/promessas
+= F2–F3; painel e renovações = F4; webhooks só quando a Tecnofit documentar eventos e assinatura).

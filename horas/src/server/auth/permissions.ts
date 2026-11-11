@@ -70,6 +70,12 @@ export const PERMISSIONS = {
   'contract.templates': 'Contratos: criar e editar os modelos',
   'ws.all_sectors': 'Escalas de Trabalho 5x2: ver e gerar as escalas de todos os setores (sem aprovar/publicar)',
   'ws.admin': 'Escalas de Trabalho 5x2: todos os setores, funcionamento da Nação e parâmetros legais (DP)',
+  'crm.view': 'Cobrança e CRM: ver a própria fila de cobrança e os casos',
+  'crm.work': 'Cobrança e CRM: trabalhar os casos (registrar contato e promessa, enviar WhatsApp de cobrança)',
+  'crm.view_all': 'Cobrança e CRM: ver a fila de todos, os casos sem responsável e redistribuir (líder)',
+  'crm.view_personal': 'Cobrança e CRM: ver o celular completo do aluno',
+  'crm.dashboard': 'Cobrança e CRM: painel do gestor (inadimplência, recuperado, produtividade)',
+  'crm.admin': 'Cobrança e CRM: consultores ↔ usuários, régua, modelos e sincronização com a Tecnofit',
 } as const;
 
 export type PermissionKey = keyof typeof PERMISSIONS;
@@ -81,7 +87,7 @@ export function isPermissionKey(value: string): value is PermissionKey {
 }
 
 export const SYSTEM_ROLES: Record<
-  'ADMIN' | 'COORDENADOR' | 'CONSULTA' | 'PROFESSOR' | 'MARKETING' | 'LIDER' | 'TREINOS',
+  'ADMIN' | 'COORDENADOR' | 'CONSULTA' | 'PROFESSOR' | 'MARKETING' | 'LIDER' | 'TREINOS' | 'CRM' | 'CRM_LIDER',
   { name: string; description: string; permissions: PermissionKey[] }
 > = {
   ADMIN: {
@@ -156,6 +162,16 @@ export const SYSTEM_ROLES: Record<
     name: 'Líder de setor',
     description: 'Acompanha e atualiza as demandas do próprio setor (Gestão de Processos), registra atas, publica materiais na Universidade Nação, cadastra colaboradores, cuida dos documentos da equipe (inclusive atestados), lança faltas, folgas e afastamentos, monta a grade e a escala de fim de semana/feriados das próprias áreas e vê a grade de todas; monta a escala mensal 5x2 dos setores que lidera (aprovar e publicar fica com a gestão). Combine com o perfil da função.',
     permissions: ['proc.view', 'proc.edit', 'edu.view', 'edu.edit', 'teacher.view', 'teacher.edit', 'teacher.docs', 'schedule.view', 'schedule.view_all', 'schedule.edit', 'occurrence.exception', 'leave.manage', 'duty.edit', 'ws.view', 'ws.edit', 'ws.all_sectors'],
+  },
+  CRM: {
+    name: 'CRM / Cobrança',
+    description: 'Consultor do time de CRM: trabalha a própria fila de cobrança (alunos da Tecnofit) e vê o celular do aluno.',
+    permissions: ['crm.view', 'crm.work', 'crm.view_personal'],
+  },
+  CRM_LIDER: {
+    name: 'Líder de CRM',
+    description: 'Líder do time de CRM: vê a fila de todos, distribui os casos sem responsável e acompanha o painel.',
+    permissions: ['crm.view', 'crm.work', 'crm.view_all', 'crm.view_personal', 'crm.dashboard'],
   },
 };
 

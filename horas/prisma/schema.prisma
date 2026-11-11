@@ -2873,3 +2873,119 @@ model GradeSimulation {
   @@index([status, createdAt])
   @@map("grade_simulations")
 }
+
+// ─────────────────────────────────────────────────────────────
+// Cobrança e CRM (Tecnofit): espelho mínimo + casos de cobrança
+// ─────────────────────────────────────────────────────────────
+
+/// Aluno espelhado da Tecnofit — SÓ o necessário para cobrar (sem CPF, RG, endereço,
+/// cartão nem exame médico). Sem débito nem caso há 90+ dias: apagado na sincronização (LGPD).
+model TecCustomer {
+  id                String    @id @default(uuid()) @db.Uuid
+  tecnofitId        String    @unique @map("tecnofit_id")
+  name              String
+  /// Status na Tecnofit quando conhecido (blocked/restricted vêm da lista; demais = null).
+  status            String?
+  /// Celular com DDD, só dígitos (sem 55). Sai do servidor só para quem tem crm.view_personal.
+  mobile            String?
+  /// Consultor da Tecnofit (id do funcionário), vindo das ligações do CRM.
+  consultantTecId   String?   @map("consultant_tec_id")
+  contactsCheckedOn DateTime? @map("contacts_checked_on") @db.Date
+  lastSeenOn        DateTime  @map("last_seen_on") @db.Date
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  debts TecDebt[]
+  cases CrmCase[]
+
+  @@index([lastSeenOn])
+  @@map("tec_customers")
+}
+
+/// Venda com valor em aberto (vencida ou vencendo em até 3 dias) vista na Tecnofit.
+model TecDebt {
+  id             String    @id @default(uuid()) @db.Uuid
+  tecnofitSaleId String    @unique @map("tecnofit_sale_id")
+  customerId     String    @map("customer_id") @db.Uuid
+  dueDate        DateTime? @map("due_date") @db.Date
+  openValue      Decimal   @map("open_value") @db.Decimal(12, 2)
+  /// Valor em aberto quando o débito apareceu pela primeira vez (base do "valor recuperado").
+  firstOpenValue Decimal   @map("first_open_value") @db.Decimal(12, 2)
+  totalValue     Decimal   @default(0) @map("total_value") @db.Decimal(12, 2)
+  description    String?
+  /// ABERTO, QUITADO (sumiu da lista de abertos na Tecnofit)
+  status         String    @default("ABERTO")
+  firstSeenOn    DateTime  @map("first_seen_on") @db.Date
+  lastSeenOn     DateTime  @map("last_seen_on") @db.Date
+  paidOn         DateTime? @map("paid_on") @db.Date
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  customer TecCustomer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, status])
+  @@map("tec_debts")
+}
+
+/// Consultor da Tecnofit ↔ usuário do Nação ADM. Vínculo SEMPRE escolhido à mão (nunca pelo nome).
+model CrmConsultant {
+  id         String   @id @default(uuid()) @db.Uuid
+  tecnofitId String   @unique @map("tecnofit_id")
+  name       String
+  userId     String?  @map("user_id") @db.Uuid
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("crm_consultants")
+}
+
+/// Caso de cobrança/pendência de um aluno. No máximo um ABERTO por aluno e tipo (índice parcial no SQL).
+model CrmCase {
+  id             String    @id @default(uuid()) @db.Uuid
+  customerId     String    @map("customer_id") @db.Uuid
+  /// COBRANCA, PENDENCIA (domain/cobranca.ts)
+  kind           String
+  /// ABERTO, RESOLVIDO, ENCERRADO
+  status         String    @default("ABERTO")
+  /// Responsável (usuário). null = "Sem responsável" (o líder distribui).
+  ownerId        String?   @map("owner_id") @db.Uuid
+  openedOn       DateTime  @map("opened_on") @db.Date
+  closedOn       DateTime? @map("closed_on") @db.Date
+  closeReason    String?   @map("close_reason")
+  originalValue  Decimal   @default(0) @map("original_value") @db.Decimal(12, 2)
+  openValue      Decimal   @default(0) @map("open_value") @db.Decimal(12, 2)
+  recoveredValue Decimal   @default(0) @map("recovered_value") @db.Decimal(12, 2)
+  oldestDue      DateTime? @map("oldest_due") @db.Date
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  customer TecCustomer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@index([status, ownerId])
+  @@index([customerId, kind, status])
+  @@map("crm_cases")
+}
+
+/// Registro de cada sincronização diária com a Tecnofit (retoma de onde parou).
+model TecSyncRun {
+  id          String    @id @default(uuid()) @db.Uuid
+  day         DateTime  @db.Date
+  /// RODANDO, CONCLUIDA, FALHOU
+  status      String    @default("RODANDO")
+  /// REAL, SIMULADO
+  mode        String
+  /// Ids Tecnofit dos alunos que faltam processar.
+  pending     Json      @default("[]")
+  /// Contagens e erros (sem dado pessoal: só ids).
+  stats       Json      @default("{}")
+  error       String?
+  apiCalls    Int       @default(0) @map("api_calls")
+  invocations Int       @default(0)
+  triggeredBy String?   @map("triggered_by") @db.Uuid
+  startedAt   DateTime  @default(now()) @map("started_at")
+  finishedAt  DateTime? @map("finished_at")
+
+  @@index([day])
+  @@map("tec_sync_runs")
+}

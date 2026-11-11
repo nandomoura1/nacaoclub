@@ -39,6 +39,9 @@ Escopo: aplicação Nação ADM (Next.js na Vercel) e banco/arquivos no Supabase
   documentos da equipe (arquivos privados, permissão `teacher.docs`).
 - **Marketing**: leads (nome, telefone, e-mail de interessados) — permissão `mkt.view`;
   exclusão só `mkt.admin`.
+- **Cobrança e CRM** (Tecnofit, só leitura): espelho mínimo do aluno — nome, status, celular e vendas
+  em aberto (sem CPF, RG, endereço, cartão nem exame médico). Celular completo só com `crm.view_personal`
+  (sem ela, mascarado); auditoria só com o id Tecnofit; aluno sem caso e sem aparecer há 90 dias é apagado.
 - **Financeiro/Condomínio**: dados da **empresa** (CNPJ, conta e PIX de recebimento).
 - **Não** guarda CPF, salário ou conta bancária de pessoas.
 
