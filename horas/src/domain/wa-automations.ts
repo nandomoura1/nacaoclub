@@ -37,7 +37,7 @@ export const AUDIENCES = [
   { id: 'PROFESSORES_GRADE', label: 'Professores com aulas fixas', detail: 'Professores ativos que têm aulas na grade semanal.', vars: [...BASE, 'grade', 'orientacoes', 'mensagem_completa'], filter: 'modality' },
   { id: 'PROFESSORES', label: 'Todos os professores ativos', detail: 'Todos os professores ativos com WhatsApp no cadastro.', vars: BASE, filter: 'modality' },
   { id: 'PERFIL', label: 'Usuários de um perfil', detail: 'Usuários ativos de um perfil de acesso (ex.: Coordenador), com WhatsApp no cadastro.', vars: BASE, filter: 'role' },
-  { id: 'CRM_TAREFAS', label: 'Consultores de CRM com tarefas', detail: 'Cada consultor com tarefas de cobrança abertas (Cobrança e CRM) e os líderes de CRM com casos sem responsável ou escalados. Sai às 07h30, depois da sincronização com a Tecnofit. O {link} abre a lista (exige login).', vars: [...BASE, 'tarefas_crm'], filter: null },
+  { id: 'CRM_TAREFAS', label: 'Consultores de CRM com tarefas', detail: 'Cada consultor com tarefas de cobrança abertas (Cobrança e CRM) e os líderes de CRM com casos sem responsável ou escalados. Sai no horário e nos dias de cada consultor (Cobrança e CRM → Time de CRM; padrão 8h, seg–sáb). O {link} abre a lista (exige login).', vars: [...BASE, 'tarefas_crm'], filter: null },
   { id: 'NUMEROS', label: 'Números ou grupos específicos', detail: 'Lista fixa de números (um por linha) ou IDs de grupo do WhatsApp.', vars: BASE.filter((v) => v !== 'nome' && v !== 'primeiro_nome'), filter: 'numbers' },
 ] as const satisfies readonly { id: string; label: string; detail: string; vars: readonly VariableKey[]; filter: 'modality' | 'role' | 'numbers' | null }[];
 export type Audience = (typeof AUDIENCES)[number]['id'];
@@ -45,8 +45,8 @@ export const audienceOf = (id: string) => AUDIENCES.find((a) => a.id === id);
 
 export interface AutomationRule { frequency: string; weekdays: number[]; monthDay: number | null; audience?: string }
 
-/** Horário do envio: as tarefas de CRM saem às 07h30 (depois da sincronização com a Tecnofit); o resto às 8h. */
-export const sendTimeOf = (audience?: string) => (audience === 'CRM_TAREFAS' ? '7h30' : '8h');
+/** Horário do envio: às 8h; as tarefas de CRM, no horário de cada consultor (Cobrança e CRM → Time de CRM). */
+export const sendTimeOf = (audience?: string) => (audience === 'CRM_TAREFAS' ? 'no horário de cada consultor' : '8h');
 
 /** Roda hoje? (semana: 1 = segunda … 7 = domingo; mês: dia 1–28). */
 export function isDue(a: AutomationRule, today: IsoDate): boolean {

@@ -1,21 +1,28 @@
 import { NextResponse } from 'next/server';
 import { todayIso } from '@/lib/today';
+import { SEND_HOURS } from '@/domain/cobranca';
 import { generateTasks } from '@/server/services/crm-task-service';
-import { runDueAutomations } from '@/server/whatsapp/automations';
+import { sendCrmDigests } from '@/server/whatsapp/automations';
 
 /**
- * Tarefas de CRM do dia (Vercel Cron, 07h27 de Brasília — depois da sincronização das 05h17):
- * gera/dá baixa nas tarefas e envia a automação "Tarefas de CRM do dia" (se estiver ligada).
- * Protegido por CRON_SECRET. O agendador das 8h é a reserva (cada dia sai uma vez só).
+ * Tarefas de CRM (Vercel Cron, uma entrada diária por hora das 6h às 14h de Brasília: ?hora=6 … ?hora=14):
+ * gera/dá baixa nas tarefas do dia (idempotente) e manda o WhatsApp de quem tem envio nesta hora
+ * (Cobrança e CRM → Time de CRM), se a automação "Tarefas de CRM do dia" estiver ligada. Protegido por CRON_SECRET.
  */
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
+/** Hora de Brasília agora (a Vercel roda em UTC). */
+const brHour = () => Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', hour12: false }).format(new Date()));
+
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || req.headers.get('authorization') !== `Bearer ${secret}`) return NextResponse.json({ error: 'não autorizado' }, { status: 401 });
-  const today = new URL(req.url).searchParams.get('dia') ?? todayIso();
+  const url = new URL(req.url);
+  const today = url.searchParams.get('dia') ?? todayIso();
+  const hour = Number(url.searchParams.get('hora') ?? brHour());
+  if (!(SEND_HOURS as readonly number[]).includes(hour)) return NextResponse.json({ today, hour, skipped: 'fora da janela de envio (6h–14h)' });
   const tasks = await generateTasks(today);
-  const sent = await runDueAutomations(today, { audience: 'CRM_TAREFAS' });
+  const sent = await sendCrmDigests(today, hour);
   return NextResponse.json({ today, tasks, sent });
 }

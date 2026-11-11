@@ -37,7 +37,16 @@ export const TASK_KINDS = {
   ...Object.fromEntries(CADENCE.map((c) => [c.kind, { label: c.label, todo: c.todo }])),
   PENDENCIA: { label: 'Pendência na recepção', todo: 'Aluno bloqueado/restrito na Tecnofit: pedir que passe na recepção ou resolver por WhatsApp.' },
   RETORNO: { label: 'Retorno / promessa agendada', todo: 'Retorno agendado na Tecnofit para {ref}: conferir se pagou e falar com o aluno.' },
+  MANUAL: { label: 'Tarefa do líder', todo: '' },
 } as Record<string, { label: string; todo: string }>;
+
+/** Tipos que o líder liga/desliga por consultor (vazio = recebe todos). Tarefa manual do líder sempre entra. */
+export const FILTERABLE_KINDS = [...CADENCE.map((c) => c.kind), 'PENDENCIA', 'RETORNO'] as string[];
+export const kindAllowed = (kind: string, allowed: readonly string[]) => kind === 'MANUAL' || !allowed.length || allowed.includes(kind);
+
+/** Envio do WhatsApp de tarefas: de hora em hora, das 6h às 14h (Brasília). */
+export const SEND_HOURS = [6, 7, 8, 9, 10, 11, 12, 13, 14] as const;
+export const DEFAULT_SEND = { hour: 8, days: [1, 2, 3, 4, 5, 6] } as const;
 
 /** Janela de antecedência para trazer débitos que ainda vão vencer (D-3). */
 export const UPCOMING_DAYS = 3;

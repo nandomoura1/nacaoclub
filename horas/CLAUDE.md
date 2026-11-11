@@ -161,7 +161,13 @@ Tarefas de CRM), mais pendência na recepção e "Retorno / promessa". O consult
 CRM): ligação **concluída** depois que a tarefa entrou na lista dá baixa sozinha; ligação **pendente agendada** (retorno/promessa)
 **pausa a régua** até a data e vira tarefa quando chega. Novo passo substitui o anterior não feito (anota "sem contato no D+3");
 não feita continua no topo ("atrasada há N dias"); pagou → baixa "pagamento"; botão "Já registrei na Tecnofit" = baixa manual
-(auditada). D+15 = escalado para o líder. **Lista diária às 07h30** (cron `/api/cron/crm-tarefas`, 07h27) pela automação de
-WhatsApp "Tarefas de CRM do dia" (público `CRM_TAREFAS`, nasce **desligada**; WhatsApp do cadastro do usuário): **só contagens,
-valor e link** — nunca nome/telefone de aluno; o agendador das 8h é reserva (1 envio por dia). Pagar = app da Tecnofit, Pix ou
+(auditada). D+15 = escalado para o líder. **O líder (`crm.view_all`) filtra e complementa**: tela **Time de CRM**
+(`crm_agent_settings`) define por consultor os **tipos** que entram na lista (vazio = todos; tarefa do líder sempre entra; o resto
+fica com o líder em "Fora das regras") e o **horário (6h–14h) e dias** do WhatsApp (padrão 8h, seg–sáb); em Tarefas, **adia**
+(`show_from`, até 60 dias) ou **tira da lista** (motivo; não é recriada) e cria **tarefa manual** (consultor, data — padrão amanhã —,
+o que fazer, aluno opcional só entre os que estão na Cobrança; com aluno, a ligação na Tecnofit dá baixa). Tarefa guarda `owner_id`
+(acompanha o caso na redistribuição). **WhatsApp no horário de cada consultor**: crons diários `/api/cron/crm-tarefas?hora=6…14`
+(9 entradas, uma por hora — vale em qualquer plano da Vercel; chega a partir da hora, nunca antes), 1 envio por pessoa por dia
+(`crm_digest_sends`), texto e liga/desliga na automação "Tarefas de CRM do dia" (público `CRM_TAREFAS`, nasce **desligada**; o
+agendador das 8h não a roda): **só contagens, valor e link** — nunca nome/telefone de aluno. Pagar = app da Tecnofit, Pix ou
 recepção; histórico de cobrança 5 anos. Painel do gestor e renovações = próximas fases; webhooks só quando a Tecnofit documentar.

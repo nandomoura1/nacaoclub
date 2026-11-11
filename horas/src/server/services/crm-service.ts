@@ -122,6 +122,8 @@ export async function assignCases(principal: P | null, input: unknown, meta: Req
     const cases = await tx.crmCase.findMany({ where: { id: { in: caseIds }, status: 'ABERTO' }, select: { id: true, ownerId: true } });
     if (!cases.length) throw new NotFoundError('Nenhum caso aberto encontrado.');
     await tx.crmCase.updateMany({ where: { id: { in: cases.map((c) => c.id) } }, data: { ownerId } });
+    // As tarefas abertas desses casos vão junto para o novo responsável.
+    await tx.crmTask.updateMany({ where: { caseId: { in: cases.map((c) => c.id) }, status: 'ABERTA' }, data: { ownerId } });
     const who = ownerId ? (await tx.user.findUnique({ where: { id: ownerId }, select: { name: true } }))?.name : null;
     for (const c of cases) {
       await audit(tx, { actorId: principal.id, ...meta }, {
@@ -169,7 +171,9 @@ export async function linkConsultant(principal: P | null, input: unknown, meta: 
     await tx.crmConsultant.update({ where: { id: c.id }, data: { userId } });
     let moved = 0;
     if (userId) {
-      const r = await tx.crmCase.updateMany({ where: { status: 'ABERTO', ownerId: null, customer: { consultantTecId: c.tecnofitId } }, data: { ownerId: userId } });
+      const ids = (await tx.crmCase.findMany({ where: { status: 'ABERTO', ownerId: null, customer: { consultantTecId: c.tecnofitId } }, select: { id: true } })).map((x) => x.id);
+      const r = await tx.crmCase.updateMany({ where: { id: { in: ids } }, data: { ownerId: userId } });
+      await tx.crmTask.updateMany({ where: { caseId: { in: ids }, status: 'ABERTA' }, data: { ownerId: userId } });
       moved = r.count;
     }
     const who = userId ? (await tx.user.findUnique({ where: { id: userId }, select: { name: true } }))?.name : null;

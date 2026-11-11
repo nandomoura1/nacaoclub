@@ -2901,6 +2901,7 @@ model TecCustomer {
 
   debts TecDebt[]
   cases CrmCase[]
+  tasks CrmTask[]
 
   @@index([lastSeenOn])
   @@map("tec_customers")
@@ -2995,31 +2996,71 @@ model TecSyncRun {
   @@map("tec_sync_runs")
 }
 
-/// Tarefa de CRM do consultor (o sistema NÃO fala com o aluno). O responsável é o do caso.
-/// Baixa: ligação concluída registrada na Tecnofit, pagamento/caso resolvido, ou "já registrei" à mão.
+/// Tarefa de CRM do consultor (o sistema NÃO fala com o aluno). Geradas pela régua (com caso) ou MANUAIS (do líder,
+/// aluno opcional). Baixa: ligação concluída na Tecnofit, pagamento/caso resolvido, ou "já registrei" à mão.
 model CrmTask {
   id        String    @id @default(uuid()) @db.Uuid
-  caseId    String    @map("case_id") @db.Uuid
-  /// D-3, D0, D+3, D+5, D+7, D+15, PENDENCIA, RETORNO (domain/cobranca.ts)
+  /// Caso de origem (null = tarefa manual).
+  caseId    String?   @map("case_id") @db.Uuid
+  /// Aluno (tarefa manual com aluno; nas geradas vem do caso).
+  customerId String?  @map("customer_id") @db.Uuid
+  /// Responsável: nas geradas acompanha o caso; nas manuais é quem o líder escolheu.
+  ownerId   String?   @map("owner_id") @db.Uuid
+  /// D-3, D0, D+3, D+5, D+7, D+15, PENDENCIA, RETORNO, MANUAL (domain/cobranca.ts)
   kind      String
-  /// Referência que define a tarefa: vencimento (régua), abertura (pendência) ou data do retorno agendado.
+  /// Referência que define a tarefa: vencimento (régua), abertura (pendência), data do retorno, data da manual.
   refDate   DateTime  @map("ref_date") @db.Date
   /// Primeiro dia em que a tarefa entrou na lista.
   createdOn DateTime  @map("created_on") @db.Date
-  /// ABERTA, FEITA, SUBSTITUIDA (o passo seguinte da régua chegou), CANCELADA
+  /// Aparece na lista (e no WhatsApp) a partir deste dia — "Adiar" muda esta data.
+  showFrom  DateTime  @map("show_from") @db.Date
+  /// Manual: o que fazer.
+  title     String?
+  note      String?
+  createdById String? @map("created_by") @db.Uuid
+  /// ABERTA, FEITA, SUBSTITUIDA (o passo seguinte da régua chegou), REMOVIDA (o líder tirou da lista)
   status    String    @default("ABERTA")
   doneOn    DateTime? @map("done_on") @db.Date
-  /// LIGACAO_TECNOFIT, PAGAMENTO, CASO_RESOLVIDO, MANUAL
+  /// LIGACAO_TECNOFIT, PAGAMENTO, CASO_RESOLVIDO, MANUAL, LIDER
   doneVia   String?   @map("done_via")
   doneById  String?   @map("done_by") @db.Uuid
+  removedReason String? @map("removed_reason")
   /// Passos anteriores da régua que ficaram sem contato (ex.: "D+3").
   missed    String[]  @default([])
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 
-  case CrmCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  case     CrmCase?     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  customer TecCustomer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
 
   @@unique([caseId, kind, refDate])
   @@index([status, createdOn])
+  @@index([status, ownerId, showFrom])
   @@map("crm_tasks")
+}
+
+/// Regras do líder por consultor: quais tipos de tarefa ele recebe e quando chega o WhatsApp.
+model CrmAgentSetting {
+  userId    String   @id @map("user_id") @db.Uuid
+  /// Tipos que entram na lista dele (vazio = todos).
+  taskKinds String[] @default([]) @map("task_kinds")
+  /// Hora do WhatsApp (6–14, horário de Brasília).
+  sendHour  Int      @default(8) @map("send_hour")
+  /// Dias da semana do envio (1 = segunda … 7 = domingo).
+  sendDays  Int[]    @default([1, 2, 3, 4, 5, 6]) @map("send_days")
+  updatedById String? @map("updated_by") @db.Uuid
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("crm_agent_settings")
+}
+
+/// Um WhatsApp de tarefas por consultor por dia (o agendador roda de hora em hora).
+model CrmDigestSend {
+  userId    String   @map("user_id") @db.Uuid
+  day       DateTime @db.Date
+  status    String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@id([userId, day])
+  @@map("crm_digest_sends")
 }

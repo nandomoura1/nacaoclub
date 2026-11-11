@@ -141,6 +141,7 @@ export const NAV_CONTRATOS: NavItem[] = [
 export const NAV_COBRANCA: NavItem[] = [
   { href: '/cobranca/tarefas', label: 'Tarefas de CRM', short: 'Tarefas', icon: 'crm', permission: 'crm.view' },
   { href: '/cobranca', label: 'Fila de cobrança', short: 'Cobrança', icon: 'cobrancas', permission: 'crm.view' },
+  { href: '/cobranca/time', label: 'Time de CRM', icon: 'usuarios', permission: 'crm.view_all' },
   { href: '/cobranca/configuracoes', label: 'Configurações', icon: 'cadastros', permission: 'crm.admin' },
 ];
 

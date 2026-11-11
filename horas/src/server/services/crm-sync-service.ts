@@ -94,7 +94,7 @@ async function prepare(api: TecnofitApi, today: IsoDate): Promise<{ pending: Pen
 
   // Quem já tem débito ou caso aberto aqui é sempre reconferido (pode ter pago).
   const known = await prisma.tecCustomer.findMany({
-    where: { OR: [{ debts: { some: { status: 'ABERTO' } } }, { cases: { some: { status: 'ABERTO' } } }] },
+    where: { OR: [{ debts: { some: { status: 'ABERTO' } } }, { cases: { some: { status: 'ABERTO' } } }, { tasks: { some: { status: 'ABERTA' } } }] },
     select: { tecnofitId: true, name: true },
   });
   for (const k of known) if (!byId.has(k.tecnofitId)) add(k.tecnofitId, k.name, null);
@@ -217,7 +217,7 @@ async function processCustomer(api: TecnofitApi, p: Pending, today: IsoDate): Pr
 
 /** LGPD: tira do espelho quem não tem caso e não aparece há mais de RETENTION_DAYS. */
 async function purgeStale(today: IsoDate): Promise<number> {
-  const r = await prisma.tecCustomer.deleteMany({ where: { lastSeenOn: { lt: d(addDays(today, -RETENTION_DAYS)) }, cases: { none: {} } } });
+  const r = await prisma.tecCustomer.deleteMany({ where: { lastSeenOn: { lt: d(addDays(today, -RETENTION_DAYS)) }, cases: { none: {} }, tasks: { none: { status: 'ABERTA' } } } });
   return r.count;
 }
 

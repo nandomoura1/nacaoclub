@@ -137,7 +137,7 @@ function Editor({ edit, setEdit, modalities, roles, pending, onSave, onPreview }
           <div><Label>Nome</Label><Input value={f.name} onChange={(e) => set('name', e.target.value)} placeholder="ex.: Aviso de reunião geral" /></div>
 
           <div>
-            <Label>Quando (às {f.audience === 'CRM_TAREFAS' ? '7h30' : '8h'})</Label>
+            <Label>Quando ({f.audience === 'CRM_TAREFAS' ? 'no horário de cada consultor' : 'às 8h'})</Label>
             <div className="mt-1 flex flex-wrap gap-1.5">
               {FREQUENCIES.map((x) => (
                 <button key={x.id} type="button" onClick={() => set('frequency', x.id)} className={cn('rounded-full px-3 py-1 text-sm font-semibold', f.frequency === x.id ? 'bg-nacao text-white' : 'bg-white text-tinta-suave ring-1 ring-borda')}>{x.label}</button>

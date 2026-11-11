@@ -6,9 +6,9 @@ import { todayIso } from '@/lib/today';
 import { setFakeTecnofit } from '@/server/tecnofit/client';
 import { FakeTecnofit, type FakeData } from '@/server/tecnofit/fake';
 import { runTecnofitSync } from '@/server/services/crm-sync-service';
-import { linkConsultant, listConsultants } from '@/server/services/crm-service';
-import { dailyDigests, generateTasks, listTasks, markTaskDone, taskCounts } from '@/server/services/crm-task-service';
-import { runDueAutomations } from '@/server/whatsapp/automations';
+import { assignCases, linkConsultant, listConsultants } from '@/server/services/crm-service';
+import { createManualTask, dailyDigests, generateTasks, listTasks, markTaskDone, removeTask, saveAgentRule, snoozeTask, taskCounts } from '@/server/services/crm-task-service';
+import { runDueAutomations, sendCrmDigests } from '@/server/whatsapp/automations';
 import { META, ensureCatalog, hasDb, makeUser, wipeCrm } from './helpers';
 
 /**
@@ -35,6 +35,7 @@ describe.skipIf(!hasDb)('Cobrança — tarefas de CRM do consultor', () => {
   let lider: Awaited<ReturnType<typeof makeUser>>;
   let agent: Awaited<ReturnType<typeof makeUser>>;
   let other: Awaited<ReturnType<typeof makeUser>>;
+  let outsiderId: string;
   const prev = { z: process.env.ZAPI_FAKE, t: process.env.ZAPI_TEST_PHONE };
 
   const tasksOf = (tecnofitId: string) => prisma.crmTask.findMany({ where: { case: { customer: { tecnofitId } } }, orderBy: { createdAt: 'asc' } });
@@ -49,6 +50,7 @@ describe.skipIf(!hasDb)('Cobrança — tarefas de CRM do consultor', () => {
     lider = await makeUser('CRM_LIDER', { name: 'Líder Tarefas' });
     agent = await makeUser('CRM', { name: 'Consultora Tarefas Usuária' });
     other = await makeUser('CRM', { name: 'Outro Consultor' });
+    outsiderId = (await makeUser('MARKETING')).principal.id;
     await prisma.user.update({ where: { id: agent.principal.id }, data: { phone: '61988887777' } });
     await prisma.user.update({ where: { id: lider.principal.id }, data: { phone: '61988886666' } });
   });
@@ -81,11 +83,11 @@ describe.skipIf(!hasDb)('Cobrança — tarefas de CRM do consultor', () => {
     const cons = await listConsultants(admin.principal);
     await linkConsultant(admin.principal, { consultantId: cons.find((c) => c.tecnofitId === '7001')!.id, userId: agent.principal.id }, META);
     const mine = await listTasks(agent.principal, 'minhas');
-    expect(mine.map((t) => t.customer.tecnofitId).sort()).toEqual(['201', '202']);
+    expect(mine.map((t) => t.customer!.tecnofitId).sort()).toEqual(['201', '202']);
     expect(mine.find((t) => t.kind === 'D-3')!.todo).toMatch(/vence em \d{2}\/\d{2}\/\d{4}/);
     await expect(listTasks(agent.principal, 'todas')).rejects.toBeInstanceOf(AuthorizationError);
     expect((await taskCounts(lider.principal)).escalados).toBe(1);
-    expect((await listTasks(lider.principal, 'sem')).map((t) => t.customer.tecnofitId).sort()).toEqual(['203', '204']);
+    expect((await listTasks(lider.principal, 'sem')).map((t) => t.customer!.tecnofitId).sort()).toEqual(['203', '204']);
   });
 
   it('dia 2: ligação concluída na Tecnofit dá baixa; tarefa não feita continua (atrasada)', async () => {
@@ -134,7 +136,7 @@ describe.skipIf(!hasDb)('Cobrança — tarefas de CRM do consultor', () => {
 
   it('"Já registrei na Tecnofit": só o dono ou o líder, e fica no histórico', async () => {
     const pen = (await tasksOf('204'))[0]!;
-    await prisma.crmCase.update({ where: { id: pen.caseId }, data: { ownerId: agent.principal.id } });
+    await assignCases(lider.principal, { caseIds: [pen.caseId!], ownerId: agent.principal.id }, META); // a tarefa vai junto
     await expect(markTaskDone(other.principal, { taskId: pen.id }, META)).rejects.toBeInstanceOf(AuthorizationError);
     await markTaskDone(agent.principal, { taskId: pen.id }, META);
     expect((await prisma.crmTask.findUniqueOrThrow({ where: { id: pen.id } })).doneVia).toBe('MANUAL');
@@ -142,24 +144,79 @@ describe.skipIf(!hasDb)('Cobrança — tarefas de CRM do consultor', () => {
     expect(await prisma.auditLog.count({ where: { action: 'crm.task_done', entityId: pen.id } })).toBe(1);
   });
 
-  it('resumo diário no WhatsApp: só contagens e link — nunca nome ou telefone de aluno', async () => {
+  it('regras do líder: consultor só recebe os tipos marcados; o resto fica em "Fora das regras" com o líder', async () => {
     const day = addDays(day1, 7);
-    const digests = await dailyDigests(day);
-    const leader = digests.find((x) => x.userId === lider.principal.id)!;
-    expect(leader.text).toMatch(/escalado/);
-    const all = JSON.stringify(digests);
-    expect(all).not.toMatch(/Aluno|Aluna|99111/);
+    // Uma tarefa de cobrança nova para a consultora (aluno 201 com novo vencimento em 2 dias → D-3).
+    const c201 = data.customers.find((c) => c.id === '201')!;
+    c201.sales[0]!.openValue = 0; // pagou a venda antiga
+    c201.sales.push(sale('6211', addDays(day, 2), 210));
+    await runTecnofitSync(day, { force: true });
+    const caso = await prisma.crmCase.findFirstOrThrow({ where: { status: 'ABERTO', customer: { tecnofitId: '201' } } });
+    await assignCases(lider.principal, { caseIds: [caso.id], ownerId: agent.principal.id }, META);
+    await expect(saveAgentRule(agent.principal, { userId: agent.principal.id, taskKinds: [], sendHour: 8, sendDays: [1] }, META)).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(saveAgentRule(lider.principal, { userId: agent.principal.id, taskKinds: [], sendHour: 8, sendDays: [1] }, META)).rejects.toThrow(/ao menos um tipo/);
+    await expect(saveAgentRule(lider.principal, { userId: agent.principal.id, taskKinds: ['D+3'], sendHour: 5, sendDays: [1] }, META)).rejects.toThrow(/6h às 14h/);
+    await saveAgentRule(lider.principal, { userId: agent.principal.id, taskKinds: ['D+3', 'D+5', 'D+7', 'RETORNO'], sendHour: 10, sendDays: [1, 2, 3, 4, 5, 6, 7] }, META);
+    expect((await listTasks(agent.principal, 'minhas')).some((t) => t.kind === 'D-3')).toBe(false);
+    // A tarefa é do dia simulado (futuro): o líder a vê em "Agendadas", marcada como fora das regras.
+    const held = await listTasks(lider.principal, 'agendadas');
+    expect(held.some((t) => t.kind === 'D-3' && t.ownerId === agent.principal.id && t.held)).toBe(true);
+    expect(JSON.stringify(await dailyDigests(day, { hour: 10 }))).not.toMatch(/lembrete/); // fora das regras não vai no WhatsApp
+    expect(await prisma.auditLog.count({ where: { action: 'crm.agent_rule', entityId: agent.principal.id } })).toBe(1);
+  });
+
+  it('líder adia e tira tarefa da lista (com motivo); tirada não volta a ser gerada', async () => {
+    const day = addDays(day1, 7);
+    const [t] = await listTasks(lider.principal, 'escalados');
+    await expect(snoozeTask(agent.principal, { taskId: t!.id, until: addDays(day, 2) }, META)).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(snoozeTask(lider.principal, { taskId: t!.id, until: todayIso() }, META)).rejects.toThrow(/a partir de amanhã/);
+    await snoozeTask(lider.principal, { taskId: t!.id, until: addDays(todayIso(), 3) }, META);
+    expect((await listTasks(lider.principal, 'escalados')).some((x) => x.id === t!.id)).toBe(false);
+    expect((await listTasks(lider.principal, 'agendadas')).some((x) => x.id === t!.id)).toBe(true);
+    await expect(removeTask(lider.principal, { taskId: t!.id, reason: 'x' }, META)).rejects.toThrow(/motivo/);
+    await removeTask(lider.principal, { taskId: t!.id, reason: 'Gerência já negociou com o aluno' }, META);
+    expect((await prisma.crmTask.findUniqueOrThrow({ where: { id: t!.id } })).status).toBe('REMOVIDA');
+    expect((await generateTasks(day)).created).toBe(0);
+    expect(await prisma.auditLog.count({ where: { action: { in: ['crm.task_snoozed', 'crm.task_removed'] }, entityId: t!.id } })).toBe(2);
+  });
+
+  it('tarefa manual do líder: entra no dia escolhido; com aluno, a ligação na Tecnofit dá baixa', async () => {
+    const day = addDays(todayIso(), 1);
+    const aluno = await prisma.tecCustomer.findUniqueOrThrow({ where: { tecnofitId: '203' } });
+    await expect(createManualTask(agent.principal, { ownerId: agent.principal.id, showFrom: day, title: 'Ligar' }, META)).rejects.toBeInstanceOf(AuthorizationError);
+    await expect(createManualTask(lider.principal, { ownerId: outsiderId, showFrom: day, title: 'Ligar' }, META)).rejects.toThrow(/time de CRM/);
+    const semAluno = await createManualTask(lider.principal, { ownerId: agent.principal.id, showFrom: day, title: 'Atualizar o funil da Tecnofit', note: 'Coluna "Negociação"' }, META);
+    const comAluno = await createManualTask(lider.principal, { ownerId: agent.principal.id, showFrom: day, title: 'Oferecer plano anual', customerId: aluno.id }, META);
+    // Ainda não aparece hoje (é para amanhã), nem com regra que exclui tipos.
+    expect((await listTasks(agent.principal, 'minhas')).some((t) => t.manual)).toBe(false);
+    expect((await listTasks(lider.principal, 'agendadas')).filter((t) => t.manual)).toHaveLength(2);
+    // Amanhã: a ligação concluída para o aluno dá baixa só na que tem aluno.
+    data.calls.push({ customerId: '203', consultantId: '7001', consultantName: 'Consultora Tarefas', at: day, done: true, deadline: day, doneAt: day });
+    await runTecnofitSync(day, { force: true });
+    expect((await prisma.crmTask.findUniqueOrThrow({ where: { id: comAluno } })).doneVia).toBe('LIGACAO_TECNOFIT');
+    expect((await prisma.crmTask.findUniqueOrThrow({ where: { id: semAluno } })).status).toBe('ABERTA');
+  });
+
+  it('WhatsApp no horário de cada consultor: só contagens e link, uma vez por dia, só se a automação estiver ligada', async () => {
+    const day = addDays(todayIso(), 1); // a tarefa manual sem aluno aparece neste dia
+    await saveAgentRule(lider.principal, { userId: lider.principal.id, taskKinds: ['D+15', 'PENDENCIA'], sendHour: 8, sendDays: [1, 2, 3, 4, 5, 6, 7] }, META);
+    const at10 = await dailyDigests(day, { hour: 10 });
+    expect(at10.map((x) => x.userId)).toEqual([agent.principal.id]); // consultora às 10h
+    expect(at10[0]!.text).toMatch(/tarefa\(s\) do líder/);
+    expect((await dailyDigests(day, { hour: 8 })).some((x) => x.userId === agent.principal.id)).toBe(false);
+    expect(JSON.stringify(await dailyDigests(day, { hour: null }))).not.toMatch(/Aluno|Aluna|99111|funil/);
 
     // A automação nasce desligada: nada sai.
-    expect(await runDueAutomations(day, { audience: 'CRM_TAREFAS' })).toEqual({});
+    expect(await sendCrmDigests(day, 10)).toMatchObject({ pulado: expect.stringMatching(/desligada/) });
     await prisma.waAutomation.updateMany({ where: { audience: 'CRM_TAREFAS' }, data: { active: true } });
-    const sent = Object.values(await runDueAutomations(day, { audience: 'CRM_TAREFAS' }))[0] as { enviados: number };
-    expect(sent.enviados).toBeGreaterThanOrEqual(1);
+    expect(await sendCrmDigests(day, 10)).toMatchObject({ enviados: 1 });
+    expect(await sendCrmDigests(day, 10)).toMatchObject({ total: 0 }); // não repete no dia
     const msgs = await prisma.waMessage.findMany({ where: { kind: 'CRM' } });
-    expect(msgs.length).toBe(sent.enviados);
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0]!.toMasked).toContain('7777');
     expect(msgs.every((m) => !/Aluno|Aluna|99111/.test(m.preview ?? ''))).toBe(true);
-    // Uma vez por dia: o agendador das 8h não manda de novo.
-    expect(Object.values(await runDueAutomations(day))).toContain('já enviada neste período');
+    // O agendador das 8h não manda tarefas de CRM (têm horário próprio).
+    expect(Object.keys(await runDueAutomations(day)).some((k) => /Tarefas de CRM/.test(k))).toBe(false);
   });
 
   it('se a Tecnofit recusar as ligações, a sincronização segue e registra o aviso', async () => {

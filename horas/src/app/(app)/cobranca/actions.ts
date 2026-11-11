@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { getPrincipal, requestMeta } from '@/server/auth/session';
 import { runAction, type ActionResult } from '@/server/action-result';
 import { assignCases, linkConsultant, syncNow } from '@/server/services/crm-service';
-import { markTaskDone } from '@/server/services/crm-task-service';
+import { createManualTask, markTaskDone, removeTask, saveAgentRule, searchCustomers, snoozeTask } from '@/server/services/crm-task-service';
 
 const refresh = () => revalidatePath('/cobranca', 'layout');
 
@@ -23,4 +23,19 @@ export async function syncNowAction(force: boolean): Promise<ActionResult<{ stat
 }
 export async function markTaskDoneAction(taskId: string): Promise<ActionResult> {
   return runAction(async () => { await markTaskDone(await getPrincipal(), { taskId }, await requestMeta()); refresh(); return undefined; }, 'Tarefa concluída.');
+}
+export async function snoozeTaskAction(taskId: string, until: string): Promise<ActionResult> {
+  return runAction(async () => { await snoozeTask(await getPrincipal(), { taskId, until }, await requestMeta()); refresh(); return undefined; }, 'Tarefa adiada.');
+}
+export async function removeTaskAction(taskId: string, reason: string): Promise<ActionResult> {
+  return runAction(async () => { await removeTask(await getPrincipal(), { taskId, reason }, await requestMeta()); refresh(); return undefined; }, 'Tarefa tirada da lista.');
+}
+export async function createManualTaskAction(input: { ownerId: string; showFrom: string; title: string; note?: string | null; customerId?: string | null }): Promise<ActionResult<string>> {
+  return runAction(async () => { const id = await createManualTask(await getPrincipal(), input, await requestMeta()); refresh(); return id; }, 'Tarefa criada.');
+}
+export async function searchCustomersAction(q: string): Promise<ActionResult<{ id: string; name: string; tecnofitId: string }[]>> {
+  return runAction(async () => searchCustomers(await getPrincipal(), q));
+}
+export async function saveAgentRuleAction(input: { userId: string; taskKinds: string[]; sendHour: number; sendDays: number[] }): Promise<ActionResult> {
+  return runAction(async () => { await saveAgentRule(await getPrincipal(), input, await requestMeta()); refresh(); return undefined; }, 'Regras salvas.');
 }

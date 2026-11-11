@@ -23,7 +23,7 @@ export default async function Page() {
   const cfg = zapiConfig();
   return (
     <>
-      <PageHeader title="Automações de WhatsApp" description="Mensagens que o sistema manda sozinho: escolha quando, para quem e o texto. Rodam às 8h (as tarefas de CRM às 7h30), no dia de cada uma; cada período é enviado uma vez só." />
+      <PageHeader title="Automações de WhatsApp" description="Mensagens que o sistema manda sozinho: escolha quando, para quem e o texto. Rodam às 8h (as tarefas de CRM, no horário de cada consultor), no dia de cada uma; cada período é enviado uma vez só." />
       <p className="-mt-2 mb-4 text-sm"><Link href="/admin/whatsapp" className="font-semibold text-nacao">← WhatsApp (conexão, respostas e registro de envios)</Link></p>
       <AutomationsClient automations={automations} modalities={modalities} roles={roles} configured={cfg.configured} testMode={!!cfg.testPhone} cronReady={!!process.env.CRON_SECRET} />
     </>

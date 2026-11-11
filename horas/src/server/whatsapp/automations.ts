@@ -117,7 +117,7 @@ export async function audienceRecipients(audience: string, filter: Filter, today
     case 'PROFESSORES_GRADE': return teachers(today, filter, true);
     case 'PROFESSORES': return teachers(today, filter, false);
     case 'PERFIL': return byRole(today, filter);
-    case 'CRM_TAREFAS': return (await dailyDigests(today)).map((x) => ({ key: `u:${x.userId}`, name: x.name, phone: x.phone, vars: { ...baseVars(x.name, today, `${appUrl()}/cobranca/tarefas`), tarefas_crm: x.text } }));
+    case 'CRM_TAREFAS': return (await dailyDigests(today, { hour: null })).map((x) => ({ key: `u:${x.userId}`, name: x.name, phone: x.phone, vars: { ...baseVars(x.name, today, `${appUrl()}/cobranca/tarefas`), tarefas_crm: x.text } }));
     case 'NUMEROS': return (filter?.numbers ?? []).map((n) => ({ key: `n:${n}`, name: null, phone: n, vars: baseVars(null, today, appUrl()) }));
     default: return [];
   }
@@ -241,6 +241,9 @@ export async function runAutomation(id: string, today: IsoDate, opts: { force?: 
         const d = await deliverWhatsApp({ kind: kindOf(a.audience), to: r.phone!, text: renderTemplate(a.template, r.vars), actor: { id: null, name: opts.actorName ? `${opts.actorName} (envio manual)` : `Automação: ${a.name}` } });
         if (d.error) { result.falhas++; continue; }
         result.enviados++;
+        if (a.audience === 'CRM_TAREFAS' && r.key.startsWith('u:')) {
+          await prisma.crmDigestSend.upsert({ where: { userId_day: { userId: r.key.slice(2), day: toUtc(today) } }, create: { userId: r.key.slice(2), day: toUtc(today), status: 'MANUAL' }, update: {} });
+        }
         const key = phoneKey(cfg.testPhone ?? r.phone);
         if (a.askConfirmation && key) {
           await prisma.waConfirmation.upsert({
@@ -262,12 +265,10 @@ export async function runAutomation(id: string, today: IsoDate, opts: { force?: 
 
 const kindOf = (audience: string) => (audience === 'CRM_TAREFAS' ? 'CRM' : audience === 'LIDERES_PENDENCIAS' ? 'DEMANDAS' : audience === 'ESCALADOS_FDS' ? 'ESCALA' : audience === 'PROFESSORES_GRADE' ? 'GRADE' : 'LIVRE');
 
-/**
- * Agendador: roda todas as automações ativas que são do dia (ou só as de um público, ex.: CRM_TAREFAS às 07h30).
- * Cada uma sai uma vez por período: a das 8h serve de reserva se a das 07h30 falhou, sem enviar em dobro.
- */
-export async function runDueAutomations(today: IsoDate, opts: { audience?: string } = {}) {
-  const list = await prisma.waAutomation.findMany({ where: { active: true, ...(opts.audience ? { audience: opts.audience } : {}) }, select: { id: true, name: true, frequency: true, weekdays: true, monthDay: true } });
+/** Agendador das 8h: roda as automações ativas que são do dia (cada uma uma vez por período). */
+export async function runDueAutomations(today: IsoDate) {
+  // Tarefas de CRM têm agendador próprio (de hora em hora, no horário de cada consultor): fora daqui.
+  const list = await prisma.waAutomation.findMany({ where: { active: true, audience: { not: 'CRM_TAREFAS' } }, select: { id: true, name: true, frequency: true, weekdays: true, monthDay: true } });
   const out: Record<string, RunResult | string> = {};
   for (const a of list.filter((x) => isDue(x, today))) out[a.name] = (await runAutomation(a.id, today)) ?? 'já enviada neste período';
   return out;
@@ -299,3 +300,43 @@ export async function replyOverview() {
   };
 }
 export type ReplyOverview = Awaited<ReturnType<typeof replyOverview>>;
+
+// ── Tarefas de CRM: envio no horário de cada consultor ─────
+
+/**
+ * Chamado de hora em hora (6h–14h). Manda o resumo das tarefas a quem tem envio nesta hora e hoje,
+ * se a automação "Tarefas de CRM do dia" estiver ligada (o texto vem dela). Um envio por pessoa por dia.
+ */
+export async function sendCrmDigests(today: IsoDate, hour: number) {
+  const a = await prisma.waAutomation.findFirst({ where: { audience: 'CRM_TAREFAS' } });
+  if (!a?.active) return { hora: hour, pulado: 'automação "Tarefas de CRM do dia" desligada' };
+  const result: RunResult = { period: `${today} ${hour}h`, total: 0, enviados: 0, falhas: 0, semTelefone: [], limitadoTeste: 0 };
+  try {
+    const cfg = zapiConfig();
+    if (!cfg.configured) throw new Error('WhatsApp não configurado.');
+    const sent = new Set((await prisma.crmDigestSend.findMany({ where: { day: toUtc(today) }, select: { userId: true } })).map((x) => x.userId));
+    const list = (await dailyDigests(today, { hour })).filter((x) => !sent.has(x.userId));
+    result.total = list.length;
+    const withPhone = list.filter((r) => { const ok = !!(r.phone && normalizeDestination(r.phone)); if (!ok) result.semTelefone.push(r.name); return ok; });
+    const batch = cfg.testPhone ? withPhone.slice(0, TEST_LIMIT) : withPhone;
+    result.limitadoTeste = withPhone.length - batch.length;
+    for (const r of batch) {
+      // Marca antes de enviar: duas execuções simultâneas não mandam em dobro.
+      const claimed = await prisma.crmDigestSend.createMany({ data: [{ userId: r.userId, day: toUtc(today), status: 'ENVIANDO' }], skipDuplicates: true });
+      if (!claimed.count) continue;
+      try {
+        const text = renderTemplate(a.template, { ...baseVars(r.name, today, `${appUrl()}/cobranca/tarefas`), tarefas_crm: r.text });
+        const d = await deliverWhatsApp({ kind: 'CRM', to: r.phone!, text, actor: { id: null, name: `Automação: ${a.name}` } });
+        await prisma.crmDigestSend.update({ where: { userId_day: { userId: r.userId, day: toUtc(today) } }, data: { status: d.error ? 'FALHOU' : 'ENVIADO' } });
+        if (d.error) result.falhas++; else result.enviados++;
+      } catch {
+        await prisma.crmDigestSend.update({ where: { userId_day: { userId: r.userId, day: toUtc(today) } }, data: { status: 'FALHOU' } });
+        result.falhas++;
+      }
+    }
+  } catch (e) {
+    result.erro = e instanceof Error ? e.message : 'Falha no envio automático.';
+  }
+  if (result.total || result.erro) await prisma.waAutomation.update({ where: { id: a.id }, data: { lastRunAt: new Date(), lastResult: result as unknown as Prisma.InputJsonValue } });
+  return { hora: hour, ...result };
+}
