@@ -161,4 +161,13 @@ describe.skipIf(!hasDb)('Cobrança — tarefas de CRM do consultor', () => {
     // Uma vez por dia: o agendador das 8h não manda de novo.
     expect(Object.values(await runDueAutomations(day))).toContain('já enviada neste período');
   });
+
+  it('se a Tecnofit recusar as ligações, a sincronização segue e registra o aviso', async () => {
+    class NoCalls extends FakeTecnofit { override async calls(): Promise<never> { throw new Error('A Tecnofit respondeu 422 em /crm/calls.'); } }
+    setFakeTecnofit(() => new NoCalls(data));
+    const r = await runTecnofitSync(addDays(day1, 8), { force: true });
+    expect(r.status).toBe('CONCLUIDA');
+    expect(r.stats.warning).toMatch(/Ligações do CRM indisponíveis.*422/);
+    setFakeTecnofit(() => new FakeTecnofit(data));
+  });
 });

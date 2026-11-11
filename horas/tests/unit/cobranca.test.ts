@@ -96,6 +96,35 @@ describe('Cliente HTTP da Tecnofit', () => {
     }
   });
 
+  it('ligações do CRM: janelas de 30 dias; 422 cai para 7 dias e o motivo da Tecnofit aparece no erro', async () => {
+    process.env.TECNOFIT_API_KEY = 'pk_tf_teste_123456789';
+    process.env.TECNOFIT_API_SECRET = 'sk_tf_teste_1234567890123';
+    const ranges: string[] = [];
+    const fake = (async (url: string | URL) => {
+      const u = new URL(String(url));
+      if (u.pathname.endsWith('/auth/login')) return new Response(JSON.stringify({ token: 't', expiration_at: new Date(Date.now() + 3_600_000).toISOString() }));
+      const a = u.searchParams.get('startDate')!; const b = u.searchParams.get('endDate')!;
+      const days = (Date.parse(b) - Date.parse(a)) / 86_400_000 + 1;
+      ranges.push(`${a}..${b}`);
+      if (days > 7) return new Response(JSON.stringify({ code: 'VALIDATION_ERROR', message: 'período máximo de 7 dias' }), { status: 422 });
+      return new Response(JSON.stringify({ data: [{ customer: { id: 1, name: 'X' }, consultant: { id: 9, name: 'C' }, status: 'completed', callDate: `${a} 10:00:00`, callDeadline: a }], meta: { pages: 1 } }));
+    }) as typeof fetch;
+    try {
+      const api = new HttpTecnofit(tecnofitConfig(), fake, 0);
+      const calls = await api.calls('2026-11-01', '2026-11-30');
+      expect(ranges[0]).toBe('2026-11-01..2026-11-30');
+      expect(calls).toHaveLength(5); // 30 dias em janelas de 7
+      expect(calls[0]).toMatchObject({ customerId: '1', consultantId: '9', done: true, doneAt: '2026-11-01 10:00:00' });
+      const other = (async (url: string | URL) => (String(url).endsWith('/auth/login')
+        ? new Response(JSON.stringify({ token: 't' }))
+        : new Response(JSON.stringify({ code: 'VALIDATION_ERROR', message: 'consultantId inválido' }), { status: 400 }))) as typeof fetch;
+      await expect(new HttpTecnofit(tecnofitConfig(), other, 0).calls('2026-11-01', '2026-11-05')).rejects.toThrow(/400 em \/crm\/calls \(VALIDATION_ERROR · consultantId inválido\)/);
+    } finally {
+      delete process.env.TECNOFIT_API_KEY;
+      delete process.env.TECNOFIT_API_SECRET;
+    }
+  });
+
   it('sem chaves: erro claro, sem chamar a rede', async () => {
     let called = false;
     const api = new HttpTecnofit(tecnofitConfig(), (async () => { called = true; return new Response('{}'); }) as typeof fetch, 0);

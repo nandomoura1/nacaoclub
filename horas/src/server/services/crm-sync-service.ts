@@ -29,7 +29,7 @@ const RETENTION_DAYS = 90;
 const SAVE_EVERY = 10;
 
 interface Pending { id: string; name: string; status: string | null; consultant: string | null; lastCallDone?: string | null; nextCall?: string | null }
-interface Stats { candidates?: number; processed?: number; casesOpened?: number; casesResolved?: number; debtsPaid?: number; consultants?: number; purged?: number; tasksCreated?: number; tasksDone?: number; errors?: { customer: string; error: string }[] }
+interface Stats { candidates?: number; processed?: number; casesOpened?: number; casesResolved?: number; debtsPaid?: number; consultants?: number; purged?: number; warning?: string; tasksCreated?: number; tasksDone?: number; errors?: { customer: string; error: string }[] }
 
 const SYSTEM = { actorId: null, userAgent: 'sincronizacao-tecnofit' };
 const d = (iso: IsoDate) => toUtc(iso);
@@ -52,7 +52,7 @@ export function collectibleDebts(sales: TfCustomerSale[], today: IsoDate): DebtI
     .filter((x) => x.saleId && isCollectible(x, today));
 }
 
-async function prepare(api: TecnofitApi, today: IsoDate): Promise<{ pending: Pending[]; consultants: number }> {
+async function prepare(api: TecnofitApi, today: IsoDate): Promise<{ pending: Pending[]; consultants: number; warning: string | null }> {
   // Consultores
   const consultants = await api.consultants();
   for (const c of consultants) {
@@ -64,7 +64,12 @@ async function prepare(api: TecnofitApi, today: IsoDate): Promise<{ pending: Pen
   const consultantOf = new Map<string, string>();
   const lastDone = new Map<string, string>();
   const pendingCalls = new Map<string, string[]>();
-  const calls = (await api.calls(addDays(today, -CALLS_LOOKBACK_DAYS), addDays(today, CALLS_AHEAD_DAYS))).sort((a, b) => String(a.at ?? '').localeCompare(String(b.at ?? '')));
+  // Ligações são complemento: se a Tecnofit recusar, a sincronização segue (sem consultor/baixa por ligação) e avisa.
+  let warning: string | null = null;
+  const calls = (await api.calls(addDays(today, -CALLS_LOOKBACK_DAYS), addDays(today, CALLS_AHEAD_DAYS)).catch((e: unknown) => {
+    warning = `Ligações do CRM indisponíveis hoje: ${e instanceof Error ? e.message : String(e)}`.slice(0, 300);
+    return [];
+  })).sort((a, b) => String(a.at ?? '').localeCompare(String(b.at ?? '')));
   for (const c of calls) {
     if (c.consultantId && (!c.at || c.at.slice(0, 10) <= today)) consultantOf.set(c.customerId, c.consultantId);
     const doneDay = c.done ? isoFromApi(c.doneAt ?? c.at) : null;
@@ -94,7 +99,7 @@ async function prepare(api: TecnofitApi, today: IsoDate): Promise<{ pending: Pen
   });
   for (const k of known) if (!byId.has(k.tecnofitId)) add(k.tecnofitId, k.name, null);
 
-  return { pending: [...byId.values()], consultants: consultants.length };
+  return { pending: [...byId.values()], consultants: consultants.length, warning };
 }
 
 async function ownerFor(consultantTecId: string | null): Promise<string | null> {
@@ -234,7 +239,7 @@ export async function runTecnofitSync(today: IsoDate, opts: { budgetMs?: number;
     run = await prisma.tecSyncRun.create({ data: { day: d(today), mode: cfg.fake ? 'SIMULADO' : 'REAL', triggeredBy: opts.actorId ?? null, pending: [], stats: {} } });
     try {
       const prep = await prepare(api, today);
-      run = await prisma.tecSyncRun.update({ where: { id: run.id }, data: { pending: prep.pending as unknown as Prisma.InputJsonValue, stats: { candidates: prep.pending.length, processed: 0, casesOpened: 0, casesResolved: 0, debtsPaid: 0, consultants: prep.consultants, errors: [] } } });
+      run = await prisma.tecSyncRun.update({ where: { id: run.id }, data: { pending: prep.pending as unknown as Prisma.InputJsonValue, stats: { candidates: prep.pending.length, processed: 0, casesOpened: 0, casesResolved: 0, debtsPaid: 0, consultants: prep.consultants, errors: [], ...(prep.warning ? { warning: prep.warning } : {}) } } });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       run = await prisma.tecSyncRun.update({ where: { id: run.id }, data: { status: 'FALHOU', error: msg.slice(0, 500), finishedAt: new Date(), apiCalls: callsMade() } });

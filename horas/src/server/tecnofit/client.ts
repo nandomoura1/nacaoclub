@@ -1,4 +1,7 @@
 import { AppError } from '@/server/errors';
+import { addDays as addDaysIso } from '@/domain/dates';
+
+const minIso = (a: string, b: string) => (a < b ? a : b);
 
 /**
  * Cliente da API externa da Tecnofit (só no servidor, só leitura).
@@ -70,6 +73,20 @@ const pagesOf = (res: unknown): number | null => {
   const p = Number(r?.meta?.pages ?? r?.data?.meta?.pages);
   return Number.isFinite(p) && p > 0 ? p : null;
 };
+/** Erro HTTP da Tecnofit com o motivo que ela devolveu (código/mensagem de validação; sem dado de aluno). */
+export class TecnofitHttpError extends AppError {
+  constructor(readonly httpStatus: number, path: string, detail: string | null) {
+    super(`A Tecnofit respondeu ${httpStatus} em ${path}${detail ? ` (${detail})` : ''}.`);
+  }
+}
+async function errorDetail(res: Response): Promise<string | null> {
+  try {
+    const b = (await res.json()) as { message?: unknown; code?: unknown; error?: unknown; errors?: unknown; details?: unknown };
+    const parts = [b.code, b.message, b.error, b.errors ?? b.details].filter((x) => x !== undefined && x !== null).map((x) => (typeof x === 'string' ? x : JSON.stringify(x)));
+    return parts.join(' · ').replace(/\s+/g, ' ').slice(0, 240) || null;
+  } catch { return null; }
+}
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const MIN_GAP_MS = 330; // ~180 req/min, abaixo do limite de 200/min
@@ -144,7 +161,7 @@ export class HttpTecnofit implements TecnofitApi {
     if (res.status === 429 && attempt < 3) { await sleep(Number(res.headers.get('retry-after')) * 1000 || 30_000); return this.get(path, params, attempt + 1); }
     if (res.status >= 500 && attempt < 2) { await sleep(3_000); return this.get(path, params, attempt + 1); }
     if (res.status === 404) return { data: [] };
-    if (!res.ok) throw new AppError(`A Tecnofit respondeu ${res.status} em ${path}.`);
+    if (!res.ok) throw new TecnofitHttpError(res.status, path, await errorDetail(res));
     return res.json();
   }
 
@@ -197,8 +214,30 @@ export class HttpTecnofit implements TecnofitApi {
     return rows.map((r) => ({ id: str(r.id), name: str(r.name), types: Array.isArray(r.types) ? r.types.map(str) : [] })).filter((e) => e.id);
   }
 
+  /**
+   * Ligações em janelas de 30 dias (um período longo deu 422 em produção); se a janela
+   * ainda for recusada (422), tenta de 7 em 7 dias.
+   */
   async calls(startDate: string, endDate: string) {
-    const rows = await this.all('/crm/calls', { startDate, endDate, sort: 'callDeadline', order: 'desc' }, 50);
+    const out: TfCall[] = [];
+    const windows = (from: string, to: string, size: number) => {
+      const w: [string, string][] = [];
+      for (let a = from; a <= to; a = addDaysIso(a, size)) w.push([a, minIso(addDaysIso(a, size - 1), to)]);
+      return w;
+    };
+    for (const [a, b] of windows(startDate, endDate, 30)) {
+      try {
+        out.push(...(await this.callsRange(a, b)));
+      } catch (e) {
+        if (!(e instanceof TecnofitHttpError && e.httpStatus === 422)) throw e;
+        for (const [x, y] of windows(a, b, 7)) out.push(...(await this.callsRange(x, y)));
+      }
+    }
+    return out;
+  }
+
+  private async callsRange(startDate: string, endDate: string): Promise<TfCall[]> {
+    const rows = await this.all('/crm/calls', { startDate, endDate }, 50);
     return rows.map((r) => {
       const c = (r.customer ?? {}) as Record<string, unknown>;
       const k = (r.consultant ?? {}) as Record<string, unknown>;
@@ -211,6 +250,7 @@ export class HttpTecnofit implements TecnofitApi {
       };
     }).filter((c) => c.customerId);
   }
+
 }
 
 let fakeFactory: (() => TecnofitApi) | null = null;

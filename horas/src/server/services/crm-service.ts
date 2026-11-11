@@ -191,7 +191,7 @@ export async function syncOverview(principal: P | null) {
     runs: runs.map((r) => ({
       id: r.id, day: fromUtc(r.day), status: r.status, mode: r.mode, error: r.error, apiCalls: r.apiCalls, invocations: r.invocations,
       remaining: Array.isArray(r.pending) ? r.pending.length : 0,
-      stats: r.stats as { candidates?: number; processed?: number; casesOpened?: number; casesResolved?: number; debtsPaid?: number; consultants?: number; purged?: number; errors?: { customer: string; error: string }[] },
+      stats: r.stats as { candidates?: number; processed?: number; casesOpened?: number; casesResolved?: number; debtsPaid?: number; consultants?: number; purged?: number; warning?: string; errors?: { customer: string; error: string }[] },
       startedAt: r.startedAt.toISOString(), finishedAt: r.finishedAt?.toISOString() ?? null,
     })),
   };

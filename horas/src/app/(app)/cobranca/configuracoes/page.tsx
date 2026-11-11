@@ -55,7 +55,7 @@ export default async function Page() {
                     <td className="pr-3">{r.stats.casesOpened ?? 0} / {r.stats.casesResolved ?? 0}</td>
                     <td className="pr-3">{r.stats.debtsPaid ?? 0}</td>
                     <td className="pr-3">{r.apiCalls}</td>
-                    <td>{at(r.finishedAt)}{r.stats.errors?.length ? <span className="ml-1 text-atencao">· {r.stats.errors.length} aluno(s) com erro</span> : null}</td>
+                    <td>{at(r.finishedAt)}{r.stats.errors?.length ? <span className="ml-1 text-atencao">· {r.stats.errors.length} aluno(s) com erro</span> : null}{r.stats.warning ? <span className="ml-1 block text-atencao">{r.stats.warning}</span> : null}</td>
                   </tr>
                 ))}
               </tbody>
