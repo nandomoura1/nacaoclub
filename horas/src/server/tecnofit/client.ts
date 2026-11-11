@@ -39,7 +39,8 @@ export interface TfCustomerSale { id: string; totalValue: unknown; openValue: un
 export interface TfContact { contact: string; type: string | null }
 export interface TfCustomer { id: string; name: string; status: string | null }
 export interface TfEmployee { id: string; name: string; types: string[] }
-export interface TfCall { customerId: string; consultantId: string | null; consultantName: string | null; at: string | null }
+/** Ligação do CRM da Tecnofit. `done` = concluída; `deadline` = data agendada; `doneAt` = quando foi feita. Notas NÃO são lidas. */
+export interface TfCall { customerId: string; consultantId: string | null; consultantName: string | null; at: string | null; done: boolean; deadline: string | null; doneAt: string | null }
 
 /** O que a sincronização precisa da Tecnofit. A implementação real e a simulada seguem este contrato. */
 export interface TecnofitApi {
@@ -201,7 +202,13 @@ export class HttpTecnofit implements TecnofitApi {
     return rows.map((r) => {
       const c = (r.customer ?? {}) as Record<string, unknown>;
       const k = (r.consultant ?? {}) as Record<string, unknown>;
-      return { customerId: str(c.id), consultantId: k.id ? str(k.id) : null, consultantName: k.name ? str(k.name) : null, at: str(r.callDate || r.createdAt) || null };
+      const st = str(r.status).toLowerCase();
+      const done = /complet|conclu|realiz|done|finaliz/.test(st);
+      return {
+        customerId: str(c.id), consultantId: k.id ? str(k.id) : null, consultantName: k.name ? str(k.name) : null,
+        at: str(r.callDate || r.callDeadline || r.createdAt) || null,
+        done, deadline: str(r.callDeadline) || null, doneAt: done ? str(r.callDate) || null : null,
+      };
     }).filter((c) => c.customerId);
   }
 }

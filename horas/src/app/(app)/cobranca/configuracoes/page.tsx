@@ -36,6 +36,10 @@ export default async function Page() {
         ) : (
           <p className="text-sm text-critico">Não configurada: cadastre <code>TECNOFIT_API_KEY</code> e <code>TECNOFIT_API_SECRET</code> nas variáveis da Vercel (chave só de leitura).</p>
         )}
+        <p className="mt-1 text-xs text-tinta-suave">
+          O sistema <strong>não fala com o aluno</strong>: gera as Tarefas de CRM de cada consultor. A lista do dia sai às 07h30 no WhatsApp do consultor
+          (só contagens e o link; ligue em Administração → <a className="font-semibold text-nacao underline" href="/admin/whatsapp/automacoes">Automações</a> → &quot;Tarefas de CRM do dia&quot;, que nasce desligada; o WhatsApp vem do cadastro do usuário).
+        </p>
         <p className="mt-1 text-xs text-tinta-suave">Roda sozinha todo dia às 05h17. Do espelho saem só nome, status, celular e vendas em aberto — nada de CPF, RG, endereço, cartão ou exame médico.</p>
         <div className="mt-3"><SyncButton disabled={!c.configured} /></div>
         {sync.runs.length > 0 && (

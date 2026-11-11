@@ -2891,6 +2891,10 @@ model TecCustomer {
   /// Consultor da Tecnofit (id do funcionário), vindo das ligações do CRM.
   consultantTecId   String?   @map("consultant_tec_id")
   contactsCheckedOn DateTime? @map("contacts_checked_on") @db.Date
+  /// Última ligação de CRM CONCLUÍDA na Tecnofit (dá baixa nas tarefas). Notas da ligação não são guardadas.
+  lastCallDoneOn    DateTime? @map("last_call_done_on") @db.Date
+  /// Próxima ligação PENDENTE agendada na Tecnofit (retorno/promessa): pausa a régua até a data.
+  nextCallOn        DateTime? @map("next_call_on") @db.Date
   lastSeenOn        DateTime  @map("last_seen_on") @db.Date
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
@@ -2961,6 +2965,7 @@ model CrmCase {
   updatedAt      DateTime  @updatedAt @map("updated_at")
 
   customer TecCustomer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  tasks    CrmTask[]
 
   @@index([status, ownerId])
   @@index([customerId, kind, status])
@@ -2988,4 +2993,33 @@ model TecSyncRun {
 
   @@index([day])
   @@map("tec_sync_runs")
+}
+
+/// Tarefa de CRM do consultor (o sistema NÃO fala com o aluno). O responsável é o do caso.
+/// Baixa: ligação concluída registrada na Tecnofit, pagamento/caso resolvido, ou "já registrei" à mão.
+model CrmTask {
+  id        String    @id @default(uuid()) @db.Uuid
+  caseId    String    @map("case_id") @db.Uuid
+  /// D-3, D0, D+3, D+5, D+7, D+15, PENDENCIA, RETORNO (domain/cobranca.ts)
+  kind      String
+  /// Referência que define a tarefa: vencimento (régua), abertura (pendência) ou data do retorno agendado.
+  refDate   DateTime  @map("ref_date") @db.Date
+  /// Primeiro dia em que a tarefa entrou na lista.
+  createdOn DateTime  @map("created_on") @db.Date
+  /// ABERTA, FEITA, SUBSTITUIDA (o passo seguinte da régua chegou), CANCELADA
+  status    String    @default("ABERTA")
+  doneOn    DateTime? @map("done_on") @db.Date
+  /// LIGACAO_TECNOFIT, PAGAMENTO, CASO_RESOLVIDO, MANUAL
+  doneVia   String?   @map("done_via")
+  doneById  String?   @map("done_by") @db.Uuid
+  /// Passos anteriores da régua que ficaram sem contato (ex.: "D+3").
+  missed    String[]  @default([])
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  case CrmCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@unique([caseId, kind, refDate])
+  @@index([status, createdOn])
+  @@map("crm_tasks")
 }

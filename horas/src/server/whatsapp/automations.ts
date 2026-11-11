@@ -16,6 +16,7 @@ import { maskDestination, normalizeDestination, phoneKey } from '@/domain/whatsa
 import { teacherShareData } from '@/server/services/teacher-share-service';
 import { deliverWhatsApp } from '@/server/services/whatsapp-service';
 import { zapiConfig } from './zapi';
+import { dailyDigests } from '@/server/services/crm-task-service';
 
 /**
  * Automações de WhatsApp editáveis: cada uma tem frequência, público e um
@@ -116,6 +117,7 @@ export async function audienceRecipients(audience: string, filter: Filter, today
     case 'PROFESSORES_GRADE': return teachers(today, filter, true);
     case 'PROFESSORES': return teachers(today, filter, false);
     case 'PERFIL': return byRole(today, filter);
+    case 'CRM_TAREFAS': return (await dailyDigests(today)).map((x) => ({ key: `u:${x.userId}`, name: x.name, phone: x.phone, vars: { ...baseVars(x.name, today, `${appUrl()}/cobranca/tarefas`), tarefas_crm: x.text } }));
     case 'NUMEROS': return (filter?.numbers ?? []).map((n) => ({ key: `n:${n}`, name: null, phone: n, vars: baseVars(null, today, appUrl()) }));
     default: return [];
   }
@@ -258,11 +260,14 @@ export async function runAutomation(id: string, today: IsoDate, opts: { force?: 
   return result;
 }
 
-const kindOf = (audience: string) => (audience === 'LIDERES_PENDENCIAS' ? 'DEMANDAS' : audience === 'ESCALADOS_FDS' ? 'ESCALA' : audience === 'PROFESSORES_GRADE' ? 'GRADE' : 'LIVRE');
+const kindOf = (audience: string) => (audience === 'CRM_TAREFAS' ? 'CRM' : audience === 'LIDERES_PENDENCIAS' ? 'DEMANDAS' : audience === 'ESCALADOS_FDS' ? 'ESCALA' : audience === 'PROFESSORES_GRADE' ? 'GRADE' : 'LIVRE');
 
-/** Agendador: roda todas as automações ativas que são do dia. */
-export async function runDueAutomations(today: IsoDate) {
-  const list = await prisma.waAutomation.findMany({ where: { active: true }, select: { id: true, name: true, frequency: true, weekdays: true, monthDay: true } });
+/**
+ * Agendador: roda todas as automações ativas que são do dia (ou só as de um público, ex.: CRM_TAREFAS às 07h30).
+ * Cada uma sai uma vez por período: a das 8h serve de reserva se a das 07h30 falhou, sem enviar em dobro.
+ */
+export async function runDueAutomations(today: IsoDate, opts: { audience?: string } = {}) {
+  const list = await prisma.waAutomation.findMany({ where: { active: true, ...(opts.audience ? { audience: opts.audience } : {}) }, select: { id: true, name: true, frequency: true, weekdays: true, monthDay: true } });
   const out: Record<string, RunResult | string> = {};
   for (const a of list.filter((x) => isDue(x, today))) out[a.name] = (await runAutomation(a.id, today)) ?? 'já enviada neste período';
   return out;

@@ -9,7 +9,7 @@ import { setFakeTecnofit } from '@/server/tecnofit/client';
 import { FakeTecnofit, sampleData } from '@/server/tecnofit/fake';
 import { runTecnofitSync } from '@/server/services/crm-sync-service';
 import { assignCases, linkConsultant, listConsultants, listQueue, queueCounts, syncNow } from '@/server/services/crm-service';
-import { META, ensureCatalog, hasDb, makeUser } from './helpers';
+import { META, ensureCatalog, hasDb, makeUser, wipeCrm } from './helpers';
 
 /** Cobrança F1: Tecnofit (simulada) → débitos → casos → fila por consultor, com permissões e LGPD. */
 describe.skipIf(!hasDb)('Cobrança e CRM — sincronização e fila', () => {
@@ -26,6 +26,7 @@ describe.skipIf(!hasDb)('Cobrança e CRM — sincronização e fila', () => {
 
   beforeAll(async () => {
     await ensureCatalog();
+    await wipeCrm();
     setFakeTecnofit(() => new FakeTecnofit(data));
     admin = await makeUser('ADMIN');
     lider = await makeUser('CRM_LIDER', { name: 'Líder CRM Teste' });
@@ -33,7 +34,7 @@ describe.skipIf(!hasDb)('Cobrança e CRM — sincronização e fila', () => {
     agent2 = await makeUser('CRM', { name: 'Consultor Teste B' });
     outsider = await makeUser('MARKETING');
   });
-  afterAll(() => setFakeTecnofit(null));
+  afterAll(async () => { setFakeTecnofit(null); await wipeCrm(); });
 
   it('primeira sincronização: abre cobrança (vencida e D-3), pendência na recepção e ignora o que vence longe', async () => {
     // Aluno antigo sem caso: sai do espelho (LGPD, 90 dias).
@@ -57,7 +58,8 @@ describe.skipIf(!hasDb)('Cobrança e CRM — sincronização e fila', () => {
     expect(await prisma.crmCase.count({ where: { status: 'ABERTO', ownerId: { not: null } } })).toBe(0);
 
     // Auditoria sem dado pessoal (só id Tecnofit).
-    const logs = await prisma.auditLog.findMany({ where: { action: 'crm.case_opened' } });
+    const mine = (await prisma.crmCase.findMany({ select: { id: true } })).map((c) => c.id);
+    const logs = await prisma.auditLog.findMany({ where: { action: 'crm.case_opened', entityId: { in: mine } } });
     expect(logs.length).toBe(4);
     expect(logs.every((l) => !/Exemplo|9999|8888/.test(l.summary + JSON.stringify(l.after)))).toBe(true);
   });

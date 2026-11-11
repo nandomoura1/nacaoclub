@@ -137,7 +137,7 @@ function Editor({ edit, setEdit, modalities, roles, pending, onSave, onPreview }
           <div><Label>Nome</Label><Input value={f.name} onChange={(e) => set('name', e.target.value)} placeholder="ex.: Aviso de reunião geral" /></div>
 
           <div>
-            <Label>Quando (às 8h)</Label>
+            <Label>Quando (às {f.audience === 'CRM_TAREFAS' ? '7h30' : '8h'})</Label>
             <div className="mt-1 flex flex-wrap gap-1.5">
               {FREQUENCIES.map((x) => (
                 <button key={x.id} type="button" onClick={() => set('frequency', x.id)} className={cn('rounded-full px-3 py-1 text-sm font-semibold', f.frequency === x.id ? 'bg-nacao text-white' : 'bg-white text-tinta-suave ring-1 ring-borda')}>{x.label}</button>
@@ -154,7 +154,7 @@ function Editor({ edit, setEdit, modalities, roles, pending, onSave, onPreview }
             {f.frequency === 'MENSAL' && (
               <div className="mt-2 flex items-center gap-2 text-sm">Dia <Input type="number" min={1} max={28} className="h-8 w-20" value={f.monthDay} onChange={(e) => set('monthDay', Math.min(28, Math.max(1, Number(e.target.value) || 1)))} /> de cada mês</div>
             )}
-            <p className="mt-1 text-xs text-tinta-suave">{describeWhen({ frequency: f.frequency, weekdays: f.weekdays, monthDay: f.monthDay })}</p>
+            <p className="mt-1 text-xs text-tinta-suave">{describeWhen({ frequency: f.frequency, weekdays: f.weekdays, monthDay: f.monthDay, audience: f.audience })}</p>
           </div>
 
           <div>

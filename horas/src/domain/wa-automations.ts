@@ -25,6 +25,7 @@ export const VARIABLES = {
   grade: 'Grade semanal de aulas do professor',
   orientacoes: 'Mensagem geral do gênero (Musculação/Aulas Coletivas) + orientações do professor',
   mensagem_completa: 'A mesma mensagem do balão de Colaboradores (grade, escalas e orientações)',
+  tarefas_crm: 'Resumo das tarefas de CRM do dia do consultor (contagens e valor; sem nome nem telefone de aluno)',
 } as const;
 export type VariableKey = keyof typeof VARIABLES;
 const BASE: VariableKey[] = ['nome', 'primeiro_nome', 'data', 'mes', 'link'];
@@ -36,12 +37,16 @@ export const AUDIENCES = [
   { id: 'PROFESSORES_GRADE', label: 'Professores com aulas fixas', detail: 'Professores ativos que têm aulas na grade semanal.', vars: [...BASE, 'grade', 'orientacoes', 'mensagem_completa'], filter: 'modality' },
   { id: 'PROFESSORES', label: 'Todos os professores ativos', detail: 'Todos os professores ativos com WhatsApp no cadastro.', vars: BASE, filter: 'modality' },
   { id: 'PERFIL', label: 'Usuários de um perfil', detail: 'Usuários ativos de um perfil de acesso (ex.: Coordenador), com WhatsApp no cadastro.', vars: BASE, filter: 'role' },
+  { id: 'CRM_TAREFAS', label: 'Consultores de CRM com tarefas', detail: 'Cada consultor com tarefas de cobrança abertas (Cobrança e CRM) e os líderes de CRM com casos sem responsável ou escalados. Sai às 07h30, depois da sincronização com a Tecnofit. O {link} abre a lista (exige login).', vars: [...BASE, 'tarefas_crm'], filter: null },
   { id: 'NUMEROS', label: 'Números ou grupos específicos', detail: 'Lista fixa de números (um por linha) ou IDs de grupo do WhatsApp.', vars: BASE.filter((v) => v !== 'nome' && v !== 'primeiro_nome'), filter: 'numbers' },
 ] as const satisfies readonly { id: string; label: string; detail: string; vars: readonly VariableKey[]; filter: 'modality' | 'role' | 'numbers' | null }[];
 export type Audience = (typeof AUDIENCES)[number]['id'];
 export const audienceOf = (id: string) => AUDIENCES.find((a) => a.id === id);
 
-export interface AutomationRule { frequency: string; weekdays: number[]; monthDay: number | null }
+export interface AutomationRule { frequency: string; weekdays: number[]; monthDay: number | null; audience?: string }
+
+/** Horário do envio: as tarefas de CRM saem às 07h30 (depois da sincronização com a Tecnofit); o resto às 8h. */
+export const sendTimeOf = (audience?: string) => (audience === 'CRM_TAREFAS' ? '7h30' : '8h');
 
 /** Roda hoje? (semana: 1 = segunda … 7 = domingo; mês: dia 1–28). */
 export function isDue(a: AutomationRule, today: IsoDate): boolean {
@@ -59,11 +64,12 @@ export function periodOf(a: AutomationRule, today: IsoDate): string {
 }
 
 export function describeWhen(a: AutomationRule): string {
-  if (a.frequency === 'DIARIA') return 'Todo dia, 8h';
-  if (a.frequency === 'MENSAL') return `Dia ${a.monthDay ?? 1} de cada mês, 8h`;
+  const h = sendTimeOf(a.audience);
+  if (a.frequency === 'DIARIA') return `Todo dia, ${h}`;
+  if (a.frequency === 'MENSAL') return `Dia ${a.monthDay ?? 1} de cada mês, ${h}`;
   const days = [...a.weekdays].sort().map((d) => WEEKDAYS[d - 1]!.long.toLowerCase());
   if (!days.length) return 'Semanal (escolha os dias)';
-  return `Toda ${days.length > 1 ? `${days.slice(0, -1).join(', ')} e ${days.at(-1)}` : days[0]}, 8h`;
+  return `Toda ${days.length > 1 ? `${days.slice(0, -1).join(', ')} e ${days.at(-1)}` : days[0]}, ${h}`;
 }
 
 /** Troca {variavel} pelo valor; variável que não existe para o público some. Linhas vazias em excesso são compactadas. */
@@ -113,6 +119,7 @@ export function sampleVars(today: IsoDate): Record<VariableKey, string> {
     escala: shiftsBlock([{ date: sat, startMin: 420, endMin: 1020, sector: 'Recepção' }]),
     grade: '*Segunda*\n• 07:00–08:00 CrossFit\n\n*Quarta*\n• 19:00–20:00 Funcional\n\nTotal: 2 aula(s) · 2h por semana',
     orientacoes: '*Atribuições e orientações — Aulas Coletivas*\n*Conduta*\n• Chegar 10 min antes da aula…\n\n*Para você, Ana*\nResponsável por abrir o box às 5h.',
+    tarefas_crm: '• *12 tarefa(s)* — 3 atrasada(s) 🔴 · R$ 3.420,00 em aberto\n   4 lembrete(s) de vencimento\n   6 cobrança(s) em atraso\n   2 retorno(s)/promessa(s) para conferir',
     mensagem_completa: '*Sua grade na Nação — Ana Souza*\nValendo a partir de 01/12/2026\n\n*Segunda*\n• 07:00–08:00 CrossFit\n\nTotal: 1 aula(s) · 1h por semana\n\n*Atribuições e orientações — Aulas Coletivas*\n• Chegar 10 min antes da aula…',
   } as Record<VariableKey, string>;
 }

@@ -1,6 +1,7 @@
 {
   "crons": [
     { "path": "/api/cron/whatsapp", "schedule": "0 11 * * *" },
-    { "path": "/api/cron/tecnofit", "schedule": "17 8 * * *" }
+    { "path": "/api/cron/tecnofit", "schedule": "17 8 * * *" },
+    { "path": "/api/cron/crm-tarefas", "schedule": "27 10 * * *" }
   ]
 }

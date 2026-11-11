@@ -36,3 +36,13 @@ export async function makeUser(
   });
   return { principal: (await loadPrincipal(prisma, user.id))!, email, password };
 }
+
+/** Cobrança/CRM: a sincronização olha TODOS os casos abertos — cada arquivo de teste começa e termina limpo. */
+export async function wipeCrm() {
+  await prisma.crmTask.deleteMany({});
+  await prisma.crmCase.deleteMany({});
+  await prisma.tecDebt.deleteMany({});
+  await prisma.tecCustomer.deleteMany({});
+  await prisma.crmConsultant.deleteMany({});
+  await prisma.tecSyncRun.deleteMany({});
+}

@@ -4,6 +4,7 @@ import { audit } from '@/server/audit';
 import { addDays, toUtc, fromUtc, type IsoDate } from '@/domain/dates';
 import { isBlockedStatus, isCollectible, isoFromApi, money, pickMobile, type DebtIn } from '@/domain/cobranca';
 import { tecnofitApi, type TecnofitApi, type TfCustomerSale } from '@/server/tecnofit/client';
+import { generateTasks } from './crm-task-service';
 
 /**
  * Sincronização diária com a Tecnofit (só leitura) → débitos e casos de cobrança.
@@ -20,13 +21,15 @@ import { tecnofitApi, type TecnofitApi, type TfCustomerSale } from '@/server/tec
 
 const SALES_LOOKBACK_DAYS = 360;
 const CALLS_LOOKBACK_DAYS = 90;
+/** Retornos agendados (promessas) até 60 dias à frente. */
+const CALLS_AHEAD_DAYS = 60;
 const CONTACTS_REFRESH_DAYS = 7;
 /** LGPD: aluno sem débito nem caso há mais de 90 dias sai do espelho. */
 const RETENTION_DAYS = 90;
 const SAVE_EVERY = 10;
 
-interface Pending { id: string; name: string; status: string | null; consultant: string | null }
-interface Stats { candidates?: number; processed?: number; casesOpened?: number; casesResolved?: number; debtsPaid?: number; consultants?: number; purged?: number; errors?: { customer: string; error: string }[] }
+interface Pending { id: string; name: string; status: string | null; consultant: string | null; lastCallDone?: string | null; nextCall?: string | null }
+interface Stats { candidates?: number; processed?: number; casesOpened?: number; casesResolved?: number; debtsPaid?: number; consultants?: number; purged?: number; tasksCreated?: number; tasksDone?: number; errors?: { customer: string; error: string }[] }
 
 const SYSTEM = { actorId: null, userAgent: 'sincronizacao-tecnofit' };
 const d = (iso: IsoDate) => toUtc(iso);
@@ -57,14 +60,25 @@ async function prepare(api: TecnofitApi, today: IsoDate): Promise<{ pending: Pen
   }
 
   // Consultor de cada aluno = o da ligação de CRM mais recente.
+  // e, por aluno, a última ligação CONCLUÍDA e o retorno PENDENTE mais próximo (promessa/retorno agendado).
   const consultantOf = new Map<string, string>();
-  const calls = (await api.calls(addDays(today, -CALLS_LOOKBACK_DAYS), today)).sort((a, b) => String(a.at ?? '').localeCompare(String(b.at ?? '')));
-  for (const c of calls) if (c.consultantId) consultantOf.set(c.customerId, c.consultantId);
+  const lastDone = new Map<string, string>();
+  const pendingCalls = new Map<string, string[]>();
+  const calls = (await api.calls(addDays(today, -CALLS_LOOKBACK_DAYS), addDays(today, CALLS_AHEAD_DAYS))).sort((a, b) => String(a.at ?? '').localeCompare(String(b.at ?? '')));
+  for (const c of calls) {
+    if (c.consultantId && (!c.at || c.at.slice(0, 10) <= today)) consultantOf.set(c.customerId, c.consultantId);
+    const doneDay = c.done ? isoFromApi(c.doneAt ?? c.at) : null;
+    if (doneDay && doneDay <= today && doneDay > (lastDone.get(c.customerId) ?? '')) lastDone.set(c.customerId, doneDay);
+    const due = !c.done ? isoFromApi(c.deadline) : null;
+    if (due) pendingCalls.set(c.customerId, [...(pendingCalls.get(c.customerId) ?? []), due]);
+  }
+  /** Retorno pendente mais próximo, ignorando os agendados antes da última ligação concluída (ficaram velhos). */
+  const nextCallOf = (id: string) => (pendingCalls.get(id) ?? []).filter((x) => x > (lastDone.get(id) ?? '')).sort()[0] ?? null;
 
   const byId = new Map<string, Pending>();
   const add = (id: string, name: string, status: string | null) => {
     const cur = byId.get(id);
-    byId.set(id, { id, name: name || cur?.name || '', status: status ?? cur?.status ?? null, consultant: consultantOf.get(id) ?? null });
+    byId.set(id, { id, name: name || cur?.name || '', status: status ?? cur?.status ?? null, consultant: consultantOf.get(id) ?? null, lastCallDone: lastDone.get(id) ?? null, nextCall: nextCallOf(id) });
   };
 
   for (let end = today; end > addDays(today, -SALES_LOOKBACK_DAYS); end = addDays(end, -90)) {
@@ -121,13 +135,17 @@ async function processCustomer(api: TecnofitApi, p: Pending, today: IsoDate): Pr
   }
 
   const owner = await ownerFor(p.consultant ?? existing?.consultantTecId ?? null);
+  // Ligações: mantém a última concluída conhecida (a janela de 90 dias pode não alcançá-la mais).
+  const prevDone = iso(existing?.lastCallDoneOn ?? null);
+  const doneDay = [p.lastCallDone ?? null, prevDone].filter((x): x is string => !!x).sort().at(-1) ?? null;
+  const calls = { lastDone: doneDay ? d(doneDay) : null, next: p.nextCall ? d(p.nextCall) : null };
   let opened = 0, resolved = 0, paid = 0;
 
   await prisma.$transaction(async (tx) => {
     const cust = await tx.tecCustomer.upsert({
       where: { tecnofitId: p.id },
-      create: { tecnofitId: p.id, name: p.name || 'Aluno sem nome', status: p.status, mobile, consultantTecId: p.consultant, contactsCheckedOn, lastSeenOn: d(today) },
-      update: { name: p.name || undefined, status: p.status, mobile, consultantTecId: p.consultant ?? undefined, contactsCheckedOn, lastSeenOn: d(today) },
+      create: { tecnofitId: p.id, name: p.name || 'Aluno sem nome', status: p.status, mobile, consultantTecId: p.consultant, contactsCheckedOn, lastCallDoneOn: calls.lastDone, nextCallOn: calls.next, lastSeenOn: d(today) },
+      update: { name: p.name || undefined, status: p.status, mobile, consultantTecId: p.consultant ?? undefined, contactsCheckedOn, lastCallDoneOn: calls.lastDone, nextCallOn: calls.next, lastSeenOn: d(today) },
     });
 
     // Débitos: atualiza os que seguem em aberto; os que sumiram viram QUITADO.
@@ -250,7 +268,13 @@ export async function runTecnofitSync(today: IsoDate, opts: { budgetMs?: number;
   }
 
   const done = pending.length === 0;
-  if (done) stats.purged = await purgeStale(today);
+  if (done) {
+    stats.purged = await purgeStale(today);
+    // Tarefas do dia já prontas quando o consultor abrir a lista (o envio das 07h30 gera de novo, sem duplicar).
+    const t = await generateTasks(today);
+    stats.tasksCreated = t.created;
+    stats.tasksDone = t.done + t.closed;
+  }
   const final = await prisma.tecSyncRun.update({
     where: { id: run.id },
     data: { pending: pending as unknown as Prisma.InputJsonValue, stats: stats as Prisma.InputJsonValue, status: done ? 'CONCLUIDA' : 'RODANDO', invocations: { increment: 1 }, apiCalls: { increment: callsMade() }, ...(done ? { finishedAt: new Date() } : {}) },

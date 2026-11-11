@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { getPrincipal, requestMeta } from '@/server/auth/session';
 import { runAction, type ActionResult } from '@/server/action-result';
 import { assignCases, linkConsultant, syncNow } from '@/server/services/crm-service';
+import { markTaskDone } from '@/server/services/crm-task-service';
 
 const refresh = () => revalidatePath('/cobranca', 'layout');
 
@@ -19,4 +20,7 @@ export async function syncNowAction(force: boolean): Promise<ActionResult<{ stat
     refresh();
     return { status: r.status, processed: r.processed, remaining: r.remaining };
   });
+}
+export async function markTaskDoneAction(taskId: string): Promise<ActionResult> {
+  return runAction(async () => { await markTaskDone(await getPrincipal(), { taskId }, await requestMeta()); refresh(); return undefined; }, 'Tarefa concluída.');
 }

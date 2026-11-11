@@ -155,7 +155,13 @@ retoma de onde parou): vendas não recebidas (12 meses) + bloqueados/restritos +
 recepção", fora dos números de inadimplência). Pagou na Tecnofit → caso RESOLVIDO na rodada seguinte (valores recalculados
 dos débitos, sem duplicar). **Responsável = consultor da Tecnofit** (o da ligação de CRM mais recente — o cadastro do aluno na
 API não traz consultor) vinculado **à mão** ao usuário em Configurações; sem vínculo = "Sem responsável", o **líder distribui**
-e vê tudo. Responsável é fixo até o caso fechar. Régua decidida: automáticas em **D-3, D0, D+3, D+5, D+7** (a partir do D+3
-também tarefa do consultor; D+15 escala para o líder); pagar = app da Tecnofit, Pix ou recepção; recuperado = último contato
-nos 7 dias antes do pagamento; histórico de cobrança 5 anos. **F1 no ar = só leitura, sem mensagens** (régua/contatos/promessas
-= F2–F3; painel e renovações = F4; webhooks só quando a Tecnofit documentar eventos e assinatura).
+e vê tudo. Responsável é fixo até o caso fechar. **O sistema NÃO fala com o aluno** (decisão de 11/11): cada passo da régua
+(**D-3, D0, D+3, D+5, D+7, D+15**) vira **tarefa do consultor** (`crm_tasks`, `crm-task-service.ts`; tela Cobrança e CRM →
+Tarefas de CRM), mais pendência na recepção e "Retorno / promessa". O consultor **registra o contato na Tecnofit** (Ligações do
+CRM): ligação **concluída** depois que a tarefa entrou na lista dá baixa sozinha; ligação **pendente agendada** (retorno/promessa)
+**pausa a régua** até a data e vira tarefa quando chega. Novo passo substitui o anterior não feito (anota "sem contato no D+3");
+não feita continua no topo ("atrasada há N dias"); pagou → baixa "pagamento"; botão "Já registrei na Tecnofit" = baixa manual
+(auditada). D+15 = escalado para o líder. **Lista diária às 07h30** (cron `/api/cron/crm-tarefas`, 07h27) pela automação de
+WhatsApp "Tarefas de CRM do dia" (público `CRM_TAREFAS`, nasce **desligada**; WhatsApp do cadastro do usuário): **só contagens,
+valor e link** — nunca nome/telefone de aluno; o agendador das 8h é reserva (1 envio por dia). Pagar = app da Tecnofit, Pix ou
+recepção; histórico de cobrança 5 anos. Painel do gestor e renovações = próximas fases; webhooks só quando a Tecnofit documentar.

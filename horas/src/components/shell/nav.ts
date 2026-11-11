@@ -139,7 +139,8 @@ export const NAV_CONTRATOS: NavItem[] = [
 
 /** Cobrança e CRM: alunos da Tecnofit com venda em aberto/pendência, fila por consultor (Tecnofit só leitura). */
 export const NAV_COBRANCA: NavItem[] = [
-  { href: '/cobranca', label: 'Fila de cobrança', short: 'Cobrança', icon: 'crm', permission: 'crm.view' },
+  { href: '/cobranca/tarefas', label: 'Tarefas de CRM', short: 'Tarefas', icon: 'crm', permission: 'crm.view' },
+  { href: '/cobranca', label: 'Fila de cobrança', short: 'Cobrança', icon: 'cobrancas', permission: 'crm.view' },
   { href: '/cobranca/configuracoes', label: 'Configurações', icon: 'cadastros', permission: 'crm.admin' },
 ];
 

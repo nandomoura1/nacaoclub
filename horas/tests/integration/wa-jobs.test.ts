@@ -32,11 +32,14 @@ describe.skipIf(!hasDb)('WhatsApp — automações', () => {
   });
   afterAll(() => { server.close(); for (const k of ENV) { delete process.env[k]; if (saved[k] !== undefined) process.env[k] = saved[k]; } });
 
-  it('as 3 automações iniciais vieram da migration, editáveis', async () => {
+  it('as automações iniciais vieram das migrations, editáveis (a de tarefas de CRM nasce desligada, às 7h30)', async () => {
     const list = await listAutomations();
-    expect(list.filter((a) => a.id.startsWith('a0000000')).map((a) => [a.audience, a.when])).toEqual([
+    const seeded = list.filter((a) => a.id.startsWith('a0000000'));
+    expect(seeded.filter((a) => a.audience !== 'CRM_TAREFAS').map((a) => [a.audience, a.when])).toEqual([
       ['LIDERES_PENDENCIAS', 'Toda segunda, 8h'], ['ESCALADOS_FDS', 'Toda sexta, 8h'], ['PROFESSORES_GRADE', 'Dia 1 de cada mês, 8h'],
     ]);
+    const crm = seeded.find((a) => a.audience === 'CRM_TAREFAS')!;
+    expect([crm.when, crm.active]).toEqual(['Todo dia, 7h30', false]);
   });
 
   it('líderes: só quem tem pendência; não repete na semana; desligada não envia', async () => {

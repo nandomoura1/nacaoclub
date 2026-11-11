@@ -28,8 +28,8 @@ export function sampleData(today = todayIso()): FakeData {
       { id: '105', name: 'Aluno Exemplo Cinco', status: 'active', contacts: [{ contact: '(61) 96666-0105', type: 'TELEFONE CELULAR' }], sales: [sale('5005', addDays(today, 20), 289.9)] },
     ],
     calls: [
-      { customerId: '101', consultantId: '9001', consultantName: 'Consultor Exemplo A', at: addDays(today, -5) },
-      { customerId: '103', consultantId: '9002', consultantName: 'Consultor Exemplo B', at: addDays(today, -20) },
+      { customerId: '101', consultantId: '9001', consultantName: 'Consultor Exemplo A', at: addDays(today, -5), done: true, deadline: addDays(today, -5), doneAt: addDays(today, -5) },
+      { customerId: '103', consultantId: '9002', consultantName: 'Consultor Exemplo B', at: addDays(today, -20), done: true, deadline: addDays(today, -20), doneAt: addDays(today, -20) },
     ],
   };
 }
@@ -57,6 +57,6 @@ export class FakeTecnofit implements TecnofitApi {
   async customerContacts(id: string) { return this.find(id)?.contacts ?? []; }
   async consultants() { return this.data.consultants; }
   async calls(startDate: string, endDate: string) {
-    return this.data.calls.filter((c) => !c.at || (c.at >= startDate && c.at.slice(0, 10) <= endDate));
+    return this.data.calls.filter((c) => !c.at || (c.at.slice(0, 10) >= startDate && c.at.slice(0, 10) <= endDate));
   }
 }

@@ -1,8 +1,10 @@
 /**
  * Cobrança e CRM (puro, sem banco): classifica débitos vindos da Tecnofit,
  * escolhe o celular do aluno, ordena a fila e diz em que passo da régua o caso está.
- * Decisões do gestor (11/11/2026): régua automática em D-3, D0, D+3, D+5 e D+7;
- * a partir do D+3 o caso entra na fila do consultor; no D+15 escala para o líder.
+ * Decisões do gestor (11/11/2026): o sistema NÃO fala com o aluno — cada passo da régua
+ * (D-3, D0, D+3, D+5, D+7, D+15) vira TAREFA do consultor, enviada todo dia às 07h30.
+ * O consultor registra o contato na Tecnofit (Ligações do CRM); a ligação concluída dá
+ * baixa na tarefa e o retorno agendado lá (promessa) pausa a régua até a data.
  * Aluno `blocked`/`restricted` sem venda em atraso = "Pendência na recepção".
  */
 import { addDays, toUtc, type IsoDate } from './dates';
@@ -21,15 +23,21 @@ export const CASE_STATUS = [
 ] as const;
 export type CaseStatus = (typeof CASE_STATUS)[number]['id'];
 
-/** Passos da régua (dias em relação ao vencimento mais antigo em aberto). */
+/** Passos da régua (dias em relação ao vencimento mais antigo em aberto): cada um vira tarefa do consultor. */
 export const CADENCE = [
-  { offset: -3, auto: true, task: false, label: 'D-3 · lembrete de vencimento' },
-  { offset: 0, auto: true, task: false, label: 'D0 · vence hoje' },
-  { offset: 3, auto: true, task: true, label: 'D+3 · aviso de pendência + contato do consultor' },
-  { offset: 5, auto: true, task: true, label: 'D+5 · segundo aviso' },
-  { offset: 7, auto: true, task: true, label: 'D+7 · último aviso automático' },
-  { offset: 15, auto: false, task: true, label: 'D+15 · escala para o líder' },
+  { offset: -3, kind: 'D-3', label: 'D-3 · lembrar o vencimento', todo: 'Lembrar com gentileza que vence em {venc} e as formas de pagamento (app da Tecnofit, Pix ou recepção).' },
+  { offset: 0, kind: 'D0', label: 'D0 · vence hoje', todo: 'Vence hoje: confirmar se já pagou e oferecer as formas de pagamento.' },
+  { offset: 3, kind: 'D+3', label: 'D+3 · primeiro contato de cobrança', todo: 'Entender o motivo do atraso e combinar uma data. Combinou? Agende o retorno na Tecnofit com essa data.' },
+  { offset: 5, kind: 'D+5', label: 'D+5 · segundo contato', todo: 'Reforçar a pendência e combinar a data de pagamento (agende o retorno na Tecnofit).' },
+  { offset: 7, kind: 'D+7', label: 'D+7 · último contato antes de escalar', todo: 'Propor a regularização. Sem acordo até o D+15, o caso vai para o líder.' },
+  { offset: 15, kind: 'D+15', label: 'D+15 · escalado para o líder', todo: 'Caso escalado: líder decide negociação ou próximos passos com o aluno.' },
 ] as const;
+
+export const TASK_KINDS = {
+  ...Object.fromEntries(CADENCE.map((c) => [c.kind, { label: c.label, todo: c.todo }])),
+  PENDENCIA: { label: 'Pendência na recepção', todo: 'Aluno bloqueado/restrito na Tecnofit: pedir que passe na recepção ou resolver por WhatsApp.' },
+  RETORNO: { label: 'Retorno / promessa agendada', todo: 'Retorno agendado na Tecnofit para {ref}: conferir se pagou e falar com o aluno.' },
+} as Record<string, { label: string; todo: string }>;
 
 /** Janela de antecedência para trazer débitos que ainda vão vencer (D-3). */
 export const UPCOMING_DAYS = 3;
