@@ -1,0 +1,136 @@
+'use client';
+
+import { useMemo, useState, useTransition } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { Copy, Info } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { FormMessage } from '@/components/ui/alert';
+import { Input, Label } from '@/components/ui/input';
+import { formatDateBR } from '@/domain/dates';
+import type { TransportReport } from '@/server/services/ws-service';
+import { saveTransportValueAction } from '../actions';
+
+const brl = (c: number | null) => (c == null ? '—' : (c / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+const toCents = (v: string): number | null | 'erro' => {
+  const t = v.trim().replace(/[R$\s]/g, '');
+  if (!t) return null;
+  const n = Number(t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : 'erro';
+};
+const STATUS: Record<string, string> = { RASCUNHO: 'rascunho', APROVADA: 'aprovada', PUBLICADA: 'publicada' };
+
+export function TransportClient({ mes, report }: { mes: string; report: TransportReport }) {
+  const router = useRouter();
+  const path = usePathname();
+  const [msg, setMsg] = useState<{ ok?: string; error?: string }>({});
+  const [pending, start] = useTransition();
+  const [editing, setEditing] = useState<Record<string, string>>({});
+  const rows = report.rows;
+  const totals = useMemo(() => ({
+    pay: rows.reduce((s, r) => s + r.payDays, 0),
+    cents: rows.reduce((s, r) => s + (r.totalCents ?? 0), 0),
+    missing: rows.filter((r) => r.dailyCents == null).length,
+  }), [rows]);
+  const sectors = [...new Set(rows.flatMap((r) => r.sectors))];
+
+  const save = (teacherId: string) => {
+    const c = toCents(editing[teacherId] ?? '');
+    if (c === 'erro') return setMsg({ error: 'Valor inválido. Use, por exemplo, 11,00.' });
+    start(async () => {
+      const r = await saveTransportValueAction(teacherId, c);
+      if (!r.ok) return setMsg({ error: r.error });
+      setMsg({ ok: 'Valor da passagem salvo.' });
+      setEditing((e) => { const n = { ...e }; delete n[teacherId]; return n; });
+      router.refresh();
+    });
+  };
+
+  const csv = () => {
+    const head = 'Setor;Nome;Vínculo;Dias de trabalho;Faltas/atestados mês anterior;Dias a pagar;Valor diário;Total';
+    const lines = rows.map((r) => [r.sectors.join(' + '), r.name, r.bond, r.workDays, r.discount, r.payDays, r.dailyCents == null ? '' : (r.dailyCents / 100).toFixed(2).replace('.', ','), r.totalCents == null ? '' : (r.totalCents / 100).toFixed(2).replace('.', ',')].join(';'));
+    return [head, ...lines].join('\n');
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card className="flex flex-wrap items-end gap-4 p-4">
+        <div>
+          <Label htmlFor="ps-mes">Mês da passagem</Label>
+          <Input id="ps-mes" type="month" value={mes} onChange={(e) => e.target.value && router.push(`${path}?mes=${e.target.value}`)} className="w-44" />
+        </div>
+        <div className="flex gap-6 text-sm">
+          <div><p className="text-2xl font-extrabold text-navy">{rows.length}</p><p className="text-tinta-suave">pessoas</p></div>
+          <div><p className="text-2xl font-extrabold text-navy">{totals.pay}</p><p className="text-tinta-suave">dias a pagar</p></div>
+          <div><p className="text-2xl font-extrabold text-navy">{brl(totals.cents)}</p><p className="text-tinta-suave">total{totals.missing ? ` (${totals.missing} sem valor)` : ''}</p></div>
+        </div>
+        <div className="flex-1" />
+        <Button variant="secondary" onClick={async () => { try { await navigator.clipboard.writeText(csv()); setMsg({ ok: 'Tabela copiada: cole no Excel/Planilhas.' }); } catch { setMsg({ error: 'Não consegui copiar.' }); } }}><Copy /> Copiar tabela</Button>
+      </Card>
+
+      <Card className="flex gap-2 p-3 text-sm text-tinta-suave">
+        <Info className="mt-0.5 size-4 shrink-0 text-nacao" />
+        <p>
+          <b className="text-tinta">{report.label}:</b> dias de trabalho pela escala do mês; setor sem escala gerada usa o horário padrão da pessoa (marcado <i>estimado</i>).
+          Desconto = faltas e atestados de <b className="text-tinta">{report.prevLabel}</b> que caíram em dia de trabalho.
+          A mesma pessoa em mais de um setor conta cada dia uma vez. {report.canEditValues ? 'Clique no valor diário para alterar.' : 'O valor diário é definido pela gestão (DP).'}
+        </p>
+      </Card>
+
+      <div className="flex flex-wrap gap-2 text-xs">
+        {report.status.map((s) => (
+          <span key={s.sector} className="rounded-full bg-white px-2.5 py-1 ring-1 ring-borda">
+            <b className="text-navy">{s.sector}</b> · {s.schedule ? `escala ${STATUS[s.schedule] ?? s.schedule}` : <span className="text-atencao">sem escala (estimado)</span>}
+          </span>
+        ))}
+      </div>
+
+      <FormMessage error={msg.error} success={msg.ok} />
+
+      {sectors.length === 0 ? <Card className="p-6 text-sm text-tinta-suave">Nenhum CLT ou FUNAP nas equipes da escala.</Card> : sectors.map((sector) => (
+        <Card key={sector} className="overflow-x-auto">
+          <h3 className="px-4 pt-3 font-extrabold text-navy">{sector}</h3>
+          <table className="w-full min-w-[42rem] text-sm">
+            <thead><tr className="border-b border-borda text-left text-xs uppercase text-tinta-suave">
+              <th className="px-4 py-2">Nome</th><th className="px-2 py-2">Vínculo</th><th className="px-2 py-2 text-right">Dias no mês</th>
+              <th className="px-2 py-2 text-right">Faltas/atest. ({report.prevLabel.split(' ')[0]})</th><th className="px-2 py-2 text-right">Dias a pagar</th>
+              <th className="px-2 py-2 text-right">Valor diário</th><th className="px-4 py-2 text-right">Total</th>
+            </tr></thead>
+            <tbody className="divide-y divide-borda">
+              {rows.filter((r) => r.sectors[0] === sector).map((r) => (
+                <tr key={r.teacherId}>
+                  <td className="px-4 py-2 font-semibold text-tinta">{r.name}{r.sectors.length > 1 && <span className="ml-1 text-xs font-normal text-tinta-suave">(também {r.sectors.slice(1).join(', ')})</span>}</td>
+                  <td className="px-2 py-2">{r.bond}</td>
+                  <td className="tabular px-2 py-2 text-right">{r.workDays}{r.source !== 'escala' && <Badge tone="amber" className="ml-1">{r.source}</Badge>}</td>
+                  <td className="tabular px-2 py-2 text-right" title={r.discountDates.map(formatDateBR).join(', ')}>{r.discount ? `−${r.discount}` : '0'}</td>
+                  <td className="tabular px-2 py-2 text-right font-bold text-navy">{r.payDays}</td>
+                  <td className="tabular px-2 py-2 text-right">
+                    {report.canEditValues && editing[r.teacherId] !== undefined ? (
+                      <span className="inline-flex items-center gap-1">
+                        <Input autoFocus inputMode="decimal" className="h-8 w-24 text-right" value={editing[r.teacherId]} placeholder="11,00"
+                          onChange={(e) => setEditing((x) => ({ ...x, [r.teacherId]: e.target.value }))}
+                          onKeyDown={(e) => { if (e.key === 'Enter') save(r.teacherId); if (e.key === 'Escape') setEditing((x) => { const n = { ...x }; delete n[r.teacherId]; return n; }); }} />
+                        <Button size="sm" disabled={pending} onClick={() => save(r.teacherId)}>OK</Button>
+                      </span>
+                    ) : report.canEditValues ? (
+                      <button type="button" className={r.dailyCents == null ? 'font-semibold text-atencao underline' : 'underline decoration-dotted'}
+                        onClick={() => setEditing((x) => ({ ...x, [r.teacherId]: r.dailyCents == null ? '' : (r.dailyCents / 100).toFixed(2).replace('.', ',') }))}>
+                        {r.dailyCents == null ? 'informar' : brl(r.dailyCents)}
+                      </button>
+                    ) : brl(r.dailyCents)}
+                  </td>
+                  <td className="tabular px-4 py-2 text-right font-bold">{brl(r.totalCents)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      ))}
+
+      {report.outside.length > 0 && (
+        <p className="text-xs text-tinta-suave">Fora da passagem (vínculo sem vale-transporte): {report.outside.map((o) => `${o.name} (${o.bond}, ${o.sector})`).join(' · ')}.</p>
+      )}
+    </div>
+  );
+}

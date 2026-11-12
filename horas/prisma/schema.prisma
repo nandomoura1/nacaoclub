@@ -2599,6 +2599,8 @@ model WsMember {
   holiday       Boolean  @default(true)
   /// false = fica fora da geração automática (ex.: líder sem horário definido).
   autoSchedule  Boolean  @default(true) @map("auto_schedule")
+  /// Vale-transporte: valor por dia trabalhado (ida e volta), em centavos. Vazio = não informado.
+  transportDailyCents Int? @map("transport_daily_cents")
   notes         String?
   sortOrder     Int      @default(0) @map("sort_order")
   active        Boolean  @default(true)

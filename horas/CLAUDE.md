@@ -92,6 +92,13 @@ Lanchonete, Cozinha e Limpeza = como sábado. Todo feriado pede confirmação; d
 feriado específico (Nação inteira ou setor). Feriado no fim de semana usa o horário do próprio dia.
 **FUNAP** (6x1, 44h, até 2h de intervalo) trabalha o feriado normalmente e só folga nos dias fixos.
 
+**Passagem (vale-transporte)** (Escalas 5x2 → Passagem; ver `ws.view`, valor só `ws.admin`): todos os setores que a pessoa vê,
+**CLT e FUNAP** (MEI/freelancer listados como fora). Dias a pagar = dias de TRABALHO do mês (escala gerada; sem escala = **estimado** pelo
+padrão, máx. 5/sem CLT e 6 FUNAP, sem folga fixa e sem ausências) − **faltas e atestados do mês anterior** que caíram em dia de trabalho;
+× **valor diário** (ida e volta, `ws_members.transport_daily_cents`, igual em todas as equipes da pessoa). Mesma pessoa em 2 setores = dias sem
+repetir. "Copiar tabela" para planilha. `domain/escalas/passagem.ts`, `transportReport` no ws-service. Setor **ADM** = setor comum
+(Pré-requisitos → Novo setor) para quem não está em outro setor.
+
 **Simulação de grade** (Grade semanal → "Simular nova grade"; `schedule.edit`, nas áreas da pessoa): copia a grade de
 uma data para um rascunho (`grade_simulations.items`, sem tocar na grade real), edita (aulas, troca de professor em
 massa), compara horas atual × simulada (semana e competência 26→25, sem descontar feriados) e **implanta a partir de

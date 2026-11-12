@@ -13,6 +13,7 @@ import { describeRule, parseRule, RULE_KINDS, type RuleKind } from '@/domain/esc
 import type { Absence, Bond, Cell, CellKind, DayPlan, Grid, HoursMap, LegalParams, Member, MemberHours, Post, Rule } from '@/domain/escalas/types';
 import { validate, type Analysis } from '@/domain/escalas/validate';
 import { fairness, type FairnessRow } from '@/domain/escalas/fairness';
+import { estimateWorkDays, receivesTransport, transportRows, type TransportInput } from '@/domain/escalas/passagem';
 import { cancelLeave, saveLeave } from './leave-service';
 import { deliverWhatsApp } from './whatsapp-service';
 import { zapiConfig } from '@/server/whatsapp/zapi';
@@ -944,3 +945,61 @@ export async function loadDocumentModels(principal: P | null, meta: RequestMeta)
 }
 
 export const RULE_KIND_OPTIONS = (Object.keys(RULE_KINDS) as RuleKind[]).map((k) => ({ value: k, label: RULE_KINDS[k].label, help: RULE_KINDS[k].help }));
+
+// ── Passagem (vale-transporte) ───────────────────────────────
+
+/**
+ * Passagem do mês para todos os setores que a pessoa vê: dias de trabalho (escala gerada do mês;
+ * sem escala, estimado pelo padrão) − faltas e atestados do mês anterior, × valor diário.
+ * Só CLT e FUNAP recebem; a mesma pessoa em dois setores conta cada dia uma vez.
+ */
+export async function transportReport(principal: P | null, year: number, month: number) {
+  assertCan(principal, 'ws.view');
+  const scope = await sectorScope(principal);
+  const sectors = await prisma.wsSector.findMany({ where: { active: true, ...(scope ? { id: { in: scope } } : {}) }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }] });
+  const p = prevMonth(year, month);
+  const inputs: TransportInput[] = [];
+  const status: { sector: string; schedule: string | null; prevSchedule: string | null }[] = [];
+  const outside: { name: string; bond: string; sector: string }[] = [];
+  for (const s of sectors) {
+    const [c, pc] = await Promise.all([context(prisma, s.id, year, month), context(prisma, s.id, p.y, p.m)]);
+    status.push({ sector: s.name, schedule: c.schedule?.status ?? null, prevSchedule: pc.schedule?.status ?? null });
+    const days = c.mi.days.map((d) => c.days.get(d)!);
+    const prevDays = pc.mi.days.map((d) => pc.days.get(d)!);
+    for (const m of c.members) {
+      const db = c.membersDb.find((x) => x.id === m.id)!;
+      if (!receivesTransport(m.bond)) { if (db.active) outside.push({ name: m.name, bond: m.bond, sector: s.name }); continue; }
+      const leaves = c.absences.filter((a) => a.memberId === m.id).map((a) => ({ start: a.start, end: a.end, type: a.type }));
+      const workDays = c.schedule
+        ? c.schedule.cells.filter((x) => x.memberId === m.id && x.kind === 'TRABALHO').map((x) => fromUtc(x.date)).filter((d) => d >= c.mi.first && d <= c.mi.last)
+        : estimateWorkDays(m, days, c.cycleRef, leaves);
+      // Mês anterior: dias em que a pessoa trabalharia (inclusive os que virou falta/atestado na escala).
+      const pm = pc.members.find((x) => x.id === m.id);
+      const prevWorkDays = pc.schedule
+        ? pc.schedule.cells.filter((x) => x.memberId === m.id && ['TRABALHO', 'FALTA', 'ATESTADO'].includes(x.kind)).map((x) => fromUtc(x.date)).filter((d) => d >= pc.mi.first && d <= pc.mi.last)
+        : pm ? estimateWorkDays(pm, prevDays, pc.cycleRef, []) : [];
+      const prevLeaves = pc.absences.filter((a) => a.memberId === m.id).map((a) => ({ start: a.start, end: a.end, type: a.type }));
+      inputs.push({ teacherId: db.teacherId, name: m.name, bond: m.bond, sector: s.name, workDays, source: c.schedule ? 'escala' : 'estimado', prevWorkDays, prevLeaves, dailyCents: db.transportDailyCents });
+    }
+  }
+  return { year, month, label: monthInfo(year, month).label, prevLabel: monthInfo(p.y, p.m).label, rows: transportRows(inputs), status, outside, canEditValues: can(principal, 'ws.admin') };
+}
+export type TransportReport = Awaited<ReturnType<typeof transportReport>>;
+
+/** Valor diário da passagem (ida e volta) da pessoa, em todas as equipes dela. Só a gestão (DP). */
+export async function saveTransportValue(principal: P | null, teacherId: string, cents: number | null, meta: RequestMeta) {
+  assertCan(principal, 'ws.admin');
+  if (cents != null && (!Number.isInteger(cents) || cents < 0 || cents > 50_000)) throw new AppError('Valor diário inválido (até R$ 500,00).');
+  return prisma.$transaction(async (tx) => {
+    const members = await tx.wsMember.findMany({ where: { teacherId }, include: { teacher: { select: { name: true } } } });
+    if (!members.length) throw new NotFoundError('Pessoa não está em nenhuma equipe da escala.');
+    const before = members[0]!.transportDailyCents;
+    await tx.wsMember.updateMany({ where: { teacherId }, data: { transportDailyCents: cents } });
+    const brl = (v: number | null) => (v == null ? 'não informado' : `R$ ${(v / 100).toFixed(2).replace('.', ',')}`);
+    await audit(tx, ctx(principal, meta), {
+      action: 'ws.transport_value', entityType: 'teacher', entityId: teacherId,
+      before: { valor_diario_centavos: before }, after: { valor_diario_centavos: cents },
+      summary: `${principal.name} definiu a passagem diária de ${members[0]!.teacher.name}: ${brl(before)} → ${brl(cents)}`,
+    });
+  });
+}
