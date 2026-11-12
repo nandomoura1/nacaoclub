@@ -90,7 +90,7 @@ export type DutyView = Awaited<ReturnType<typeof loadDuty>>;
  * Escala da semana (segunda a domingo) de uma data, para a Grade semanal: a
  * grade é o padrão que se repete; a escala é datada e aparece por cima dela.
  */
-export async function dutyForWeek(principal: Principal | null, date: IsoDate, areaId?: string | null) {
+export async function dutyForWeek(principal: Principal | null, date: IsoDate, areaId?: string | string[] | null) {
   assertCan(principal, 'schedule.view');
   const start = addDays(date, 1 - weekdayOf(date));
   const end = addDays(start, 6);
@@ -98,7 +98,7 @@ export async function dutyForWeek(principal: Principal | null, date: IsoDate, ar
     prisma.dutyShift.findMany({
       where: {
         date: { gte: toUtc(start), lte: toUtc(end) },
-        sector: { active: true, ...sectorScope(principal), ...(areaId ? { modality: { areaId } } : {}) },
+        sector: { active: true, ...sectorScope(principal), ...((Array.isArray(areaId) ? areaId.length : areaId) ? { modality: { areaId: { in: Array.isArray(areaId) ? areaId : [areaId!] } } } : {}) },
       },
       orderBy: [{ date: 'asc' }, { startMin: 'asc' }],
       include: {

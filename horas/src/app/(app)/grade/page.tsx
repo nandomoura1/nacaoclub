@@ -1,3 +1,4 @@
+import { parseAreas, parseModalities } from '@/lib/grade-filter';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -25,11 +26,11 @@ export default async function GradePage({ searchParams }: { searchParams: Promis
   const scoped = viewIds === null ? {} : { id: { in: [...viewIds] } };
 
   const areas = await prisma.coordinationArea.findMany({ where: { deletedAt: null, active: true, ...scoped }, orderBy: { sortOrder: 'asc' }, select: { id: true, name: true, color: true } });
-  const areaId = sp.area && areas.some((a) => a.id === sp.area) ? sp.area : null;
+  const areaIds = parseAreas(sp.area, (id) => areas.some((a) => a.id === id));
 
   const [grade, duty, modalities, activityTypes, spaces, teachers] = await Promise.all([
-    listGrade(principal, date, areaId),
-    dutyForWeek(principal, date, areaId),
+    listGrade(principal, date, areaIds),
+    dutyForWeek(principal, date, areaIds),
     prisma.modality.findMany({
       where: { active: true, ...(principal.areaIds === null ? {} : { areaId: { in: [...principal.areaIds] } }) },
       orderBy: [{ sortOrder: 'asc' }], select: { id: true, name: true, color: true, areaId: true, defaultDurationMin: true },
@@ -43,7 +44,7 @@ export default async function GradePage({ searchParams }: { searchParams: Promis
   ]);
 
   const filters = {
-    modalityId: modalities.some((m) => m.id === sp.modalidade) ? sp.modalidade! : null,
+    modalityIds: parseModalities(sp.modalidade, (id) => modalities.some((m) => m.id === id)),
     teacherId: teachers.some((t) => t.id === sp.professor) ? sp.professor! : null,
     spaceId: spaces.some((x) => x.id === sp.espaco) ? sp.espaco! : null,
   };
@@ -63,7 +64,7 @@ export default async function GradePage({ searchParams }: { searchParams: Promis
       <GradeClient
         date={date}
         today={todayIso()}
-        areaId={areaId}
+        areaIds={areaIds}
         areas={areas}
         grade={filterGrade(grade, filters)}
         duty={filters.teacherId ? { ...duty, shifts: duty.shifts.filter((s) => s.people.some((p) => p.id === filters.teacherId)) } : duty}

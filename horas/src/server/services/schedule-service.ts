@@ -65,7 +65,16 @@ async function assertModalityInScope(tx: Tx, principal: Principal, modalityId: s
 }
 
 /** Grade valendo numa data, escopada pelas áreas do usuário. */
-export async function listGrade(principal: Principal | null, date: IsoDate, areaId?: string | null) {
+/** Filtro por área(s), sem sair do escopo de quem vê. */
+export function areaWhere(areaId: string | string[] | null | undefined, viewIds: ReadonlySet<string> | readonly string[] | null) {
+  const ids = (Array.isArray(areaId) ? areaId : areaId ? [areaId] : []).filter(Boolean);
+  if (!ids.length) return {};
+  const allowed = viewIds === null ? ids : ids.filter((id) => [...viewIds].includes(id));
+  return { areaId: { in: allowed } };
+}
+
+/** `areaId`: uma área, várias (lista) ou todas (vazio). */
+export async function listGrade(principal: Principal | null, date: IsoDate, areaId?: string | string[] | null) {
   assertCan(principal, 'schedule.view');
   const d = toUtc(date);
   const viewIds = gradeViewAreaIds(principal);
@@ -74,7 +83,7 @@ export async function listGrade(principal: Principal | null, date: IsoDate, area
     where: {
       validFrom: { lte: d },
       OR: [{ validTo: null }, { validTo: { gte: d } }],
-      modality: { ...areaFilter, ...(areaId ? { areaId } : {}) },
+      modality: { ...areaFilter, ...areaWhere(areaId, viewIds) },
     },
     include: versionInclude,
     orderBy: [{ weekday: 'asc' }, { startMin: 'asc' }],

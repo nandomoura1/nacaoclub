@@ -30,7 +30,7 @@ type Role = 'TITULAR' | 'AUXILIAR' | 'ESTAGIARIO';
 const ROLE_LABEL: Record<Role, string> = { TITULAR: 'Professor', AUXILIAR: 'Auxiliar', ESTAGIARIO: 'Estagiário' };
 
 interface Props {
-  date: string; today: string; areaId: string | null; areas: Area[]; grade: GradeItem[]; duty: WeekDuty; canEdit: boolean; filters: GradeFilters;
+  date: string; today: string; areaIds: string[]; areas: Area[]; grade: GradeItem[]; duty: WeekDuty; canEdit: boolean; filters: GradeFilters;
   modalities: Mod[]; activityTypes: ActType[]; spaces: Opt[]; teachers: Teacher[];
 }
 
@@ -38,7 +38,7 @@ export type Editing = { mode: 'create'; weekday: number; base?: GradeItem; prese
 export type SheetProps = Pick<Props, 'canEdit' | 'modalities' | 'activityTypes' | 'spaces' | 'teachers'>;
 
 export function GradeClient(props: Props) {
-  const { date, today, areaId, areas, grade, duty, canEdit, filters } = props;
+  const { date, today, areaIds, areas, grade, duty, canEdit, filters } = props;
   const router = useRouter();
   const [editing, setEditing] = useState<Editing>(null);
   const [mobileDay, setMobileDay] = useState(() => {
@@ -63,14 +63,16 @@ export function GradeClient(props: Props) {
   const dateOf = (n: number) => addDays(duty.start, n - 1);
   const days = WEEKDAYS.filter((w) => w.n <= 6 || byDay.get(7)!.length > 0 || dutyByDay.has(7));
 
-  const current = gradeParams({ date, areaId, ...filters });
+  const current = gradeParams({ date, areaIds, ...filters });
   const go = (params: Record<string, string | null>) => {
     const sp = new URLSearchParams(current);
     for (const [k, v] of Object.entries(params)) (v ? sp.set(k, v) : sp.delete(k));
     router.push(`/grade?${sp}`);
   };
-  const filtered = Boolean(filters.modalityId || filters.teacherId || filters.spaceId);
-  const areaMods = props.modalities.filter((m) => !areaId || m.areaId === areaId);
+  const filtered = Boolean(filters.modalityIds.length || filters.teacherId || filters.spaceId);
+  const areaMods = props.modalities.filter((m) => !areaIds.length || areaIds.includes(m.areaId));
+  // Áreas: clicar marca/desmarca (dá para juntar várias, ex.: CrossFit + Aulas Coletivas); "Todas" limpa.
+  const toggleArea = (id: string) => { const next = areaIds.includes(id) ? areaIds.filter((x) => x !== id) : [...areaIds, id]; go({ area: next.length ? next.join(',') : null, modalidade: null }); };
 
   return (
     <>
@@ -83,10 +85,10 @@ export function GradeClient(props: Props) {
         </div>
         <div className="flex flex-wrap gap-1.5">
           {areas.length > 1 && (
-            <button onClick={() => go({ area: null })} className={cn('rounded-full px-3 py-1 text-xs font-semibold', !areaId ? 'bg-navy text-white' : 'ring-1 ring-borda text-tinta-suave')}>Todas</button>
+            <button onClick={() => go({ area: null, modalidade: null })} className={cn('rounded-full px-3 py-1 text-xs font-semibold', !areaIds.length ? 'bg-navy text-white' : 'ring-1 ring-borda text-tinta-suave')}>Todas</button>
           )}
           {areas.map((a) => (
-            <button key={a.id} onClick={() => go({ area: a.id })} className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold', areaId === a.id ? 'bg-navy text-white' : 'ring-1 ring-borda text-tinta-suave')}>
+            <button key={a.id} aria-pressed={areaIds.includes(a.id)} onClick={() => toggleArea(a.id)} className={cn('inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold', areaIds.includes(a.id) ? 'bg-navy text-white' : 'ring-1 ring-borda text-tinta-suave')}>
               <span className="size-2 rounded-full" style={{ background: a.color }} />{a.name}
             </button>
           ))}
@@ -100,10 +102,7 @@ export function GradeClient(props: Props) {
       </Card>
 
       <Card className="mb-4 flex flex-col gap-2 p-3 sm:flex-row sm:flex-wrap sm:items-center">
-        <Select aria-label="Filtrar por modalidade" className="sm:w-52" value={filters.modalityId ?? ''} onChange={(e) => go({ modalidade: e.target.value || null })}>
-          <option value="">Todas as modalidades</option>
-          {areaMods.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-        </Select>
+        <ModalityPicker options={areaMods} selected={filters.modalityIds} onChange={(ids) => go({ modalidade: ids.length ? ids.join(',') : null })} />
         <Select aria-label="Filtrar por professor" className="sm:w-56" value={filters.teacherId ?? ''} onChange={(e) => go({ professor: e.target.value || null })}>
           <option value="">Todos os professores</option>
           {props.teachers.map((t) => <option key={t.id} value={t.id}>{t.fullName}</option>)}
@@ -536,5 +535,41 @@ function Choice({ checked, onChange, title, help, children }: { checked: boolean
       <span className="mt-0.5 block text-tinta-suave">{help}</span>
       {children}
     </label>
+  );
+}
+
+/** Filtro de modalidades: nenhuma marcada = todas; dá para marcar várias (ex.: CrossFit + Aulas coletivas). */
+function ModalityPicker({ options, selected, onChange }: { options: { id: string; name: string; color?: string }[]; selected: string[]; onChange: (ids: string[]) => void }) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<string[]>(selected);
+  const names = options.filter((m) => selected.includes(m.id)).map((m) => m.name);
+  const label = !names.length ? 'Todas as modalidades' : names.length <= 2 ? names.join(' + ') : `${names.length} modalidades`;
+  const toggle = (id: string) => setDraft((d) => (d.includes(id) ? d.filter((x) => x !== id) : [...d, id]));
+  const apply = (ids: string[]) => { setOpen(false); if (ids.slice().sort().join() !== selected.slice().sort().join()) onChange(ids); };
+  return (
+    <div className="relative sm:w-60">
+      <button type="button" aria-haspopup="listbox" aria-expanded={open} onClick={() => { setDraft(selected); setOpen((o) => !o); }}
+        className={cn('flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-borda bg-white px-3 text-left text-sm', names.length ? 'font-semibold text-navy' : 'text-tinta')}>
+        <span className="truncate">{label}</span><span aria-hidden className="text-tinta-fraca">▾</span>
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => apply(draft)} />
+          <div role="listbox" aria-multiselectable className="absolute z-40 mt-1 max-h-80 w-full min-w-56 overflow-y-auto rounded-xl border border-borda bg-white p-2 shadow-lg">
+            <div className="mb-1 flex gap-3 px-1 text-xs font-semibold">
+              <button type="button" className="text-nacao" onClick={() => setDraft([])}>Todas</button>
+              <span className="text-tinta-fraca">marque uma ou mais</span>
+            </div>
+            {options.map((m) => (
+              <label key={m.id} className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-sm hover:bg-fundo">
+                <input type="checkbox" className="size-4" checked={draft.includes(m.id)} onChange={() => toggle(m.id)} />
+                {m.color && <span className="size-2 rounded-full" style={{ background: m.color }} />}{m.name}
+              </label>
+            ))}
+            <Button type="button" size="sm" className="mt-2 w-full" onClick={() => apply(draft)}>Aplicar{draft.length ? ` (${draft.length})` : ''}</Button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }

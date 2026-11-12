@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { computeLedger, type LedgerOccurrence } from '@/domain/ledger';
 import { buildHoursReport, toDecimalHours } from '@/domain/report';
-import { filterGrade, gradeParams } from '@/lib/grade-filter';
+import { filterGrade, gradeParams, parseModalities } from '@/lib/grade-filter';
 
 const occ = (id: string, modalityId: string, a: Partial<LedgerOccurrence['assignments'][number]>[], extra: Partial<LedgerOccurrence> = {}): LedgerOccurrence => ({
   id, date: '2026-09-01', modalityId, status: 'PREVISTA', plannedDurationMin: 60, durationMin: 60, countsHours: true, cancellationCountsHours: false,
@@ -53,15 +53,19 @@ describe('filtros da grade', () => {
     { id: 'c', modality: { id: 'cf' }, space: { id: 's2' }, people: [] },
   ];
   it('modalidade, professor e espaço combinam', () => {
-    const f = (x: Partial<{ modalityId: string; teacherId: string; spaceId: string }>) =>
-      filterGrade(items, { modalityId: null, teacherId: null, spaceId: null, ...x }).map((i) => i.id);
+    const f = (x: Partial<{ modalityIds: string[]; teacherId: string; spaceId: string }>) =>
+      filterGrade(items, { modalityIds: [], teacherId: null, spaceId: null, ...x }).map((i) => i.id);
     expect(f({})).toEqual(['a', 'b', 'c']);
-    expect(f({ modalityId: 'cf' })).toEqual(['a', 'c']);
+    expect(f({ modalityIds: ['cf'] })).toEqual(['a', 'c']);
+    expect(f({ modalityIds: ['cf', 'hy'] })).toEqual(['a', 'b', 'c']);
     expect(f({ teacherId: 'ana' })).toEqual(['a', 'b']);
-    expect(f({ teacherId: 'ana', modalityId: 'hy' })).toEqual(['b']);
+    expect(f({ teacherId: 'ana', modalityIds: ['hy'] })).toEqual(['b']);
     expect(f({ spaceId: 's2' })).toEqual(['c']);
   });
   it('a URL de impressão leva os mesmos filtros', () => {
-    expect(gradeParams({ date: '2026-10-01', areaId: 'x', modalityId: null, teacherId: 't', spaceId: null }).toString()).toBe('data=2026-10-01&area=x&professor=t');
+    expect(gradeParams({ date: '2026-10-01', areaIds: ['x'], modalityIds: [], teacherId: 't', spaceId: null }).toString()).toBe('data=2026-10-01&area=x&professor=t');
+    expect(gradeParams({ date: '2026-10-01', areaIds: ['x', 'y'], modalityIds: ['cf', 'hy'], teacherId: null, spaceId: null }).get('modalidade')).toBe('cf,hy');
+    expect(gradeParams({ date: '2026-10-01', areaIds: ['x', 'y'], modalityIds: [], teacherId: null, spaceId: null }).get('area')).toBe('x,y');
+    expect(parseModalities('cf,hy,,xx,cf', (id) => id !== 'xx')).toEqual(['cf', 'hy']);
   });
 });

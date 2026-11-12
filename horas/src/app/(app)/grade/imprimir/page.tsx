@@ -10,7 +10,7 @@ import { gradeTeamText, printDensity, printLines, type PrintMode, type TeacherIn
 import { GradeTextButton } from '@/components/whatsapp/GradeTextButton';
 import { LEAVE_LABEL, type LeaveType } from '@/domain/leave';
 import { crefRule, isIntern } from '@/domain/staff-docs';
-import { filterGrade, gradeParams } from '@/lib/grade-filter';
+import { filterGrade, gradeParams, parseAreas, parseModalities } from '@/lib/grade-filter';
 import { cn } from '@/lib/cn';
 import { formatDateTime, formatMinutes } from '@/lib/format';
 import { todayIso } from '@/lib/today';
@@ -40,14 +40,18 @@ export default async function ImprimirGradePage({ searchParams }: { searchParams
   const date = sp.data && isIsoDate(sp.data) ? sp.data : todayIso();
   const viewIds = gradeViewAreaIds(principal);
   const scoped = viewIds === null ? {} : { id: { in: [...viewIds] } };
-  const area = sp.area ? await prisma.coordinationArea.findFirst({ where: { id: sp.area, ...scoped }, select: { id: true, name: true } }) : null;
-  const [modality, teacher, space] = await Promise.all([
-    sp.modalidade ? prisma.modality.findUnique({ where: { id: sp.modalidade }, select: { id: true, name: true } }) : null,
+  const areaIdsReq = parseAreas(sp.area, (id) => /^[0-9a-f-]{36}$/i.test(id));
+  const areaList = areaIdsReq.length ? await prisma.coordinationArea.findMany({ where: { id: { in: areaIdsReq }, ...scoped }, select: { id: true, name: true }, orderBy: { sortOrder: 'asc' } }) : [];
+  const areaNames = areaList.map((a) => a.name).join(' + ');
+  const modIds = parseModalities(sp.modalidade, (id) => /^[0-9a-f-]{36}$/i.test(id));
+  const [mods, teacher, space] = await Promise.all([
+    modIds.length ? prisma.modality.findMany({ where: { id: { in: modIds } }, select: { id: true, name: true }, orderBy: { sortOrder: 'asc' } }) : [],
     sp.professor ? prisma.teacher.findUnique({ where: { id: sp.professor }, select: { id: true, name: true } }) : null,
     sp.espaco ? prisma.space.findUnique({ where: { id: sp.espaco }, select: { id: true, name: true } }) : null,
   ]);
-  const filters = { modalityId: modality?.id ?? null, teacherId: teacher?.id ?? null, spaceId: space?.id ?? null };
-  const grade = filterGrade(await listGrade(principal, date, area?.id ?? null), filters);
+  const filters = { modalityIds: mods.map((m) => m.id), teacherId: teacher?.id ?? null, spaceId: space?.id ?? null };
+  const modalityNames = mods.map((m) => m.name).join(', ');
+  const grade = filterGrade(await listGrade(principal, date, areaList.map((a) => a.id)), filters);
 
   // Vínculo (estagiário?) e nº do CREF de quem aparece na grade.
   const ids = [...new Set(grade.flatMap((g) => g.people.map((p) => p.teacherId)))];
@@ -76,8 +80,8 @@ export default async function ImprimirGradePage({ searchParams }: { searchParams
     ? counted.reduce((s, g) => s + g.durationMin, 0)
     : counted.reduce((s, g) => s + g.durationMin * g.people.length, 0);
   const subtitle = [
-    area ? `Área: ${area.name}` : viewIds === null ? 'Todas as áreas' : 'Minhas áreas',
-    modality && `Modalidade: ${modality.name}`,
+    areaList.length ? `${areaList.length > 1 ? 'Áreas' : 'Área'}: ${areaNames}` : viewIds === null ? 'Todas as áreas' : 'Minhas áreas',
+    mods.length > 0 && `${mods.length > 1 ? 'Modalidades' : 'Modalidade'}: ${modalityNames}`,
     teacher && `Professor: ${teacher.name}`,
     space && `Espaço: ${space.name}`,
   ].filter(Boolean).join(' · ');
@@ -86,8 +90,8 @@ export default async function ImprimirGradePage({ searchParams }: { searchParams
     weekday: g.weekday, startMin: g.startMin, durationMin: g.durationMin, modality: g.modality.name,
     people: g.people.filter((p) => mode === 'todos' || (p.role === 'TITULAR' && !info.get(p.teacherId)?.intern)).map((p) => ({ teacherId: p.teacherId, name: p.name })),
   }));
-  const textTitle = [teacher ? `Grade de ${teacher.name}` : 'Grade semanal', area?.name, modality?.name, space?.name, `a partir de ${formatDateBR(date)}`].filter(Boolean).join(' · ');
-  const base = gradeParams({ date, areaId: area?.id ?? null, ...filters });
+  const textTitle = [teacher ? `Grade de ${teacher.name}` : 'Grade semanal', areaNames || null, modalityNames || null, space?.name, `a partir de ${formatDateBR(date)}`].filter(Boolean).join(' · ');
+  const base = gradeParams({ date, areaIds: areaList.map((a) => a.id), ...filters });
   const href = (m: PrintMode, one: boolean) => { const q = new URLSearchParams(base); q.set('auto', '0'); if (m === 'professores') q.set('equipe', 'professores'); if (!one) q.set('folhas', 'varias'); return `/grade/imprimir?${q}`; };
   const hrefMode = (m: PrintMode) => href(m, onePage);
 
