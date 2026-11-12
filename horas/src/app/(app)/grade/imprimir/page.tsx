@@ -119,7 +119,7 @@ export default async function ImprimirGradePage({ searchParams }: { searchParams
           </div>
           <div className="flex-1" />
           <p className="text-xs text-tinta-fraca">Na impressão: “Paisagem”, margens “Padrão” e escala 100%. “Salvar como PDF” para o WhatsApp.</p>
-          <GradeTextButton plain={gradeTeamText(textClasses, info, { title: textTitle })} withModalities={gradeTeamText(textClasses, info, { title: textTitle, modalities: true })} autoOpen={sp.texto === '1'} />
+          <GradeTextButton plain={gradeTeamText(textClasses, info, { title: textTitle })} withModalities={gradeTeamText(textClasses, info, { title: textTitle, layout: 'linha' })} autoOpen={sp.texto === '1'} />
           <PrintButton auto={sp.auto !== '0' && sp.texto !== '1'} />
         </div>
         {missingCref.length > 0 && (

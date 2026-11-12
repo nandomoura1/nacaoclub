@@ -101,9 +101,10 @@ competências abertas; competência fechada bloqueia; aula mexida na grade real 
 **Filtros da Grade semanal**: **áreas** (botões redondos) e **modalidades** aceitam **várias ao mesmo tempo** (`?area=a,b&modalidade=x,y`;
 `parseAreas`/`parseModalities` em `lib/grade-filter.ts`); vale para tela, impressão/PDF e texto do WhatsApp.
 
-**Grade em texto (WhatsApp)** (Grade semanal → "Texto WhatsApp", ou na tela de impressão): uma linha por pessoa, separada em
-**Professores** e **Estagiários**, aulas encostadas viram um período ("Seg a Sex - 5h às 8h"), mesmos filtros da grade; opção de mostrar
-modalidades; copiar, abrir no WhatsApp ou Z-API (`GRADE`). `gradeTeamText` em `domain/grade-print.ts`. O PDF continua igual.
+**Grade em texto (WhatsApp)** (Grade semanal → "Texto WhatsApp", ou na tela de impressão): por pessoa, separada em
+**Professores** e **Estagiários**; padrão **detalhado** = "*Nome* · Modalidade" + horários embaixo (mais de uma modalidade: uma linha
+"Modalidade: dias - horário" para cada), **linha em branco entre pessoas**; opção "formato curto" (uma linha por pessoa). Aulas encostadas
+viram um período ("Seg a Sex - 5h às 8h"), mesmos filtros da grade; copiar, abrir no WhatsApp ou Z-API (`GRADE`). `gradeTeamText` em `domain/grade-print.ts`. O PDF continua igual.
 
 **Ausências de professor**: padrão "desconta" para tudo, menos **folga** (abonada); atestado desconta e o líder abona à mão quando for o caso. Lançadas antes de gerar a competência valem quando ela for gerada
 (a prévia mostra as aulas pendentes e oferece "Gerar competência agora").

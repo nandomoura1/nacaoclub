@@ -20,13 +20,27 @@ describe('grade em texto por pessoa', () => {
       .toBe('Seg e Qua - 5h às 8h e 17h às 18h; Ter, Qui, Sex - 5h às 8h; Sáb - 8h às 9h30'.replace('Ter, Qui, Sex', 'Ter, Qui e Sex'));
   });
 
-  it('separa professores e estagiários, em ordem alfabética', () => {
+  it('detalhado: modalidade ao lado do nome, horários embaixo, linha em branco entre pessoas', () => {
     const cls = [1, 2, 3, 4, 5].flatMap((d) => [c(d, 5, ['André', 'Lucas']), c(d, 6, ['André', 'Lucas']), c(d, 7, ['André', 'Lucas']), c(d, 8, ['Lucas'], 'Academia', 120)]);
-    const t = gradeTeamText(cls, new Map([['Lucas', { intern: true }]]), { title: 'Grade · CrossFit', modalities: true });
+    cls.push(c(6, 9, ['Bia'], 'Funcional'), c(1, 18, ['Bia']), c(3, 18, ['Bia']));
+    const t = gradeTeamText(cls, new Map([['Lucas', { intern: true }]]), { title: 'Grade' });
+    expect(t).toBe([
+      '📋 *Grade*', '',
+      '👨‍🏫 *PROFESSORES*', '',
+      '*André* · CrossFit', 'Seg a Sex - 5h às 8h', '',
+      '*Bia*', 'CrossFit: Seg e Qua - 18h às 19h', 'Funcional: Sáb - 9h às 10h', '', '',
+      '🎓 *ESTAGIÁRIOS*', '',
+      '*Lucas*', 'Academia: Seg a Sex - 8h às 10h', 'CrossFit: Seg a Sex - 5h às 8h',
+    ].join('\n'));
+  });
+
+  it('linha: uma linha por pessoa', () => {
+    const cls = [1, 2, 3, 4, 5].flatMap((d) => [c(d, 5, ['André', 'Lucas']), c(d, 6, ['André', 'Lucas']), c(d, 7, ['André', 'Lucas']), c(d, 8, ['Lucas'], 'Academia', 120)]);
+    const t = gradeTeamText(cls, new Map([['Lucas', { intern: true }]]), { title: 'Grade · CrossFit', layout: 'linha' });
     expect(t).toBe([
       '📋 *Grade · CrossFit*', '',
-      '*Professores*', '• *André* (CrossFit) - Seg a Sex - 5h às 8h', '',
-      '*Estagiários*', '• *Lucas* (Academia, CrossFit) - Seg a Sex - 5h às 10h',
+      '👨‍🏫 *PROFESSORES*', '', '• *André* - Seg a Sex - 5h às 8h', '', '',
+      '🎓 *ESTAGIÁRIOS*', '', '• *Lucas* - Seg a Sex - 5h às 10h',
     ].join('\n'));
   });
 });

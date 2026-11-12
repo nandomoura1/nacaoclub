@@ -87,23 +87,38 @@ export function personSchedule(cls: { weekday: number; startMin: number; duratio
  * Grade em texto para WhatsApp, por pessoa, separada em Professores e Estagiários.
  * `modalities`: mostra as modalidades de cada um entre parênteses.
  */
-export function gradeTeamText(classes: TextClass[], info: Map<string, { intern: boolean }>, opts: { title: string; modalities?: boolean }): string {
+/** Linhas de horário de uma pessoa (uma por grupo de dias): ["Seg a Sex - 5h às 8h", "Sáb - 9h às 10h"]. */
+export function personScheduleLines(cls: { weekday: number; startMin: number; durationMin: number }[]): string[] {
+  const s = personSchedule(cls);
+  return s ? s.split('; ') : [];
+}
+
+/**
+ * Grade em texto para WhatsApp, por pessoa, separada em Professores e Estagiários.
+ *  - `detalhado` (padrão): nome em negrito com a modalidade ao lado, horários embaixo, linha em branco
+ *    entre as pessoas. Quem dá mais de uma modalidade tem os horários separados por modalidade.
+ *  - `linha`: uma linha por pessoa (formato curto).
+ */
+export function gradeTeamText(classes: TextClass[], info: Map<string, { intern: boolean }>, opts: { title: string; layout?: 'detalhado' | 'linha' }): string {
   const people = new Map<string, { name: string; cls: TextClass[] }>();
   for (const c of classes) for (const p of c.people) {
     const cur = people.get(p.teacherId) ?? { name: p.name, cls: [] };
     cur.cls.push(c);
     people.set(p.teacherId, cur);
   }
-  const line = ([id, p]: [string, { name: string; cls: TextClass[] }]) => {
-    void id;
-    const mods = opts.modalities ? ` (${[...new Set(p.cls.map((c) => c.modality))].sort().join(', ')})` : '';
-    return `• *${p.name.trim()}*${mods} - ${personSchedule(p.cls)}`;
+  const short = (p: { name: string; cls: TextClass[] }) => [`• *${p.name.trim()}* - ${personSchedule(p.cls)}`];
+  const detailed = (p: { name: string; cls: TextClass[] }) => {
+    const mods = [...new Set(p.cls.map((c) => c.modality))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    if (mods.length === 1) return [`*${p.name.trim()}* · ${mods[0]}`, ...personScheduleLines(p.cls)];
+    return [`*${p.name.trim()}*`, ...mods.flatMap((m) => personScheduleLines(p.cls.filter((c) => c.modality === m)).map((l) => `${m}: ${l}`))];
   };
+  const block = (list: [string, { name: string; cls: TextClass[] }][]) =>
+    opts.layout === 'linha' ? list.flatMap(([, p]) => short(p)) : list.flatMap(([, p], i) => [...(i ? [''] : []), ...detailed(p)]);
   const sorted = [...people].sort((a, b) => a[1].name.localeCompare(b[1].name, 'pt-BR'));
   const pros = sorted.filter(([id]) => !info.get(id)?.intern), interns = sorted.filter(([id]) => info.get(id)?.intern);
   const out = [`📋 *${opts.title}*`];
-  if (pros.length) out.push('', '*Professores*', ...pros.map(line));
-  if (interns.length) out.push('', '*Estagiários*', ...interns.map(line));
+  if (pros.length) out.push('', '👨‍🏫 *PROFESSORES*', '', ...block(pros));
+  if (interns.length) out.push('', '', '🎓 *ESTAGIÁRIOS*', '', ...block(interns));
   if (!pros.length && !interns.length) out.push('', '_Nenhuma aula com esses filtros._');
   return out.join('\n');
 }

@@ -5,7 +5,8 @@ import { Copy, MessageCircle, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SendWhatsApp } from '@/components/whatsapp/SendWhatsApp';
 
-/** "Texto para WhatsApp" da grade: prévia editável, copiar, abrir no WhatsApp ou enviar pela Z-API. */
+/** "Texto para WhatsApp" da grade: prévia editável, copiar, abrir no WhatsApp ou enviar pela Z-API.
+ *  `plain` = formato detalhado (padrão); `withModalities` = formato curto, uma linha por pessoa. */
 export function GradeTextButton({ plain, withModalities, autoOpen = false }: { plain: string; withModalities: string; autoOpen?: boolean }) {
   const [open, setOpen] = useState(autoOpen);
   const [mods, setMods] = useState(false);
@@ -23,9 +24,9 @@ export function GradeTextButton({ plain, withModalities, autoOpen = false }: { p
               <h3 className="flex-1 font-extrabold text-navy">Grade em texto para WhatsApp</h3>
               <button type="button" aria-label="Fechar" onClick={() => setOpen(false)} className="text-tinta-fraca hover:text-tinta"><X className="size-4" /></button>
             </div>
-            <p className="mt-1 text-xs text-tinta-suave">Uma linha por pessoa, com os mesmos filtros da grade (área, modalidade, professor, data). Aulas seguidas viram um período só. Dá para editar antes de mandar.</p>
+            <p className="mt-1 text-xs text-tinta-suave">Por pessoa, com a modalidade ao lado do nome e os mesmos filtros da grade (área, modalidade, professor, data). Aulas seguidas viram um período só. Dá para editar antes de mandar.</p>
             <label className="mt-3 inline-flex items-center gap-1.5 text-sm">
-              <input type="checkbox" className="size-4" checked={mods} onChange={() => { setMods(!mods); setEdited(null); }} /> Mostrar as modalidades de cada um
+              <input type="checkbox" className="size-4" checked={mods} onChange={() => { setMods(!mods); setEdited(null); }} /> Formato curto (uma linha por pessoa, sem modalidade)
             </label>
             <textarea value={body} onChange={(e) => setEdited(e.target.value)} rows={16}
               className="mt-2 min-h-48 w-full flex-1 resize-y rounded-lg border border-borda bg-fundo p-3 font-mono text-[13px] leading-relaxed text-tinta" />
