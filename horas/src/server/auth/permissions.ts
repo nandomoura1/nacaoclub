@@ -76,6 +76,7 @@ export const PERMISSIONS = {
   'crm.view_personal': 'Cobrança e CRM: ver o celular completo do aluno',
   'crm.dashboard': 'Cobrança e CRM: painel do gestor (inadimplência, recuperado, produtividade)',
   'crm.admin': 'Cobrança e CRM: consultores ↔ usuários, régua, modelos e sincronização com a Tecnofit',
+  'tv.privacy': 'Check-ins na TV: ver os check-ins do dia e marcar quem não quer aparecer',
 } as const;
 
 export type PermissionKey = keyof typeof PERMISSIONS;
@@ -119,6 +120,7 @@ export const SYSTEM_ROLES: Record<
       'ws.view',
       'ws.edit',
       'ws.all_sectors',
+      'tv.privacy',
     ],
   },
   CONSULTA: {
@@ -161,17 +163,17 @@ export const SYSTEM_ROLES: Record<
   LIDER: {
     name: 'Líder de setor',
     description: 'Acompanha e atualiza as demandas do próprio setor (Gestão de Processos), registra atas, publica materiais na Universidade Nação, cadastra colaboradores, cuida dos documentos da equipe (inclusive atestados), lança faltas, folgas e afastamentos, monta a grade e a escala de fim de semana/feriados das próprias áreas e vê a grade de todas; monta a escala mensal 5x2 dos setores que lidera (aprovar e publicar fica com a gestão). Combine com o perfil da função.',
-    permissions: ['proc.view', 'proc.edit', 'edu.view', 'edu.edit', 'teacher.view', 'teacher.edit', 'teacher.docs', 'schedule.view', 'schedule.view_all', 'schedule.edit', 'occurrence.exception', 'leave.manage', 'duty.edit', 'ws.view', 'ws.edit', 'ws.all_sectors'],
+    permissions: ['proc.view', 'proc.edit', 'edu.view', 'edu.edit', 'teacher.view', 'teacher.edit', 'teacher.docs', 'schedule.view', 'schedule.view_all', 'schedule.edit', 'occurrence.exception', 'leave.manage', 'duty.edit', 'ws.view', 'ws.edit', 'ws.all_sectors', 'tv.privacy'],
   },
   CRM: {
     name: 'CRM / Cobrança',
     description: 'Consultor do time de CRM: trabalha a própria fila de cobrança (alunos da Tecnofit) e vê o celular do aluno.',
-    permissions: ['crm.view', 'crm.work', 'crm.view_personal'],
+    permissions: ['crm.view', 'crm.work', 'crm.view_personal', 'tv.privacy'],
   },
   CRM_LIDER: {
     name: 'Líder de CRM',
     description: 'Líder do time de CRM: vê a fila de todos, distribui os casos sem responsável e acompanha o painel.',
-    permissions: ['crm.view', 'crm.work', 'crm.view_all', 'crm.view_personal', 'crm.dashboard'],
+    permissions: ['crm.view', 'crm.work', 'crm.view_all', 'crm.view_personal', 'crm.dashboard', 'tv.privacy'],
   },
 };
 

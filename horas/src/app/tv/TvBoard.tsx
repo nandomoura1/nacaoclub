@@ -5,6 +5,8 @@ import type { TvDay } from '@/server/services/tv-service';
 import { describeTimer, suggestTimer, type TimerState } from '@/domain/timer';
 import { TvTimer } from './TvTimer';
 import { TvTimerWatch } from './TvTimerWatch';
+import { TvCheckins } from './TvCheckins';
+import type { TvCheckinView } from '@/server/services/tv-checkin-service';
 
 const ddmm = (d: IsoDate) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 const dayLong = (d: IsoDate) => WEEKDAYS[weekdayOf(d) - 1]!.long;
@@ -14,7 +16,7 @@ const nowSP = () => new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/
 const CLOCK = `(function(){var e=document.getElementById('tv-clock');if(!e)return;function t(){var d=new Date();e.textContent=d.toLocaleTimeString('pt-BR',{timeZone:'America/Sao_Paulo',hour:'2-digit',minute:'2-digit'})}setInterval(t,15000)})();`;
 
 /** Treino do dia em tela cheia, para a TV do box (16:9, letra grande, sem cortar). */
-export function TvBoard({ v, refreshSeconds, live }: { v: TvDay; refreshSeconds: number; live?: { token: string; timer: TimerState | null; serverNow: number } }) {
+export function TvBoard({ v, refreshSeconds, live }: { v: TvDay; refreshSeconds: number; live?: { token: string; timer: TimerState | null; serverNow: number; checkins?: TvCheckinView | null } }) {
   const timer = live?.timer ?? null;
   // Com cronômetro: relógio à esquerda (44%) e o treino à direita: só Força e WOD detalhados; o resto só com o tempo.
   const layout = tvLayout(v.blocks, timer ? { widthVh: 87, bodyVh: 66, maxColumns: 1, detailedKinds: ['FORCA', 'WOD'] } : {});
@@ -96,6 +98,7 @@ export function TvBoard({ v, refreshSeconds, live }: { v: TvDay; refreshSeconds:
         </>
       )}
 
+      {live?.checkins && <TvCheckins token={live.token} initial={live.checkins} />}
       <footer className="flex items-center gap-[1.2vw] border-t border-white/10 px-[3vw]" style={{ height: '6vh' }}>
         {v.footerTitle && <span className="font-extrabold uppercase text-[#20C4FA]" style={{ fontSize: '2vh' }}>📣 {v.footerTitle}</span>}
         {chips.map((p, i) => <span key={i} className="rounded-full bg-white/10 px-[0.9vw] py-[0.3vh] font-bold" style={{ fontSize: '1.8vh' }}>{p[0]!.trim()}{p[1] ? ` · ${p[1].trim()}` : ''}</span>)}

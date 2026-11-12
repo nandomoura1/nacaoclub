@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { todayIso } from '@/lib/today';
 import { tvByToken, tvTimerByToken } from '@/server/services/tv-service';
 import { TvBoard } from '../TvBoard';
+import { prisma } from '@/server/db';
 
 export const metadata: Metadata = { title: 'Treino do dia' };
 export const dynamic = 'force-dynamic';
@@ -18,5 +19,8 @@ export default async function Page({ params }: { params: Promise<{ token: string
     );
   }
   const t = await tvTimerByToken(token);
-  return <TvBoard v={v} refreshSeconds={60} live={{ token, timer: t?.timer ?? null, serverNow: t?.now ?? Date.now() }} />;
+  // Check-ins: só nas telas com a opção ligada; a faixa busca os dados sozinha (não atrasa a página).
+  const s = await prisma.tvScreen.findUnique({ where: { token }, select: { showCheckins: true } });
+  const checkins = s?.showCheckins ? { active: false, configured: false, title: null, labels: [], count: 0, capacity: null } : null;
+  return <TvBoard v={v} refreshSeconds={60} live={{ token, timer: t?.timer ?? null, serverNow: t?.now ?? Date.now(), checkins }} />;
 }

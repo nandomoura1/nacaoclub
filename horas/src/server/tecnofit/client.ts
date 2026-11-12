@@ -45,6 +45,20 @@ export interface TfEmployee { id: string; name: string; types: string[] }
 /** Ligação do CRM da Tecnofit. `done` = concluída; `deadline` = data agendada; `doneAt` = quando foi feita. Notas NÃO são lidas. */
 export interface TfCall { customerId: string; consultantId: string | null; consultantName: string | null; at: string | null; done: boolean; deadline: string | null; doneAt: string | null }
 
+/** Check-in (turma/CrossFit). `classId` pode ser a turma ou o evento do dia: a agenda desfaz a dúvida. */
+export interface TfCheckin { customerId: string; customerName: string; classId: string; className: string; classStart: string | null; checkinAt: string | null }
+/** Aula do dia na agenda da Tecnofit. */
+export interface TfScheduleEvent { eventId: string; classId: string; name: string; date: string; startTime: string; endTime: string; modality: string | null; place: string | null; capacity: number | null; occupied: number | null }
+export interface TfClass { id: string; name: string; modality: string | null; place: string | null }
+
+/** Agenda e frequência (check-ins na TV). */
+export interface TecnofitAgendaApi {
+  /** Uma página de check-ins do dia (type = class | crossfit; máx. 50 por página). */
+  checkinsPage(date: string, type: 'class' | 'crossfit', page: number): Promise<{ rows: TfCheckin[]; total: number; pages: number }>;
+  schedule(date: string): Promise<TfScheduleEvent[]>;
+  classes(): Promise<TfClass[]>;
+}
+
 /** O que a sincronização precisa da Tecnofit. A implementação real e a simulada seguem este contrato. */
 export interface TecnofitApi {
   /** Vendas não recebidas com data de venda no período (máx. 90 dias por chamada). */
@@ -89,7 +103,7 @@ async function errorDetail(res: Response): Promise<string | null> {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-const MIN_GAP_MS = 330; // ~180 req/min, abaixo do limite de 200/min
+const MIN_GAP_MS = 350; // ~170 req/min: sobra para os check-ins da TV dentro do limite de 200/min
 const MAX_PAGES = 200;
 /** Combinação de parâmetros de /customers/{id}/sales que a Tecnofit aceitou (vale para a instância do servidor). */
 let salesVariantMemo: number | null = null;
@@ -97,7 +111,7 @@ export const resetSalesVariant = () => { salesVariantMemo = null; };
 
 type Fetch = typeof fetch;
 
-export class HttpTecnofit implements TecnofitApi {
+export class HttpTecnofit implements TecnofitApi, TecnofitAgendaApi {
   private token: string | null = null;
   private tokenExp = 0;
   private last = 0;
@@ -202,6 +216,38 @@ export class HttpTecnofit implements TecnofitApi {
     return r?.id ? { id: str(r.id), name: str(r.name), status: r.status ? str(r.status) : null } : null;
   }
 
+  async checkinsPage(date: string, type: 'class' | 'crossfit', page: number) {
+    const res = await this.get('/attendances', { startDate: date, endDate: date, type, page, limit: 50 });
+    const meta = (res as { meta?: { total?: unknown; pages?: unknown } } | null)?.meta ?? {};
+    const rows = rowsOf(res).map((r) => {
+      const c = (r.customer ?? {}) as Record<string, unknown>;
+      const k = (r.class ?? {}) as Record<string, unknown>;
+      const ch = (r.checkin ?? {}) as Record<string, unknown>;
+      return { customerId: str(c.id), customerName: str(c.name), classId: str(k.id), className: str(k.name), classStart: str(k.start) || null, checkinAt: str(ch.createdAt) || null };
+    }).filter((x) => x.customerId && x.classId);
+    return { rows, total: Number(meta.total ?? rows.length) || rows.length, pages: Number(meta.pages ?? 1) || 1 };
+  }
+
+  async schedule(date: string) {
+    const res = await this.get('/calendar/schedule', { startDate: date, endDate: date });
+    return rowsOf(res).map((r) => {
+      const m = (r.modality ?? {}) as Record<string, unknown>;
+      const p = (r.place ?? {}) as Record<string, unknown>;
+      const o = (r.occupancy ?? {}) as Record<string, unknown>;
+      const num = (v: unknown) => (v === null || v === undefined || v === '' ? null : Number(v));
+      return { eventId: str(r.id), classId: str(r.classId), name: str(r.name), date: str(r.date) || date, startTime: str(r.startTime), endTime: str(r.endTime), modality: m.name ? str(m.name) : null, place: p.name ? str(p.name) : null, capacity: num(o.capacity), occupied: num(o.occupied) };
+    }).filter((e) => e.eventId);
+  }
+
+  async classes() {
+    const rows = await this.all('/calendar/classes', {});
+    return rows.map((r) => {
+      const m = (r.modality ?? {}) as Record<string, unknown>;
+      const p = (r.place ?? {}) as Record<string, unknown>;
+      return { id: str(r.id), name: str(r.name), modality: m.name ? str(m.name) : null, place: p.name ? str(p.name) : null };
+    }).filter((c) => c.id);
+  }
+
   /**
    * Vendas do aluno. Em produção a combinação de parâmetros da doc deu 422 (validação, sem dizer
    * o campo); então tenta combinações da mais provável à mais simples e lembra a que funcionou.
@@ -286,11 +332,11 @@ export class HttpTecnofit implements TecnofitApi {
 
 }
 
-let fakeFactory: (() => TecnofitApi) | null = null;
+let fakeFactory: (() => TecnofitApi & TecnofitAgendaApi) | null = null;
 /** Testes e o modo TECNOFIT_FAKE injetam a fonte simulada por aqui. */
-export function setFakeTecnofit(factory: (() => TecnofitApi) | null) { fakeFactory = factory; }
+export function setFakeTecnofit(factory: (() => TecnofitApi & TecnofitAgendaApi) | null) { fakeFactory = factory; }
 
-export async function tecnofitApi(): Promise<{ api: TecnofitApi; cfg: TecnofitConfig; callsMade: () => number }> {
+export async function tecnofitApi(): Promise<{ api: TecnofitApi & TecnofitAgendaApi; cfg: TecnofitConfig; callsMade: () => number }> {
   const cfg = tecnofitConfig();
   if (fakeFactory) return { api: fakeFactory(), cfg: { ...cfg, fake: true, configured: true }, callsMade: () => 0 };
   if (cfg.fake) {

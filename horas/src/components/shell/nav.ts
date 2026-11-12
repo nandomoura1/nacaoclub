@@ -55,6 +55,7 @@ export const NAV_TREINOS: NavItem[] = [
   { href: '/treinos', label: 'Cadastro de Treino', short: 'Treinos', icon: 'treinos', permission: 'workout.view', mobile: true },
   { href: '/treinos/personal', label: 'Treinos Personal', short: 'Personal', icon: 'treinos', permission: 'workout.personal' },
   { href: '/treinos/tv', label: 'Telas de TV', icon: 'treinos-tv', permission: 'workout.edit' },
+  { href: '/treinos/tv/checkins', label: 'Check-ins na TV', icon: 'usuarios', permission: 'tv.privacy' },
   { href: '/treinos/cronometro', label: 'Cronômetro da TV', short: 'Cronômetro', icon: 'treinos-timer', permission: 'workout.tv_timer', mobile: true },
   ...PROGRAM_MODALITIES.flatMap((m): NavItem[] => [
     ...(m.benchmarks ? [{ href: `/treinos/${m.slug}/benchmarks`, label: 'Benchmarks', icon: 'benchmarks', permission: 'workout.edit', group: m.name } satisfies NavItem] : []),

@@ -863,6 +863,10 @@ model TvScreen {
   lastSeenAt DateTime? @map("last_seen_at")
   /// Cronômetro da aula (TimerState de domain/timer.ts); nulo = sem timer na TV.
   timer      Json?
+  /// Mostra os check-ins da aula atual (Tecnofit) numa faixa acima do rodapé. Desligado por padrão.
+  showCheckins Boolean @default(false) @map("show_checkins")
+  /// Espaço da tela (ex.: CrossFit 1 × CrossFit 2 no mesmo horário). Nulo = qualquer espaço da modalidade.
+  spaceId    String?   @map("space_id") @db.Uuid
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
 
@@ -3063,4 +3067,73 @@ model CrmDigestSend {
 
   @@id([userId, day])
   @@map("crm_digest_sends")
+}
+
+/// Turma da Tecnofit ↔ aulas da nossa grade (modalidade + espaço opcional). Vínculo escolhido à mão.
+model TecClassLink {
+  id              String   @id @default(uuid()) @db.Uuid
+  tecnofitClassId String   @unique @map("tecnofit_class_id")
+  name            String
+  modalityId      String?  @map("modality_id") @db.Uuid
+  spaceId         String?  @map("space_id") @db.Uuid
+  updatedById     String?  @map("updated_by") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("tec_class_links")
+}
+
+/// Aulas do dia na agenda da Tecnofit (id do evento → turma, horário, vagas). Só o dia corrente.
+model TecClassSlot {
+  day             DateTime @db.Date
+  tecnofitEventId String   @map("tecnofit_event_id")
+  tecnofitClassId String   @map("tecnofit_class_id")
+  name            String
+  /// "HH:MM"
+  start           String
+  end             String
+  capacity        Int?
+  occupied        Int?
+
+  @@id([day, tecnofitEventId])
+  @@map("tec_class_slots")
+}
+
+/// Check-ins de hoje (turma e CrossFit) para a TV. Guarda só o rótulo "Nome I." para exibir; apagados no dia seguinte.
+model TvCheckin {
+  day             DateTime @db.Date
+  tecnofitClassId String   @map("tecnofit_class_id")
+  /// Início da aula "HH:MM"
+  start           String
+  customerTecId   String   @map("customer_tec_id")
+  /// Nome completo só para a recepção marcar "não mostrar" (tela com login e permissão tv.privacy); a TV recebe só o rótulo.
+  name            String
+  label           String
+  className       String   @map("class_name")
+  checkinAt       String?  @map("checkin_at")
+
+  @@id([day, tecnofitClassId, start, customerTecId])
+  @@map("tv_checkins")
+}
+
+/// Controle da consulta de check-ins: uma por minuto para todas as TVs (por dia e tipo).
+model TvCheckinSync {
+  day       DateTime  @db.Date
+  kind      String
+  fetchedAt DateTime  @map("fetched_at")
+  total     Int       @default(0)
+  fullAt    DateTime? @map("full_at")
+
+  @@id([day, kind])
+  @@map("tv_checkin_sync")
+}
+
+/// Aluno que pediu para não aparecer na TV (id Tecnofit).
+model TvHiddenCustomer {
+  customerTecId String   @id @map("customer_tec_id")
+  name          String
+  createdById   String?  @map("created_by") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@map("tv_hidden_customers")
 }

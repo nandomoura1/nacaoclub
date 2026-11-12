@@ -4,7 +4,8 @@ import { revalidatePath } from 'next/cache';
 import { todayIso } from '@/lib/today';
 import { getPrincipal, requestMeta } from '@/server/auth/session';
 import { runAction, type ActionResult } from '@/server/action-result';
-import { deleteScreen, pinScreen, rotateScreenToken, saveScreen } from '@/server/services/tv-service';
+import { deleteScreen, pinScreen, rotateScreenToken, saveScreen, setScreenCheckins } from '@/server/services/tv-service';
+import { saveClassLink, setHidden } from '@/server/services/tv-checkin-service';
 
 const refresh = () => { revalidatePath('/treinos/tv'); revalidatePath('/treinos', 'layout'); };
 
@@ -19,4 +20,13 @@ export async function rotateScreenTokenAction(id: string): Promise<ActionResult>
 }
 export async function deleteScreenAction(id: string): Promise<ActionResult> {
   return runAction(async () => { await deleteScreen(await getPrincipal(), id, await requestMeta()); refresh(); return undefined; }, 'Tela excluída.');
+}
+export async function setScreenCheckinsAction(id: string, values: { showCheckins: boolean; spaceId: string | null }): Promise<ActionResult> {
+  return runAction(async () => { await setScreenCheckins(await getPrincipal(), id, values, await requestMeta()); refresh(); return undefined; }, values.showCheckins ? 'Check-ins ligados — aparecem na TV durante as aulas.' : 'Check-ins desligados nesta TV.');
+}
+export async function saveClassLinkAction(values: { tecnofitClassId: string; name: string; modalityId: string | null; spaceId: string | null }): Promise<ActionResult> {
+  return runAction(async () => { await saveClassLink(await getPrincipal(), values, await requestMeta()); revalidatePath('/treinos/tv/checkins'); return undefined; }, 'Turma vinculada.');
+}
+export async function setHiddenAction(customerTecId: string, hidden: boolean): Promise<ActionResult> {
+  return runAction(async () => { await setHidden(await getPrincipal(), { customerTecId, hidden }, await requestMeta()); revalidatePath('/treinos/tv/checkins'); return undefined; }, hidden ? 'Pronto: não aparece mais na TV.' : 'Volta a aparecer na TV.');
 }

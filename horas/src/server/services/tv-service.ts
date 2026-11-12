@@ -83,6 +83,7 @@ export async function listScreens(principal: Principal | null) {
   return rows.map((s) => ({
     id: s.id, name: s.name, modalityId: s.modalityId, modality: s.modality.name, color: s.modality.color, token: s.token, active: s.active,
     pinnedDate: s.pinnedDate ? fromUtc(s.pinnedDate) : null, lastSeenAt: s.lastSeenAt?.toISOString() ?? null,
+    showCheckins: s.showCheckins, spaceId: s.spaceId,
   }));
 }
 export type ScreenRow = Awaited<ReturnType<typeof listScreens>>[number];
@@ -110,6 +111,19 @@ export async function saveScreen(principal: Principal | null, id: string | null,
       : await tx.tvScreen.create({ data: { ...p.data, token: newToken() } });
     await audit(tx, { actorId: principal.id, ...meta }, { action: id ? 'tv.screen_updated' : 'tv.screen_created', entityType: 'tv_screen', entityId: s.id, after: { nome: s.name, modalidade: m.name }, summary: `${principal.name} ${id ? 'alterou' : 'criou'} a tela de TV “${s.name}” (${m.name})` });
     return s.id;
+  });
+}
+
+/** Liga/desliga os check-ins da aula atual (Tecnofit) na tela e o espaço dela (CrossFit 1 × 2). */
+export async function setScreenCheckins(principal: Principal | null, id: string, input: { showCheckins: boolean; spaceId: string | null }, meta: RequestMeta) {
+  assertCan(principal, 'workout.edit');
+  const s = await screenInScope(principal, id);
+  const p = z.object({ showCheckins: z.boolean(), spaceId: z.string().uuid().nullable() }).safeParse(input);
+  if (!p.success) throw new AppError('Dados inválidos.');
+  if (p.data.spaceId && !(await prisma.space.findUnique({ where: { id: p.data.spaceId } }))) throw new NotFoundError('Espaço não encontrado.');
+  await prisma.$transaction(async (tx) => {
+    await tx.tvScreen.update({ where: { id }, data: p.data });
+    await audit(tx, { actorId: principal.id, ...meta }, { action: 'tv.screen_checkins', entityType: 'tv_screen', entityId: id, before: { showCheckins: s.showCheckins, spaceId: s.spaceId }, after: p.data, summary: `${principal.name} ${p.data.showCheckins ? 'ligou' : 'desligou'} os check-ins na TV “${s.name}”` });
   });
 }
 

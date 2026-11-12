@@ -175,3 +175,14 @@ o que fazer, aluno opcional só entre os que estão na Cobrança; com aluno, a l
 (`crm_digest_sends`), texto e liga/desliga na automação "Tarefas de CRM do dia" (público `CRM_TAREFAS`, nasce **desligada**; o
 agendador das 8h não a roda): **só contagens, valor e link** — nunca nome/telefone de aluno. Pagar = app da Tecnofit, Pix ou
 recepção; histórico de cobrança 5 anos. Painel do gestor e renovações = próximas fases; webhooks só quando a Tecnofit documentar.
+
+**Check-ins na TV** (Telas de TV → "Mostrar check-ins da aula", **desligado por padrão**; página Treinos → Check-ins na TV):
+a Tecnofit não filtra check-in por aula nem tem webhook → `refreshCheckins` lê "check-ins de hoje" (`/attendances`, tipos
+**turma e CrossFit** — catraca não conta) **no máximo 1×/min para todas as TVs** (trava em `tv_checkin_sync`), só páginas novas e
+varredura completa a cada 10 min, + agenda do dia (`/calendar/schedule`: evento → turma, vagas). Só quando há TV ligada em aula.
+**Turma da Tecnofit ↔ grade** à mão (`tec_class_links`: modalidade + espaço opcional; sugestão pelo nome; `workout.edit`). Aula
+atual da tela = ocorrência de hoje da modalidade (+ espaço da tela), de 15 min antes a 5 min depois; check-in entra se a turma
+está vinculada e o horário bate (±10 min). **TV recebe só "Nome I."** (`tvLabel`), contagem e vagas — sem id, sem horário de
+chegada. **Opt-out** (decisão 12/11): todos aparecem; a recepção (`tv.privacy`: Admin, Coordenador, Líder, CRM) marca "Não
+mostrar" (`tv_hidden_customers`; continua contando no número); menores seguem a mesma regra. `tv_checkins` guarda só o dia.
+

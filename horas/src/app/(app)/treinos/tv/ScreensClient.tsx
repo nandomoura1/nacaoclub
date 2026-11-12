@@ -10,7 +10,7 @@ import { FormMessage } from '@/components/ui/alert';
 import { Input, Label, Select } from '@/components/ui/input';
 import { formatDateBR } from '@/domain/dates';
 import type { ScreenRow } from '@/server/services/tv-service';
-import { deleteScreenAction, pinScreenAction, rotateScreenTokenAction, saveScreenAction } from '../tv-actions';
+import { deleteScreenAction, pinScreenAction, rotateScreenTokenAction, saveScreenAction, setScreenCheckinsAction } from '../tv-actions';
 
 type Result = { ok: true; message?: string } | { ok: false; error: string };
 const seen = (iso: string | null) => {
@@ -19,7 +19,7 @@ const seen = (iso: string | null) => {
   return min < 10 ? 'ligada agora' : `vista ${new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' })}`;
 };
 
-export function ScreensClient({ screens, modalities, base, today }: { screens: ScreenRow[]; modalities: { id: string; name: string }[]; base: string; today: string }) {
+export function ScreensClient({ screens, modalities, spaces, base, today }: { screens: ScreenRow[]; modalities: { id: string; name: string }[]; spaces: { id: string; name: string }[]; base: string; today: string }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<{ ok?: string | null; error?: string | null }>({});
@@ -81,6 +81,21 @@ export function ScreensClient({ screens, modalities, base, today }: { screens: S
                   <Input type="date" min={today} value={pin[s.id] ?? ''} onChange={(e) => setPin({ ...pin, [s.id]: e.target.value })} className="h-8 w-auto" />
                   <Button size="sm" variant="secondary" disabled={pending || !pin[s.id]} onClick={() => run(() => pinScreenAction(s.id, pin[s.id]!))}><Pin /> Fixar</Button>
                 </div>
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-fundo p-3 text-sm">
+                <label className="flex items-center gap-2 font-semibold text-navy">
+                  <input type="checkbox" checked={s.showCheckins} disabled={pending} onChange={(e) => run(() => setScreenCheckinsAction(s.id, { showCheckins: e.target.checked, spaceId: s.spaceId }))} />
+                  Mostrar check-ins da aula (Tecnofit)
+                </label>
+                {s.showCheckins && (
+                  <Select className="h-8 w-auto" value={s.spaceId ?? ''} disabled={pending} onChange={(e) => run(() => setScreenCheckinsAction(s.id, { showCheckins: true, spaceId: e.target.value || null }))} aria-label="Espaço desta TV">
+                    <option value="">Qualquer espaço</option>
+                    {spaces.map((sp) => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
+                  </Select>
+                )}
+                <a href="/treinos/tv/checkins" className="ml-auto text-xs font-semibold text-nacao hover:underline">Turmas e privacidade →</a>
+                <p className="w-full text-xs text-tinta-suave">Durante a aula, a TV mostra numa faixa só o primeiro nome + inicial de quem fez check-in (ex.: “Ana S.”). Quem não quiser aparecer: a recepção marca em “Turmas e privacidade”.</p>
               </div>
 
               <div className="mt-3 flex flex-wrap gap-2">
