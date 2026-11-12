@@ -153,4 +153,11 @@ describe.skipIf(!hasDb)('Cobrança e CRM — sincronização e fila', () => {
     expect(r.status).toBe('CONCLUIDA');
     expect(await prisma.auditLog.count({ where: { action: 'crm.sync_manual', actorId: admin.principal.id } })).toBe(1);
   });
+
+  it('rodada de um dia anterior que ficou pela metade é encerrada quando começa a de hoje', async () => {
+    const stale = await prisma.tecSyncRun.create({ data: { day: toUtc(addDays(today, -1)), status: 'RODANDO', mode: 'SIMULADO', pending: ['999'] } });
+    await runTecnofitSync(today, { force: true });
+    expect((await prisma.tecSyncRun.findUniqueOrThrow({ where: { id: stale.id } })).status).toBe('INTERROMPIDA');
+  });
 });
+

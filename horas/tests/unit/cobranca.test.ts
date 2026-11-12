@@ -3,6 +3,7 @@ import { agingOf, cadenceStep, isCollectible, isoFromApi, maskMobile, money, pic
 import { collectibleDebts } from '@/server/services/crm-sync-service';
 import { HttpTecnofit, resetSalesVariant, tecnofitConfig } from '@/server/tecnofit/client';
 import { SYSTEM_ROLES } from '@/server/auth/permissions';
+import { selfBaseUrl } from '@/lib/app-url';
 
 const today = '2026-11-11';
 
@@ -58,6 +59,16 @@ describe('Cobrança: regras puras', () => {
       { id: '1', totalValue: 300, openValue: 100, saleDate: '2026-10-01', dueDate: '2026-11-01', items: [{ name: 'Plano' }] },
       { id: '2', totalValue: 300, openValue: 0, saleDate: '2026-10-01', dueDate: '2026-11-01' },
     ], today)).toEqual([{ saleId: '1', dueDate: '2026-11-01', openValue: 100, totalValue: 300, description: 'Plano' }]);
+  });
+
+  it('continuação da sincronização chama o domínio de produção, não o endereço do deploy', () => {
+    const prev = { a: process.env.APP_URL, v: process.env.VERCEL_PROJECT_PRODUCTION_URL };
+    delete process.env.APP_URL; process.env.VERCEL_PROJECT_PRODUCTION_URL = 'nacao-horas.vercel.app';
+    expect(selfBaseUrl('https://nacao-horas-abc123-time.vercel.app')).toBe('https://nacao-horas.vercel.app');
+    process.env.APP_URL = 'https://adm.nacaoclub.com.br/';
+    expect(selfBaseUrl()).toBe('https://adm.nacaoclub.com.br');
+    if (prev.a === undefined) delete process.env.APP_URL; else process.env.APP_URL = prev.a;
+    if (prev.v === undefined) delete process.env.VERCEL_PROJECT_PRODUCTION_URL; else process.env.VERCEL_PROJECT_PRODUCTION_URL = prev.v;
   });
 
   it('papéis de CRM: consultor sem visão do time; líder vê tudo mas não configura', () => {

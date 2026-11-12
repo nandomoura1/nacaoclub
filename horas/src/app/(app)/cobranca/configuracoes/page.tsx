@@ -15,6 +15,7 @@ const STATUS: Record<string, { label: string; tone: 'green' | 'blue' | 'red' }> 
   CONCLUIDA: { label: 'Concluída', tone: 'green' },
   RODANDO: { label: 'Em andamento', tone: 'blue' },
   FALHOU: { label: 'Falhou', tone: 'red' },
+  INTERROMPIDA: { label: 'Interrompida', tone: 'red' },
 };
 const at = (iso: string | null) => (iso ? new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' }) : '—');
 
@@ -40,7 +41,7 @@ export default async function Page() {
           O sistema <strong>não fala com o aluno</strong>: gera as Tarefas de CRM de cada consultor. A lista do dia sai às 07h30 no WhatsApp do consultor
           (só contagens e o link; ligue em Administração → <a className="font-semibold text-nacao underline" href="/admin/whatsapp/automacoes">Automações</a> → &quot;Tarefas de CRM do dia&quot;, que nasce desligada; o WhatsApp vem do cadastro do usuário).
         </p>
-        <p className="mt-1 text-xs text-tinta-suave">Roda sozinha todo dia às 05h17. Do espelho saem só nome, status, celular e vendas em aberto — nada de CPF, RG, endereço, cartão ou exame médico.</p>
+        <p className="mt-1 text-xs text-tinta-suave">Roda sozinha todo dia às 05h17 e continua de 10 em 10 minutos até terminar (até 07h07; depois, de hora em hora). Do espelho saem só nome, status, celular e vendas em aberto — nada de CPF, RG, endereço, cartão ou exame médico.</p>
         <div className="mt-3"><SyncButton disabled={!c.configured} /></div>
         {sync.runs.length > 0 && (
           <div className="mt-4 overflow-x-auto">

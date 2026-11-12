@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { after } from 'next/server';
 import { todayIso } from '@/lib/today';
+import { selfBaseUrl } from '@/lib/app-url';
 import { getPrincipal, requestMeta } from '@/server/auth/session';
 import { runAction, type ActionResult } from '@/server/action-result';
 import { assignCases, linkConsultant, syncNow } from '@/server/services/crm-service';
@@ -22,7 +23,7 @@ export async function syncNowAction(force: boolean): Promise<ActionResult<{ stat
     refresh();
     // Não coube no clique: a rodada continua sozinha em segundo plano (mesma rota do agendamento da madrugada).
     const secret = process.env.CRON_SECRET;
-    const base = (process.env.APP_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : '')).replace(/\/$/, '');
+    const base = selfBaseUrl();
     if (r.status === 'RODANDO' && secret && base) {
       after(() => fetch(`${base}/api/cron/tecnofit?dia=${todayIso()}&parte=2`, { headers: { authorization: `Bearer ${secret}` }, signal: AbortSignal.timeout(10_000) }).then(() => undefined, () => undefined));
     }

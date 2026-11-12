@@ -3,6 +3,10 @@ import { todayIso } from '@/lib/today';
 import { SEND_HOURS } from '@/domain/cobranca';
 import { generateTasks } from '@/server/services/crm-task-service';
 import { sendCrmDigests } from '@/server/whatsapp/automations';
+import { prisma } from '@/server/db';
+import { toUtc } from '@/domain/dates';
+import { runTecnofitSync } from '@/server/services/crm-sync-service';
+import { tecnofitConfig } from '@/server/tecnofit/client';
 
 /**
  * Tarefas de CRM (Vercel Cron, uma entrada diária por hora das 6h às 14h de Brasília: ?hora=6 … ?hora=14):
@@ -22,7 +26,13 @@ export async function GET(req: Request) {
   const today = url.searchParams.get('dia') ?? todayIso();
   const hour = Number(url.searchParams.get('hora') ?? brHour());
   if (!(SEND_HOURS as readonly number[]).includes(hour)) return NextResponse.json({ today, hour, skipped: 'fora da janela de envio (6h–14h)' });
+  // Rede de segurança: se a sincronização do dia ficou pela metade, continua um pedaço antes das tarefas.
+  let sync: unknown = null;
+  if (tecnofitConfig().configured && (await prisma.tecSyncRun.findFirst({ where: { day: toUtc(today), status: 'RODANDO' }, select: { id: true } }))) {
+    const r = await runTecnofitSync(today, { budgetMs: 150_000 });
+    sync = { status: r.status, processed: r.processed, remaining: r.remaining };
+  }
   const tasks = await generateTasks(today);
   const sent = await sendCrmDigests(today, hour);
-  return NextResponse.json({ today, tasks, sent });
+  return NextResponse.json({ today, sync, tasks, sent });
 }

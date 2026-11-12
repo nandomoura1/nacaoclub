@@ -9,6 +9,50 @@
       "schedule": "17 8 * * *"
     },
     {
+      "path": "/api/cron/tecnofit?janela=2",
+      "schedule": "27 8 * * *"
+    },
+    {
+      "path": "/api/cron/tecnofit?janela=3",
+      "schedule": "37 8 * * *"
+    },
+    {
+      "path": "/api/cron/tecnofit?janela=4",
+      "schedule": "47 8 * * *"
+    },
+    {
+      "path": "/api/cron/tecnofit?janela=5",
+      "schedule": "57 8 * * *"
+    },
+    {
+      "path": "/api/cron/tecnofit?janela=6",
+      "schedule": "7 9 * * *"
+    },
+    {
+      "path": "/api/cron/tecnofit?janela=7",
+      "schedule": "17 9 * * *"
+    },
+    {
+      "path": "/api/cron/tecnofit?janela=8",
+      "schedule": "27 9 * * *"
+    },
+    {
+      "path": "/api/cron/tecnofit?janela=9",
+      "schedule": "37 9 * * *"
+    },
+    {
+      "path": "/api/cron/tecnofit?janela=10",
+      "schedule": "47 9 * * *"
+    },
+    {
+      "path": "/api/cron/tecnofit?janela=11",
+      "schedule": "57 9 * * *"
+    },
+    {
+      "path": "/api/cron/tecnofit?janela=12",
+      "schedule": "7 10 * * *"
+    },
+    {
       "path": "/api/cron/crm-tarefas?hora=6",
       "schedule": "0 9 * * *"
     },

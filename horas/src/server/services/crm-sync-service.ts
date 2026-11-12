@@ -236,6 +236,8 @@ export async function runTecnofitSync(today: IsoDate, opts: { budgetMs?: number;
     return { runId: run.id, status: run.status, processed: stats.processed ?? 0, remaining: 0, stats };
   }
   if (!run || run.status !== 'RODANDO') {
+    // Rodada de dia anterior que ficou pela metade não continua mais (a de hoje refaz tudo).
+    await prisma.tecSyncRun.updateMany({ where: { status: 'RODANDO', day: { lt: d(today) } }, data: { status: 'INTERROMPIDA', finishedAt: new Date(), error: 'Não terminou no dia; a rodada seguinte refez tudo.' } });
     run = await prisma.tecSyncRun.create({ data: { day: d(today), mode: cfg.fake ? 'SIMULADO' : 'REAL', triggeredBy: opts.actorId ?? null, pending: [], stats: {} } });
     try {
       const prep = await prepare(api, today);
