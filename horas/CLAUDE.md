@@ -98,6 +98,10 @@ massa), compara horas atual × simulada (semana e competência 26→25, sem desc
 uma data** com as mesmas operações da grade (`createSlotsTx`/`changeSlotTx`/`endSlotTx`, numa transação só, realinha
 competências abertas; competência fechada bloqueia; aula mexida na grade real depois da simulação exige confirmação).
 
+**Grade em texto (WhatsApp)** (Grade semanal → "Texto WhatsApp", ou na tela de impressão): uma linha por pessoa, separada em
+**Professores** e **Estagiários**, aulas encostadas viram um período ("Seg a Sex - 5h às 8h"), mesmos filtros da grade; opção de mostrar
+modalidades; copiar, abrir no WhatsApp ou Z-API (`GRADE`). `gradeTeamText` em `domain/grade-print.ts`. O PDF continua igual.
+
 **Ausências de professor**: padrão "desconta" para tudo, menos **folga** (abonada); atestado desconta e o líder abona à mão quando for o caso. Lançadas antes de gerar a competência valem quando ela for gerada
 (a prévia mostra as aulas pendentes e oferece "Gerar competência agora").
 

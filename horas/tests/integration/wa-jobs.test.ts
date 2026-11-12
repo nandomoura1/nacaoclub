@@ -35,9 +35,10 @@ describe.skipIf(!hasDb)('WhatsApp — automações', () => {
   it('as automações iniciais vieram das migrations, editáveis (a de tarefas de CRM nasce desligada, no horário de cada consultor)', async () => {
     const list = await listAutomations();
     const seeded = list.filter((a) => a.id.startsWith('a0000000'));
-    expect(seeded.filter((a) => a.audience !== 'CRM_TAREFAS').map((a) => [a.audience, a.when])).toEqual([
+    // A ordem da lista depende de outros arquivos de teste (edições mudam a data): compara sem ordem.
+    expect(seeded.filter((a) => a.audience !== 'CRM_TAREFAS').map((a) => [a.audience, a.when]).sort()).toEqual([
       ['LIDERES_PENDENCIAS', 'Toda segunda, 8h'], ['ESCALADOS_FDS', 'Toda sexta, 8h'], ['PROFESSORES_GRADE', 'Dia 1 de cada mês, 8h'],
-    ]);
+    ].sort());
     const crm = seeded.find((a) => a.audience === 'CRM_TAREFAS')!;
     expect([crm.when, crm.active]).toEqual(['Todo dia, no horário de cada consultor', false]);
   });

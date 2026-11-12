@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { CalendarClock, Copy, History, MapPin, Plus, Printer, Trash2, UserPlus, Users, X } from 'lucide-react';
+import { CalendarClock, Copy, History, MapPin, Plus, Printer, Trash2, UserPlus, Users, X, MessageCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -116,6 +116,7 @@ export function GradeClient(props: Props) {
         <div className="flex-1" />
         <a href={`/grade/imprimir?${current}`} target="_blank" rel="noopener" className={buttonVariants({ variant: 'secondary' })}><Printer /> Imprimir esta grade</a>
         <a href={`/grade/imprimir?${current}&equipe=professores`} target="_blank" rel="noopener" className={buttonVariants({ variant: 'ghost' })} title="Só os professores titulares, com o nº do CREF — sem auxiliares e estagiários">Só professores (CREF)</a>
+        <a href={`/grade/imprimir?${current}&texto=1`} target="_blank" rel="noopener" className={buttonVariants({ variant: 'ghost' })} title="Uma linha por pessoa (Professores e Estagiários), pronto para colar no WhatsApp"><MessageCircle /> Texto WhatsApp</a>
       </Card>
 
       {/* Mobile: um dia por vez */}
