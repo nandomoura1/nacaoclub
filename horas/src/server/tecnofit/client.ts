@@ -91,6 +91,9 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const MIN_GAP_MS = 330; // ~180 req/min, abaixo do limite de 200/min
 const MAX_PAGES = 200;
+/** Combinação de parâmetros de /customers/{id}/sales que a Tecnofit aceitou (vale para a instância do servidor). */
+let salesVariantMemo: number | null = null;
+export const resetSalesVariant = () => { salesVariantMemo = null; };
 
 type Fetch = typeof fetch;
 
@@ -199,10 +202,40 @@ export class HttpTecnofit implements TecnofitApi {
     return r?.id ? { id: str(r.id), name: str(r.name), status: r.status ? str(r.status) : null } : null;
   }
 
+  /**
+   * Vendas do aluno. Em produção a combinação de parâmetros da doc deu 422 (validação, sem dizer
+   * o campo); então tenta combinações da mais provável à mais simples e lembra a que funcionou.
+   * Sem filtro de data na API, o corte por data é feito aqui.
+   */
   async customerSales(id: string, saleStartDate: string) {
-    const rows = await this.all(`/customers/${encodeURIComponent(id)}/sales`, { saleStartDate, order: 'saleDate', sort: 'asc' });
-    return rows.map((r) => ({ ...r, id: str(r.id) }) as TfCustomerSale);
+    const path = `/customers/${encodeURIComponent(id)}/sales`;
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+    const variants: { params: Record<string, string>; limit: number }[] = [
+      { params: { saleStartDate, saleEndDate: today }, limit: 50 },
+      { params: { saleStartDate, saleEndDate: today, order: 'saleDate', sort: 'asc' }, limit: 50 },
+      { params: { saleStartDate }, limit: 50 },
+      { params: {}, limit: 50 },
+      { params: {}, limit: 10 },
+    ];
+    const order = this.salesVariant === null ? variants.map((_, i) => i) : [this.salesVariant, ...variants.map((_, i) => i).filter((i) => i !== this.salesVariant)];
+    let last: unknown = null;
+    for (const i of order) {
+      try {
+        const rows = await this.all(path, variants[i]!.params, variants[i]!.limit);
+        this.salesVariant = i;
+        return rows
+          .map((r) => ({ ...r, id: str(r.id) }) as TfCustomerSale)
+          .filter((r) => { const sd = typeof r.saleDate === 'string' ? r.saleDate.slice(0, 10) : null; return !sd || sd >= saleStartDate; });
+      } catch (e) {
+        if (!(e instanceof TecnofitHttpError && (e.httpStatus === 422 || e.httpStatus === 400))) throw e;
+        last = e;
+        if (this.salesVariant !== null && i === this.salesVariant) break; // a que funcionava falhou: é deste aluno, não da combinação
+      }
+    }
+    throw last;
   }
+  private get salesVariant() { return salesVariantMemo; }
+  private set salesVariant(v: number | null) { salesVariantMemo = v; }
 
   async customerContacts(id: string) {
     const rows = await this.all(`/customers/${encodeURIComponent(id)}/contacts`, {});

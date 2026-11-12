@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { agingOf, cadenceStep, isCollectible, isoFromApi, maskMobile, money, pickMobile, priorityScore } from '@/domain/cobranca';
 import { collectibleDebts } from '@/server/services/crm-sync-service';
-import { HttpTecnofit, tecnofitConfig } from '@/server/tecnofit/client';
+import { HttpTecnofit, resetSalesVariant, tecnofitConfig } from '@/server/tecnofit/client';
 import { SYSTEM_ROLES } from '@/server/auth/permissions';
 
 const today = '2026-11-11';
@@ -120,6 +120,37 @@ describe('Cliente HTTP da Tecnofit', () => {
         : new Response(JSON.stringify({ code: 'VALIDATION_ERROR', message: 'consultantId inválido' }), { status: 400 }))) as typeof fetch;
       await expect(new HttpTecnofit(tecnofitConfig(), other, 0).calls('2026-11-01', '2026-11-05')).rejects.toThrow(/400 em \/crm\/calls \(VALIDATION_ERROR · consultantId inválido\)/);
     } finally {
+      delete process.env.TECNOFIT_API_KEY;
+      delete process.env.TECNOFIT_API_SECRET;
+    }
+  });
+
+  it('vendas do aluno: 422 na combinação da doc → tenta a próxima, lembra a que funcionou e corta por data aqui', async () => {
+    process.env.TECNOFIT_API_KEY = 'pk_tf_teste_123456789';
+    process.env.TECNOFIT_API_SECRET = 'sk_tf_teste_1234567890123';
+    resetSalesVariant();
+    const seen: string[] = [];
+    const fake = (async (url: string | URL) => {
+      const u = new URL(String(url));
+      if (u.pathname.endsWith('/auth/login')) return new Response(JSON.stringify({ token: 't' }));
+      seen.push(u.search);
+      // Esta "Tecnofit" só aceita sem filtro de data.
+      if (u.searchParams.has('saleStartDate')) return new Response(JSON.stringify({ code: 'VALIDATION_ERROR', message: 'The submitted fields failed validation.' }), { status: 422 });
+      return new Response(JSON.stringify({ data: [
+        { id: 1, totalValue: 100, openValue: 100, saleDate: '2026-10-01', dueDate: '2026-11-01' },
+        { id: 2, totalValue: 100, openValue: 100, saleDate: '2024-01-01', dueDate: '2024-02-01' },
+      ], meta: { pages: 1 } }));
+    }) as typeof fetch;
+    try {
+      const api = new HttpTecnofit(tecnofitConfig(), fake, 0);
+      const a = await api.customerSales('10', '2025-09-01');
+      expect(a.map((x) => x.id)).toEqual(['1']); // a venda de 2024 sai pelo corte local
+      expect(seen.length).toBe(4); // 3 recusadas + a que funcionou
+      seen.length = 0;
+      await new HttpTecnofit(tecnofitConfig(), fake, 0).customerSales('11', '2025-09-01');
+      expect(seen.length).toBe(1); // já sabe a combinação certa
+    } finally {
+      resetSalesVariant();
       delete process.env.TECNOFIT_API_KEY;
       delete process.env.TECNOFIT_API_SECRET;
     }

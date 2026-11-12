@@ -19,7 +19,7 @@ export function SyncButton({ disabled }: { disabled: boolean }) {
     const d = r.data;
     setMsg(d.status === 'FALHOU' ? { error: 'A sincronização falhou — veja o motivo na tabela.' }
       : d.status === 'CONCLUIDA' ? { success: `Sincronização concluída (${d.processed} aluno(s)).` }
-      : { success: `${d.processed} aluno(s) processados; faltam ${d.remaining}. Clique em "Continuar" (ou deixe a rodada automática terminar).` });
+      : { success: `${d.processed} aluno(s) processados; faltam ${d.remaining}. A rodada continua sozinha em segundo plano — atualize a página daqui a alguns minutos para acompanhar.` });
     router.refresh();
   });
   return (
