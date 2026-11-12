@@ -6,7 +6,7 @@ import type { Principal } from '@/server/auth/principal';
 import type { RequestMeta } from '@/server/auth/session';
 import { AppError, NotFoundError } from '@/server/errors';
 import { fromUtc, toUtc, weekdayOf, type IsoDate } from '@/domain/dates';
-import { currentClass, hhmm, minutesOf, sameClassTime, suggestModality, tvLabel } from '@/domain/tv-checkins';
+import { classesOfHour, hhmm, hourOf, minutesOf, nextClass, sameHour, suggestModality, tvLabel } from '@/domain/tv-checkins';
 import { todayIso } from '@/lib/today';
 import { tecnofitApi, tecnofitConfig } from '@/server/tecnofit/client';
 
@@ -97,8 +97,12 @@ export async function refreshCheckins(today: IsoDate, now = new Date()): Promise
 // ── O que a TV mostra ─────────────────────────────────────
 
 export interface TvCheckinView {
-  /** false = sem aula agora (ou check-in desligado na tela). */
+  /** false = fora do horário de aulas do dia (ou check-in desligado na tela). */
   active: boolean;
+  /** Hora cheia sem turma (ex.: 7h): a faixa mostra "sem turma" e a próxima. */
+  noClass?: boolean;
+  /** Início da próxima turma ("10:00"), quando não há turma nesta hora. */
+  next?: string | null;
   /** Aula agora, mas a turma da Tecnofit ainda não foi vinculada a esta modalidade. */
   configured: boolean;
   title: string | null;
@@ -122,37 +126,61 @@ async function todaysClasses(modalityId: string, spaceId: string | null, today: 
   });
 }
 
-/** Check-ins da aula atual para a TV deste link (só rótulos "Nome I."). */
+/**
+ * Check-ins da turma da hora cheia para a TV deste link (só rótulos "Nome I.").
+ * Turmas do dia = grade da Nação (modalidade + espaço da tela) e, nas horas em que a grade não tem
+ * aula, as turmas da Tecnofit vinculadas à modalidade. Às 6h00 a TV passa sozinha para a turma das 6h.
+ */
 export async function checkinsByToken(token: string, now = new Date()): Promise<TvCheckinView | null> {
   if (!/^[a-z0-9]{8,64}$/.test(token)) return null;
   const s = await prisma.tvScreen.findUnique({ where: { token }, include: { modality: { select: { name: true } } } });
   if (!s || !s.active) return null;
   if (!s.showCheckins) return OFF;
   const today = todayIso(now);
-  const cur = currentClass(await todaysClasses(s.modalityId, s.spaceId, today), nowMinSP(now));
-  if (!cur) return OFF;
-  const title = `${hhmm(cur.startMin)} · ${s.modality.name}${cur.label ? ` · ${cur.label}` : ''}`;
+  const nowMin = nowMinSP(now);
 
-  const links = await prisma.tecClassLink.findMany({ where: { modalityId: s.modalityId, ...(cur.spaceId ? { OR: [{ spaceId: null }, { spaceId: cur.spaceId }] } : {}) }, select: { tecnofitClassId: true } });
-  if (!links.length) return { ...OFF, active: true, title };
-  try { await refreshCheckins(today, now); } catch (e) { console.error('[tv-checkins] refresh', e instanceof Error ? e.message : e); }
-
+  const links = await prisma.tecClassLink.findMany({ where: { modalityId: s.modalityId, ...(s.spaceId ? { OR: [{ spaceId: null }, { spaceId: s.spaceId }] } : {}) }, select: { tecnofitClassId: true } });
   const ids = links.map((l) => l.tecnofitClassId);
-  const [rows, slots, hidden] = await Promise.all([
+  if (ids.length) { try { await refreshCheckins(today, now); } catch (e) { console.error('[tv-checkins] refresh', e instanceof Error ? e.message : e); } }
+
+  const grade = (await todaysClasses(s.modalityId, s.spaceId, today)).map((c) => ({ startMin: c.startMin, durationMin: c.durationMin, label: c.label }));
+  const slots = ids.length ? await prisma.tecClassSlot.findMany({ where: { day: d(today), tecnofitClassId: { in: ids } }, select: { start: true, end: true, capacity: true } }) : [];
+  const gradeHours = new Set(grade.map((c) => hourOf(c.startMin)));
+  const fromTecnofit = slots.flatMap((x) => {
+    const st = minutesOf(x.start); const en = minutesOf(x.end);
+    return st === null || gradeHours.has(hourOf(st)) ? [] : [{ startMin: st, durationMin: Math.max((en ?? st + 60) - st, 30), label: null as string | null }];
+  });
+  const classes = [...grade, ...fromTecnofit];
+  if (!classes.length) return OFF;
+  // Fora do horário de aulas do dia (antes da primeira hora ou depois da última): a faixa some.
+  const first = Math.min(...classes.map((c) => hourOf(c.startMin)));
+  const last = Math.max(...classes.map((c) => hourOf(c.startMin)));
+  if (hourOf(nowMin) < first || hourOf(nowMin) > last) return OFF;
+
+  const mine = classesOfHour(classes, nowMin);
+  if (!mine.length) {
+    const nx = nextClass(classes, nowMin);
+    return { ...OFF, active: true, configured: ids.length > 0, noClass: true, next: nx ? hhmm(nx.startMin) : null, title: `${String(hourOf(nowMin)).padStart(2, '0')}h · ${s.modality.name}` };
+  }
+  const start = mine[0]!.startMin;
+  const labelTxt = [...new Set(mine.map((c) => c.label).filter(Boolean))].join(' / ');
+  const title = `${hhmm(start)} · ${s.modality.name}${labelTxt ? ` · ${labelTxt}` : ''}`;
+  if (!ids.length) return { ...OFF, active: true, title };
+
+  const [rows, hidden] = await Promise.all([
     prisma.tvCheckin.findMany({ where: { day: d(today), tecnofitClassId: { in: ids } }, select: { start: true, customerTecId: true, label: true } }),
-    prisma.tecClassSlot.findMany({ where: { day: d(today), tecnofitClassId: { in: ids } }, select: { start: true, capacity: true } }),
     prisma.tvHiddenCustomer.findMany({ select: { customerTecId: true } }),
   ]);
   const hide = new Set(hidden.map((h) => h.customerTecId));
+  const inHour = rows.filter((r) => sameHour(start, minutesOf(r.start)));
   const here = new Map<string, string>();
-  for (const r of rows) if (sameClassTime(cur.startMin, minutesOf(r.start)) && !hide.has(r.customerTecId)) here.set(r.customerTecId, r.label);
-  const caps = slots.filter((x) => sameClassTime(cur.startMin, minutesOf(x.start))).map((x) => x.capacity).filter((x): x is number => x !== null && x > 0);
-  // Quem pediu para não aparecer não entra no rótulo, mas conta no número (a vaga está ocupada).
-  const count = new Set(rows.filter((r) => sameClassTime(cur.startMin, minutesOf(r.start))).map((r) => r.customerTecId)).size;
+  for (const r of inHour) if (!hide.has(r.customerTecId)) here.set(r.customerTecId, r.label);
+  const caps = slots.filter((x) => sameHour(start, minutesOf(x.start))).map((x) => x.capacity).filter((x): x is number => x !== null && x > 0);
   return {
     active: true, configured: true, title,
     labels: [...here.values()].sort((a, b) => a.localeCompare(b, 'pt-BR')),
-    count,
+    // Quem pediu para não aparecer não entra no rótulo, mas conta no número (a vaga está ocupada).
+    count: new Set(inHour.map((r) => r.customerTecId)).size,
     capacity: caps.length ? caps.reduce((a, b) => a + b, 0) : null,
   };
 }

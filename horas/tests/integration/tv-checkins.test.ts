@@ -44,7 +44,7 @@ describe.skipIf(!hasDb)('Check-ins na TV', () => {
     const area = await prisma.coordinationArea.create({ data: { name: `Área TV ${randomUUID().slice(0, 6)}` } });
     modalityId = (await prisma.modality.create({ data: { name: "CrossFit Teste Checkin", areaId: area.id } })).id;
     const act = await prisma.activityType.upsert({ where: { name: 'Aula' }, create: { name: 'Aula', kind: 'AULA' }, update: {} });
-    for (const startMin of [420, 480]) {
+    for (const startMin of [420, 480, 600]) {
       const slot = await prisma.scheduleSlot.create({ data: {} });
       await prisma.scheduleSlotVersion.create({ data: { slotId: slot.id, weekday: weekdayOf(day), startMin, durationMin: 60, modalityId, activityTypeId: act.id, validFrom: toUtc('2041-01-01') } });
     }
@@ -78,21 +78,24 @@ describe.skipIf(!hasDb)('Check-ins na TV', () => {
     expect(v.labels).toEqual(['Ana S.', 'Bruno L.', 'Carla P.']);
     // Nada além do rótulo sai para a TV.
     expect(JSON.stringify(v)).not.toMatch(/SOUZA|Lima|Prado|9101|06:40/);
-    // Às 7h50 a aula atual já é a das 8h.
-    expect((await checkinsByToken(token, at('07:50')))!.labels).toEqual(['Davi R.']);
+    // Na hora cheia: 07h50 ainda é a turma das 7h; às 08h00 troca sozinha para a das 8h.
+    expect((await checkinsByToken(token, at('07:50')))!.labels).toEqual(['Ana S.', 'Bruno L.', 'Carla P.']);
+    expect((await checkinsByToken(token, at('08:00')))!.labels).toEqual(['Davi R.']);
+    // 9h: sem turma — mostra a próxima (10h).
+    expect(await checkinsByToken(token, at('09:15'))).toMatchObject({ active: true, noClass: true, next: '10:00', labels: [] });
   });
 
   it('uma consulta por minuto para todas as TVs', async () => {
     const before = calls;
-    expect(await refreshCheckins(day, at('07:50'))).toBe(false); // a TV acabou de consultar às 07h50
-    await checkinsByToken(token, at('07:50'));
+    expect(await refreshCheckins(day, at('09:15'))).toBe(false); // a TV acabou de consultar às 09h15
+    await checkinsByToken(token, at('09:15'));
     expect(calls).toBe(before);
-    expect(await refreshCheckins(day, at('07:52'))).toBe(true);
+    expect(await refreshCheckins(day, at('09:17'))).toBe(true);
   });
 
   it('não quer aparecer: a recepção marca, some da TV mas continua contando; dá para desfazer', async () => {
-    await expect(todayCheckins(prof.principal, at('07:53'))).rejects.toBeInstanceOf(AuthorizationError);
-    const t = await todayCheckins(lider.principal, at('07:53'));
+    await expect(todayCheckins(prof.principal, at('09:18'))).rejects.toBeInstanceOf(AuthorizationError);
+    const t = await todayCheckins(lider.principal, at('09:18'));
     expect(t.groups.flatMap((g) => g.people.map((p) => p.name))).toContain('Bruno Lima');
     await setHidden(lider.principal, { customerTecId: '9102', hidden: true }, META);
     const v7 = (await checkinsByToken(token, at('07:04')))!;
@@ -104,8 +107,9 @@ describe.skipIf(!hasDb)('Check-ins na TV', () => {
     expect((await checkinsByToken(token, at('07:05')))!.labels).toContain('Bruno L.');
   });
 
-  it('fora do horário de aula a faixa some; dados de dias anteriores são apagados', async () => {
-    expect(await checkinsByToken(token, at('12:00'))).toMatchObject({ active: false });
+  it('antes da primeira e depois da última turma do dia a faixa some; dados de dias anteriores são apagados', async () => {
+    expect(await checkinsByToken(token, at('06:30'))).toMatchObject({ active: false });
+    expect(await checkinsByToken(token, at('11:00'))).toMatchObject({ active: false });
     await refreshCheckins('2041-03-05', new Date('2041-03-05T10:05:00Z'));
     expect(await prisma.tvCheckin.count({ where: { day: toUtc(day) } })).toBe(0);
   });

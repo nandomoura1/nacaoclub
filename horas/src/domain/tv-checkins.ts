@@ -26,22 +26,36 @@ export function minutesOf(v: string | null | undefined): number | null {
 }
 export const hhmm = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
 
-/** Janela em que a aula é a "atual" na TV: 15 min antes do início até 5 min depois do fim. */
-export const BEFORE_MIN = 15;
-export const AFTER_MIN = 5;
+/**
+ * A TV troca de turma na hora cheia (decisão de 12/11): das 5h00 às 5h59 mostra a turma das 5h,
+ * às 6h00 passa sozinha para a das 6h; hora sem turma = "sem turma neste horário" + a próxima.
+ */
+export const hourOf = (min: number) => Math.floor(min / 60);
 /** Tolerância entre o horário da Tecnofit e o da grade. */
 export const MATCH_TOLERANCE_MIN = 10;
 
 export interface ClassWindow { startMin: number; durationMin: number }
 
-/** A aula que a TV mostra agora: a que está na janela; se duas se sobrepõem, a que começa mais perto de agora. */
+/** Turmas que começam na hora cheia de agora (pode haver mais de uma: espaços diferentes). */
+export function classesOfHour<T extends ClassWindow>(classes: T[], nowMin: number): T[] {
+  return classes.filter((c) => hourOf(c.startMin) === hourOf(nowMin)).sort((a, b) => a.startMin - b.startMin);
+}
+
+/** Próxima turma do dia depois da hora atual (para "sem turma às 7h · próxima às 10h"). */
+export function nextClass<T extends ClassWindow>(classes: T[], nowMin: number): T | null {
+  return classes.filter((c) => hourOf(c.startMin) > hourOf(nowMin)).sort((a, b) => a.startMin - b.startMin)[0] ?? null;
+}
+
+/** Compatível com o uso antigo: a primeira turma da hora atual. */
 export function currentClass<T extends ClassWindow>(classes: T[], nowMin: number): T | null {
-  const inWindow = classes.filter((c) => nowMin >= c.startMin - BEFORE_MIN && nowMin <= c.startMin + c.durationMin + AFTER_MIN);
-  return inWindow.sort((a, b) => Math.abs(a.startMin - nowMin) - Math.abs(b.startMin - nowMin))[0] ?? null;
+  return classesOfHour(classes, nowMin)[0] ?? null;
 }
 
 export const sameClassTime = (gradeStartMin: number, tecnofitStartMin: number | null) =>
   tecnofitStartMin !== null && Math.abs(gradeStartMin - tecnofitStartMin) <= MATCH_TOLERANCE_MIN;
+
+/** Check-in pertence à turma da hora: mesma hora cheia de início (05:00, 05:15… → turma das 5h). */
+export const sameHour = (a: number, b: number | null) => b !== null && hourOf(a) === hourOf(b);
 
 /** Normaliza para comparar nomes de turma × modalidade ("CrossFit 07h" ~ "CrossFit"). */
 export const normName = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();

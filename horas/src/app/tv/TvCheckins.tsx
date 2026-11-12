@@ -20,8 +20,12 @@ export function TvCheckins({ token, initial }: { token: string; initial: TvCheck
       } catch { /* sem rede: mantém o último */ }
     };
     const id = setInterval(load, 45_000);
+    // Troca de turma na hora cheia: busca de novo logo depois de virar a hora (sem esperar o próximo ciclo).
+    const msToHour = 3_600_000 - (Date.now() % 3_600_000) + 5_000;
+    let hourly: ReturnType<typeof setInterval> | null = null;
+    const first = setTimeout(() => { void load(); hourly = setInterval(load, 3_600_000); }, msToHour);
     void load();
-    return () => { alive = false; clearInterval(id); };
+    return () => { alive = false; clearInterval(id); clearTimeout(first); if (hourly) clearInterval(hourly); };
   }, [token]);
   if (!v.active) return null;
   const extra = v.labels.length - MAX_NAMES;
@@ -32,7 +36,9 @@ export function TvCheckins({ token, initial }: { token: string; initial: TvCheck
       </span>
       {v.title && <span className="shrink-0 font-bold text-white/80" style={{ fontSize: '1.9vh' }}>{v.title}</span>}
       <div className="flex min-w-0 flex-1 flex-wrap gap-[0.6vw] overflow-hidden" style={{ maxHeight: '5vh' }}>
-        {!v.configured
+        {v.noClass
+          ? <span className="font-semibold text-white/70" style={{ fontSize: '1.9vh' }}>Sem turma neste horário{v.next ? ` · próxima às ${v.next.replace(':00', 'h').replace(':', 'h')}` : ''}</span>
+          : !v.configured
           ? <span className="font-semibold text-white/60" style={{ fontSize: '1.9vh' }}>Check-in da Tecnofit ainda não ligado a esta aula</span>
           : v.labels.length === 0
             ? <span className="font-semibold text-white/60" style={{ fontSize: '1.9vh' }}>Faça seu check-in no app da Tecnofit 💙</span>
