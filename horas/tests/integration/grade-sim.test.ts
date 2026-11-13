@@ -4,7 +4,7 @@ import { prisma } from '@/server/db';
 import { AuthorizationError } from '@/server/errors';
 import { bootstrapStructure } from '@/server/services/bootstrap';
 import { createSlots, listGrade, changeSlot } from '@/server/services/schedule-service';
-import { applySimulation, createSimulation, discardSimulation, getSimulation, listSimulations, saveSimulation } from '@/server/services/grade-sim-service';
+import { applySimulation, createSimulation, discardSimulation, getSimulation, listSimulations, saveSimulation, simulationGrade } from '@/server/services/grade-sim-service';
 import { replaceTeacher, type SimItem } from '@/domain/grade-sim';
 import { META, hasDb, makeUser } from './helpers';
 
@@ -44,6 +44,11 @@ describe.skipIf(!hasDb)('Simulação de grade', () => {
     items = items.map((i) => (i.weekday === 5 ? { ...i, durationMin: 90 } : i.weekday === 3 ? { ...i, removed: true } : i));
     items.push({ key: 'n-1', slotId: null, baseVersionId: null, weekday: 6, startMin: 540, durationMin: 60, modalityId, activityTypeId: aulaId, spaceId: null, label: 'Nova', people: [{ teacherId: bia.id, role: 'TITULAR' }] });
     await saveSimulation(admin.principal, id, { name: `Verão ${tag}`, effectiveFrom: '2047-03-04', items }, META);
+    // Imprimir/WhatsApp: a grade que a simulação produz, com nomes (sem tocar na grade real).
+    const sg = await simulationGrade(admin.principal, id);
+    expect(sg.sim.effectiveFrom).toBe('2047-03-04');
+    expect(sg.grade.map((g) => `${g.weekday}@${g.startMin}+${g.durationMin}:${g.people.map((p) => p.name.split(' ')[0]).join(',')}`)).toEqual(['1@420+60:Caio', '5@1080+90:Bia', '6@540+60:Bia']);
+    expect(sg.grade[0]!.modality.areaId).toBe(areaId);
     // Nada muda na grade real só por salvar.
     expect(await gradeAt('2047-03-10')).toEqual(['1@420+60:Ana', '3@420+60:Ana', '5@1080+60:Bia']);
 

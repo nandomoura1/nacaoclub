@@ -17,11 +17,12 @@ import { todayIso } from '@/lib/today';
 import { can, gradeViewAreaIds } from '@/server/auth/authz';
 import { requirePrincipal } from '@/server/auth/session';
 import { prisma } from '@/server/db';
-import { listGrade } from '@/server/services/schedule-service';
+import { listGrade, type GradeItem } from '@/server/services/schedule-service';
+import { simulationGrade } from '@/server/services/grade-sim-service';
 
 export const metadata: Metadata = { title: 'Imprimir grade' };
 
-type SP = { texto?: string; data?: string; area?: string; modalidade?: string; professor?: string; espaco?: string; auto?: string; equipe?: string; folhas?: string };
+type SP = { sim?: string; texto?: string; data?: string; area?: string; modalidade?: string; professor?: string; espaco?: string; auto?: string; equipe?: string; folhas?: string };
 
 /** Tamanhos por densidade: a grade cabe em uma página A4 deitada sempre que possível. */
 const SIZE = {
@@ -37,7 +38,10 @@ export default async function ImprimirGradePage({ searchParams }: { searchParams
   const mode: PrintMode = sp.equipe === 'professores' ? 'professores' : 'todos';
   // Padrão: tudo em uma folha, ocupando o papel inteiro. "Várias folhas" para grades enormes.
   const onePage = sp.folhas !== 'varias';
-  const date = sp.data && isIsoDate(sp.data) ? sp.data : todayIso();
+  // ?sim=<id>: imprime a grade que a simulação produz (rascunho), na data em que ela passaria a valer.
+  const simId = sp.sim && /^[0-9a-f-]{36}$/i.test(sp.sim) && can(principal, 'schedule.edit') ? sp.sim : null;
+  const simData = simId ? await simulationGrade(principal, simId) : null;
+  const date = simData ? simData.sim.effectiveFrom : sp.data && isIsoDate(sp.data) ? sp.data : todayIso();
   const viewIds = gradeViewAreaIds(principal);
   const scoped = viewIds === null ? {} : { id: { in: [...viewIds] } };
   const areaIdsReq = parseAreas(sp.area, (id) => /^[0-9a-f-]{36}$/i.test(id));
@@ -51,7 +55,11 @@ export default async function ImprimirGradePage({ searchParams }: { searchParams
   ]);
   const filters = { modalityIds: mods.map((m) => m.id), teacherId: teacher?.id ?? null, spaceId: space?.id ?? null };
   const modalityNames = mods.map((m) => m.name).join(', ');
-  const grade = filterGrade(await listGrade(principal, date, areaList.map((a) => a.id)), filters);
+  const areaSet = new Set(areaList.map((a) => a.id));
+  const source = simData
+    ? (simData.grade.filter((g) => !areaSet.size || areaSet.has(g.modality.areaId)) as unknown as GradeItem[])
+    : await listGrade(principal, date, areaList.map((a) => a.id));
+  const grade = filterGrade(source, filters);
 
   // Vínculo (estagiário?) e nº do CREF de quem aparece na grade.
   const ids = [...new Set(grade.flatMap((g) => g.people.map((p) => p.teacherId)))];
@@ -90,8 +98,9 @@ export default async function ImprimirGradePage({ searchParams }: { searchParams
     weekday: g.weekday, startMin: g.startMin, durationMin: g.durationMin, modality: g.modality.name,
     people: g.people.filter((p) => mode === 'todos' || (p.role === 'TITULAR' && !info.get(p.teacherId)?.intern)).map((p) => ({ teacherId: p.teacherId, name: p.name })),
   }));
-  const textTitle = [teacher ? `Grade de ${teacher.name}` : 'Grade semanal', areaNames || null, modalityNames || null, space?.name, `a partir de ${formatDateBR(date)}`].filter(Boolean).join(' · ');
+  const textTitle = [simData ? `Nova grade (simulação) · ${simData.sim.name}` : teacher ? `Grade de ${teacher.name}` : 'Grade semanal', areaNames || null, modalityNames || null, space?.name, `a partir de ${formatDateBR(date)}`].filter(Boolean).join(' · ');
   const base = gradeParams({ date, areaIds: areaList.map((a) => a.id), ...filters });
+  if (simData) base.set('sim', simData.sim.id);
   const href = (m: PrintMode, one: boolean) => { const q = new URLSearchParams(base); q.set('auto', '0'); if (m === 'professores') q.set('equipe', 'professores'); if (!one) q.set('folhas', 'varias'); return `/grade/imprimir?${q}`; };
   const hrefMode = (m: PrintMode) => href(m, onePage);
 
@@ -108,7 +117,9 @@ export default async function ImprimirGradePage({ searchParams }: { searchParams
 
       <div className="mb-4 space-y-2 print:hidden">
         <div className="flex flex-wrap items-center gap-2">
-          <Link href={`/grade?${base}`} className={buttonVariants({ variant: 'ghost' })}>← Voltar para a grade</Link>
+          {simData
+            ? <Link href={`/grade/simulacao/${simData.sim.id}`} className={buttonVariants({ variant: 'ghost' })}>← Voltar para a simulação</Link>
+            : <Link href={`/grade?${base}`} className={buttonVariants({ variant: 'ghost' })}>← Voltar para a grade</Link>}
           <div className="inline-flex rounded-lg border border-borda bg-white p-0.5 text-sm font-semibold">
             <Link href={hrefMode('todos')} className={cn('rounded-md px-3 py-1.5', mode === 'todos' ? 'bg-navy text-white' : 'text-tinta-suave')}>Equipe completa</Link>
             <Link href={hrefMode('professores')} className={cn('rounded-md px-3 py-1.5', mode === 'professores' ? 'bg-navy text-white' : 'text-tinta-suave')}>Só professores (com CREF)</Link>
@@ -133,8 +144,8 @@ export default async function ImprimirGradePage({ searchParams }: { searchParams
       <div className="mb-2 flex items-end justify-between border-b-2 border-navy pb-1.5">
         <div>
           <div className="text-navy"><Logo tone="light" /></div>
-          <h1 className="mt-1 text-lg font-extrabold leading-tight text-navy">{teacher ? `Grade de ${teacher.name}` : mode === 'professores' ? 'Grade semanal — Professores responsáveis' : 'Grade semanal'}</h1>
-          <p className="text-xs text-tinta-suave">Valendo em {formatDateBR(date)} · {subtitle}</p>
+          <h1 className="mt-1 text-lg font-extrabold leading-tight text-navy">{simData ? <>Nova grade{simData.sim.status !== 'IMPLANTADA' && <span className="ml-2 rounded bg-atencao/15 px-1.5 py-0.5 align-middle text-[10px] font-bold uppercase tracking-wide text-atencao">simulação — ainda não vale</span>} <span className="font-semibold text-tinta-suave">· {simData.sim.name}</span></> : teacher ? `Grade de ${teacher.name}` : mode === 'professores' ? 'Grade semanal — Professores responsáveis' : 'Grade semanal'}</h1>
+          <p className="text-xs text-tinta-suave">{simData ? (simData.sim.status === 'IMPLANTADA' ? 'Vale desde' : 'Passaria a valer em') : 'Valendo em'} {formatDateBR(date)} · {subtitle}</p>
         </div>
         <div className="text-right text-[11px] text-tinta-suave">
           <p><b className="text-navy">{grade.length}</b> atividade(s)/semana{mode === 'todos' && <> · <b className="text-navy">{formatMinutes(personMin)}</b> {teacher ? 'de aula' : 'de professor'}/semana</>}</p>

@@ -111,6 +111,8 @@ competências abertas; competência fechada bloqueia; aula mexida na grade real 
 **Copiar dia** na simulação (`copyWeekday`): "Copiar de" um dia → vários dias, filtro por área ou modalidade; "substituir" tira as aulas
 do destino no mesmo filtro, mas **reaproveita** a aula da grade real no mesmo horário+modalidade (vira alterada/igual, não encerra+cria);
 depois ajusta/exclui as exceções à mão e salva.
+**Imprimir / PDF e Texto WhatsApp da simulação**: mesma tela da grade semanal com `?sim=<id>` (`simulationGrade`: aulas da simulação +
+as que entraram na grade real depois), selo "Simulação — ainda não vale" e data em que passaria a valer; usa a versão **salva**.
 
 **Filtros da Grade semanal**: **áreas** (botões redondos) e **modalidades** aceitam **várias ao mesmo tempo** (`?area=a,b&modalidade=x,y`;
 `parseAreas`/`parseModalities` em `lib/grade-filter.ts`); vale para tela, impressão/PDF e texto do WhatsApp.

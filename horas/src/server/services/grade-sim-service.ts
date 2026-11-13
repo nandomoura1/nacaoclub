@@ -7,7 +7,7 @@ import type { Principal } from '@/server/auth/principal';
 import type { RequestMeta } from '@/server/auth/session';
 import { AppError, NotFoundError } from '@/server/errors';
 import { addDays, formatDateBR, fromUtc, isIsoDate, toUtc, type IsoDate } from '@/domain/dates';
-import { periodOf, planFrom, type SimItem } from '@/domain/grade-sim';
+import { periodOf, planFrom, resulting, type SimItem } from '@/domain/grade-sim';
 import { todayIso } from '@/lib/today';
 import { changeSlotTx, createSlotsTx, endSlotTx, listGrade, type GradeItem } from './schedule-service';
 import { onScheduleChanged } from './period-service';
@@ -194,3 +194,28 @@ export async function applySimulation(principal: P | null, id: string, input: { 
 
 /** Chave nova para aula criada na simulação. */
 export const newKey = () => `n-${randomUUID()}`;
+
+/**
+ * A grade que a simulação produz (para imprimir/PDF e texto do WhatsApp), no mesmo formato da
+ * grade semanal: aulas da simulação + as que entraram na grade real depois dela.
+ */
+export async function simulationGrade(principal: P | null, id: string) {
+  const s = await getSimulation(principal, id);
+  const items = s.status === 'IMPLANTADA' ? s.items : resulting(s.items, planFrom(s.items, s.current));
+  const ids = (k: (i: SimItem) => string | null) => [...new Set(items.map(k).filter((x): x is string => !!x))];
+  const [mods, types, spaces, people] = await Promise.all([
+    prisma.modality.findMany({ where: { id: { in: ids((i) => i.modalityId) } }, select: { id: true, name: true, color: true, areaId: true } }),
+    prisma.activityType.findMany({ where: { id: { in: ids((i) => i.activityTypeId) } }, select: { id: true, name: true, kind: true } }),
+    prisma.space.findMany({ where: { id: { in: ids((i) => i.spaceId) } }, select: { id: true, name: true } }),
+    prisma.teacher.findMany({ where: { id: { in: [...new Set(items.flatMap((i) => i.people.map((p) => p.teacherId)))] } }, select: { id: true, name: true, displayName: true } }),
+  ]);
+  const M = new Map(mods.map((m) => [m.id, m])), T = new Map(types.map((t) => [t.id, t])), S = new Map(spaces.map((x) => [x.id, x])), N = new Map(people.map((t) => [t.id, t.displayName || t.name]));
+  const grade = items.filter((i) => M.has(i.modalityId) && T.has(i.activityTypeId)).map((i) => ({
+    id: i.key, weekday: i.weekday, startMin: i.startMin, durationMin: i.durationMin, label: i.label,
+    modality: { id: i.modalityId, name: M.get(i.modalityId)!.name, color: M.get(i.modalityId)!.color ?? '#0169E9', areaId: M.get(i.modalityId)!.areaId },
+    activityType: { id: i.activityTypeId, name: T.get(i.activityTypeId)!.name, kind: T.get(i.activityTypeId)!.kind },
+    space: i.spaceId && S.has(i.spaceId) ? S.get(i.spaceId)! : null,
+    people: i.people.map((p) => ({ teacherId: p.teacherId, role: p.role, name: N.get(p.teacherId) ?? '?', leave: null as { type: string; substitute: string | null } | null })),
+  })).sort((a, b) => a.weekday - b.weekday || a.startMin - b.startMin);
+  return { sim: { id: s.id, name: s.name, status: s.status, effectiveFrom: s.effectiveFrom }, grade };
+}

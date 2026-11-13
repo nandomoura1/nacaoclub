@@ -2,10 +2,10 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowRightLeft, Copy, Plus, RotateCcw, Rocket, Save, Trash2, TriangleAlert, X } from 'lucide-react';
+import { ArrowRightLeft, Copy, MessageCircle, Plus, Printer, RotateCcw, Rocket, Save, Trash2, TriangleAlert, X } from 'lucide-react';
 import { FormMessage } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, PageHeader } from '@/components/ui/card';
 import { Input, Label, Select } from '@/components/ui/input';
 import { WEEKDAYS, formatClock, formatDateBR } from '@/domain/dates';
@@ -109,7 +109,18 @@ export function SimEditor({ sim, today, modalities, activityTypes, spaces, teach
         description={readOnly
           ? `${sim.status === 'IMPLANTADA' ? `Implantada — vale desde ${formatDateBR(sim.effectiveFrom)}` : 'Descartada'}. Só leitura.`
           : `Rascunho a partir da grade de ${formatDateBR(sim.baseDate)}. Nada muda na grade real até você implantar.`}
-        actions={!readOnly ? <Button variant={dirty ? 'primary' : 'secondary'} disabled={pending || !dirty} onClick={save}><Save /> {dirty ? 'Salvar simulação' : 'Salva'}</Button> : undefined}
+        actions={
+          <>
+            {/* Imprimir e WhatsApp usam a versão SALVA (a mesma tela da grade semanal). */}
+            <a href={dirty ? undefined : `/grade/imprimir?sim=${sim.id}`} target="_blank" rel="noopener" aria-disabled={dirty}
+              onClick={(e) => { if (dirty) { e.preventDefault(); setMsg({ error: 'Salve a simulação antes de imprimir ou enviar.' }); } }}
+              className={buttonVariants({ variant: 'secondary' })}><Printer /> Imprimir / PDF</a>
+            <a href={dirty ? undefined : `/grade/imprimir?sim=${sim.id}&texto=1`} target="_blank" rel="noopener" aria-disabled={dirty}
+              onClick={(e) => { if (dirty) { e.preventDefault(); setMsg({ error: 'Salve a simulação antes de imprimir ou enviar.' }); } }}
+              className={buttonVariants({ variant: 'secondary' })}><MessageCircle /> Texto WhatsApp</a>
+            {!readOnly && <Button variant={dirty ? 'primary' : 'secondary'} disabled={pending || !dirty} onClick={save}><Save /> {dirty ? 'Salvar simulação' : 'Salva'}</Button>}
+          </>
+        }
       />
       <FormMessage error={msg.error} success={msg.success} />
 
