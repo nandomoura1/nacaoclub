@@ -151,3 +151,44 @@ export function replaceTeacher(items: SimItem[], fromId: string, toId: string): 
   });
   return { items: next, count };
 }
+
+/**
+ * Copia as aulas de um dia da semana para outros (ex.: quarta = segunda nas Aulas Coletivas).
+ * `match` limita às aulas de uma área/modalidade. `replace`: as aulas que já existiam no dia de
+ * destino (dentro do mesmo filtro) saem — as da grade real ficam marcadas para sair, as novas somem.
+ * As cópias nascem como aulas novas (mesmo horário, modalidade, tipo, espaço, turma e pessoas)
+ * e podem ser ajustadas ou excluídas uma a uma depois.
+ */
+export function copyWeekday(
+  items: SimItem[], fromDay: number, toDays: number[], opts: { match?: (it: SimItem) => boolean; replace: boolean; newKey: () => string },
+): { items: SimItem[]; copied: number; removed: number } {
+  const match = opts.match ?? (() => true);
+  const targets = [...new Set(toDays)].filter((d) => d !== fromDay && d >= 1 && d <= 7);
+  const source = items.filter((i) => !i.removed && i.weekday === fromDay && match(i));
+  let removed = 0;
+  let next = items;
+  if (opts.replace) {
+    next = items.flatMap((i) => {
+      if (i.removed || !targets.includes(i.weekday) || !match(i)) return [i];
+      removed++;
+      return i.slotId ? [{ ...i, removed: true }] : [];
+    });
+  }
+  // Aula da grade real que estava no destino no mesmo horário e modalidade é reaproveitada (vira "igual" ou
+  // "alterada" em vez de encerrar uma e criar outra): o histórico da aula continua o mesmo.
+  const reuse = new Map<string, SimItem>();
+  if (opts.replace) for (const i of next) if (i.removed && i.slotId && targets.includes(i.weekday) && match(i)) {
+    const k = `${i.weekday}|${i.startMin}|${i.modalityId}`;
+    if (!reuse.has(k)) reuse.set(k, i);
+  }
+  const reused = new Map<string, SimItem>();
+  const copies: SimItem[] = [];
+  for (const d of targets) for (const src of source) {
+    const fields = { weekday: d, startMin: src.startMin, durationMin: src.durationMin, modalityId: src.modalityId, activityTypeId: src.activityTypeId, spaceId: src.spaceId, label: src.label, people: src.people.map((p) => ({ ...p })), removed: false };
+    const old = reuse.get(`${d}|${src.startMin}|${src.modalityId}`);
+    if (old && !reused.has(old.key)) { reused.set(old.key, { ...old, ...fields }); continue; }
+    copies.push({ ...src, ...fields, key: opts.newKey(), slotId: null, baseVersionId: null });
+  }
+  next = next.map((i) => reused.get(i.key) ?? i);
+  return { items: [...next, ...copies], copied: copies.length + reused.size, removed: removed - reused.size };
+}

@@ -24,7 +24,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   const [modalities, activityTypes, spaces, teachers] = await Promise.all([
     prisma.modality.findMany({
       where: { active: true, ...(principal.areaIds === null ? {} : { areaId: { in: [...principal.areaIds] } }), ...(sim.areaId ? { areaId: sim.areaId } : {}) },
-      orderBy: [{ sortOrder: 'asc' }], select: { id: true, name: true, color: true, defaultDurationMin: true },
+      orderBy: [{ sortOrder: 'asc' }], select: { id: true, name: true, color: true, defaultDurationMin: true, areaId: true, area: { select: { name: true } } },
     }),
     prisma.activityType.findMany({ orderBy: { sortOrder: 'asc' }, select: { id: true, name: true, countsHours: true, active: true } }),
     prisma.space.findMany({ where: { active: true }, orderBy: { sortOrder: 'asc' }, select: { id: true, name: true } }),
@@ -39,7 +39,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
       <SimEditor
         sim={sim}
         today={todayIso()}
-        modalities={modalities}
+        modalities={modalities.map(({ area, ...m }) => ({ ...m, areaName: area.name }))}
         activityTypes={activityTypes}
         spaces={spaces}
         teachers={teachers.map((t) => ({ id: t.id, name: t.displayName || t.name, active: t.active }))}

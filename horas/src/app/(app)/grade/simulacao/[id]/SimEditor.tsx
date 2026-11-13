@@ -10,7 +10,7 @@ import { Card, PageHeader } from '@/components/ui/card';
 import { Input, Label, Select } from '@/components/ui/input';
 import { WEEKDAYS, formatClock, formatDateBR } from '@/domain/dates';
 import {
-  compareHours, itemState, periodMinutes, periodOf, planFrom, replaceTeacher, resulting, weekdayCounts, weeklyMinutes,
+  compareHours, copyWeekday, itemState, periodMinutes, periodOf, planFrom, replaceTeacher, resulting, weekdayCounts, weeklyMinutes,
   type ItemState, type SimItem, type SimRole,
 } from '@/domain/grade-sim';
 import { cn } from '@/lib/cn';
@@ -20,7 +20,7 @@ import { applySimulationAction, discardSimulationAction, saveSimulationAction } 
 interface Props {
   sim: SimulationView;
   today: string;
-  modalities: { id: string; name: string; color: string | null; defaultDurationMin: number | null }[];
+  modalities: { id: string; name: string; color: string | null; defaultDurationMin: number | null; areaId: string; areaName: string }[];
   activityTypes: { id: string; name: string; countsHours: boolean; active: boolean }[];
   spaces: { id: string; name: string }[];
   teachers: { id: string; name: string; active: boolean }[];
@@ -47,6 +47,9 @@ export function SimEditor({ sim, today, modalities, activityTypes, spaces, teach
   const [filterTeacher, setFilterTeacher] = useState('');
   const [onlyChanged, setOnlyChanged] = useState(false);
   const [swap, setSwap] = useState({ from: '', to: '' });
+  /** Copiar um dia para outros: origem, destinos, filtro ("area:<id>" / "mod:<id>" / "") e substituir. */
+  const [dup, setDup] = useState<{ from: number; to: number[]; scope: string; replace: boolean }>({ from: 1, to: [], scope: '', replace: true });
+  const areas = useMemo(() => [...new Map(modalities.map((m) => [m.areaId, m.areaName])).entries()], [modalities]);
   const [view, setView] = useState<'semana' | 'competencia'>('semana');
   const [onlyDelta, setOnlyDelta] = useState(true);
 
@@ -139,6 +142,50 @@ export function SimEditor({ sim, today, modalities, activityTypes, spaces, teach
                 const r = replaceTeacher(items, swap.from, swap.to); update(r.items);
                 setMsg({ success: `${tName.get(swap.from)} → ${tName.get(swap.to)} em ${r.count} aula(s). Salve para guardar.` }); setSwap({ from: '', to: '' });
               }}>Trocar</Button>
+            </Card>
+          )}
+
+          {!readOnly && (
+            <Card className="space-y-3 p-4">
+              <div className="flex items-center gap-2"><Copy className="size-4 text-nacao" /><h2 className="text-sm font-extrabold text-navy">Copiar a grade de um dia para outros</h2></div>
+              <div className="flex flex-wrap items-end gap-3">
+                <div><Label>Copiar de</Label>
+                  <Select value={dup.from} onChange={(e) => setDup((d) => ({ ...d, from: Number(e.target.value), to: d.to.filter((x) => x !== Number(e.target.value)) }))} className="w-36">
+                    {WEEKDAYS.map((w) => <option key={w.n} value={w.n}>{w.long}</option>)}
+                  </Select>
+                </div>
+                <div><Label>Para</Label>
+                  <div className="flex flex-wrap gap-1">
+                    {WEEKDAYS.filter((w) => w.n !== dup.from).map((w) => (
+                      <button key={w.n} type="button" aria-pressed={dup.to.includes(w.n)}
+                        onClick={() => setDup((d) => ({ ...d, to: d.to.includes(w.n) ? d.to.filter((x) => x !== w.n) : [...d.to, w.n] }))}
+                        className={cn('h-10 rounded-lg px-3 text-sm font-semibold ring-1 ring-borda', dup.to.includes(w.n) ? 'bg-navy text-white ring-navy' : 'bg-white text-tinta-suave')}>{w.short}</button>
+                    ))}
+                  </div>
+                </div>
+                <div className="min-w-48"><Label>Quais aulas</Label>
+                  <Select value={dup.scope} onChange={(e) => setDup((d) => ({ ...d, scope: e.target.value }))}>
+                    <option value="">Todas do dia</option>
+                    {areas.length > 1 && <optgroup label="Área">{areas.map(([id, n]) => <option key={id} value={`area:${id}`}>{n}</option>)}</optgroup>}
+                    <optgroup label="Modalidade">{modalities.map((m) => <option key={m.id} value={`mod:${m.id}`}>{m.name}</option>)}</optgroup>
+                  </Select>
+                </div>
+              </div>
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="size-4 accent-nacao" checked={dup.replace} onChange={(e) => setDup((d) => ({ ...d, replace: e.target.checked }))} />
+                Substituir as aulas que já existem nos dias de destino (só as {dup.scope ? 'do filtro escolhido' : 'do dia'}); desmarcado = só acrescenta</label>
+              <Button variant="secondary" disabled={!dup.to.length} onClick={() => {
+                const [kind, id] = dup.scope.split(':');
+                const match = !dup.scope ? undefined : kind === 'area' ? (i: SimItem) => mod.get(i.modalityId)?.areaId === id : (i: SimItem) => i.modalityId === id;
+                const days = dup.to.slice().sort((a, b) => a - b).map((d) => WEEKDAYS[d - 1]!.short).join(', ');
+                const fromName = WEEKDAYS[dup.from - 1]!.long;
+                const filtro = !dup.scope ? '' : ` (${kind === 'area' ? areas.find(([a]) => a === id)?.[1] : mod.get(id!)?.name})`;
+                if (!confirm(`Copiar as aulas de ${fromName}${filtro} para ${days}?${dup.replace ? '\n\nAs aulas que já existem nesses dias (no mesmo filtro) saem da simulação.' : ''}`)) return;
+                const r = copyWeekday(items, dup.from, dup.to, { match, replace: dup.replace, newKey });
+                if (!r.copied && !r.removed) { setMsg({ error: `${fromName} não tem aulas${filtro} para copiar.` }); return; }
+                update(r.items); setOnlyChanged(false);
+                setMsg({ success: `${r.copied} aula(s) de ${fromName}${filtro} copiada(s) para ${days}${r.removed ? `; ${r.removed} que já existia(m) saiu(íram)` : ''}. Ajuste ou exclua as exceções na lista e salve.` });
+                setDup((d) => ({ ...d, to: [] }));
+              }}><Copy /> Copiar dia</Button>
             </Card>
           )}
 

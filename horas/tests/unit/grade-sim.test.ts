@@ -66,3 +66,39 @@ describe('comparação resiste à ordem das chaves (JSONB)', () => {
     expect(planFrom([b], [a]).change).toEqual([]);
   });
 });
+
+import { copyWeekday } from '@/domain/grade-sim';
+describe('copiar um dia da semana para outros', () => {
+  let n = 0;
+  const key = () => `k${++n}`;
+  const it0 = (o: Partial<import('@/domain/grade-sim').SimItem>) => ({ key: key(), slotId: null, baseVersionId: null, weekday: 1, startMin: 420, durationMin: 60, modalityId: 'col', activityTypeId: 'aula', spaceId: null, label: null, people: [{ teacherId: 'ana', role: 'TITULAR' as const }], ...o });
+  it('quarta e sexta = segunda (só Aulas Coletivas); substitui o que havia no destino', () => {
+    const items = [
+      it0({ slotId: 's1', weekday: 1, startMin: 420 }), it0({ slotId: 's2', weekday: 1, startMin: 1080 }),
+      it0({ slotId: 's3', weekday: 1, modalityId: 'cf' }), // outra área: não copia
+      it0({ slotId: 's4', weekday: 3, startMin: 600 }), // quarta antiga (coletivas): sai
+      it0({ weekday: 5, startMin: 700 }), // nova na sexta (coletivas): some
+      it0({ slotId: 's5', weekday: 3, modalityId: 'cf' }), // quarta de outra área: fica
+    ];
+    const r = copyWeekday(items, 1, [3, 5, 1], { match: (i) => i.modalityId === 'col', replace: true, newKey: key });
+    expect([r.copied, r.removed]).toEqual([4, 2]);
+    expect(r.items.find((i) => i.slotId === 's4')?.removed).toBe(true);
+    expect(r.items.some((i) => i.weekday === 5 && i.startMin === 700)).toBe(false);
+    expect(r.items.find((i) => i.slotId === 's5')?.removed).toBeFalsy();
+    const wed = r.items.filter((i) => i.weekday === 3 && !i.removed && i.modalityId === 'col');
+    expect(wed.map((i) => [i.startMin, i.slotId, i.people[0]!.teacherId])).toEqual([[420, null, 'ana'], [1080, null, 'ana']]);
+    expect(new Set(r.items.map((i) => i.key)).size).toBe(r.items.length);
+  });
+  it('reaproveita a aula da grade real no mesmo horário/modalidade (vira alterada, não sai + nova)', () => {
+    const items = [it0({ slotId: 's1', weekday: 1, startMin: 420, people: [{ teacherId: 'bia', role: 'TITULAR' }] }), it0({ slotId: 's9', weekday: 3, startMin: 420 })];
+    const r = copyWeekday(items, 1, [3], { replace: true, newKey: key });
+    expect([r.copied, r.removed]).toEqual([1, 0]);
+    const wed = r.items.filter((i) => i.weekday === 3);
+    expect(wed.map((i) => [i.slotId, i.removed, i.people[0]!.teacherId])).toEqual([['s9', false, 'bia']]);
+  });
+  it('sem substituir: só acrescenta', () => {
+    const items = [it0({ slotId: 's1' }), it0({ slotId: 's2', weekday: 3 })];
+    const r = copyWeekday(items, 1, [3], { replace: false, newKey: key });
+    expect([r.copied, r.removed, r.items.filter((i) => i.weekday === 3).length]).toEqual([1, 0, 2]);
+  });
+});

@@ -108,6 +108,9 @@ uma data para um rascunho (`grade_simulations.items`, sem tocar na grade real), 
 massa), compara horas atual × simulada (semana e competência 26→25, sem descontar feriados) e **implanta a partir de
 uma data** com as mesmas operações da grade (`createSlotsTx`/`changeSlotTx`/`endSlotTx`, numa transação só, realinha
 competências abertas; competência fechada bloqueia; aula mexida na grade real depois da simulação exige confirmação).
+**Copiar dia** na simulação (`copyWeekday`): "Copiar de" um dia → vários dias, filtro por área ou modalidade; "substituir" tira as aulas
+do destino no mesmo filtro, mas **reaproveita** a aula da grade real no mesmo horário+modalidade (vira alterada/igual, não encerra+cria);
+depois ajusta/exclui as exceções à mão e salva.
 
 **Filtros da Grade semanal**: **áreas** (botões redondos) e **modalidades** aceitam **várias ao mesmo tempo** (`?area=a,b&modalidade=x,y`;
 `parseAreas`/`parseModalities` em `lib/grade-filter.ts`); vale para tela, impressão/PDF e texto do WhatsApp.
