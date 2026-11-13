@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { Plus } from 'lucide-react';
+import { buttonVariants } from '@/components/ui/button';
 import { Card, PageHeader } from '@/components/ui/card';
 import { can } from '@/server/auth/authz';
 import { requirePrincipal } from '@/server/auth/session';
@@ -22,7 +24,10 @@ export default async function EquipesPage({ searchParams }: { searchParams: Prom
   return (
     <>
       {header}
-      <Card className="mb-4 p-4"><SectorMonthPicker sectors={sectors} sectorId={q.sectorId} month={q.mes} showMonth={false} /></Card>
+      <Card className="mb-4 flex flex-wrap items-end justify-between gap-3 p-4">
+        <SectorMonthPicker sectors={sectors} sectorId={q.sectorId} month={q.mes} showMonth={false} />
+        {can(principal, 'ws.admin') && <Link href="/escalas-trabalho/pre-requisitos" className={buttonVariants({ variant: 'secondary', size: 'sm' })} title="Criar setor (ex.: ADM), com horário de funcionamento — em Pré-requisitos"><Plus /> Novo setor</Link>}
+      </Card>
       <TeamClient key={q.sectorId} sectorId={q.sectorId} members={setup.sector.members.map((m) => ({ ...m, name: m.teacher.displayName || m.teacher.name, hours: m.hours as never }))} people={setup.people} canEdit={can(principal, 'ws.edit')} cycleRef={setup.sector.cycleRef.toISOString().slice(0, 10)} />
     </>
   );
