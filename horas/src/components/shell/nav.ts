@@ -8,7 +8,7 @@ export type NavIcon =
   | 'mkt' | 'mkt-campanhas' | 'mkt-kanban' | 'mkt-eventos' | 'mkt-reuniao' | 'mkt-conteudo' | 'mkt-interna' | 'mkt-canais' | 'mkt-leads' | 'mkt-biblioteca' | 'mkt-trafego' | 'mkt-performance' | 'mkt-memoria' | 'mkt-conexoes' | 'mkt-criativo' | 'whatsapp'
   | 'wa-auto' | 'processos' | 'proc-demandas' | 'proc-setores' | 'proc-task' | 'proc-reuniao'
   | 'edu' | 'edu-trilhas' | 'edu-painel' | 'proc-atas' | 'treinos-tv'
-  | 'ws' | 'ws-equipes' | 'ws-regras' | 'ws-funcionamento' | 'ws-feriados' | 'ws-ausencias' | 'ws-legal' | 'ws-passagem' | 'contratos' | 'contratos-modelos' | 'treinos-timer' | 'crm';
+  | 'ws' | 'ws-equipes' | 'ws-regras' | 'ws-funcionamento' | 'ws-feriados' | 'ws-ausencias' | 'ws-legal' | 'ws-passagem' | 'contratos' | 'contratos-modelos' | 'treinos-timer' | 'crm' | 'planos';
 
 export interface NavItem {
   href: string;
@@ -150,6 +150,7 @@ export const NAV_COBRANCA: NavItem[] = [
 export const NAV_ADMIN: NavItem[] = [
   { href: '/admin/empresas', label: 'Empresas', icon: 'empresas', permission: 'company.view' },
   { href: '/admin/cadastros', label: 'Cadastros', icon: 'cadastros', permission: 'admin.catalog' },
+  { href: '/admin/planos', label: 'Planos Nação', icon: 'planos', permission: 'plans.view' },
   { href: '/admin/usuarios', label: 'Usuários', icon: 'usuarios', permission: 'admin.users' },
   { href: '/admin/whatsapp', label: 'WhatsApp (Z-API)', icon: 'whatsapp', permission: 'whatsapp.admin' },
   { href: '/admin/whatsapp/automacoes', label: 'Automações (WhatsApp)', icon: 'wa-auto', permission: 'whatsapp.admin' },

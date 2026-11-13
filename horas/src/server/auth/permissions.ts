@@ -77,6 +77,8 @@ export const PERMISSIONS = {
   'crm.dashboard': 'Cobrança e CRM: painel do gestor (inadimplência, recuperado, produtividade)',
   'crm.admin': 'Cobrança e CRM: consultores ↔ usuários, régua, modelos e sincronização com a Tecnofit',
   'tv.privacy': 'Check-ins na TV: ver os check-ins do dia e marcar quem não quer aparecer',
+  'plans.view': 'Planos Nação: consultar a tabela de planos e preços vigente',
+  'plans.edit': 'Planos Nação: criar e editar tabelas de preços (rascunhos) e publicar a nova tabela',
 } as const;
 
 export type PermissionKey = keyof typeof PERMISSIONS;
@@ -143,6 +145,8 @@ export const SYSTEM_ROLES: Record<
       // Escalas de Trabalho 5x2: o DP cadastra e valida os parâmetros legais e acompanha todos os setores.
       'ws.view', 'ws.edit', 'ws.publish', 'ws.admin',
       'contract.view', 'contract.edit', 'contract.templates',
+      // Planos Nação: consulta a tabela vigente (rascunho e edição ficam com o Administrador).
+      'plans.view',
     ],
   },
   PROFESSOR: {

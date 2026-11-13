@@ -1,0 +1,1314 @@
+{
+ "source": "Planilha \"Gestão Nação Club - Planos - Modalidades - Aulas - Pessoal\" (abas \"Planos 2026\" e \"Planos 2026-REPASSE DE PREÇO\"), lida em 13/11/2026",
+ "plans2026": [
+  {
+   "group": "Nação Fit",
+   "name": "Nação Fit",
+   "modalities": "Academia + Aulas Coletivas",
+   "commonClasses": "Funcional, Mobilidade, Black Fit, Core, Funcional Beach",
+   "specificClasses": "Academia",
+   "checkin": "Check In Ilimitado",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 399.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 299.25
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 249.38
+    },
+    {
+     "label": "Aluno Nação Parceiros ou pai do kids",
+     "months": 1,
+     "card": 174.56
+    }
+   ]
+  },
+  {
+   "group": "Futevôlei",
+   "name": "Day Use Futevôlei",
+   "modalities": "Day Use Futevôlei",
+   "commonClasses": "Day Use Futevôlei",
+   "specificClasses": "Day Use Futevôlei",
+   "checkin": "Check In Ilimitado",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 230.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 198.95
+    }
+   ]
+  },
+  {
+   "group": "Futevôlei",
+   "name": "Nação Futevôlei 3x",
+   "modalities": "Futevôlei + Aulas Coletivas*",
+   "commonClasses": "Funcional, Mobilidade, Black Fit, Core, Funcional Beach",
+   "specificClasses": "FTV Foundation, FTV Iniciante, FTV Série C, FTV Intermediário, SImulação de Jogo, FTV Feminino, FTV Kids Day Use",
+   "checkin": "Check In 3x",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 349.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 314.1
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 296.65
+    }
+   ]
+  },
+  {
+   "group": "Futevôlei",
+   "name": "Nação Futevôlei",
+   "modalities": "Futevôlei + Aulas Coletivas*",
+   "commonClasses": "Funcional, Mobilidade, Black Fit, Core, Funcional Beach",
+   "specificClasses": "FTV Foundation, FTV Iniciante, FTV Série C, FTV Intermediário, SImulação de Jogo, FTV Feminino, FTV Kids Day Use",
+   "checkin": "Check In Ilimitado",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 399.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 369.08
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 325.19
+    }
+   ]
+  },
+  {
+   "group": "Crossfit",
+   "name": "Crossfit 3x",
+   "modalities": "Crossfit + Aulas Coletivas*",
+   "commonClasses": "Funcional, Mobilidade, Black Fit, Core, Funcional Beach",
+   "specificClasses": "Crossfit, Ginástica, Barbell",
+   "checkin": "Check In 3x",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 349.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 314.1
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 296.65
+    }
+   ]
+  },
+  {
+   "group": "Crossfit",
+   "name": "Crossfit",
+   "modalities": "Crossfit + Aulas Coletivas*",
+   "commonClasses": "Funcional, Mobilidade, Black Fit, Core, Funcional Beach",
+   "specificClasses": "Crossfit, Ginástica, Barbell",
+   "checkin": "Check In Ilimitado",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 399.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 369.08
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 325.19
+    }
+   ]
+  },
+  {
+   "group": "Lutas",
+   "name": "Nação Lutas",
+   "modalities": "Lutas + Aulas Coletivas*",
+   "commonClasses": "Funcional, Mobilidade, Black Fit, Core, Funcional Beach",
+   "specificClasses": "Jiu Jitsu, Boxe, Muay Thai",
+   "checkin": "Check In Ilimitado",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 399.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 369.08
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 325.19
+    }
+   ]
+  },
+  {
+   "group": "Combos",
+   "name": "Nação Blue",
+   "modalities": "Escolher 2 Planos entre - Nação Fit, Nação Futevôlei, Nação Crossfit, Nação Lutas e as Aulas Coletivas",
+   "commonClasses": "Funcional, Mobilidade, Black Fit, Core, Funcional Beach",
+   "specificClasses": "FTV Foundation, FTV Iniciante, FTV Série C, FTV Intermediário, SImulação de Jogo, FTV Feminino, FTV Kids Day Use ou Crossfit, Ginástica, Barbell ou Academia",
+   "checkin": "Check In Ilimitado",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 548.9
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 494.01
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 443.51
+    },
+    {
+     "label": "18 meses",
+     "months": 18,
+     "card": 411.68
+    }
+   ]
+  },
+  {
+   "group": "Combos",
+   "name": "Nação Infinity",
+   "modalities": "4 Planos Inclusos + Aulas Coletivas",
+   "commonClasses": "Funcional, Mobilidade, Black Fit, Core, Funcional Beach",
+   "specificClasses": "FTV Foundation, FTV Iniciante, FTV Série C, FTV Intermediário, SImulação de Jogo, FTV Feminino, FTV Kids Day Use E Crossfit, Ginástica, Barbell, Jiu Jitsu, Boxe, Muay Thai e Academia",
+   "checkin": "Check In Ilimitado",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 699.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 629.1
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 559.2
+    },
+    {
+     "label": "18 meses",
+     "months": 18,
+     "card": 524.25
+    }
+   ]
+  },
+  {
+   "group": "Lutas",
+   "name": "Nação Jiu Jitsu",
+   "modalities": "Jiu Jitsu",
+   "commonClasses": "",
+   "specificClasses": "ter qui sab",
+   "checkin": "Turma Fixa",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 249.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 224.1
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 199.2
+    }
+   ]
+  },
+  {
+   "group": "Master 60+",
+   "name": "Nação Master 60+",
+   "modalities": "Nação Master + Nação Fit",
+   "commonClasses": "",
+   "specificClasses": "Nação Master + Mobilidade + Academia",
+   "checkin": "Turma Fixa",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 587.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 528.3
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 498.95
+    }
+   ]
+  },
+  {
+   "group": "Nação Kids",
+   "name": "Kids Jiu Jitsu",
+   "modalities": "Jiu Jitsu",
+   "commonClasses": "",
+   "specificClasses": "ter qui sab",
+   "checkin": "Turma Fixa",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 249.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 224.1
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 199.2
+    }
+   ]
+  },
+  {
+   "group": "Nação Kids",
+   "name": "Funcional Kids",
+   "modalities": "Funcional Kids",
+   "commonClasses": "",
+   "specificClasses": "-",
+   "checkin": "Turma Fixa",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 249.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 224.1
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 199.2
+    }
+   ]
+  },
+  {
+   "group": "Nação Kids",
+   "name": "Combo - Jiu-Jitsu + Funcional Kids",
+   "modalities": "Combo - Jiu-Jitsu + Funcional Kids",
+   "commonClasses": "",
+   "specificClasses": "seg - sab",
+   "checkin": "Turma Fixa",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 399.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 359.1
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 319.2
+    }
+   ]
+  },
+  {
+   "group": "Nação Kids",
+   "name": "Futevôlei Teens",
+   "modalities": "Futevôlei Teens",
+   "commonClasses": "",
+   "specificClasses": "seg e qua - 16h",
+   "checkin": "Turma Fixa",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 249.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 224.1
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 199.2
+    }
+   ]
+  },
+  {
+   "group": "Nação Kids",
+   "name": "Crossfit Teens",
+   "modalities": "Crossfit Teens",
+   "commonClasses": "",
+   "specificClasses": "seg e qua - 16h",
+   "checkin": "Turma Fixa",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 249.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 224.1
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 199.2
+    }
+   ]
+  },
+  {
+   "group": "Nação Kids",
+   "name": "Tênis Kids e Teens",
+   "modalities": "Tênis Kids e Teens",
+   "commonClasses": "",
+   "specificClasses": "seg e qua ou ter e qui - 14h – Teens (6 alunos) 15h – Kids (8 alunos)",
+   "checkin": "Turma Fixa",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 399.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 359.1
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 319.2
+    }
+   ]
+  },
+  {
+   "group": "Nação Kids",
+   "name": "Contraturno 3 a 5 anos (seg, qua)",
+   "modalities": "Contraturno 2026 - 3 a 5 anos",
+   "commonClasses": "",
+   "specificClasses": "seg - qua",
+   "checkin": "Turma Fixa",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 687.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 618.3
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 549.6
+    }
+   ]
+  },
+  {
+   "group": "Nação Kids",
+   "name": "Contraturno 3 a 5 anos (ter, qui)",
+   "modalities": "Contraturno 2026 - 3 a 5 anos",
+   "commonClasses": "",
+   "specificClasses": "ter qui",
+   "checkin": "Turma Fixa",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 687.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 618.3
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 549.6
+    }
+   ]
+  },
+  {
+   "group": "Nação Kids",
+   "name": "Contraturno 6 a 8 anos (seg, qua)",
+   "modalities": "Contraturno 2026 - 6 a 8 anos",
+   "commonClasses": "",
+   "specificClasses": "seg - qua",
+   "checkin": "Turma Fixa",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 687.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 618.3
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 549.6
+    }
+   ]
+  },
+  {
+   "group": "Nação Kids",
+   "name": "Contraturno 6 a 8 anos (ter, qui)",
+   "modalities": "Contraturno 2026 - 6 a 8 anos",
+   "commonClasses": "",
+   "specificClasses": "ter qui",
+   "checkin": "Turma Fixa",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 687.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 618.3
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 549.6
+    }
+   ]
+  },
+  {
+   "group": "Nação Kids",
+   "name": "Contraturno 9 a 10 anos (seg, qua)",
+   "modalities": "Contraturno 2026 - 9 a 10 anos",
+   "commonClasses": "",
+   "specificClasses": "seg - qua",
+   "checkin": "Turma Fixa",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 687.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 618.3
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 549.6
+    }
+   ]
+  },
+  {
+   "group": "Nação Kids",
+   "name": "Contraturno 9 a 10 anos (ter, qui)",
+   "modalities": "Contraturno 2026 - 9 a 10 anos",
+   "commonClasses": "",
+   "specificClasses": "ter qui",
+   "checkin": "Turma Fixa",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 687.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 618.3
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 549.6
+    }
+   ]
+  },
+  {
+   "group": "Nação Kids",
+   "name": "Colônia de Férias",
+   "modalities": "Colônia de Férias",
+   "commonClasses": "",
+   "specificClasses": "seg a sex",
+   "checkin": "Turma Fixa",
+   "options": [
+    {
+     "label": "Diária",
+     "months": null,
+     "card": 120.0
+    },
+    {
+     "label": "1 semana",
+     "months": null,
+     "card": 550.0
+    },
+    {
+     "label": "2 semanas",
+     "months": null,
+     "card": 950.0
+    },
+    {
+     "label": "3 semanas",
+     "months": null,
+     "card": 1200.0
+    }
+   ]
+  },
+  {
+   "group": "Tênis",
+   "name": "Tênis 1x",
+   "modalities": "Tênis",
+   "commonClasses": "-",
+   "specificClasses": "Tênis",
+   "checkin": "1x",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 350.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 315.0
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 297.5
+    }
+   ]
+  },
+  {
+   "group": "Tênis",
+   "name": "Tênis 2x",
+   "modalities": "Tênis",
+   "commonClasses": "-",
+   "specificClasses": "Tênis",
+   "checkin": "2x",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 490.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 441.0
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 416.5
+    }
+   ]
+  },
+  {
+   "group": "Tênis",
+   "name": "Tênis 3x",
+   "modalities": "Tênis",
+   "commonClasses": "-",
+   "specificClasses": "Tênis",
+   "checkin": "3x",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 650.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 585.0
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 552.5
+    }
+   ]
+  },
+  {
+   "group": "Tênis",
+   "name": "Tênis 4x",
+   "modalities": "Tênis",
+   "commonClasses": "-",
+   "specificClasses": "Tênis",
+   "checkin": "4x",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 730.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 657.0
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 620.5
+    }
+   ]
+  },
+  {
+   "group": "Tênis",
+   "name": "Tênis 5x",
+   "modalities": "Tênis",
+   "commonClasses": "-",
+   "specificClasses": "Tênis",
+   "checkin": "5x",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 830.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 747.0
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 705.5
+    }
+   ]
+  },
+  {
+   "group": "Small Group",
+   "name": "Small Group",
+   "modalities": "grupo de 2 a 5 alunos",
+   "commonClasses": "Personal Grupo Pequeno",
+   "specificClasses": "-",
+   "checkin": "limitado - Turma Fixa",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 587.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 528.0
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 499.0
+    }
+   ]
+  }
+ ],
+ "repasse": [
+  {
+   "group": "Nação Fit",
+   "name": "Nação Fit",
+   "modalities": "Academia + Aulas Coletivas",
+   "commonClasses": "Funcional, Mobilidade, Black Fit, Core, Funcional Beach",
+   "specificClasses": "Academia",
+   "checkin": "Check In Ilimitado",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 438.9
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 299.0,
+     "recurring": 328.9
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 250.2,
+     "recurring": 278.0
+    },
+    {
+     "label": "Aluno Nação Parceiros ou pai do kids",
+     "months": 1,
+     "card": 192.5
+    }
+   ]
+  },
+  {
+   "group": "Futevôlei",
+   "name": "Day Use Futevôlei",
+   "modalities": "Day Use Futevôlei",
+   "commonClasses": "Day Use Futevôlei",
+   "specificClasses": "Day Use Futevôlei",
+   "checkin": "Check In Ilimitado",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 253.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 199.0,
+     "recurring": 218.9
+    }
+   ]
+  },
+  {
+   "group": "Futevôlei",
+   "name": "Nação Futevôlei 3x",
+   "modalities": "Futevôlei + Aulas Coletivas*",
+   "commonClasses": "Funcional, Mobilidade, Black Fit, Core, Funcional Beach",
+   "specificClasses": "FTV Foundation, FTV Iniciante, FTV Série C, FTV Intermediário, Simulação de Jogo, FTV Feminino, FTV Kids Day Use",
+   "checkin": "Check In 3x",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 383.9
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 314.0,
+     "recurring": 345.4
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 297.0,
+     "recurring": 326.7
+    }
+   ]
+  },
+  {
+   "group": "Futevôlei",
+   "name": "Nação Futevôlei",
+   "modalities": "Futevôlei + Aulas Coletivas*",
+   "commonClasses": "Funcional, Mobilidade, Black Fit, Core, Funcional Beach",
+   "specificClasses": "FTV Foundation, FTV Iniciante, FTV Série C, FTV Intermediário, Simulação de Jogo, FTV Feminino, FTV Kids Day Use",
+   "checkin": "Check In Ilimitado",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 438.9
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 369.0,
+     "recurring": 405.9
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 325.0,
+     "recurring": 357.5
+    }
+   ]
+  },
+  {
+   "group": "Crossfit",
+   "name": "Crossfit 3x",
+   "modalities": "Crossfit + Aulas Coletivas*",
+   "commonClasses": "Funcional, Mobilidade, Black Fit, Core, Funcional Beach",
+   "specificClasses": "Crossfit, Ginástica, Barbell",
+   "checkin": "Check In 3x",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 383.9
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 314.0,
+     "recurring": 345.4
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 297.0,
+     "recurring": 326.7
+    }
+   ]
+  },
+  {
+   "group": "Crossfit",
+   "name": "Crossfit",
+   "modalities": "Crossfit + Aulas Coletivas*",
+   "commonClasses": "Funcional, Mobilidade, Black Fit, Core, Funcional Beach",
+   "specificClasses": "Crossfit, Ginástica, Barbell",
+   "checkin": "Check In Ilimitado",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 438.9
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 369.0,
+     "recurring": 405.9
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 325.0,
+     "recurring": 357.5
+    }
+   ]
+  },
+  {
+   "group": "Combos",
+   "name": "Nação Blue",
+   "modalities": "Escolher 2 Planos entre - Nação Fit, Nação Futevôlei, Nação Crossfit, Nação Lutas e as Aulas Coletivas",
+   "commonClasses": "Funcional, Mobilidade, Black Fit, Core, Funcional Beach",
+   "specificClasses": "FTV Foundation, FTV Iniciante, FTV Série C, FTV Intermediário, Simulação de Jogo, FTV Feminino, FTV Kids Day Use ou Crossfit, Ginástica, Barbell ou Academia",
+   "checkin": "Check In Ilimitado",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 549.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 444.6,
+     "recurring": 494.0
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 399.6,
+     "recurring": 444.0
+    }
+   ]
+  },
+  {
+   "group": "Combos",
+   "name": "Nação Infinity",
+   "modalities": "4 Planos Inclusos + Aulas Coletivas",
+   "commonClasses": "Funcional, Mobilidade, Black Fit, Core, Funcional Beach",
+   "specificClasses": "FTV Foundation, FTV Iniciante, FTV Série C, FTV Intermediário, Simulação de Jogo, FTV Feminino, FTV Kids Day Use E Crossfit, Ginástica, Barbell, Jiu Jitsu, Boxe, Muay Thai e Academia",
+   "checkin": "Check In Ilimitado",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 699.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 566.1,
+     "recurring": 629.0
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 503.1,
+     "recurring": 559.0
+    }
+   ]
+  },
+  {
+   "group": "Master 60+",
+   "name": "Nação Master 60+",
+   "modalities": "Nação Master + Nação Fit",
+   "commonClasses": "",
+   "specificClasses": "Nação Master + Mobilidade + Academia",
+   "checkin": "Turma Fixa",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 645.7
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 528.0,
+     "recurring": 580.8
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 499.0,
+     "recurring": 548.9
+    }
+   ]
+  },
+  {
+   "group": "Nação Kids",
+   "name": "Funcional Kids",
+   "modalities": "Funcional Kids",
+   "commonClasses": "",
+   "specificClasses": "-",
+   "checkin": "Turma Fixa",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 273.9
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 224.0,
+     "recurring": 246.4
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 199.0,
+     "recurring": 218.9
+    }
+   ]
+  },
+  {
+   "group": "Nação Kids",
+   "name": "Combo - Jiu-Jitsu + Funcional Kids",
+   "modalities": "Combo - Jiu-Jitsu + Funcional Kids",
+   "commonClasses": "",
+   "specificClasses": "seg - sab",
+   "checkin": "Turma Fixa",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 438.9
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 359.0,
+     "recurring": 394.9
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 319.0,
+     "recurring": 350.9
+    }
+   ]
+  },
+  {
+   "group": "Nação Kids",
+   "name": "Futevôlei Teens",
+   "modalities": "Futevôlei Teens",
+   "commonClasses": "",
+   "specificClasses": "seg e qua - 16h",
+   "checkin": "Turma Fixa",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 273.9
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 224.0,
+     "recurring": 246.4
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 199.0,
+     "recurring": 218.9
+    }
+   ]
+  },
+  {
+   "group": "Nação Kids",
+   "name": "Tênis Kids e Teens",
+   "modalities": "Tênis Kids e Teens",
+   "commonClasses": "",
+   "specificClasses": "seg e qua ou ter e qui - 14h – Teens (6 alunos) / 15h – Kids (8 alunos)",
+   "checkin": "Turma Fixa",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 438.9
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 359.0,
+     "recurring": 394.9
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 319.0,
+     "recurring": 350.9
+    }
+   ]
+  },
+  {
+   "group": "Nação Kids",
+   "name": "Colônia de Férias",
+   "modalities": "Colônia de Férias",
+   "commonClasses": "",
+   "specificClasses": "seg a sex",
+   "checkin": "Turma Fixa",
+   "options": [
+    {
+     "label": "Diária",
+     "months": null,
+     "card": 120.0
+    },
+    {
+     "label": "1 semana",
+     "months": null,
+     "card": 550.0
+    },
+    {
+     "label": "2 semanas",
+     "months": null,
+     "card": 950.0
+    },
+    {
+     "label": "3 semanas",
+     "months": null,
+     "card": 1200.0
+    }
+   ]
+  },
+  {
+   "group": "Tênis",
+   "name": "Tênis 1x",
+   "modalities": "Tênis",
+   "commonClasses": "",
+   "specificClasses": "Tênis",
+   "checkin": "1x",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 385.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 315.0,
+     "recurring": 346.5
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 298.0,
+     "recurring": 327.8
+    }
+   ]
+  },
+  {
+   "group": "Tênis",
+   "name": "Tênis 2x",
+   "modalities": "Tênis",
+   "commonClasses": "",
+   "specificClasses": "Tênis",
+   "checkin": "2x",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 539.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 441.0,
+     "recurring": 485.1
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 417.0,
+     "recurring": 458.7
+    }
+   ]
+  },
+  {
+   "group": "Tênis",
+   "name": "Tênis 3x",
+   "modalities": "Tênis",
+   "commonClasses": "",
+   "specificClasses": "Tênis",
+   "checkin": "3x",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 715.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 585.0,
+     "recurring": 643.5
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 553.0,
+     "recurring": 608.3
+    }
+   ]
+  },
+  {
+   "group": "Tênis",
+   "name": "Tênis 4x",
+   "modalities": "Tênis",
+   "commonClasses": "",
+   "specificClasses": "Tênis",
+   "checkin": "4x",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 803.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 657.0,
+     "recurring": 722.7
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 621.0,
+     "recurring": 683.1
+    }
+   ]
+  },
+  {
+   "group": "Tênis",
+   "name": "Tênis 5x",
+   "modalities": "Tênis",
+   "commonClasses": "",
+   "specificClasses": "Tênis",
+   "checkin": "5x",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 913.0
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 747.0,
+     "recurring": 821.7
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 706.0,
+     "recurring": 776.6
+    }
+   ]
+  },
+  {
+   "group": "Small Group",
+   "name": "Small Group",
+   "modalities": "grupo de 2 a 5 alunos",
+   "commonClasses": "Personal Grupo Pequeno",
+   "specificClasses": "-",
+   "checkin": "limitado - Turma Fixa",
+   "options": [
+    {
+     "label": "Mensal",
+     "months": 1,
+     "card": 645.7
+    },
+    {
+     "label": "Semestral",
+     "months": 6,
+     "card": 528.0,
+     "recurring": 580.8
+    },
+    {
+     "label": "Anual",
+     "months": 12,
+     "card": 499.0,
+     "recurring": 548.9
+    }
+   ]
+  }
+ ]
+}

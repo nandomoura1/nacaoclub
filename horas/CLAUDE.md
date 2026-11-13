@@ -234,3 +234,15 @@ o líder liga por consultor no Time de CRM e, desligados, nem viram tarefa (os a
 `ATRASO_ANTIGO` só do líder (aba Tarefas → Atraso antigo; nunca na lista/WhatsApp do consultor; o WhatsApp do líder traz a contagem):
 cancelar na Tecnofit, renegociar ou cobrar.
 
+
+**Planos Nação** (Administração → Planos Nação; `plans.view` = Administrador e DP/Financeiro, `plans.edit` = só Administrador;
+decisão 13/11): tabelas de planos e preços por ano (`plan_tables` → `plan_items` → `plan_options`). Uma **VIGENTE** (travada) +
+**rascunhos** (só quem edita vê) + arquivadas. Opção de preço = valor **por mês** no **cartão/cheque** e na **recorrência**; total =
+mensal × meses (sem meses = valor único: diária/semana). Rascunho comparado com a tabela-base (`base_item_id`, opção pelo nome) com a
+variação %. Situação do plano: Mantém / Novo / Simplificado / A decidir / **Sai** (não se apaga o que veio da base — fica riscado; plano
+novo do rascunho pode ser apagado). **Reajuste em lote** dos planos marcados (não linear): % sobre o rascunho ou sobre a base, só nas
+opções escolhidas, arredondamento (centavos, inteiro, final ,90, final 9) e "recorrência = cartão + %"; preço também se edita direto na
+tabela. **Publicar** exige nenhum "A decidir" e preço em todas as opções que ficam; a vigente anterior vai para o arquivo; novo rascunho
+copia a vigente sem os que saíram. "Copiar para planilha" = TSV no formato da planilha. Primeira carga pelo botão "Importar planilha de
+2026" (`src/server/planos/planilha-2026.json`, da planilha de 13/11): 2026 vigente + rascunho 2027 do **repasse de nov/2026**; os 10
+planos fora do repasse entram como "A decidir".

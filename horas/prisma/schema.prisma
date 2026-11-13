@@ -3193,3 +3193,64 @@ model TecContractCheck {
   @@index([checkedOn])
   @@map("tec_contract_checks")
 }
+
+/// Planos Nação: tabela de preços dos planos (uma VIGENTE travada; rascunhos só para quem edita).
+model PlanTable {
+  id          String     @id @default(uuid()) @db.Uuid
+  name        String
+  year        Int
+  /// RASCUNHO | VIGENTE | ARQUIVADA
+  status      String     @default("RASCUNHO")
+  /// Tabela com que esta é comparada (ex.: 2027 × 2026).
+  baseTableId String?    @map("base_table_id") @db.Uuid
+  note        String?
+  publishedAt DateTime?  @map("published_at")
+  createdById String?    @map("created_by_id") @db.Uuid
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  items       PlanItem[]
+
+  @@map("plan_tables")
+}
+
+model PlanItem {
+  id              String       @id @default(uuid()) @db.Uuid
+  tableId         String       @map("table_id") @db.Uuid
+  table           PlanTable    @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  /// Plano correspondente na tabela-base (comparação de preço).
+  baseItemId      String?      @map("base_item_id") @db.Uuid
+  groupName       String       @map("group_name")
+  name            String
+  modalities      String?
+  commonClasses   String?      @map("common_classes")
+  specificClasses String?      @map("specific_classes")
+  checkin         String?
+  /// MANTEM | NOVO | SIMPLIFICADO | A_DECIDIR | EXCLUIR
+  status          String       @default("MANTEM")
+  note            String?
+  sort            Int          @default(0)
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+  options         PlanOption[]
+
+  @@index([tableId])
+  @@map("plan_items")
+}
+
+model PlanOption {
+  id               String    @id @default(uuid()) @db.Uuid
+  itemId           String    @map("item_id") @db.Uuid
+  item             PlanItem  @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  /// "Mensal", "Semestral", "Anual", "Diária"…
+  label            String
+  /// Meses do contrato (total = mensal × meses); vazio = valor único (diária, semana).
+  months           Int?
+  cardMonthly      Decimal?  @map("card_monthly") @db.Decimal(12, 2)
+  recurringMonthly Decimal?  @map("recurring_monthly") @db.Decimal(12, 2)
+  sort             Int       @default(0)
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  @@index([itemId])
+  @@map("plan_options")
+}
