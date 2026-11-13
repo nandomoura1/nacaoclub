@@ -103,7 +103,15 @@ export interface TecnofitApi {
   calls(startDate: string, endDate: string): Promise<TfCall[]>;
   /** Contagens/formato da última leitura (só o cliente real preenche). */
   diag?: TfDiag;
+  /** Alunos ativos (só ids, para a varredura de renovações). */
+  activeCustomerIds(): Promise<string[]>;
+  /** Contratos do aluno (todos os status). `dueDate` = fim do contrato. */
+  customerContracts(id: string): Promise<TfContract[]>;
+  /** Recurso indicado por um aviso (webhook): GET do `resource_url`, só no host da API. */
+  resource(url: string): Promise<Record<string, unknown> | null>;
 }
+
+export interface TfContract { id: string; name: string | null; startDate: string | null; dueDate: string | null; status: string | null }
 
 const str = (v: unknown) => (v === null || v === undefined ? '' : String(v));
 const rowsOf = (res: unknown): Record<string, unknown>[] => {
@@ -151,7 +159,7 @@ export class HttpTecnofit implements TecnofitApi, TecnofitAgendaApi {
   /** Chamadas feitas (para o registro da sincronização). */
   calls_made = 0;
 
-  constructor(private readonly cfg: TecnofitConfig, private readonly doFetch: Fetch = fetch, private readonly gapMs = MIN_GAP_MS) {}
+  constructor(private readonly cfg: TecnofitConfig, private readonly doFetch: Fetch = fetch, private readonly gapMs = MIN_GAP_MS, private readonly creds?: { key?: string; secret?: string }) {}
 
   private async pace() {
     const wait = this.last + this.gapMs - Date.now();
@@ -161,9 +169,9 @@ export class HttpTecnofit implements TecnofitApi, TecnofitAgendaApi {
 
   private async login(attempt = 0): Promise<string> {
     if (this.token && Date.now() < this.tokenExp) return this.token;
-    const key = clean(process.env.TECNOFIT_API_KEY);
-    const secret = clean(process.env.TECNOFIT_API_SECRET);
-    if (!key || !secret) throw new AppError('Tecnofit não configurada: faltam TECNOFIT_API_KEY e TECNOFIT_API_SECRET nas variáveis da Vercel.');
+    const key = clean(this.creds ? this.creds.key : process.env.TECNOFIT_API_KEY);
+    const secret = clean(this.creds ? this.creds.secret : process.env.TECNOFIT_API_SECRET);
+    if (!key || !secret) throw new AppError(this.creds ? 'Chave de webhooks não configurada: faltam TECNOFIT_WEBHOOK_API_KEY e TECNOFIT_WEBHOOK_API_SECRET na Vercel.' : 'Tecnofit não configurada: faltam TECNOFIT_API_KEY e TECNOFIT_API_SECRET nas variáveis da Vercel.');
     await this.pace();
     this.calls_made++;
     let res: Response;
@@ -194,7 +202,7 @@ export class HttpTecnofit implements TecnofitApi, TecnofitAgendaApi {
 
   private async get(path: string, params: Record<string, string | number | undefined> = {}, attempt = 0): Promise<unknown> {
     const token = await this.login();
-    const url = new URL(`${this.cfg.base}/v1${path}`);
+    const url = /^https:\/\//.test(path) ? new URL(path) : new URL(`${this.cfg.base}/v1${path}`);
     for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== '') url.searchParams.set(k, String(v));
     await this.pace();
     this.calls_made++;
@@ -281,6 +289,50 @@ export class HttpTecnofit implements TecnofitApi, TecnofitAgendaApi {
       const p = (r.place ?? {}) as Record<string, unknown>;
       return { id: str(r.id), name: str(r.name), modality: m.name ? str(m.name) : null, place: p.name ? str(p.name) : null };
     }).filter((c) => c.id);
+  }
+
+  async activeCustomerIds() {
+    const rows = await this.all('/customers', { status: 'active', type: 'customer' });
+    return rows.map((r) => str(r.id)).filter(Boolean);
+  }
+
+  async customerContracts(id: string) {
+    const rows = await this.all(`/customers/${encodeURIComponent(id)}/contracts`, {});
+    return rows.map((r) => {
+      const c = (r.contract ?? {}) as Record<string, unknown>;
+      return { id: str(r.id), name: str(r.name ?? c.name) || null, startDate: str(r.startDate) || null, dueDate: str(r.dueDate) || null, status: r.status ? str(r.status) : null };
+    }).filter((c) => c.id);
+  }
+
+  async resource(url: string) {
+    const u = new URL(url, this.cfg.base);
+    // Só o host da API e caminhos /v1 (o aviso não pode nos fazer chamar outro endereço).
+    if (u.origin !== new URL(this.cfg.base).origin || !u.pathname.startsWith('/v1/')) throw new AppError('Link do aviso fora da API da Tecnofit.');
+    const res = (await this.get(u.toString())) as Record<string, unknown> | null;
+    const d = res && typeof res === 'object' && res.data && !Array.isArray(res.data) ? (res.data as Record<string, unknown>) : res;
+    return d && typeof d === 'object' && Object.keys(d).length ? d : null;
+  }
+
+  /** Webhooks (chave separada, com permissão de administrar webhooks). */
+  async createWebhook(url: string, events: string[], description: string) {
+    const token = await this.login();
+    await this.pace();
+    const res = await this.doFetch(`${this.cfg.base}/v1/webhooks/subscriptions`, {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(this.cfg.companyId ? { 'X-Company-Id': this.cfg.companyId } : {}) },
+      body: JSON.stringify({ url, events, description }),
+      signal: AbortSignal.timeout(30_000),
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new TecnofitHttpError(res.status, '/webhooks/subscriptions', await errorDetail(res));
+    const b = (await res.json()) as Record<string, unknown>;
+    const d = (b.data && typeof b.data === 'object' ? b.data : b) as Record<string, unknown>;
+    return { id: str(d.id), secret: str(d.secret), events: Array.isArray(d.events) ? d.events.map(str) : events };
+  }
+
+  async listWebhooks() {
+    const rows = await this.all('/webhooks/subscriptions', {});
+    return rows.map((r) => ({ id: str(r.id), url: str(r.url), events: Array.isArray(r.events) ? r.events.map(str) : [], active: r.ativo !== false && r.active !== false, lastDeliveredAt: str(r.lastDeliveredAt) || null, lastFailedAt: str(r.lastFailedAt) || null }));
   }
 
   /**

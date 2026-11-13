@@ -38,10 +38,11 @@ export const TASK_KINDS = {
   PENDENCIA: { label: 'Pendência na recepção', todo: 'Aluno bloqueado/restrito na Tecnofit: pedir que passe na recepção ou resolver por WhatsApp.' },
   RETORNO: { label: 'Retorno / promessa agendada', todo: 'Retorno agendado na Tecnofit para {ref}: conferir se pagou e falar com o aluno.' },
   MANUAL: { label: 'Tarefa do líder', todo: '' },
+  RENOVACAO: { label: 'Renovação do plano', todo: 'O plano termina em {ref}: oferecer a renovação. Renovou? A tarefa sai sozinha quando o contrato novo aparecer na Tecnofit.' },
 } as Record<string, { label: string; todo: string }>;
 
 /** Tipos que o líder liga/desliga por consultor (vazio = recebe todos). Tarefa manual do líder sempre entra. */
-export const FILTERABLE_KINDS = [...CADENCE.map((c) => c.kind), 'PENDENCIA', 'RETORNO'] as string[];
+export const FILTERABLE_KINDS = [...CADENCE.map((c) => c.kind), 'PENDENCIA', 'RETORNO', 'RENOVACAO'] as string[];
 export const kindAllowed = (kind: string, allowed: readonly string[]) => kind === 'MANUAL' || !allowed.length || allowed.includes(kind);
 
 /** Envio do WhatsApp de tarefas: de hora em hora, das 6h às 14h (Brasília). */

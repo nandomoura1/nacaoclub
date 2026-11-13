@@ -29,7 +29,7 @@ const RETENTION_DAYS = 90;
 const SAVE_EVERY = 10;
 
 interface Pending { id: string; name: string; status: string | null; consultant: string | null; lastCallDone?: string | null; nextCall?: string | null }
-interface Stats { candidates?: number; processed?: number; casesOpened?: number; casesResolved?: number; debtsPaid?: number; consultants?: number; purged?: number; warning?: string; tasksCreated?: number; tasksDone?: number; salesRead?: number; salesWithSeller?: number; salesShape?: string; errors?: { customer: string; error: string }[] }
+interface Stats { candidates?: number; processed?: number; casesOpened?: number; casesResolved?: number; debtsPaid?: number; consultants?: number; purged?: number; renewalsChecked?: number; warning?: string; tasksCreated?: number; tasksDone?: number; salesRead?: number; salesWithSeller?: number; salesShape?: string; errors?: { customer: string; error: string }[] }
 
 const SYSTEM = { actorId: null, userAgent: 'sincronizacao-tecnofit' };
 const d = (iso: IsoDate) => toUtc(iso);
@@ -234,6 +234,34 @@ async function processCustomer(api: TecnofitApi, p: Pending, today: IsoDate): Pr
   return { opened, resolved, paid };
 }
 
+/**
+ * Reprocessa UM aluno agora (aviso da Tecnofit: pagou, mudou status, ligação, contrato…). Mantém o que já
+ * sabemos (consultor, ligações) a menos que o aviso traga algo novo, e refaz as tarefas só desse aluno.
+ */
+export async function resyncCustomer(customerTecId: string, today: IsoDate, patch: { lastCallDone?: string | null; nextCall?: string | null; consultant?: string | null; contracts?: boolean } = {}) {
+  const { api } = await tecnofitApi();
+  const existing = await prisma.tecCustomer.findUnique({ where: { tecnofitId: customerTecId } });
+  const info = await api.customer(customerTecId);
+  const status = info?.status ?? existing?.status ?? null;
+  const tracked = !!existing || isBlockedStatus(status);
+  const ids: string[] = [];
+  // Só quem já acompanhamos (ou está bloqueado/restrito): aviso de aluno sem pendência não cria cadastro aqui.
+  if (tracked) {
+    await processCustomer(api, {
+      id: customerTecId,
+      name: info?.name || existing?.name || '',
+      status,
+      consultant: patch.consultant !== undefined ? patch.consultant : existing?.consultantTecId ?? null,
+      lastCallDone: patch.lastCallDone !== undefined ? patch.lastCallDone : iso(existing?.lastCallDoneOn ?? null),
+      nextCall: patch.nextCall !== undefined ? patch.nextCall : iso(existing?.nextCallOn ?? null),
+    }, today);
+  }
+  if (patch.contracts) await checkCustomerContracts(api, customerTecId, today);
+  const cust = await prisma.tecCustomer.findUnique({ where: { tecnofitId: customerTecId }, select: { id: true } });
+  if (cust) { ids.push(cust.id); await generateTasks(today, { customerIds: ids }); }
+  return cust?.id ?? null;
+}
+
 /** LGPD: tira do espelho quem não tem caso e não aparece há mais de RETENTION_DAYS. */
 async function purgeStale(today: IsoDate): Promise<number> {
   const r = await prisma.tecCustomer.deleteMany({ where: { lastSeenOn: { lt: d(addDays(today, -RETENTION_DAYS)) }, cases: { none: {} }, tasks: { none: { status: 'ABERTA' } } } });
@@ -244,6 +272,91 @@ async function purgeStale(today: IsoDate): Promise<number> {
  * Roda (ou continua) a sincronização do dia. `force` recomeça mesmo que o dia já tenha
  * concluído. `budgetMs` limita o tempo desta chamada (a Vercel corta em maxDuration).
  */
+// ── Renovações ────────────────────────────────────────────
+
+/** Cada aluno ativo tem os contratos conferidos uma vez por semana (~1/7 por dia); avisos da Tecnofit adiantam. */
+const CONTRACT_RECHECK_DAYS = 7;
+const RENEWAL_WINDOW = 30;
+const ENDING_STATUSES = new Set(['active', 'blocked', 'onleave', 'pendingpayment']);
+const NEXT_STATUSES = new Set(['active', 'waitingstart', 'pendingpayment']);
+
+/** Lista de alunos ativos (só ids), uma vez por dia. */
+async function refreshActiveList(api: TecnofitApi, today: IsoDate) {
+  if (await prisma.tecContractCheck.findFirst({ where: { seenOn: d(today) }, select: { customerTecId: true } })) return;
+  const ids = await api.activeCustomerIds();
+  if (!ids.length) return;
+  await prisma.tecContractCheck.createMany({ data: ids.map((id) => ({ customerTecId: id, seenOn: d(today) })), skipDuplicates: true });
+  for (let i = 0; i < ids.length; i += 1000) await prisma.tecContractCheck.updateMany({ where: { customerTecId: { in: ids.slice(i, i + 1000) } }, data: { seenOn: d(today) } });
+  // Quem deixou de ser ativo há uma semana sai da varredura.
+  await prisma.tecContractCheck.deleteMany({ where: { seenOn: { lt: d(addDays(today, -CONTRACT_RECHECK_DAYS)) } } });
+}
+
+/**
+ * Confere os contratos de um aluno: contrato que termina em até 30 dias vira (ou atualiza) `tec_contracts`,
+ * marcando `renewed` se já existe o contrato seguinte. Devolve o id do aluno no espelho quando há algo a acompanhar.
+ */
+export async function checkCustomerContracts(api: TecnofitApi, customerTecId: string, today: IsoDate): Promise<string | null> {
+  const list = await api.customerContracts(customerTecId);
+  const norm = (st: string | null) => (st ?? '').toLowerCase().replace(/[^a-z]/g, '');
+  const withDue = list.map((c) => ({ ...c, due: isoFromApi(c.dueDate), st: norm(c.status) })).filter((c) => c.due);
+  const ending = withDue.filter((c) => ENDING_STATUSES.has(c.st) && c.due! >= addDays(today, -15) && c.due! <= addDays(today, RENEWAL_WINDOW));
+  let cust = await prisma.tecCustomer.findUnique({ where: { tecnofitId: customerTecId } });
+  const known = cust ? await prisma.tecContract.findMany({ where: { customerId: cust.id } }) : [];
+  await prisma.tecContractCheck.upsert({ where: { customerTecId }, create: { customerTecId, seenOn: d(today), checkedOn: d(today) }, update: { checkedOn: d(today) } });
+  if (!ending.length && !known.length) return null;
+  if (!cust) {
+    const info = await api.customer(customerTecId);
+    cust = await prisma.tecCustomer.create({ data: { tecnofitId: customerTecId, name: info?.name || 'Aluno sem nome', status: info?.status ?? null, lastSeenOn: d(today) } });
+  } else {
+    await prisma.tecCustomer.update({ where: { id: cust.id }, data: { lastSeenOn: d(today) } });
+  }
+  const keep = new Set<string>();
+  for (const c of ending) {
+    const renewed = withDue.some((o) => o.id !== c.id && NEXT_STATUSES.has(o.st) && o.due! > c.due!);
+    keep.add(c.id);
+    await prisma.tecContract.upsert({
+      where: { tecnofitId: c.id },
+      create: { tecnofitId: c.id, customerId: cust.id, name: c.name, startDate: isoFromApi(c.startDate) ? d(isoFromApi(c.startDate)!) : null, dueDate: d(c.due!), status: c.status, renewed, lastSeenOn: d(today) },
+      update: { customerId: cust.id, name: c.name, dueDate: d(c.due!), status: c.status, renewed, lastSeenOn: d(today) },
+    });
+  }
+  // Contrato que saiu da janela (cancelado, data mudou): não há mais o que acompanhar.
+  for (const k of known) if (!keep.has(k.tecnofitId)) {
+    const now = withDue.find((x) => x.id === k.tecnofitId);
+    const renewed = !!now && withDue.some((o) => o.id !== now.id && NEXT_STATUSES.has(o.st) && o.due! > now.due!);
+    if (renewed) await prisma.tecContract.update({ where: { id: k.id }, data: { renewed: true, lastSeenOn: d(today) } });
+    else await prisma.tecContract.delete({ where: { id: k.id } });
+  }
+  return cust.id;
+}
+
+/** Varredura de renovações até `untilMs`: alunos ativos com contratos não conferidos há 7+ dias. */
+async function renewalPhase(api: TecnofitApi, today: IsoDate, untilMs: number): Promise<{ checked: number; customerIds: string[] }> {
+  const out = { checked: 0, customerIds: [] as string[] };
+  if (Date.now() >= untilMs - 5_000) return out;
+  try { await refreshActiveList(api, today); } catch (e) { console.error('[renovacoes] ativos', e instanceof Error ? e.message : e); return out; }
+  while (Date.now() < untilMs - 5_000) {
+    const batch = await prisma.tecContractCheck.findMany({
+      where: { seenOn: { gte: d(addDays(today, -1)) }, OR: [{ checkedOn: null }, { checkedOn: { lt: d(addDays(today, -(CONTRACT_RECHECK_DAYS - 1))) } }] },
+      orderBy: { checkedOn: { sort: 'asc', nulls: 'first' } }, take: 25, select: { customerTecId: true },
+    });
+    if (!batch.length) break;
+    for (const b of batch) {
+      if (Date.now() >= untilMs - 5_000) break;
+      try {
+        const id = await checkCustomerContracts(api, b.customerTecId, today);
+        if (id) out.customerIds.push(id);
+      } catch (e) {
+        // Não trava a fila: tenta de novo amanhã.
+        await prisma.tecContractCheck.update({ where: { customerTecId: b.customerTecId }, data: { checkedOn: d(today) } }).catch(() => undefined);
+        console.error('[renovacoes]', e instanceof Error ? e.message : e);
+      }
+      out.checked++;
+    }
+  }
+  return out;
+}
+
 /**
  * Trava: só uma sincronização por vez (o agendamento de 10 em 10 min, a continuação automática e o
  * botão podiam rodar juntos e estourar o limite de 200 req/min da Tecnofit → erro 429). Usa a tabela
@@ -280,6 +393,13 @@ async function runLocked(today: IsoDate, budget: number, opts: { force?: boolean
   let run = await prisma.tecSyncRun.findFirst({ where: { day: d(today) }, orderBy: { startedAt: 'desc' } });
   if (run && run.status === 'CONCLUIDA' && !opts.force) {
     const stats = run.stats as Stats;
+    // Cobrança do dia pronta: as chamadas seguintes (agendamento de 10 em 10 min) seguem a varredura de renovações.
+    const rn = await renewalPhase(api, today, startedAt + budget);
+    if (rn.checked) {
+      stats.renewalsChecked = (stats.renewalsChecked ?? 0) + rn.checked;
+      await generateTasks(today, { customerIds: rn.customerIds });
+      await prisma.tecSyncRun.update({ where: { id: run.id }, data: { stats: stats as Prisma.InputJsonValue, apiCalls: { increment: callsMade() } } });
+    }
     return { runId: run.id, status: run.status, processed: stats.processed ?? 0, remaining: 0, stats };
   }
   if (!run || run.status !== 'RODANDO') {
@@ -334,6 +454,9 @@ async function runLocked(today: IsoDate, budget: number, opts: { force?: boolean
   }
   if (done) {
     stats.purged = await purgeStale(today);
+    // Sobrou tempo: começa a varredura de renovações (continua nas chamadas seguintes do dia).
+    const rn = await renewalPhase(api, today, startedAt + budget);
+    stats.renewalsChecked = (stats.renewalsChecked ?? 0) + rn.checked;
     // Tarefas do dia já prontas quando o consultor abrir a lista (o envio das 07h30 gera de novo, sem duplicar).
     const t = await generateTasks(today);
     stats.tasksCreated = t.created;

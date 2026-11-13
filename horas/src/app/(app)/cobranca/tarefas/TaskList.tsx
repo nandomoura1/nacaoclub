@@ -14,7 +14,7 @@ import type { TaskRow } from '@/server/services/crm-task-service';
 import { markTaskDoneAction, removeTaskAction, snoozeTaskAction } from '../actions';
 
 const lateText = (d: number | null) => (d === null ? '' : d < 0 ? `vence em ${-d} dia(s)` : d === 0 ? 'vence hoje' : `${d} dia(s) de atraso`);
-const tone = (k: string) => (k === 'D+15' ? 'red' : k === 'RETORNO' ? 'cyan' : k === 'MANUAL' ? 'navy' : k === 'D-3' || k === 'D0' ? 'blue' : 'amber') as 'red' | 'cyan' | 'navy' | 'blue' | 'amber';
+const tone = (k: string) => (k === 'D+15' ? 'red' : k === 'RETORNO' || k === 'RENOVACAO' ? 'cyan' : k === 'MANUAL' ? 'navy' : k === 'D-3' || k === 'D0' ? 'blue' : 'amber') as 'red' | 'cyan' | 'navy' | 'blue' | 'amber';
 
 /** Lista de tarefas. O líder (canManage) também adia ou tira da lista. */
 export function TaskList({ rows, showOwner, canManage, today }: { rows: TaskRow[]; showOwner: boolean; canManage: boolean; today: string }) {
@@ -44,6 +44,7 @@ export function TaskList({ rows, showOwner, canManage, today }: { rows: TaskRow[
                   {t.held && <Badge tone="amber">fora das regras do consultor (não vai para ele)</Badge>}
                 </div>
                 {t.manual && t.customer && <p className="mt-1 text-sm font-semibold text-tinta">{t.label}</p>}
+                {t.plan && <p className="mt-1 text-xs font-semibold text-tinta-suave">Plano: {t.plan}</p>}
                 {t.todo && <p className="mt-1 text-sm text-tinta">{t.todo}</p>}
                 <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-tinta-suave">
                   {t.caseKind === 'COBRANCA' && <span className="font-semibold text-tinta">{brl(t.openValue)}</span>}

@@ -7,6 +7,7 @@ import { selfBaseUrl } from '@/lib/app-url';
 import { getPrincipal, requestMeta } from '@/server/auth/session';
 import { runAction, type ActionResult } from '@/server/action-result';
 import { assignCases, linkConsultant, syncNow } from '@/server/services/crm-service';
+import { registerWebhook } from '@/server/services/tecnofit-webhook-service';
 import { createManualTask, markTaskDone, removeTask, saveAgentRule, searchCustomers, snoozeTask } from '@/server/services/crm-task-service';
 
 const refresh = () => revalidatePath('/cobranca', 'layout');
@@ -47,4 +48,11 @@ export async function searchCustomersAction(q: string): Promise<ActionResult<{ i
 }
 export async function saveAgentRuleAction(input: { userId: string; taskKinds: string[]; sendHour: number; sendDays: number[] }): Promise<ActionResult> {
   return runAction(async () => { await saveAgentRule(await getPrincipal(), input, await requestMeta()); refresh(); return undefined; }, 'Regras salvas.');
+}
+export async function registerWebhookAction(): Promise<ActionResult<{ id: string; secret: string; url: string }>> {
+  return runAction(async () => {
+    const base = selfBaseUrl();
+    if (!base) throw new Error('APP_URL não configurado.');
+    return registerWebhook(await getPrincipal(), base, await requestMeta());
+  });
 }

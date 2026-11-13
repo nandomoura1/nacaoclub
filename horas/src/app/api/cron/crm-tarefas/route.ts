@@ -6,6 +6,7 @@ import { sendCrmDigests } from '@/server/whatsapp/automations';
 import { prisma } from '@/server/db';
 import { toUtc } from '@/domain/dates';
 import { runTecnofitSync } from '@/server/services/crm-sync-service';
+import { processPending } from '@/server/services/tecnofit-webhook-service';
 import { tecnofitConfig } from '@/server/tecnofit/client';
 
 /**
@@ -32,7 +33,9 @@ export async function GET(req: Request) {
     const r = await runTecnofitSync(today, { budgetMs: 150_000 });
     sync = { status: r.status, processed: r.processed, remaining: r.remaining };
   }
+  // Avisos da Tecnofit que não foram processados na hora (rede, Tecnofit lenta): reprocessa.
+  const webhooks = await processPending(today).catch(() => 0);
   const tasks = await generateTasks(today);
   const sent = await sendCrmDigests(today, hour);
-  return NextResponse.json({ today, sync, tasks, sent });
+  return NextResponse.json({ today, sync, webhooks, tasks, sent });
 }

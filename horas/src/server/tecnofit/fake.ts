@@ -1,6 +1,6 @@
 import { addDays } from '@/domain/dates';
 import { todayIso } from '@/lib/today';
-import type { TecnofitAgendaApi, TecnofitApi, TfCall, TfCheckin, TfClass, TfContact, TfCustomer, TfCustomerSale, TfEmployee, TfScheduleEvent, TfUnreceivedSale } from './client';
+import type { TfContract, TecnofitAgendaApi, TecnofitApi, TfCall, TfCheckin, TfClass, TfContact, TfCustomer, TfCustomerSale, TfEmployee, TfScheduleEvent, TfUnreceivedSale } from './client';
 
 /**
  * Tecnofit simulada (TECNOFIT_FAKE=1 e testes): mesmos formatos da API real,
@@ -14,6 +14,11 @@ export interface FakeData {
   classes?: TfClass[];
   schedule?: TfScheduleEvent[];
   checkins?: (TfCheckin & { type: 'class' | 'crossfit'; date: string })[];
+  /** Renovações: alunos ativos e contratos por aluno. */
+  active?: string[];
+  contracts?: Record<string, TfContract[]>;
+  /** Recursos que os avisos (webhooks) apontam: url → objeto. */
+  resources?: Record<string, Record<string, unknown>>;
 }
 
 export function sampleData(today = todayIso()): FakeData {
@@ -79,4 +84,7 @@ export class FakeTecnofit implements TecnofitApi, TecnofitAgendaApi {
   }
   async schedule(date: string) { return (this.data.schedule ?? []).filter((e) => e.date === date); }
   async classes() { return this.data.classes ?? []; }
+  async activeCustomerIds() { return this.data.active ?? this.data.customers.filter((c) => c.status === 'active').map((c) => c.id); }
+  async customerContracts(id: string) { return this.data.contracts?.[id] ?? []; }
+  async resource(url: string) { return this.data.resources?.[url] ?? null; }
 }

@@ -2905,9 +2905,10 @@ model TecCustomer {
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
 
-  debts TecDebt[]
-  cases CrmCase[]
-  tasks CrmTask[]
+  debts     TecDebt[]
+  cases     CrmCase[]
+  tasks     CrmTask[]
+  contracts TecContract[]
 
   @@index([lastSeenOn])
   @@map("tec_customers")
@@ -3138,4 +3139,51 @@ model TvHiddenCustomer {
   createdAt     DateTime @default(now()) @map("created_at")
 
   @@map("tv_hidden_customers")
+}
+
+/// Aviso recebido da Tecnofit (webhook). Guarda só identificação e o link do recurso — o dado vem da API na hora.
+model TecWebhookEvent {
+  /// X-Tecnofit-Webhook-Id (o mesmo evento reenviado não é processado duas vezes)
+  id          String    @id
+  event       String
+  resourceUrl String?   @map("resource_url")
+  /// RECEBIDO, PROCESSADO, IGNORADO, ERRO
+  status      String    @default("RECEBIDO")
+  error       String?
+  receivedAt  DateTime  @default(now()) @map("received_at")
+  processedAt DateTime? @map("processed_at")
+
+  @@index([receivedAt])
+  @@map("tec_webhook_events")
+}
+
+/// Contrato de aluno que termina em até 30 dias (renovação). `dueDate` = fim do contrato (confirmado pela Tecnofit).
+model TecContract {
+  id          String    @id @default(uuid()) @db.Uuid
+  tecnofitId  String    @unique @map("tecnofit_id")
+  customerId  String    @map("customer_id") @db.Uuid
+  name        String?
+  startDate   DateTime? @map("start_date") @db.Date
+  dueDate     DateTime  @map("due_date") @db.Date
+  status      String?
+  /// Já existe contrato seguinte (renovou).
+  renewed     Boolean   @default(false)
+  lastSeenOn  DateTime  @map("last_seen_on") @db.Date
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  customer TecCustomer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([dueDate])
+  @@map("tec_contracts")
+}
+
+/// Varredura de renovações: alunos ativos (só o id Tecnofit, sem nome) e quando os contratos foram conferidos.
+model TecContractCheck {
+  customerTecId String    @id @map("customer_tec_id")
+  seenOn        DateTime  @map("seen_on") @db.Date
+  checkedOn     DateTime? @map("checked_on") @db.Date
+
+  @@index([checkedOn])
+  @@map("tec_contract_checks")
 }

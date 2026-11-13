@@ -8,6 +8,8 @@ import { requirePrincipal } from '@/server/auth/session';
 import { crmAgents, listConsultants, syncOverview } from '@/server/services/crm-service';
 import { ConsultantLinks } from './ConsultantLinks';
 import { SyncButton } from './SyncButton';
+import { WebhookPanel } from './WebhookPanel';
+import { webhookOverview } from '@/server/services/tecnofit-webhook-service';
 
 export const metadata: Metadata = { title: 'Cobrança · Configurações' };
 
@@ -22,7 +24,7 @@ const at = (iso: string | null) => (iso ? new Date(iso).toLocaleString('pt-BR', 
 export default async function Page() {
   const principal = await requirePrincipal();
   if (!can(principal, 'crm.admin')) redirect('/cobranca');
-  const [sync, consultants, agents] = await Promise.all([syncOverview(principal), listConsultants(principal), crmAgents(principal)]);
+  const [sync, consultants, agents, hooks] = await Promise.all([syncOverview(principal), listConsultants(principal), crmAgents(principal), webhookOverview(principal)]);
   const c = sync.config;
   return (
     <>
@@ -63,6 +65,12 @@ export default async function Page() {
             </table>
           </div>
         )}
+      </Card>
+
+      <Card className="mb-4 p-4">
+        <h2 className="mb-1 font-semibold text-tinta">Avisos da Tecnofit em tempo real (webhooks)</h2>
+        <p className="mb-3 text-xs text-tinta-suave">Pagamento, ligação do CRM, contrato, status do aluno e check-in chegam na hora: o caso fecha quando o aluno paga, a tarefa sai quando a ligação é registrada e a TV mostra o check-in sem esperar. A sincronização da madrugada continua como garantia.</p>
+        <WebhookPanel o={hooks} />
       </Card>
 
       <Card className="p-4">

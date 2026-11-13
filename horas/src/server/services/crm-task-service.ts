@@ -34,18 +34,23 @@ const parse = <S extends z.ZodType>(s: S, v: unknown): z.output<S> => {
 export interface TaskGenResult { created: number; done: number; superseded: number; closed: number }
 
 /** Gera e dá baixa nas tarefas do dia. Idempotente: rodar de novo no mesmo dia não duplica. */
-export async function generateTasks(today: IsoDate): Promise<TaskGenResult> {
+/**
+ * `customerIds` (ids de tec_customers) limita a geração a esses alunos — usado pelos avisos da
+ * Tecnofit (webhooks), que chegam um a um ao longo do dia.
+ */
+export async function generateTasks(today: IsoDate, opts: { customerIds?: string[] } = {}): Promise<TaskGenResult> {
   const r: TaskGenResult = { created: 0, done: 0, superseded: 0, closed: 0 };
+  const only = opts.customerIds ? { customerId: { in: opts.customerIds } } : {};
 
   // 1) Caso que fechou: tarefas abertas dele saem (pagou = PAGAMENTO).
-  const closedCases = await prisma.crmTask.findMany({ where: { status: 'ABERTA', case: { status: { not: 'ABERTO' } } }, select: { id: true, case: { select: { kind: true, status: true } } } });
+  const closedCases = await prisma.crmTask.findMany({ where: { status: 'ABERTA', ...only, case: { status: { not: 'ABERTO' } } }, select: { id: true, case: { select: { kind: true, status: true } } } });
   for (const t of closedCases) {
     await prisma.crmTask.update({ where: { id: t.id }, data: { status: 'FEITA', doneOn: d(today), doneVia: t.case!.kind === 'COBRANCA' && t.case!.status === 'RESOLVIDO' ? 'PAGAMENTO' : 'CASO_RESOLVIDO' } });
     r.closed++;
   }
 
   // 2) Baixa pela ligação concluída na Tecnofit no dia em que a tarefa apareceu ou depois (geradas e manuais com aluno).
-  const withCustomer = await prisma.crmTask.findMany({ where: { status: 'ABERTA', customerId: { not: null } }, select: { id: true, showFrom: true, createdOn: true, customer: { select: { lastCallDoneOn: true } } } });
+  const withCustomer = await prisma.crmTask.findMany({ where: { status: 'ABERTA', customerId: { not: null }, ...only }, select: { id: true, showFrom: true, createdOn: true, customer: { select: { lastCallDoneOn: true } } } });
   for (const t of withCustomer) {
     const lastDone = iso(t.customer?.lastCallDoneOn ?? null);
     const since = [iso(t.createdOn)!, iso(t.showFrom)!].sort()[0]!;
@@ -55,7 +60,11 @@ export async function generateTasks(today: IsoDate): Promise<TaskGenResult> {
     }
   }
 
-  const cases = await prisma.crmCase.findMany({ where: { status: 'ABERTO' }, include: { customer: { select: { nextCallOn: true } } } });
+  // 3) Renovações: contrato que termina em até 30 dias e ainda não renovou.
+  const rr = await renewalTasks(today, opts.customerIds);
+  r.created += rr.created; r.closed += rr.closed;
+
+  const cases = await prisma.crmCase.findMany({ where: { status: 'ABERTO', ...only }, include: { customer: { select: { nextCallOn: true } } } });
   for (const c of cases) {
     // Responsável das tarefas acompanha o do caso (redistribuição do líder).
     await prisma.crmTask.updateMany({ where: { caseId: c.id, status: 'ABERTA', NOT: { ownerId: c.ownerId } }, data: { ownerId: c.ownerId } });
@@ -93,6 +102,38 @@ export async function generateTasks(today: IsoDate): Promise<TaskGenResult> {
     }
   }
   return r;
+}
+
+/** Dias antes do fim do contrato em que a tarefa de renovação entra na lista. */
+export const RENEWAL_DAYS = 30;
+/** Depois do fim sem renovar, a tarefa sai sozinha ("não renovou"). */
+const RENEWAL_GRACE_DAYS = 15;
+
+async function renewalTasks(today: IsoDate, customerIds?: string[]) {
+  let created = 0, closed = 0;
+  const only = customerIds ? { customerId: { in: customerIds } } : {};
+  // Renovou, contrato sumiu ou passou do prazo: a tarefa fecha.
+  const open = await prisma.crmTask.findMany({ where: { status: 'ABERTA', kind: 'RENOVACAO', ...only }, select: { id: true, refDate: true, customerId: true } });
+  for (const t of open) {
+    const c = t.customerId ? await prisma.tecContract.findFirst({ where: { customerId: t.customerId, dueDate: t.refDate } }) : null;
+    const expired = iso(t.refDate)! < addDays(today, -RENEWAL_GRACE_DAYS);
+    if (!c || c.renewed || expired) {
+      await prisma.crmTask.update({ where: { id: t.id }, data: { status: 'FEITA', doneOn: d(today), doneVia: c?.renewed ? 'RENOVOU' : expired ? 'NAO_RENOVOU' : 'CONTRATO_ALTERADO' } });
+      closed++;
+    }
+  }
+  const ending = await prisma.tecContract.findMany({
+    where: { renewed: false, dueDate: { gte: d(today), lte: d(addDays(today, RENEWAL_DAYS)) }, ...only },
+    include: { customer: { select: { id: true, consultantTecId: true } } },
+  });
+  for (const c of ending) {
+    const exists = await prisma.crmTask.findFirst({ where: { customerId: c.customerId, kind: 'RENOVACAO', refDate: c.dueDate } });
+    if (exists) continue;
+    const consultant = c.customer.consultantTecId ? await prisma.crmConsultant.findUnique({ where: { tecnofitId: c.customer.consultantTecId } }) : null;
+    await prisma.crmTask.create({ data: { kind: 'RENOVACAO', customerId: c.customerId, ownerId: consultant?.active ? consultant.userId : null, refDate: c.dueDate, createdOn: d(today), showFrom: d(today), title: c.name } });
+    created++;
+  }
+  return { created, closed };
 }
 
 // ── Regras do líder por consultor ────────────────────────
@@ -149,7 +190,7 @@ export async function saveAgentRule(principal: P | null, input: unknown, meta: R
 
 // ── Lista ─────────────────────────────────────────────────
 
-export const TASK_VIEWS = ['minhas', 'sem', 'escalados', 'agendadas', 'retidas', 'todas'] as const;
+export const TASK_VIEWS = ['minhas', 'sem', 'escalados', 'renovacoes', 'agendadas', 'retidas', 'todas'] as const;
 export type TaskView = (typeof TASK_VIEWS)[number];
 
 const OPEN: Prisma.CrmTaskWhereInput = { status: 'ABERTA' };
@@ -160,6 +201,7 @@ function viewWhere(principal: P, view: TaskView, today: IsoDate): Prisma.CrmTask
   if (!can(principal, 'crm.view_all')) throw new AuthorizationError('Só o líder de CRM vê as tarefas do time.');
   if (view === 'sem') return { ...visible, ownerId: null };
   if (view === 'escalados') return { ...visible, kind: 'D+15' };
+  if (view === 'renovacoes') return { ...visible, kind: 'RENOVACAO' };
   if (view === 'agendadas') return { showFrom: { gt: d(today) } };
   return visible; // todas / retidas (filtradas depois pela regra do consultor)
 }
@@ -186,8 +228,8 @@ export async function taskCounts(principal: P | null) {
   const today = todayIso();
   const all = can(principal, 'crm.view_all');
   const n = async (v: TaskView) => (v === 'minhas' || all ? (await rowsFor(principal, v, today)).length : 0);
-  const [minhas, sem, escalados, agendadas, retidas, todas] = await Promise.all(TASK_VIEWS.map(n));
-  return { minhas: minhas!, sem: sem!, escalados: escalados!, agendadas: agendadas!, retidas: retidas!, todas: todas! };
+  const [minhas, sem, escalados, renovacoes, agendadas, retidas, todas] = await Promise.all(TASK_VIEWS.map(n));
+  return { minhas: minhas!, sem: sem!, escalados: escalados!, renovacoes: renovacoes!, agendadas: agendadas!, retidas: retidas!, todas: todas! };
 }
 
 export async function listTasks(principal: P | null, view: TaskView) {
@@ -206,6 +248,7 @@ export async function listTasks(principal: P | null, view: TaskView) {
       id: t.id,
       kind: t.kind,
       label: t.kind === 'MANUAL' ? (t.title ?? 'Tarefa do líder') : k.label,
+      plan: t.kind === 'RENOVACAO' ? t.title : null,
       todo: t.kind === 'MANUAL' ? (t.note ?? '') : k.todo.replace('{venc}', due ? formatDateBR(due) : '—').replace('{ref}', formatDateBR(ref)),
       manual: t.kind === 'MANUAL',
       showFrom,
@@ -370,6 +413,7 @@ export async function dailyDigests(today: IsoDate, opts: { hour?: number | null 
         [count((k) => k === 'RETORNO'), 'retorno(s)/promessa(s) para conferir'],
         [count((k) => k === 'PENDENCIA'), 'pendência(s) na recepção'],
         [count((k) => k === 'D+15'), 'caso(s) escalado(s)'],
+        [count((k) => k === 'RENOVACAO'), 'renovação(ões) de plano'],
       ].filter(([n]) => (n as number) > 0).map(([n, l]) => `   ${n} ${l}`));
     }
     // Líder sem tarefa própria só recebe se houver algo do time para olhar.

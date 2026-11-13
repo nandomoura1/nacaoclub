@@ -45,4 +45,7 @@ export async function wipeCrm() {
   await prisma.tecCustomer.deleteMany({});
   await prisma.crmConsultant.deleteMany({});
   await prisma.tecSyncRun.deleteMany({});
+  await prisma.tecContractCheck.deleteMany({});
+  await prisma.tecWebhookEvent.deleteMany({});
+  await prisma.tvCheckinSync.deleteMany({ where: { kind: 'SYNC_LOCK' } });
 }

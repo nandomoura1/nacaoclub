@@ -210,3 +210,18 @@ turma está vinculada e começa na mesma hora cheia. **TV recebe só "Nome I."**
 chegada. **Opt-out** (decisão 12/11): todos aparecem; a recepção (`tv.privacy`: Admin, Coordenador, Líder, CRM) marca "Não
 mostrar" (`tv_hidden_customers`; continua contando no número); menores seguem a mesma regra. `tv_checkins` guarda só o dia.
 
+**Respostas da Tecnofit (12/11)**: contrato do aluno `dueDate` = **fim do contrato**; `partialDueDate` = 1ª parcela em aberto;
+token vale **24 h** (sem refresh); `blocked` = automático (parcela vencida, pendente, aguardando início — volta sozinho);
+`restricted` = administrativo (inclui **negativação**; só a academia tira); não há consulta única de inadimplência.
+**Webhooks** (`/api/webhooks/tecnofit`, `tecnofit-webhook-service.ts`): HMAC-SHA256 em `X-Tecnofit-Signature: v1=<hex>` sobre
+"<timestamp>.<corpo>" (±5 min), responder 2xx em ≤ 5 s (reenvio 1 min…24 h); corpo traz só `resource_url` → o dado vem da API
+(só no host da API). Guarda o aviso (`tec_webhook_events`, idempotente pelo Webhook-Id, 30 dias) e processa em `after()`:
+pagamento/venda/status/contrato → reprocessa **só aquele aluno** (`resyncCustomer`, só quem já acompanhamos ou bloqueado/restrito);
+`call.*` → baixa/pausa de tarefa; `attendance.created` → check-in na TV. Pendentes são retomados de hora em hora. Secret **só na
+Vercel** (`TECNOFIT_WEBHOOK_SECRET`); a assinatura é cadastrada por Configurações com **chave separada**
+(`TECNOFIT_WEBHOOK_API_KEY/SECRET`), o secret aparece uma vez ao admin e não é guardado. **Renovações**: varredura dentro da
+sincronização (lista de ativos 1×/dia em `tec_contract_checks` — só ids —, contratos de cada ativo 1×/semana); contrato que termina
+em ≤ 30 dias e não tem o seguinte vira `tec_contracts` + tarefa **RENOVACAO** (aba Renovações; filtrável no Time de CRM); fecha
+sozinha ao renovar (contrato seguinte ativo/aguardando início), se o contrato sair ou 15 dias após o fim ("não renovou").
+**Uma sincronização por vez** (trava com prazo em `tv_checkin_sync`, tipo `SYNC_LOCK`).
+
