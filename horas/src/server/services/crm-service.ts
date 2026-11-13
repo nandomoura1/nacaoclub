@@ -207,7 +207,7 @@ export async function syncNow(principal: P | null, opts: { force?: boolean }, me
   const r = await runTecnofitSync(todayIso(), { budgetMs: 50_000, force: opts.force, actorId: principal.id });
   await prisma.$transaction((tx) => audit(tx, { actorId: principal.id, ...meta }, {
     action: 'crm.sync_manual', entityType: 'tec_sync_run', entityId: r.runId, after: { status: r.status, processed: r.processed, remaining: r.remaining },
-    summary: `${principal.name} rodou a sincronização com a Tecnofit (${r.status === 'CONCLUIDA' ? 'concluída' : r.status === 'FALHOU' ? 'falhou' : `faltam ${r.remaining} alunos`})`,
+    summary: `${principal.name} rodou a sincronização com a Tecnofit (${r.status === 'CONCLUIDA' ? 'concluída' : r.status === 'FALHOU' ? 'falhou' : r.status === 'OCUPADA' ? 'já estava rodando' : `faltam ${r.remaining} alunos`})`,
   }));
   return r;
 }

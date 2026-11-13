@@ -17,7 +17,8 @@ export function SyncButton({ disabled }: { disabled: boolean }) {
     const r = await syncNowAction(force);
     if (!r.ok) return setMsg({ error: r.error });
     const d = r.data;
-    setMsg(d.status === 'FALHOU' ? { error: 'A sincronização falhou — veja o motivo na tabela.' }
+    setMsg(d.status === 'OCUPADA' ? { success: `A sincronização já está rodando (${d.processed} aluno(s) feitos, faltam ${d.remaining}). Atualize a página daqui a alguns minutos.` }
+      : d.status === 'FALHOU' ? { error: 'A sincronização falhou — veja o motivo na tabela.' }
       : d.status === 'CONCLUIDA' ? { success: `Sincronização concluída (${d.processed} aluno(s)).` }
       : { success: `${d.processed} aluno(s) processados; faltam ${d.remaining}. A rodada continua sozinha em segundo plano — atualize a página daqui a alguns minutos para acompanhar.` });
     router.refresh();

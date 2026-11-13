@@ -159,7 +159,7 @@ export class HttpTecnofit implements TecnofitApi, TecnofitAgendaApi {
     this.last = Date.now();
   }
 
-  private async login(): Promise<string> {
+  private async login(attempt = 0): Promise<string> {
     if (this.token && Date.now() < this.tokenExp) return this.token;
     const key = clean(process.env.TECNOFIT_API_KEY);
     const secret = clean(process.env.TECNOFIT_API_SECRET);
@@ -178,6 +178,8 @@ export class HttpTecnofit implements TecnofitApi, TecnofitAgendaApi {
     } catch {
       throw new AppError('Não consegui falar com a Tecnofit (rede ou tempo esgotado).');
     }
+    // Limite de uso: espera e tenta de novo (até 3 vezes).
+    if (res.status === 429 && attempt < 3) { await sleep(Number(res.headers.get('retry-after')) * 1000 || 30_000); return this.login(attempt + 1); }
     if (res.status === 401 || res.status === 422) throw new AppError('A Tecnofit recusou as chaves da API (confira TECNOFIT_API_KEY/SECRET e se a chave está ativa).');
     if (!res.ok) throw new AppError(`A Tecnofit respondeu ${res.status} no login.`);
     const body = (await res.json()) as { token?: string; expiration_at?: string; data?: { token?: string; expiration_at?: string } };

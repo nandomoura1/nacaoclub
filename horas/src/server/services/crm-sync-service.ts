@@ -244,9 +244,37 @@ async function purgeStale(today: IsoDate): Promise<number> {
  * Roda (ou continua) a sincronização do dia. `force` recomeça mesmo que o dia já tenha
  * concluído. `budgetMs` limita o tempo desta chamada (a Vercel corta em maxDuration).
  */
+/**
+ * Trava: só uma sincronização por vez (o agendamento de 10 em 10 min, a continuação automática e o
+ * botão podiam rodar juntos e estourar o limite de 200 req/min da Tecnofit → erro 429). Usa a tabela
+ * de controle de consultas (`tv_checkin_sync`, tipo SYNC_LOCK): quem pega a trava roda até o fim do
+ * orçamento; uma execução que cair no meio libera sozinha quando o prazo vence.
+ */
+const LOCK_KIND = 'SYNC_LOCK';
+async function claimSyncLock(today: IsoDate, ms: number): Promise<boolean> {
+  await prisma.tvCheckinSync.createMany({ data: [{ day: d(today), kind: LOCK_KIND, fetchedAt: new Date(0) }], skipDuplicates: true });
+  const r = await prisma.tvCheckinSync.updateMany({ where: { day: d(today), kind: LOCK_KIND, fetchedAt: { lt: new Date() } }, data: { fetchedAt: new Date(Date.now() + ms) } });
+  return r.count === 1;
+}
+const releaseSyncLock = (today: IsoDate) => prisma.tvCheckinSync.updateMany({ where: { day: d(today), kind: LOCK_KIND }, data: { fetchedAt: new Date(0) } });
+
 export async function runTecnofitSync(today: IsoDate, opts: { budgetMs?: number; force?: boolean; actorId?: string | null } = {}): Promise<SyncResult> {
-  const startedAt = Date.now();
   const budget = opts.budgetMs ?? 240_000;
+  // Prazo da trava: o orçamento + folga para o último aluno e para salvar.
+  if (!(await claimSyncLock(today, budget + 90_000))) {
+    const cur = await prisma.tecSyncRun.findFirst({ where: { day: d(today) }, orderBy: { startedAt: 'desc' } });
+    const stats = (cur?.stats ?? {}) as Stats;
+    return { runId: cur?.id ?? '', status: 'OCUPADA', processed: stats.processed ?? 0, remaining: Array.isArray(cur?.pending) ? cur.pending.length : 0, stats };
+  }
+  try {
+    return await runLocked(today, budget, opts);
+  } finally {
+    await releaseSyncLock(today);
+  }
+}
+
+async function runLocked(today: IsoDate, budget: number, opts: { force?: boolean; actorId?: string | null }): Promise<SyncResult> {
+  const startedAt = Date.now();
   const { api, cfg, callsMade } = await tecnofitApi();
 
   let run = await prisma.tecSyncRun.findFirst({ where: { day: d(today) }, orderBy: { startedAt: 'desc' } });

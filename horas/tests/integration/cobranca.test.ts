@@ -162,5 +162,12 @@ describe.skipIf(!hasDb)('Cobrança e CRM — sincronização e fila', () => {
     await runTecnofitSync(today, { force: true });
     expect((await prisma.tecSyncRun.findUniqueOrThrow({ where: { id: stale.id } })).status).toBe('INTERROMPIDA');
   });
+
+  it('só uma sincronização por vez: a segunda chamada simultânea não roda (evita o erro 429 da Tecnofit)', async () => {
+    const [a, b] = await Promise.all([runTecnofitSync(today, { force: true }), runTecnofitSync(today, { force: true })]);
+    expect([a.status, b.status].sort()).toEqual(['CONCLUIDA', 'OCUPADA']);
+    // A trava é liberada no fim: a próxima chamada roda normalmente.
+    expect((await runTecnofitSync(today, { force: true })).status).toBe('CONCLUIDA');
+  });
 });
 
