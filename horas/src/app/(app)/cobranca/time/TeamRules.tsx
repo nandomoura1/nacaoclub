@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { FormMessage } from '@/components/ui/alert';
-import { FILTERABLE_KINDS, SEND_HOURS, TASK_KINDS } from '@/domain/cobranca';
+import { DEFAULT_KINDS, FILTERABLE_KINDS, OPT_IN_KINDS, SEND_HOURS, TASK_KINDS } from '@/domain/cobranca';
 import { WEEKDAYS } from '@/domain/dates';
 import { saveAgentRuleAction } from '../actions';
 
@@ -14,7 +14,7 @@ interface Member { id: string; name: string; hasPhone: boolean; taskKinds: strin
 
 function Row({ m }: { m: Member }) {
   const router = useRouter();
-  const [kinds, setKinds] = useState<string[]>(m.taskKinds.length ? m.taskKinds : FILTERABLE_KINDS);
+  const [kinds, setKinds] = useState<string[]>(m.taskKinds.length ? m.taskKinds : DEFAULT_KINDS);
   const [hour, setHour] = useState(m.sendHour);
   const [days, setDays] = useState<number[]>(m.sendDays);
   const [msg, setMsg] = useState<{ error?: string; success?: string }>({});
@@ -27,12 +27,12 @@ function Row({ m }: { m: Member }) {
         {!m.hasPhone && <Badge tone="amber">sem WhatsApp no cadastro — não recebe a mensagem</Badge>}
       </div>
       <div>
-        <p className="mb-1 text-xs font-semibold text-tinta-suave">Tarefas que entram na lista (a tarefa do líder sempre entra)</p>
+        <p className="mb-1 text-xs font-semibold text-tinta-suave">Tarefas que entram na lista (a tarefa do líder sempre entra). D-3 e D0 vêm desligados: muita parcela é cobrada sozinha no cartão.</p>
         <div className="flex flex-wrap gap-1.5">
           {FILTERABLE_KINDS.map((k) => (
             <label key={k} className={`flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ring-1 ${kinds.includes(k) ? 'bg-nacao/10 text-nacao ring-nacao/30' : 'bg-white text-tinta-suave ring-borda'}`}>
               <input type="checkbox" className="sr-only" checked={kinds.includes(k)} onChange={() => setKinds(toggle(kinds, k))} />
-              {TASK_KINDS[k]?.label ?? k}
+              {TASK_KINDS[k]?.label ?? k}{OPT_IN_KINDS.includes(k) && ' (antes de vencer)'}
             </label>
           ))}
         </div>

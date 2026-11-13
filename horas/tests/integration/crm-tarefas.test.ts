@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '@/server/db';
 import { AuthorizationError } from '@/server/errors';
 import { addDays } from '@/domain/dates';
+import { DEFAULT_KINDS, overdueValue } from '@/domain/cobranca';
 import { todayIso } from '@/lib/today';
 import { setFakeTecnofit } from '@/server/tecnofit/client';
 import { FakeTecnofit, type FakeData } from '@/server/tecnofit/fake';
@@ -25,10 +26,13 @@ describe.skipIf(!hasDb)('Cobrança — tarefas de CRM do consultor', () => {
       { id: '202', name: 'Aluna Tarefa Dois', status: 'active', contacts: [{ contact: '(61) 99111-0202', type: 'WHATSAPP' }], sales: [sale('6202', addDays(day1, -3), 300)] }, // D+3
       { id: '203', name: 'Aluno Tarefa Três', status: 'active', contacts: [{ contact: '(61) 99111-0203', type: 'WHATSAPP' }], sales: [sale('6203', addDays(day1, -16), 150)] }, // D+15
       { id: '204', name: 'Aluna Tarefa Quatro', status: 'restricted', contacts: [], sales: [] }, // pendência
+      // Plano anual parcelado com a 1ª parcela em aberto vencida há 200 dias: atraso antigo (lista do líder).
+      { id: '205', name: 'Aluno Tarefa Cinco', status: 'active', contacts: [], sales: [{ id: '6205', totalValue: 2400, openValue: 2000, installments: 12, saleDate: addDays(day1, -260), dueDate: addDays(day1, -200), items: [{ name: 'PLANO ANUAL' }] }] },
     ],
     calls: [
       { customerId: '201', consultantId: '7001', consultantName: 'Consultora Tarefas', at: addDays(day1, -10), done: true, deadline: addDays(day1, -10), doneAt: addDays(day1, -10) },
       { customerId: '202', consultantId: '7001', consultantName: 'Consultora Tarefas', at: addDays(day1, -10), done: true, deadline: addDays(day1, -10), doneAt: addDays(day1, -10) },
+      { customerId: '205', consultantId: '7001', consultantName: 'Consultora Tarefas', at: addDays(day1, -10), done: true, deadline: addDays(day1, -10), doneAt: addDays(day1, -10) },
     ],
   };
   let admin: Awaited<ReturnType<typeof makeUser>>;
@@ -65,7 +69,9 @@ describe.skipIf(!hasDb)('Cobrança — tarefas de CRM do consultor', () => {
     const r = await runTecnofitSync(day1);
     expect(r.status).toBe('CONCLUIDA');
     expect(r.stats.tasksCreated).toBe(4);
-    expect((await tasksOf('201')).map((t) => t.kind)).toEqual(['D-3']);
+    // D-3/D0 (antes de vencer) vêm desligados: sem regra do líder, não viram tarefa.
+    expect((await tasksOf('201')).map((t) => t.kind)).toEqual([]);
+    expect((await tasksOf('205')).map((t) => t.kind)).toEqual(['ATRASO_ANTIGO']);
     expect((await tasksOf('202')).map((t) => t.kind)).toEqual(['D+3']);
     expect((await tasksOf('203')).map((t) => t.kind)).toEqual(['D+15']);
     expect((await tasksOf('204')).map((t) => t.kind)).toEqual(['PENDENCIA']);
@@ -82,6 +88,13 @@ describe.skipIf(!hasDb)('Cobrança — tarefas de CRM do consultor', () => {
   it('lista: consultor vê as dele com o que fazer; líder vê o time e os escalados', async () => {
     const cons = await listConsultants(admin.principal);
     await linkConsultant(admin.principal, { consultantId: cons.find((c) => c.tecnofitId === '7001')!.id, userId: agent.principal.id }, META);
+    // Atraso antigo não vai para o consultor; fica na aba do líder.
+    expect((await listTasks(agent.principal, 'minhas')).map((t) => t.customer!.tecnofitId)).toEqual(['202']);
+    expect((await listTasks(lider.principal, 'antigos')).map((t) => t.customer!.tecnofitId)).toEqual(['205']);
+    expect((await taskCounts(lider.principal)).antigos).toBe(1);
+    // O líder liga o D-3/D0 para a consultora: o lembrete passa a ser gerado.
+    await saveAgentRule(lider.principal, { userId: agent.principal.id, taskKinds: [...DEFAULT_KINDS, 'D-3', 'D0'], sendHour: 8, sendDays: [1, 2, 3, 4, 5, 6] }, META);
+    expect((await generateTasks(day1)).created).toBe(1);
     const mine = await listTasks(agent.principal, 'minhas');
     expect(mine.map((t) => t.customer!.tecnofitId).sort()).toEqual(['201', '202']);
     expect(mine.find((t) => t.kind === 'D-3')!.todo).toMatch(/vence em \d{2}\/\d{2}\/\d{4}/);
@@ -156,13 +169,16 @@ describe.skipIf(!hasDb)('Cobrança — tarefas de CRM do consultor', () => {
     await expect(saveAgentRule(agent.principal, { userId: agent.principal.id, taskKinds: [], sendHour: 8, sendDays: [1] }, META)).rejects.toBeInstanceOf(AuthorizationError);
     await expect(saveAgentRule(lider.principal, { userId: agent.principal.id, taskKinds: [], sendHour: 8, sendDays: [1] }, META)).rejects.toThrow(/ao menos um tipo/);
     await expect(saveAgentRule(lider.principal, { userId: agent.principal.id, taskKinds: ['D+3'], sendHour: 5, sendDays: [1] }, META)).rejects.toThrow(/6h às 14h/);
+    expect(await prisma.crmTask.count({ where: { kind: 'D-3', status: 'ABERTA', ownerId: agent.principal.id } })).toBe(1);
     await saveAgentRule(lider.principal, { userId: agent.principal.id, taskKinds: ['D+3', 'D+5', 'D+7', 'RETORNO'], sendHour: 10, sendDays: [1, 2, 3, 4, 5, 6, 7] }, META);
-    expect((await listTasks(agent.principal, 'minhas')).some((t) => t.kind === 'D-3')).toBe(false);
-    // A tarefa é do dia simulado (futuro): o líder a vê em "Agendadas", marcada como fora das regras.
-    const held = await listTasks(lider.principal, 'agendadas');
-    expect(held.some((t) => t.kind === 'D-3' && t.ownerId === agent.principal.id && t.held)).toBe(true);
+    // Pendência fora das regras fica com o líder em "Fora das regras".
+    expect((await listTasks(agent.principal, 'minhas')).some((t) => t.kind === 'PENDENCIA')).toBe(false);
+    // D-3 desligado: o lembrete que estava na lista sai na geração seguinte (e não é recriado).
+    await generateTasks(day);
+    expect(await prisma.crmTask.count({ where: { kind: 'D-3', status: 'ABERTA', ownerId: agent.principal.id } })).toBe(0);
+    expect(await prisma.crmTask.count({ where: { kind: 'D-3', doneVia: 'REGRA' } })).toBe(1);
     expect(JSON.stringify(await dailyDigests(day, { hour: 10 }))).not.toMatch(/lembrete/); // fora das regras não vai no WhatsApp
-    expect(await prisma.auditLog.count({ where: { action: 'crm.agent_rule', entityId: agent.principal.id } })).toBe(1);
+    expect(await prisma.auditLog.count({ where: { action: 'crm.agent_rule', entityId: agent.principal.id } })).toBe(2);
   });
 
   it('líder adia e tira tarefa da lista (com motivo); tirada não volta a ser gerada', async () => {
@@ -217,6 +233,21 @@ describe.skipIf(!hasDb)('Cobrança — tarefas de CRM do consultor', () => {
     expect(msgs.every((m) => !/Aluno|Aluna|99111/.test(m.preview ?? ''))).toBe(true);
     // O agendador das 8h não manda tarefas de CRM (têm horário próprio).
     expect(Object.keys(await runDueAutomations(day)).some((k) => /Tarefas de CRM/.test(k))).toBe(false);
+  });
+
+  it('valor vencido: plano parcelado conta só as parcelas vencidas, não o saldo do contrato', async () => {
+    const debt = await prisma.tecDebt.findUniqueOrThrow({ where: { tecnofitSaleId: '6205' } });
+    expect(debt.installments).toBe(12);
+    const want = overdueValue({ dueDate: addDays(day1, -200), openValue: 2000, totalValue: 2400, installments: 12, description: 'PLANO ANUAL' }, day1);
+    expect(want).toBeGreaterThan(1000); // ~7 parcelas de 200
+    expect(want).toBeLessThan(2000);
+    const caso = await prisma.crmCase.findFirstOrThrow({ where: { customer: { tecnofitId: '205' }, kind: 'COBRANCA' } });
+    expect(Number(caso.openValue)).toBe(2000); // saldo
+    expect(Number(caso.overdueValue)).toBeGreaterThan(1000);
+    expect(Number(caso.overdueValue)).toBeLessThan(2000);
+    // O líder vê o atraso antigo no WhatsApp do time (só a contagem).
+    const lead = (await dailyDigests(addDays(todayIso(), 1), { hour: null })).find((x) => x.userId === lider.principal.id);
+    expect(lead?.text ?? '').toMatch(/atraso antigo/);
   });
 
   it('se a Tecnofit recusar as ligações, a sincronização segue e registra o aviso', async () => {

@@ -39,11 +39,26 @@ export const TASK_KINDS = {
   RETORNO: { label: 'Retorno / promessa agendada', todo: 'Retorno agendado na Tecnofit para {ref}: conferir se pagou e falar com o aluno.' },
   MANUAL: { label: 'Tarefa do líder', todo: '' },
   RENOVACAO: { label: 'Renovação do plano', todo: 'O plano termina em {ref}: oferecer a renovação. Renovou? A tarefa sai sozinha quando o contrato novo aparecer na Tecnofit.' },
+  ATRASO_ANTIGO: { label: 'Atraso antigo (mais de 180 dias)', todo: 'Parcela vencida desde {venc}: decidir com o aluno ou na Tecnofit — cancelar o contrato, renegociar ou cobrar.' },
 } as Record<string, { label: string; todo: string }>;
 
-/** Tipos que o líder liga/desliga por consultor (vazio = recebe todos). Tarefa manual do líder sempre entra. */
+/** Tipos que o líder liga/desliga por consultor. Tarefa manual do líder sempre entra. */
 export const FILTERABLE_KINDS = [...CADENCE.map((c) => c.kind), 'PENDENCIA', 'RETORNO', 'RENOVACAO'] as string[];
-export const kindAllowed = (kind: string, allowed: readonly string[]) => kind === 'MANUAL' || !allowed.length || allowed.includes(kind);
+/**
+ * Lembretes ANTES de vencer (decisão 13/11): desligados por padrão — muita parcela de plano anual é
+ * cobrada sozinha no cartão. O líder liga por consultor no Time de CRM; desligado, nem viram tarefa.
+ */
+export const OPT_IN_KINDS = ['D-3', 'D0'] as string[];
+export const DEFAULT_KINDS = FILTERABLE_KINDS.filter((k) => !OPT_IN_KINDS.includes(k));
+/** Só o líder trata (aba própria): nunca vai para a lista nem para o WhatsApp do consultor. */
+export const LEADER_ONLY_KINDS = ['ATRASO_ANTIGO'] as string[];
+/** Regra vazia = padrão (todos, menos os lembretes antes de vencer). */
+export const kindAllowed = (kind: string, allowed: readonly string[]) =>
+  kind === 'MANUAL' || (!LEADER_ONLY_KINDS.includes(kind) && (allowed.length ? allowed.includes(kind) : !OPT_IN_KINDS.includes(kind)));
+
+/** Parcela vencida há mais que isso: sai da régua do consultor e vai para a lista do líder (decisão 13/11). */
+export const OLD_DEBT_DAYS = 180;
+export const isOldDebt = (oldestDue: IsoDate | null, today: IsoDate) => !!oldestDue && daysLate(oldestDue, today) > OLD_DEBT_DAYS;
 
 /** Envio do WhatsApp de tarefas: de hora em hora, das 6h às 14h (Brasília). */
 export const SEND_HOURS = [6, 7, 8, 9, 10, 11, 12, 13, 14] as const;
@@ -80,10 +95,38 @@ export const agingOf = (late: number): AgingId => AGING.find((a) => late >= a.mi
 /** Débito da Tecnofit (venda do cliente) já normalizado. */
 export interface DebtIn {
   saleId: string;
+  /** 1ª parcela em aberto da venda. */
   dueDate: IsoDate | null;
+  /** Saldo da venda: em plano parcelado inclui as parcelas que ainda vão vencer. */
   openValue: number;
   totalValue: number;
   description: string;
+  /** Quantidade de parcelas da venda (a API não detalha cada uma). */
+  installments?: number | null;
+  saleStatus?: string | null;
+}
+
+/** Parcelas da venda: o número da Tecnofit; sem ele, pelo nome do plano (anual 12, semestral 6, trimestral 3). */
+export function installmentsOf(n: number | null | undefined, description: string | null | undefined): number {
+  if (n && n > 0) return Math.min(Math.floor(n), 60);
+  const t = (description ?? '').toLowerCase();
+  return t.includes('anual') ? 12 : t.includes('semestral') ? 6 : t.includes('trimestral') ? 3 : 1;
+}
+
+/**
+ * Valor VENCIDO (estimado) da venda: a Tecnofit devolve só o saldo e a 1ª parcela em aberto, então
+ * conta as parcelas mensais vencidas desde ela × valor da parcela, limitado ao saldo.
+ * Plano à vista ou parcela única = o saldo inteiro, se já venceu.
+ */
+export function overdueValue(x: Pick<DebtIn, 'dueDate' | 'openValue' | 'totalValue' | 'description' | 'installments'>, today: IsoDate): number {
+  if (!x.dueDate || x.dueDate > today || !(x.openValue > 0)) return 0;
+  const n = installmentsOf(x.installments, x.description);
+  if (n <= 1) return x.openValue;
+  const parcela = (x.totalValue > 0 ? x.totalValue : x.openValue) / n;
+  const [y1, m1, d1] = x.dueDate.split('-').map(Number) as [number, number, number];
+  const [y2, m2, d2] = today.split('-').map(Number) as [number, number, number];
+  const months = (y2 - y1) * 12 + (m2 - m1) - (d2 < d1 ? 1 : 0);
+  return Math.round(Math.min(x.openValue, (months + 1) * parcela) * 100) / 100;
 }
 
 /** Só entra na cobrança venda com valor em aberto, vencida ou vencendo em até UPCOMING_DAYS. */

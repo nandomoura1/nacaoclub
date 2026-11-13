@@ -42,7 +42,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ a
     <>
       <PageHeader
         title="Fila de cobrança"
-        description="Alunos da Tecnofit com venda vencida ou vencendo em até 3 dias, e pendências na recepção. Atualizado todo dia de madrugada; pagou na Tecnofit, o caso se resolve sozinho na sincronização seguinte."
+        description="Alunos da Tecnofit com parcela vencida ou vencendo em até 3 dias, e pendências na recepção. O valor é o vencido (estimado); o saldo do contrato aparece ao lado. Parcela vencida há mais de 180 dias fica com o líder (Tarefas → Atraso antigo). Atualizado todo dia de madrugada; pagou na Tecnofit, o caso se resolve sozinho na sincronização seguinte."
         actions={can(principal, 'crm.admin') ? <Link href="/cobranca/configuracoes" className={buttonVariants({ variant: 'secondary' })}>Configurações</Link> : undefined}
       />
       <div className="mb-3 flex gap-1 overflow-x-auto border-b border-borda">
@@ -65,7 +65,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ a
         </div>
         <button className={buttonVariants({ variant: 'secondary' })}>Filtrar</button>
       </form>
-      <p className="mb-2 text-xs text-tinta-suave">{tab.hint} {rows.length > 0 && <>· <strong>{rows.length}</strong> caso(s) · <strong>{brl(total)}</strong> em aberto</>}</p>
+      <p className="mb-2 text-xs text-tinta-suave">{tab.hint} {rows.length > 0 && <>· <strong>{rows.length}</strong> caso(s) · <strong>{brl(total)}</strong> vencido (estimado)</>}</p>
       {rows.length === 0 ? (
         <Card className="p-8 text-center text-sm text-tinta-suave">
           {view === 'minha' ? 'Nenhum caso na sua fila agora.' : 'Nenhum caso aqui.'}

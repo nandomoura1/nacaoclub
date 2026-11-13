@@ -6,7 +6,7 @@ import type { Principal } from '@/server/auth/principal';
 import type { RequestMeta } from '@/server/auth/session';
 import { AppError, AuthorizationError, NotFoundError } from '@/server/errors';
 import { fromUtc } from '@/domain/dates';
-import { agingOf, cadenceStep, daysLate, formatMobile, maskMobile, priorityScore, type CaseKind } from '@/domain/cobranca';
+import { agingOf, cadenceStep, daysLate, formatMobile, isOldDebt, maskMobile, priorityScore, type CaseKind } from '@/domain/cobranca';
 import { todayIso } from '@/lib/today';
 import { tecnofitConfig } from '@/server/tecnofit/client';
 import { runTecnofitSync } from './crm-sync-service';
@@ -79,19 +79,22 @@ export async function listQueue(principal: P | null, opts: { view: QueueView; ki
         // Dado pessoal: completo só com crm.view_personal.
         phone: personal ? formatMobile(r.customer.mobile) : maskMobile(r.customer.mobile),
         hasPhone: !!r.customer.mobile,
-        openValue: Number(r.openValue),
+        // Vencido (estimado) é o número da cobrança; saldo = o que falta pagar dos contratos (inclui parcelas futuras).
+        openValue: Number(r.overdueValue),
+        balance: Number(r.openValue),
+        old: kind === 'COBRANCA' && isOldDebt(oldestDue, today),
         originalValue: Number(r.originalValue),
         recoveredValue: Number(r.recoveredValue),
         oldestDue,
         daysLate: late,
         aging: late === null ? null : agingOf(late),
-        step: kind === 'COBRANCA' ? cadenceStep(oldestDue, today)?.label ?? 'Antes do D-3' : null,
+        step: kind === 'COBRANCA' ? (isOldDebt(oldestDue, today) ? 'Atraso antigo · com o líder' : cadenceStep(oldestDue, today)?.label ?? 'Antes do D-3') : null,
         openedOn: fromUtc(r.openedOn),
         ownerId: r.ownerId,
         ownerName: r.ownerId ? ownerName.get(r.ownerId) ?? 'Usuário removido' : null,
         consultantName: r.customer.consultantTecId ? consultantName.get(r.customer.consultantTecId) ?? null : null,
-        debts: r.customer.debts.map((x) => ({ description: x.description, dueDate: x.dueDate ? fromUtc(x.dueDate) : null, openValue: Number(x.openValue) })),
-        score: priorityScore({ kind, openValue: Number(r.openValue), oldestDue, openedOn: fromUtc(r.openedOn) }, today),
+        debts: r.customer.debts.map((x) => ({ description: x.description, dueDate: x.dueDate ? fromUtc(x.dueDate) : null, openValue: Number(x.openValue), overdueValue: Number(x.overdueValue), installments: x.installments })),
+        score: priorityScore({ kind, openValue: Number(r.overdueValue), oldestDue, openedOn: fromUtc(r.openedOn) }, today),
       };
     })
     .sort((a, b) => b.score - a.score);

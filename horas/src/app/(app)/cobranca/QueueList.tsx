@@ -62,7 +62,9 @@ export function QueueList({ rows, agents, canAssign }: { rows: QueueRow[]; agent
                   {r.customer.status && <Badge>{r.customer.status === 'blocked' ? 'Bloqueado' : r.customer.status === 'restricted' ? 'Restrito' : r.customer.status}</Badge>}
                 </div>
                 <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-tinta-suave">
-                  {r.kind === 'COBRANCA' && <span className="font-semibold text-tinta">{brl(r.openValue)}</span>}
+                  {r.kind === 'COBRANCA' && <span className="font-semibold text-tinta" title="Parcelas vencidas (estimado pelo nº de parcelas da venda)">{brl(r.openValue)} vencido</span>}
+                  {r.kind === 'COBRANCA' && r.balance > r.openValue + 0.01 && <span title="Saldo dos contratos na Tecnofit, com as parcelas que ainda vão vencer">saldo {brl(r.balance)}</span>}
+                  {r.old && <Badge tone="red">+180 dias</Badge>}
                   {r.kind === 'COBRANCA' && <span>{lateText(r.daysLate)}</span>}
                   {r.step && <span>{r.step}</span>}
                   <span className="flex items-center gap-1">{r.hasPhone ? <Phone className="size-3" /> : <PhoneOff className="size-3" />}{r.phone ?? 'sem celular'}</span>
@@ -80,9 +82,10 @@ export function QueueList({ rows, agents, canAssign }: { rows: QueueRow[]; agent
                   <>
                     <p className="mb-1 font-semibold text-tinta">Vendas em aberto (Tecnofit)</p>
                     <ul className="space-y-0.5">
-                      {r.debts.map((d, i) => <li key={i}>{d.description ?? 'Venda'} · vence {d.dueDate ? formatDateBR(d.dueDate) : '—'} · <strong>{brl(d.openValue)}</strong></li>)}
+                      {r.debts.map((d, i) => <li key={i}>{d.description ?? 'Venda'} · 1ª parcela em aberto {d.dueDate ? formatDateBR(d.dueDate) : '—'} · <strong>{brl(d.overdueValue)} vencido</strong>{d.openValue > d.overdueValue + 0.01 ? ` · saldo ${brl(d.openValue)}` : ''}{d.installments ? ` · ${d.installments}x` : ''}</li>)}
                     </ul>
-                    <p className="mt-2">Caso aberto em {formatDateBR(r.openedOn)} · valor original {brl(r.originalValue)}{r.recoveredValue > 0 ? ` · já recuperado ${brl(r.recoveredValue)}` : ''}.</p>
+                    <p className="mt-2">Caso aberto em {formatDateBR(r.openedOn)} · saldo quando abriu {brl(r.originalValue)}{r.recoveredValue > 0 ? ` · já recuperado ${brl(r.recoveredValue)}` : ''}.</p>
+                    <p className="mt-1">O vencido é estimado: parcelas mensais vencidas desde a 1ª em aberto × valor da parcela (a Tecnofit não detalha cada parcela). Confira na Tecnofit antes de falar valor com o aluno.</p>
                     <p className="mt-1">Formas de pagamento: app da Tecnofit, Pix ou recepção.</p>
                   </>
                 )}

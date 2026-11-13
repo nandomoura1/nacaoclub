@@ -38,7 +38,7 @@ export function tecnofitConfig(): TecnofitConfig {
 
 export interface TfCustomerRef { id: string; name: string }
 export interface TfUnreceivedSale { saleId: string; customer: TfCustomerRef }
-export interface TfCustomerSale { id: string; totalValue: unknown; openValue: unknown; saleDate: unknown; dueDate: unknown; saleStatus?: unknown; items?: { name?: string }[]; seller?: TfPerson | null }
+export interface TfCustomerSale { id: string; totalValue: unknown; openValue: unknown; saleDate: unknown; dueDate: unknown; saleStatus?: unknown; installments?: unknown; items?: { name?: string }[]; seller?: TfPerson | null }
 /** Funcionário citado num registro (vendedor/consultor). */
 export interface TfPerson { id: string; name: string | null }
 

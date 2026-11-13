@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/server/db';
 import { audit } from '@/server/audit';
 import { addDays, toUtc, fromUtc, type IsoDate } from '@/domain/dates';
-import { isBlockedStatus, isCollectible, isoFromApi, money, pickMobile, type DebtIn } from '@/domain/cobranca';
+import { isBlockedStatus, isCollectible, isoFromApi, money, overdueValue, pickMobile, type DebtIn } from '@/domain/cobranca';
 import { tecnofitApi, type TecnofitApi, type TfCustomerSale, type TfPerson } from '@/server/tecnofit/client';
 import { generateTasks } from './crm-task-service';
 
@@ -48,6 +48,8 @@ export function collectibleDebts(sales: TfCustomerSale[], today: IsoDate): DebtI
       openValue: money(s.openValue),
       totalValue: money(s.totalValue),
       description: (s.items ?? []).map((i) => i?.name).filter(Boolean).join(', ').slice(0, 200) || 'Venda',
+      installments: Number.isFinite(Number(s.installments)) && Number(s.installments) > 0 ? Math.floor(Number(s.installments)) : null,
+      saleStatus: typeof s.saleStatus === 'string' ? s.saleStatus.slice(0, 40) : null,
     }))
     .filter((x) => x.saleId && isCollectible(x, today));
 }
@@ -130,13 +132,13 @@ async function ownerFor(consultantTecId: string | null): Promise<string | null> 
  */
 async function caseValues(tx: Prisma.TransactionClient, customerId: string, openedOn: IsoDate) {
   const debts = await tx.tecDebt.findMany({ where: { customerId, status: { in: ['ABERTO', 'QUITADO'] }, lastSeenOn: { gte: d(openedOn) } } });
-  let original = 0, open = 0, recovered = 0;
+  let original = 0, open = 0, recovered = 0, overdue = 0;
   for (const x of debts) {
     original += num(x.firstOpenValue);
-    if (x.status === 'ABERTO') { open += num(x.openValue); recovered += Math.max(num(x.firstOpenValue) - num(x.openValue), 0); }
+    if (x.status === 'ABERTO') { open += num(x.openValue); overdue += num(x.overdueValue); recovered += Math.max(num(x.firstOpenValue) - num(x.openValue), 0); }
     else recovered += num(x.firstOpenValue);
   }
-  return { originalValue: dec(original), openValue: dec(open), recoveredValue: dec(recovered) };
+  return { originalValue: dec(original), openValue: dec(open), recoveredValue: dec(recovered), overdueValue: dec(overdue) };
 }
 
 /** Processa um aluno: débitos, celular e casos. Devolve o que mudou (para as contagens). */
@@ -175,10 +177,11 @@ async function processCustomer(api: TecnofitApi, p: Pending, today: IsoDate): Pr
     // Débitos: atualiza os que seguem em aberto; os que sumiram viram QUITADO.
     const seen = new Set(debts.map((x) => x.saleId));
     for (const x of debts) {
+      const extra = { installments: x.installments ?? null, saleStatus: x.saleStatus ?? null, overdueValue: dec(overdueValue(x, today)) };
       await tx.tecDebt.upsert({
         where: { tecnofitSaleId: x.saleId },
-        create: { tecnofitSaleId: x.saleId, customerId: cust.id, dueDate: x.dueDate ? d(x.dueDate) : null, openValue: dec(x.openValue), firstOpenValue: dec(x.openValue), totalValue: dec(x.totalValue), description: x.description, firstSeenOn: d(today), lastSeenOn: d(today) },
-        update: { customerId: cust.id, dueDate: x.dueDate ? d(x.dueDate) : null, openValue: dec(x.openValue), totalValue: dec(x.totalValue), description: x.description, status: 'ABERTO', paidOn: null, lastSeenOn: d(today) },
+        create: { tecnofitSaleId: x.saleId, customerId: cust.id, dueDate: x.dueDate ? d(x.dueDate) : null, openValue: dec(x.openValue), firstOpenValue: dec(x.openValue), totalValue: dec(x.totalValue), description: x.description, ...extra, firstSeenOn: d(today), lastSeenOn: d(today) },
+        update: { customerId: cust.id, dueDate: x.dueDate ? d(x.dueDate) : null, openValue: dec(x.openValue), totalValue: dec(x.totalValue), description: x.description, ...extra, status: 'ABERTO', paidOn: null, lastSeenOn: d(today) },
       });
     }
     const gone = await tx.tecDebt.findMany({ where: { customerId: cust.id, status: 'ABERTO', tecnofitSaleId: { notIn: [...seen] } } });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { agingOf, cadenceStep, isCollectible, isoFromApi, maskMobile, money, pickMobile, priorityScore } from '@/domain/cobranca';
+import { agingOf, cadenceStep, installmentsOf, isCollectible, isOldDebt, isoFromApi, kindAllowed, maskMobile, money, overdueValue, pickMobile, priorityScore } from '@/domain/cobranca';
 import { collectibleDebts } from '@/server/services/crm-sync-service';
 import { HttpTecnofit, resetSalesVariant, tecnofitConfig } from '@/server/tecnofit/client';
 import { SYSTEM_ROLES } from '@/server/auth/permissions';
@@ -58,7 +58,7 @@ describe('Cobrança: regras puras', () => {
     expect(collectibleDebts([
       { id: '1', totalValue: 300, openValue: 100, saleDate: '2026-10-01', dueDate: '2026-11-01', items: [{ name: 'Plano' }] },
       { id: '2', totalValue: 300, openValue: 0, saleDate: '2026-10-01', dueDate: '2026-11-01' },
-    ], today)).toEqual([{ saleId: '1', dueDate: '2026-11-01', openValue: 100, totalValue: 300, description: 'Plano' }]);
+    ], today)).toEqual([{ saleId: '1', dueDate: '2026-11-01', openValue: 100, totalValue: 300, description: 'Plano', installments: null, saleStatus: null }]);
   });
 
   it('continuação da sincronização chama o domínio de produção, não o endereço do deploy', () => {
@@ -172,5 +172,31 @@ describe('Cliente HTTP da Tecnofit', () => {
     const api = new HttpTecnofit(tecnofitConfig(), (async () => { called = true; return new Response('{}'); }) as typeof fetch, 0);
     await expect(api.consultants()).rejects.toThrow(/TECNOFIT_API_KEY/);
     expect(called).toBe(false);
+  });
+
+  it('valor vencido: parcelas mensais vencidas desde a 1ª em aberto × parcela, limitado ao saldo', () => {
+    const anual = { openValue: 2400, totalValue: 2400, description: 'NAÇÃO FIT ANUAL', installments: 12 };
+    expect(overdueValue({ ...anual, dueDate: '2026-11-12' }, today)).toBe(0); // ainda vai vencer
+    expect(overdueValue({ ...anual, dueDate: '2026-11-11' }, today)).toBe(200); // vence hoje: 1 parcela
+    expect(overdueValue({ ...anual, dueDate: '2026-10-11' }, today)).toBe(400); // 2 parcelas
+    expect(overdueValue({ ...anual, dueDate: '2026-10-12' }, today)).toBe(200); // a 2ª ainda não venceu
+    expect(overdueValue({ ...anual, dueDate: '2024-01-01' }, today)).toBe(2400); // limitado ao saldo
+    // Sem o nº de parcelas: pelo nome do plano; à vista/mensal = saldo inteiro.
+    expect(overdueValue({ ...anual, installments: null, dueDate: '2026-10-11' }, today)).toBe(400);
+    expect(overdueValue({ openValue: 289.9, totalValue: 289.9, description: 'Plano Mensal', dueDate: '2026-11-01' }, today)).toBe(289.9);
+    expect(installmentsOf(null, 'NAÇÃO FUTEVÔLEI SEMESTRAL')).toBe(6);
+    expect(installmentsOf(10, 'ANUAL')).toBe(10);
+  });
+
+  it('D-3/D0 desligados por padrão; atraso antigo é só do líder; +180 dias = atraso antigo', () => {
+    expect(kindAllowed('D-3', [])).toBe(false);
+    expect(kindAllowed('D0', [])).toBe(false);
+    expect(kindAllowed('D+3', [])).toBe(true);
+    expect(kindAllowed('D-3', ['D-3', 'D+3'])).toBe(true);
+    expect(kindAllowed('MANUAL', ['D+3'])).toBe(true);
+    expect(kindAllowed('ATRASO_ANTIGO', [])).toBe(false);
+    expect(isOldDebt('2026-05-14', today)).toBe(true);
+    expect(isOldDebt('2026-05-15', today)).toBe(false);
+    expect(isOldDebt(null, today)).toBe(false);
   });
 });

@@ -17,6 +17,7 @@ const TABS: { id: TaskView; label: string; all?: boolean; hint?: string }[] = [
   { id: 'minhas', label: 'Minhas tarefas' },
   { id: 'sem', label: 'Sem responsável', all: true, hint: 'Alunos sem consultor vinculado: distribua na Fila de cobrança.' },
   { id: 'escalados', label: 'Escalados (D+15)', all: true },
+  { id: 'antigos', label: 'Atraso antigo', all: true, hint: 'Parcela vencida há mais de 180 dias: fora da régua dos consultores. Decida na Tecnofit — cancelar o contrato, renegociar ou cobrar — e marque como feita (ou crie uma tarefa manual para um consultor).' },
   { id: 'renovacoes', label: 'Renovações', all: true, hint: 'Planos que terminam em até 30 dias e ainda não renovaram. Renovou na Tecnofit, a tarefa sai sozinha.' },
   { id: 'agendadas', label: 'Agendadas', all: true, hint: 'Adiadas e tarefas do líder com data futura: entram na lista e no WhatsApp no dia marcado.' },
   { id: 'retidas', label: 'Fora das regras', all: true, hint: 'Tipos que o consultor não recebe (Time de CRM): ficam só aqui, com você.' },

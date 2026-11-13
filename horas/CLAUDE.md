@@ -224,4 +224,13 @@ sincronização (lista de ativos 1×/dia em `tec_contract_checks` — só ids �
 em ≤ 30 dias e não tem o seguinte vira `tec_contracts` + tarefa **RENOVACAO** (aba Renovações; filtrável no Time de CRM); fecha
 sozinha ao renovar (contrato seguinte ativo/aguardando início), se o contrato sair ou 15 dias após o fim ("não renovou").
 **Uma sincronização por vez** (trava com prazo em `tv_checkin_sync`, tipo `SYNC_LOCK`).
+**Valor vencido × saldo (decisão 13/11)**: a venda da Tecnofit traz só o saldo (`openValue`, inclui parcelas futuras de plano
+anual/semestral) e a 1ª parcela em aberto (`dueDate`); `installments` é só a quantidade. O número da cobrança é o **vencido
+estimado** (`overdueValue` em `domain/cobranca.ts`: parcelas mensais vencidas desde a 1ª em aberto × total/parcelas, limitado ao
+saldo; sem `installments`, pelo nome do plano) em `tec_debts.overdue_value`/`crm_cases.overdue_value`; o saldo aparece ao lado.
+**D-3 e D0 desligados por padrão** (`OPT_IN_KINDS`; parcela no cartão recorrente é cobrada sozinha): regra vazia = todos menos eles;
+o líder liga por consultor no Time de CRM e, desligados, nem viram tarefa (os abertos saem com `doneVia = REGRA`).
+**Atraso antigo** (1ª parcela em aberto vencida há **mais de 180 dias**, `isOldDebt`): sai da régua do consultor e vira tarefa
+`ATRASO_ANTIGO` só do líder (aba Tarefas → Atraso antigo; nunca na lista/WhatsApp do consultor; o WhatsApp do líder traz a contagem):
+cancelar na Tecnofit, renegociar ou cobrar.
 

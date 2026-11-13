@@ -7,7 +7,7 @@ import type { Principal } from '@/server/auth/principal';
 import type { RequestMeta } from '@/server/auth/session';
 import { AppError, AuthorizationError, NotFoundError } from '@/server/errors';
 import { addDays, formatDateBR, fromUtc, isIsoDate, toUtc, weekdayOf, type IsoDate } from '@/domain/dates';
-import { DEFAULT_SEND, FILTERABLE_KINDS, SEND_HOURS, TASK_KINDS, brl, cadenceStep, daysBetween, daysLate, formatMobile, kindAllowed, maskMobile, type CaseKind } from '@/domain/cobranca';
+import { DEFAULT_KINDS, DEFAULT_SEND, FILTERABLE_KINDS, OPT_IN_KINDS, SEND_HOURS, TASK_KINDS, brl, cadenceStep, daysBetween, daysLate, formatMobile, isOldDebt, kindAllowed, maskMobile, type CaseKind } from '@/domain/cobranca';
 import { todayIso } from '@/lib/today';
 
 /**
@@ -65,6 +65,14 @@ export async function generateTasks(today: IsoDate, opts: { customerIds?: string
   r.created += rr.created; r.closed += rr.closed;
 
   const cases = await prisma.crmCase.findMany({ where: { status: 'ABERTO', ...only }, include: { customer: { select: { nextCallOn: true } } } });
+  const rule = await rulesFor([...new Set(cases.map((c) => c.ownerId).filter((x): x is string => !!x))]);
+  // Lembrete antes de vencer (D-3/D0) só para quem o líder ligou; os que já estavam na lista saem.
+  const optIn = await prisma.crmTask.findMany({ where: { status: 'ABERTA', kind: { in: OPT_IN_KINDS }, ...only }, select: { id: true, kind: true, ownerId: true } });
+  for (const t of optIn) {
+    if (t.ownerId && kindAllowed(t.kind, rule(t.ownerId).taskKinds)) continue;
+    await prisma.crmTask.update({ where: { id: t.id }, data: { status: 'REMOVIDA', removedReason: 'Lembrete antes do vencimento desligado (padrão; o líder liga por consultor no Time de CRM)', doneOn: d(today), doneVia: 'REGRA' } });
+    r.closed++;
+  }
   for (const c of cases) {
     // Responsável das tarefas acompanha o do caso (redistribuição do líder).
     await prisma.crmTask.updateMany({ where: { caseId: c.id, status: 'ABERTA', NOT: { ownerId: c.ownerId } }, data: { ownerId: c.ownerId } });
@@ -76,10 +84,14 @@ export async function generateTasks(today: IsoDate, opts: { customerIds?: string
     const paused = !!nextCall && nextCall > today;
     if (nextCall && nextCall <= today) want.push({ kind: 'RETORNO', ref: nextCall });
     if (c.kind === 'PENDENCIA') want.push({ kind: 'PENDENCIA', ref: iso(c.openedOn)! });
-    else if (!paused) {
+    else if (isOldDebt(iso(c.oldestDue), today)) {
+      // Parcela vencida há mais de 180 dias: sai da régua do consultor e vai para a lista do líder.
+      want.push({ kind: 'ATRASO_ANTIGO', ref: iso(c.oldestDue)! });
+    } else if (!paused) {
       const due = iso(c.oldestDue);
       const step = cadenceStep(due, today);
-      if (step && due) want.push({ kind: step.kind, ref: due });
+      const off = step && OPT_IN_KINDS.includes(step.kind) && !(c.ownerId && kindAllowed(step.kind, rule(c.ownerId).taskKinds));
+      if (step && due && !off) want.push({ kind: step.kind, ref: due });
     }
 
     for (const w of want) {
@@ -87,7 +99,7 @@ export async function generateTasks(today: IsoDate, opts: { customerIds?: string
       const exists = await prisma.crmTask.findUnique({ where: { caseId_kind_refDate: { caseId: c.id, kind: w.kind, refDate: d(w.ref) } } });
       if (exists) continue;
       // Novo passo da régua: o anterior ainda aberto é substituído e fica anotado como "sem contato".
-      const older = REGUA.has(w.kind) ? open.filter((t) => REGUA.has(t.kind)) : [];
+      const older = REGUA.has(w.kind) || w.kind === 'ATRASO_ANTIGO' ? open.filter((t) => REGUA.has(t.kind)) : [];
       const missed = [...new Set(older.flatMap((t) => [...t.missed, t.kind]))];
       await prisma.$transaction(async (tx) => {
         for (const o of older) await tx.crmTask.update({ where: { id: o.id }, data: { status: 'SUBSTITUIDA' } });
@@ -141,6 +153,8 @@ async function renewalTasks(today: IsoDate, customerIds?: string[]) {
 export interface AgentRule { taskKinds: string[]; sendHour: number; sendDays: number[] }
 const ruleOf = (s: { taskKinds: string[]; sendHour: number; sendDays: number[] } | null | undefined): AgentRule =>
   s ? { taskKinds: s.taskKinds, sendHour: s.sendHour, sendDays: s.sendDays } : { taskKinds: [], sendHour: DEFAULT_SEND.hour, sendDays: [...DEFAULT_SEND.days] };
+/** Regra vazia = padrão (todos, menos os lembretes antes de vencer). */
+const sameSet = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x) => b.includes(x));
 
 async function rulesFor(userIds: string[]) {
   const rows = await prisma.crmAgentSetting.findMany({ where: { userId: { in: userIds } } });
@@ -173,9 +187,10 @@ export async function saveAgentRule(principal: P | null, input: unknown, meta: R
   const v = parse(ruleSchema, input);
   const ok = (await teamRules(principal)).some((u) => u.id === v.userId);
   if (!ok) throw new AppError('Essa pessoa não está no time de CRM.');
-  // Todos os tipos marcados = "todos" (assim um tipo novo também entra).
-  const kinds = FILTERABLE_KINDS.every((k) => v.taskKinds.includes(k)) ? [] : [...new Set(v.taskKinds)];
-  if (!kinds.length && v.taskKinds.length === 0) throw new AppError('Marque ao menos um tipo de tarefa.');
+  if (!v.taskKinds.length) throw new AppError('Marque ao menos um tipo de tarefa.');
+  // Igual ao padrão = vazio (assim um tipo novo também entra); D-3/D0 só entram se marcados.
+  const chosen = [...new Set(v.taskKinds)];
+  const kinds = sameSet(chosen, DEFAULT_KINDS) ? [] : chosen;
   const days = [...new Set(v.sendDays)].sort();
   await prisma.$transaction(async (tx) => {
     const before = await tx.crmAgentSetting.findUnique({ where: { userId: v.userId } });
@@ -183,24 +198,27 @@ export async function saveAgentRule(principal: P | null, input: unknown, meta: R
     const who = (await tx.user.findUnique({ where: { id: v.userId }, select: { name: true } }))?.name ?? '—';
     await audit(tx, { actorId: principal.id, ...meta }, {
       action: 'crm.agent_rule', entityType: 'user', entityId: v.userId, before: before ? ruleOf(before) : null, after: { taskKinds: kinds, sendHour: v.sendHour, sendDays: days },
-      summary: `${principal.name} ajustou as tarefas de CRM de ${who}: ${kinds.length ? kinds.join(', ') : 'todos os tipos'} · WhatsApp às ${v.sendHour}h`,
+      summary: `${principal.name} ajustou as tarefas de CRM de ${who}: ${kinds.length ? kinds.join(', ') : 'padrão (sem D-3/D0)'} · WhatsApp às ${v.sendHour}h`,
     });
   });
 }
 
 // ── Lista ─────────────────────────────────────────────────
 
-export const TASK_VIEWS = ['minhas', 'sem', 'escalados', 'renovacoes', 'agendadas', 'retidas', 'todas'] as const;
+export const TASK_VIEWS = ['minhas', 'sem', 'escalados', 'antigos', 'renovacoes', 'agendadas', 'retidas', 'todas'] as const;
 export type TaskView = (typeof TASK_VIEWS)[number];
 
 const OPEN: Prisma.CrmTaskWhereInput = { status: 'ABERTA' };
+const LEADER_ONLY = ['ATRASO_ANTIGO'];
 
 function viewWhere(principal: P, view: TaskView, today: IsoDate): Prisma.CrmTaskWhereInput {
-  const visible = { showFrom: { lte: d(today) } };
+  // Atraso antigo fica só na aba própria do líder.
+  const visible = { showFrom: { lte: d(today) }, kind: { notIn: LEADER_ONLY } };
   if (view === 'minhas') return { ...visible, ownerId: principal.id };
   if (!can(principal, 'crm.view_all')) throw new AuthorizationError('Só o líder de CRM vê as tarefas do time.');
   if (view === 'sem') return { ...visible, ownerId: null };
   if (view === 'escalados') return { ...visible, kind: 'D+15' };
+  if (view === 'antigos') return { showFrom: { lte: d(today) }, kind: 'ATRASO_ANTIGO' };
   if (view === 'renovacoes') return { ...visible, kind: 'RENOVACAO' };
   if (view === 'agendadas') return { showFrom: { gt: d(today) } };
   return visible; // todas / retidas (filtradas depois pela regra do consultor)
@@ -211,12 +229,12 @@ async function rowsFor(principal: P, view: TaskView, today: IsoDate) {
     where: { ...OPEN, ...viewWhere(principal, view, today) },
     include: {
       customer: { select: { tecnofitId: true, name: true, mobile: true, status: true } },
-      case: { select: { kind: true, openValue: true, oldestDue: true } },
+      case: { select: { kind: true, openValue: true, overdueValue: true, oldestDue: true } },
     },
     take: 1000,
   });
   const rule = await rulesFor([...new Set(rows.map((t) => t.ownerId).filter((x): x is string => !!x))]);
-  const withHeld = rows.map((t) => ({ t, held: !!t.ownerId && !kindAllowed(t.kind, rule(t.ownerId).taskKinds) }));
+  const withHeld = rows.map((t) => ({ t, held: !!t.ownerId && t.kind !== 'ATRASO_ANTIGO' && !kindAllowed(t.kind, rule(t.ownerId).taskKinds) }));
   // Consultor só vê o que as regras do líder deixam; "Retidas" mostra o resto ao líder.
   if (view === 'minhas') return withHeld.filter((x) => !x.held);
   if (view === 'retidas') return withHeld.filter((x) => x.held);
@@ -228,8 +246,8 @@ export async function taskCounts(principal: P | null) {
   const today = todayIso();
   const all = can(principal, 'crm.view_all');
   const n = async (v: TaskView) => (v === 'minhas' || all ? (await rowsFor(principal, v, today)).length : 0);
-  const [minhas, sem, escalados, renovacoes, agendadas, retidas, todas] = await Promise.all(TASK_VIEWS.map(n));
-  return { minhas: minhas!, sem: sem!, escalados: escalados!, renovacoes: renovacoes!, agendadas: agendadas!, retidas: retidas!, todas: todas! };
+  const [minhas, sem, escalados, antigos, renovacoes, agendadas, retidas, todas] = await Promise.all(TASK_VIEWS.map(n));
+  return { minhas: minhas!, sem: sem!, escalados: escalados!, antigos: antigos!, renovacoes: renovacoes!, agendadas: agendadas!, retidas: retidas!, todas: todas! };
 }
 
 export async function listTasks(principal: P | null, view: TaskView) {
@@ -259,7 +277,8 @@ export async function listTasks(principal: P | null, view: TaskView) {
       customer: t.customer ? { tecnofitId: t.customer.tecnofitId, name: t.customer.name, status: t.customer.status } : null,
       // Dado pessoal: completo só com crm.view_personal.
       phone: t.customer ? (personal ? formatMobile(t.customer.mobile) : maskMobile(t.customer.mobile)) : null,
-      openValue: t.case ? Number(t.case.openValue) : 0,
+      openValue: t.case ? Number(t.case.overdueValue) : 0,
+      balance: t.case ? Number(t.case.openValue) : 0,
       daysLate: due ? daysLate(due, today) : null,
       ownerId: t.ownerId,
       ownerName: t.ownerId ? owners.get(t.ownerId) ?? 'Usuário removido' : null,
@@ -273,7 +292,7 @@ export async function teamSummary(principal: P | null) {
   assertCan(principal, 'crm.view_all');
   const today = todayIso();
   const [open, done] = await Promise.all([
-    prisma.crmTask.findMany({ where: { ...OPEN, showFrom: { lte: d(today) } }, select: { showFrom: true, ownerId: true } }),
+    prisma.crmTask.findMany({ where: { ...OPEN, showFrom: { lte: d(today) }, kind: { notIn: LEADER_ONLY } }, select: { showFrom: true, ownerId: true } }),
     prisma.crmTask.findMany({ where: { status: 'FEITA', doneOn: { gte: d(addDays(today, -6)) } }, select: { doneVia: true, ownerId: true } }),
   ]);
   const ids = [...new Set([...open, ...done].map((t) => t.ownerId).filter((x): x is string => !!x))];
@@ -381,7 +400,9 @@ export async function searchCustomers(principal: P | null, q: string) {
  * `hour`: só quem tem esse horário e hoje é dia de envio (null = todos, ex.: "Enviar agora").
  */
 export async function dailyDigests(today: IsoDate, opts: { hour?: number | null } = {}) {
-  const tasks = await prisma.crmTask.findMany({ where: { ...OPEN, showFrom: { lte: d(today) } }, select: { kind: true, showFrom: true, caseId: true, ownerId: true, case: { select: { openValue: true } } } });
+  const all = await prisma.crmTask.findMany({ where: { ...OPEN, showFrom: { lte: d(today) } }, select: { kind: true, showFrom: true, caseId: true, ownerId: true, case: { select: { overdueValue: true } } } });
+  const old = all.filter((t) => LEADER_ONLY.includes(t.kind)).length;
+  const tasks = all.filter((t) => !LEADER_ONLY.includes(t.kind));
   const owners = [...new Set(tasks.map((t) => t.ownerId).filter((x): x is string => !!x))];
   const leaders = await prisma.user.findMany({ where: { active: true, roles: { some: { role: { permissions: { some: { permission: { key: 'crm.view_all' } } } } } } }, select: { id: true } });
   const leaderIds = new Set(leaders.map((l) => l.id));
@@ -402,10 +423,10 @@ export async function dailyDigests(today: IsoDate, opts: { hour?: number | null 
     const lines: string[] = [];
     if (mine.length) {
       const late = mine.filter((t) => fromUtc(t.showFrom) < today).length;
-      const cases = new Map(mine.filter((t) => t.caseId).map((t) => [t.caseId!, Number(t.case?.openValue ?? 0)]));
+      const cases = new Map(mine.filter((t) => t.caseId).map((t) => [t.caseId!, Number(t.case?.overdueValue ?? 0)]));
       const value = [...cases.values()].reduce((s, v) => s + v, 0);
       const count = (k: (x: string) => boolean) => mine.filter((t) => k(t.kind)).length;
-      lines.push(`• *${mine.length} tarefa(s)*${late ? ` — ${late} atrasada(s) 🔴` : ''}${value > 0 ? ` · ${brl(value)} em aberto` : ''}`);
+      lines.push(`• *${mine.length} tarefa(s)*${late ? ` — ${late} atrasada(s) 🔴` : ''}${value > 0 ? ` · ${brl(value)} vencido` : ''}`);
       lines.push(...[
         [count((k) => k === 'MANUAL'), 'tarefa(s) do líder'],
         [count((k) => k === 'D-3' || k === 'D0'), 'lembrete(s) de vencimento'],
@@ -417,9 +438,9 @@ export async function dailyDigests(today: IsoDate, opts: { hour?: number | null 
       ].filter(([n]) => (n as number) > 0).map(([n, l]) => `   ${n} ${l}`));
     }
     // Líder sem tarefa própria só recebe se houver algo do time para olhar.
-    if (leaderIds.has(u.id) && (unassigned || escalated)) {
+    if (leaderIds.has(u.id) && (unassigned || escalated || old)) {
       if (!mine.length) lines.push('• Nenhuma tarefa sua hoje.');
-      lines.push('', '*Time*', ...(unassigned ? [`• ${unassigned} tarefa(s) sem responsável para distribuir`] : []), ...(escalated ? [`• ${escalated} caso(s) escalado(s) no D+15`] : []));
+      lines.push('', '*Time*', ...(unassigned ? [`• ${unassigned} tarefa(s) sem responsável para distribuir`] : []), ...(escalated ? [`• ${escalated} caso(s) escalado(s) no D+15`] : []), ...(old ? [`• ${old} caso(s) de atraso antigo (+180 dias) para decidir`] : []));
     }
     if (!lines.length) return [];
     return [{ userId: u.id, name: u.name, phone: u.phone ?? u.teachers.map((t) => t.teacher.phone).find(Boolean) ?? null, text: lines.join('\n') }];

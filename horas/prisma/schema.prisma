@@ -2925,6 +2925,10 @@ model TecDebt {
   firstOpenValue Decimal   @map("first_open_value") @db.Decimal(12, 2)
   totalValue     Decimal   @default(0) @map("total_value") @db.Decimal(12, 2)
   description    String?
+  /// Parcelas da venda (Tecnofit) e status da venda; valor vencido estimado (parcelas vencidas × valor da parcela).
+  installments   Int?
+  saleStatus     String?   @map("sale_status")
+  overdueValue   Decimal   @default(0) @map("overdue_value") @db.Decimal(12, 2)
   /// ABERTO, QUITADO (sumiu da lista de abertos na Tecnofit)
   status         String    @default("ABERTO")
   firstSeenOn    DateTime  @map("first_seen_on") @db.Date
@@ -2968,6 +2972,8 @@ model CrmCase {
   originalValue  Decimal   @default(0) @map("original_value") @db.Decimal(12, 2)
   openValue      Decimal   @default(0) @map("open_value") @db.Decimal(12, 2)
   recoveredValue Decimal   @default(0) @map("recovered_value") @db.Decimal(12, 2)
+  /// Soma do vencido estimado dos débitos abertos (open_value = saldo dos contratos).
+  overdueValue   Decimal   @default(0) @map("overdue_value") @db.Decimal(12, 2)
   oldestDue      DateTime? @map("oldest_due") @db.Date
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
