@@ -169,8 +169,10 @@ retoma de onde parou): vendas não recebidas (12 meses) + bloqueados/restritos +
 (`openValue`/`dueDate`) e celular. Débito = venda com valor em aberto vencida ou vencendo em ≤ 3 dias. Caso **COBRANCA**
 (1 aberto por aluno e tipo, índice parcial); `blocked`/`restricted` sem venda em aberto = **PENDENCIA** ("Pendência na
 recepção", fora dos números de inadimplência). Pagou na Tecnofit → caso RESOLVIDO na rodada seguinte (valores recalculados
-dos débitos, sem duplicar). **Responsável = consultor da Tecnofit** (o da ligação de CRM mais recente — o cadastro do aluno na
-API não traz consultor) vinculado **à mão** ao usuário em Configurações; sem vínculo = "Sem responsável", o **líder distribui**
+dos débitos, sem duplicar). **Responsável = consultor da Tecnofit** (decisão 13/11: o da **ligação de CRM mais recente**; sem ligação, o **vendedor da venda em
+aberto** mais recente — `personOf` aceita consultant/seller/employee… como objeto ou `...Id`; vendedor novo entra em `crm_consultants`)
+vinculado **uma vez** ao usuário em Configurações (o vínculo reatribui os casos abertos dele); a sincronização grava em `stats.warning`
+um diagnóstico (contagens + só NOMES de campos) quando ligações/vendas vêm sem consultor; sem vínculo = "Sem responsável", o **líder distribui**
 e vê tudo. Responsável é fixo até o caso fechar. **O sistema NÃO fala com o aluno** (decisão de 11/11): cada passo da régua
 (**D-3, D0, D+3, D+5, D+7, D+15**) vira **tarefa do consultor** (`crm_tasks`, `crm-task-service.ts`; tela Cobrança e CRM →
 Tarefas de CRM), mais pendência na recepção e "Retorno / promessa". O consultor **registra o contato na Tecnofit** (Ligações do

@@ -26,7 +26,7 @@ export function sampleData(today = todayIso()): FakeData {
     ],
     customers: [
       { id: '101', name: 'Aluno Exemplo Um', status: 'active', contacts: [{ contact: '(61) 99999-0101', type: 'TELEFONE CELULAR' }], sales: [sale('5001', addDays(today, -10), 289.9)] },
-      { id: '102', name: 'Aluna Exemplo Dois', status: 'active', contacts: [{ contact: '(61) 3333-0102', type: 'TELEFONE FIXO' }, { contact: '61 98888-0102', type: 'WHATSAPP' }], sales: [sale('5002', addDays(today, 2), 199)] },
+      { id: '102', name: 'Aluna Exemplo Dois', status: 'active', contacts: [{ contact: '(61) 3333-0102', type: 'TELEFONE FIXO' }, { contact: '61 98888-0102', type: 'WHATSAPP' }], sales: [{ ...sale('5002', addDays(today, 2), 199), seller: { id: '9003', name: 'Vendedora Exemplo C' } }] }, // sem ligação: responsável = quem vendeu
       { id: '103', name: 'Aluno Exemplo Três', status: 'blocked', contacts: [{ contact: '(61) 97777-0103', type: 'TELEFONE CELULAR' }], sales: [sale('5003', addDays(today, -40), 150, 450, 'Plano Trimestral')] },
       { id: '104', name: 'Aluna Exemplo Quatro', status: 'restricted', contacts: [], sales: [] },
       { id: '105', name: 'Aluno Exemplo Cinco', status: 'active', contacts: [{ contact: '(61) 96666-0105', type: 'TELEFONE CELULAR' }], sales: [sale('5005', addDays(today, 20), 289.9)] },

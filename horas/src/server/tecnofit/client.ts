@@ -38,7 +38,38 @@ export function tecnofitConfig(): TecnofitConfig {
 
 export interface TfCustomerRef { id: string; name: string }
 export interface TfUnreceivedSale { saleId: string; customer: TfCustomerRef }
-export interface TfCustomerSale { id: string; totalValue: unknown; openValue: unknown; saleDate: unknown; dueDate: unknown; saleStatus?: unknown; items?: { name?: string }[] }
+export interface TfCustomerSale { id: string; totalValue: unknown; openValue: unknown; saleDate: unknown; dueDate: unknown; saleStatus?: unknown; items?: { name?: string }[]; seller?: TfPerson | null }
+/** Funcionário citado num registro (vendedor/consultor). */
+export interface TfPerson { id: string; name: string | null }
+
+/** Campos em que a Tecnofit pode trazer o funcionário responsável (a documentação varia por recurso). */
+const PERSON_KEYS = ['consultant', 'seller', 'salesman', 'salesperson', 'saleConsultant', 'employee', 'responsible', 'attendant', 'collaborator', 'user', 'createdBy'];
+/** Primeiro funcionário encontrado no registro (objeto { id, name } ou campo "...Id"). Só id e nome. */
+export function personOf(r: Record<string, unknown>, keys = PERSON_KEYS): TfPerson | null {
+  for (const k of keys) {
+    const v = r[k];
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      const o = v as Record<string, unknown>;
+      const id = o.id ?? o.employeeId ?? o.userId;
+      if (id != null && String(id).trim()) return { id: String(id).trim(), name: o.name != null ? String(o.name).trim() || null : null };
+    }
+    for (const idKey of [`${k}Id`, `${k}_id`]) {
+      const id = r[idKey];
+      if (id != null && String(id).trim() && typeof id !== 'object') return { id: String(id).trim(), name: typeof r[`${k}Name`] === 'string' ? String(r[`${k}Name`]) : null };
+    }
+  }
+  return null;
+}
+/** Só os NOMES dos campos (nunca valores) para diagnóstico: "a,b,customer{id,name}". */
+export function shapeOf(r: Record<string, unknown> | undefined): string {
+  if (!r) return '';
+  return Object.keys(r).slice(0, 40).map((k) => {
+    const v = r[k];
+    return v && typeof v === 'object' && !Array.isArray(v) ? `${k}{${Object.keys(v as object).slice(0, 12).join(',')}}` : k;
+  }).join(',');
+}
+/** Diagnóstico da última leitura (contagens e nomes de campos — sem dado de aluno). */
+export interface TfDiag { calls?: { raw: number; parsed: number; withConsultant: number; shape: string }; sales?: { total: number; withSeller: number; shape: string } }
 export interface TfContact { contact: string; type: string | null }
 export interface TfCustomer { id: string; name: string; status: string | null }
 export interface TfEmployee { id: string; name: string; types: string[] }
@@ -70,6 +101,8 @@ export interface TecnofitApi {
   consultants(): Promise<TfEmployee[]>;
   /** Ligações do CRM no período (traz o consultor de cada aluno). */
   calls(startDate: string, endDate: string): Promise<TfCall[]>;
+  /** Contagens/formato da última leitura (só o cliente real preenche). */
+  diag?: TfDiag;
 }
 
 const str = (v: unknown) => (v === null || v === undefined ? '' : String(v));
@@ -269,8 +302,11 @@ export class HttpTecnofit implements TecnofitApi, TecnofitAgendaApi {
       try {
         const rows = await this.all(path, variants[i]!.params, variants[i]!.limit);
         this.salesVariant = i;
+        const ds = (this.diag.sales ??= { total: 0, withSeller: 0, shape: '' });
+        ds.total += rows.length;
+        if (!ds.shape && rows[0]) ds.shape = shapeOf(rows[0]);
         return rows
-          .map((r) => ({ ...r, id: str(r.id) }) as TfCustomerSale)
+          .map((r) => { const seller = personOf(r); if (seller) ds.withSeller++; return { ...r, id: str(r.id), seller } as TfCustomerSale; })
           .filter((r) => { const sd = typeof r.saleDate === 'string' ? r.saleDate.slice(0, 10) : null; return !sd || sd >= saleStartDate; });
       } catch (e) {
         if (!(e instanceof TecnofitHttpError && (e.httpStatus === 422 || e.httpStatus === 400))) throw e;
@@ -317,18 +353,25 @@ export class HttpTecnofit implements TecnofitApi, TecnofitAgendaApi {
 
   private async callsRange(startDate: string, endDate: string): Promise<TfCall[]> {
     const rows = await this.all('/crm/calls', { startDate, endDate }, 50);
-    return rows.map((r) => {
-      const c = (r.customer ?? {}) as Record<string, unknown>;
-      const k = (r.consultant ?? {}) as Record<string, unknown>;
+    const parsed = rows.map((r) => {
+      const c = (r.customer ?? r.client ?? {}) as Record<string, unknown>;
+      const k = personOf(r);
       const st = str(r.status).toLowerCase();
       const done = /complet|conclu|realiz|done|finaliz/.test(st);
       return {
-        customerId: str(c.id), consultantId: k.id ? str(k.id) : null, consultantName: k.name ? str(k.name) : null,
+        customerId: str(c.id ?? r.customerId ?? r.customer_id ?? r.clientId), consultantId: k?.id ?? null, consultantName: k?.name ?? null,
         at: str(r.callDate || r.callDeadline || r.createdAt) || null,
         done, deadline: str(r.callDeadline) || null, doneAt: done ? str(r.callDate) || null : null,
       };
     }).filter((c) => c.customerId);
+    const d = (this.diag.calls ??= { raw: 0, parsed: 0, withConsultant: 0, shape: '' });
+    d.raw += rows.length; d.parsed += parsed.length; d.withConsultant += parsed.filter((c) => c.consultantId).length;
+    if (!d.shape && rows[0]) d.shape = shapeOf(rows[0]);
+    return parsed;
   }
+
+  /** Contagens e formato da última leitura (para o aviso da sincronização). */
+  diag: TfDiag = {};
 
 }
 

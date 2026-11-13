@@ -54,6 +54,9 @@ describe.skipIf(!hasDb)('Cobrança e CRM — sincronização e fila', () => {
 
     const c102 = await prisma.tecCustomer.findUniqueOrThrow({ where: { tecnofitId: '102' } });
     expect(c102.mobile).toBe('61988880102'); // WhatsApp ganha do fixo
+    // Sem ligação de CRM: o consultor vem da venda em aberto (e aparece em Configurações para vincular).
+    expect(c102.consultantTecId).toBe('9003');
+    expect(await prisma.crmConsultant.findUnique({ where: { tecnofitId: '9003' } })).toMatchObject({ name: 'Vendedora Exemplo C', userId: null });
     // Sem consultor vinculado ainda: tudo "sem responsável".
     expect(await prisma.crmCase.count({ where: { status: 'ABERTO', ownerId: { not: null } } })).toBe(0);
 

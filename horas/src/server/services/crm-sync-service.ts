@@ -3,7 +3,7 @@ import { prisma } from '@/server/db';
 import { audit } from '@/server/audit';
 import { addDays, toUtc, fromUtc, type IsoDate } from '@/domain/dates';
 import { isBlockedStatus, isCollectible, isoFromApi, money, pickMobile, type DebtIn } from '@/domain/cobranca';
-import { tecnofitApi, type TecnofitApi, type TfCustomerSale } from '@/server/tecnofit/client';
+import { tecnofitApi, type TecnofitApi, type TfCustomerSale, type TfPerson } from '@/server/tecnofit/client';
 import { generateTasks } from './crm-task-service';
 
 /**
@@ -29,7 +29,7 @@ const RETENTION_DAYS = 90;
 const SAVE_EVERY = 10;
 
 interface Pending { id: string; name: string; status: string | null; consultant: string | null; lastCallDone?: string | null; nextCall?: string | null }
-interface Stats { candidates?: number; processed?: number; casesOpened?: number; casesResolved?: number; debtsPaid?: number; consultants?: number; purged?: number; warning?: string; tasksCreated?: number; tasksDone?: number; errors?: { customer: string; error: string }[] }
+interface Stats { candidates?: number; processed?: number; casesOpened?: number; casesResolved?: number; debtsPaid?: number; consultants?: number; purged?: number; warning?: string; tasksCreated?: number; tasksDone?: number; salesRead?: number; salesWithSeller?: number; salesShape?: string; errors?: { customer: string; error: string }[] }
 
 const SYSTEM = { actorId: null, userAgent: 'sincronizacao-tecnofit' };
 const d = (iso: IsoDate) => toUtc(iso);
@@ -77,6 +77,13 @@ async function prepare(api: TecnofitApi, today: IsoDate): Promise<{ pending: Pen
     const due = !c.done ? isoFromApi(c.deadline) : null;
     if (due) pendingCalls.set(c.customerId, [...(pendingCalls.get(c.customerId) ?? []), due]);
   }
+  // Diagnóstico: ligações vazias ou sem consultor deixavam todo mundo "sem responsável" sem ninguém saber.
+  const cd = api.diag?.calls;
+  if (!warning && cd) {
+    if (cd.raw === 0) warning = 'A Tecnofit não devolveu nenhuma ligação do CRM no período: o responsável vem do consultor da venda em aberto.';
+    else if (cd.withConsultant === 0) warning = `Ligações do CRM vieram sem consultor (${cd.raw} lidas; campos: ${cd.shape.slice(0, 220)}). O responsável vem do consultor da venda em aberto.`;
+  }
+
   /** Retorno pendente mais próximo, ignorando os agendados antes da última ligação concluída (ficaram velhos). */
   const nextCallOf = (id: string) => (pendingCalls.get(id) ?? []).filter((x) => x > (lastDone.get(id) ?? '')).sort()[0] ?? null;
 
@@ -100,6 +107,14 @@ async function prepare(api: TecnofitApi, today: IsoDate): Promise<{ pending: Pen
   for (const k of known) if (!byId.has(k.tecnofitId)) add(k.tecnofitId, k.name, null);
 
   return { pending: [...byId.values()], consultants: consultants.length, warning };
+}
+
+/** Vendedor da venda em aberto mais recente (entre as que geraram débito). */
+function sellerOfOpenSale(sales: TfCustomerSale[], openSaleIds: string[]): TfPerson | null {
+  const open = new Set(openSaleIds);
+  const withSeller = sales.filter((s) => s.seller && (open.size === 0 || open.has(s.id)));
+  withSeller.sort((a, b) => String(b.saleDate ?? '').localeCompare(String(a.saleDate ?? '')));
+  return withSeller[0]?.seller ?? null;
 }
 
 async function ownerFor(consultantTecId: string | null): Promise<string | null> {
@@ -139,7 +154,11 @@ async function processCustomer(api: TecnofitApi, p: Pending, today: IsoDate): Pr
     contactsCheckedOn = d(today);
   }
 
-  const owner = await ownerFor(p.consultant ?? existing?.consultantTecId ?? null);
+  // Responsável (decisão 13/11): consultor da ligação mais recente; sem ligação, o da venda em aberto mais recente.
+  const seller = sellerOfOpenSale(sales, debts.map((x) => x.saleId));
+  if (seller) await prisma.crmConsultant.upsert({ where: { tecnofitId: seller.id }, create: { tecnofitId: seller.id, name: seller.name || `Funcionário Tecnofit ${seller.id}` }, update: {} });
+  const consultantTec = p.consultant ?? seller?.id ?? existing?.consultantTecId ?? null;
+  const owner = await ownerFor(consultantTec);
   // Ligações: mantém a última concluída conhecida (a janela de 90 dias pode não alcançá-la mais).
   const prevDone = iso(existing?.lastCallDoneOn ?? null);
   const doneDay = [p.lastCallDone ?? null, prevDone].filter((x): x is string => !!x).sort().at(-1) ?? null;
@@ -149,8 +168,8 @@ async function processCustomer(api: TecnofitApi, p: Pending, today: IsoDate): Pr
   await prisma.$transaction(async (tx) => {
     const cust = await tx.tecCustomer.upsert({
       where: { tecnofitId: p.id },
-      create: { tecnofitId: p.id, name: p.name || 'Aluno sem nome', status: p.status, mobile, consultantTecId: p.consultant, contactsCheckedOn, lastCallDoneOn: calls.lastDone, nextCallOn: calls.next, lastSeenOn: d(today) },
-      update: { name: p.name || undefined, status: p.status, mobile, consultantTecId: p.consultant ?? undefined, contactsCheckedOn, lastCallDoneOn: calls.lastDone, nextCallOn: calls.next, lastSeenOn: d(today) },
+      create: { tecnofitId: p.id, name: p.name || 'Aluno sem nome', status: p.status, mobile, consultantTecId: consultantTec, contactsCheckedOn, lastCallDoneOn: calls.lastDone, nextCallOn: calls.next, lastSeenOn: d(today) },
+      update: { name: p.name || undefined, status: p.status, mobile, consultantTecId: consultantTec ?? undefined, contactsCheckedOn, lastCallDoneOn: calls.lastDone, nextCallOn: calls.next, lastSeenOn: d(today) },
     });
 
     // Débitos: atualiza os que seguem em aberto; os que sumiram viram QUITADO.
@@ -274,7 +293,17 @@ export async function runTecnofitSync(today: IsoDate, opts: { budgetMs?: number;
     if (++n % SAVE_EVERY === 0) await save();
   }
 
+  // Vendas lidas e quantas trazem vendedor (sem dado de aluno): mostra se o responsável pela venda está chegando.
+  const ds = api.diag?.sales;
+  if (ds) {
+    stats.salesRead = (stats.salesRead ?? 0) + ds.total;
+    stats.salesWithSeller = (stats.salesWithSeller ?? 0) + ds.withSeller;
+    if (!stats.salesShape && ds.shape) stats.salesShape = ds.shape.slice(0, 300);
+  }
   const done = pending.length === 0;
+  if (done && (stats.salesRead ?? 0) > 0 && !stats.salesWithSeller) {
+    stats.warning = `${stats.warning ? `${stats.warning} ` : ''}As vendas também vieram sem vendedor/consultor (campos: ${(stats.salesShape ?? '').slice(0, 200)}): sem responsável automático.`.slice(0, 600);
+  }
   if (done) {
     stats.purged = await purgeStale(today);
     // Tarefas do dia já prontas quando o consultor abrir a lista (o envio das 07h30 gera de novo, sem duplicar).
