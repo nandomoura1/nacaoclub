@@ -55,6 +55,9 @@ Commits: mensagem em português, explicando o porquê. Sem identificador de mode
 - IA de marketing: nada de dado pessoal no prompt; publicação sempre com aprovação humana.
 - Escalas: **não criar dados fictícios para cobrir posto descoberto** — sinalizar.
 
+- **WhatsApp do sistema (Z-API) sai assinado** "_Assistente Nação Tech_" (`withSignature` em `deliverWhatsApp`, único ponto de envio);
+  "Copiar"/"Abrir no WhatsApp" são enviados pela própria pessoa e não levam assinatura.
+
 ## Mapa do código
 
 - `src/domain/**` — regras puras e testáveis (sem banco). Ex.: `domain/escalas/{calendar,engine,validate,rotation,fairness}.ts`.

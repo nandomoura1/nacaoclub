@@ -84,3 +84,13 @@ export function isConfirmation(text: string | null | undefined): boolean {
   const words = t.replace(/[👍✅👌☑️✔️🙏💙]/gu, ' ').split(/[\s,.;!]+/).filter(Boolean);
   return words.length > 0 && words.length <= 5 && words.every((w) => OK.has(w)) && words.some((w) => !['obrigado', 'obrigada', 'obg', 'valeu', 'vlw', 'tudo', 'e', 'esta', 'ta'].includes(w));
 }
+
+/** Assinatura de toda mensagem enviada pelo sistema (para o destinatário saber que é automática). */
+export const WA_SIGNATURE = 'Assistente Nação Tech';
+
+/** Acrescenta a assinatura no fim (uma vez só, mesmo se o texto já vier assinado). */
+export function withSignature(text: string): string {
+  const t = text.replace(/\s+$/, '');
+  if (t.endsWith(WA_SIGNATURE) || t.endsWith(`_${WA_SIGNATURE}_`)) return t;
+  return `${t}\n\n_${WA_SIGNATURE}_`;
+}

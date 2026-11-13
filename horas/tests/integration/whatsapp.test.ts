@@ -45,7 +45,7 @@ describe.skipIf(!hasDb)('WhatsApp (Z-API)', () => {
     Object.assign(process.env, { ZAPI_INSTANCE_ID: 'INST', ZAPI_INSTANCE_TOKEN: 'TOK', ZAPI_CLIENT_TOKEN: 'SEC', ZAPI_BASE_URL: `http://127.0.0.1:${port}` });
     const r = await sendWhatsApp(coord.principal, { kind: 'ESCALA', to: '(61) 98466-2806', text: 'Escala do sábado' }, META);
     expect(r).toEqual({ status: 'SENT', testMode: false, to: '(61) 9••••-2806' });
-    expect(calls[0]).toMatchObject({ method: 'POST', url: '/instances/INST/token/TOK/send-text', body: { phone: '5561984662806', message: 'Escala do sábado' } });
+    expect(calls[0]).toMatchObject({ method: 'POST', url: '/instances/INST/token/TOK/send-text', body: { phone: '5561984662806', message: 'Escala do sábado\n\n_Assistente Nação Tech_' } });
     expect(calls[0]!.headers['client-token']).toBe('SEC');
     const m = await prisma.waMessage.findFirstOrThrow({ where: { createdById: coord.principal.id }, orderBy: { createdAt: 'desc' } });
     expect([m.status, m.toMasked, m.providerId, m.preview]).toEqual(['SENT', '(61) 9••••-2806', 'm1', 'Escala do sábado']);
@@ -81,7 +81,7 @@ describe.skipIf(!hasDb)('WhatsApp (Z-API)', () => {
   it('PDF vai em send-document/pdf como base64 com legenda', async () => {
     Object.assign(process.env, { ZAPI_INSTANCE_ID: 'INST', ZAPI_INSTANCE_TOKEN: 'TOK', ZAPI_BASE_URL: `http://127.0.0.1:${port}` });
     await sendWhatsApp(admin.principal, { kind: 'CONDOMINIO', to: '61 98466-2806', text: 'Cobrança' }, META, { bytes: new Uint8Array([37, 80, 68, 70]), fileName: 'c.pdf' });
-    expect(calls.at(-1)).toMatchObject({ url: '/instances/INST/token/TOK/send-document/pdf', body: { phone: '5561984662806', document: 'data:application/pdf;base64,JVBERg==', fileName: 'c.pdf', caption: 'Cobrança' } });
+    expect(calls.at(-1)).toMatchObject({ url: '/instances/INST/token/TOK/send-document/pdf', body: { phone: '5561984662806', document: 'data:application/pdf;base64,JVBERg==', fileName: 'c.pdf', caption: 'Cobrança\n\n_Assistente Nação Tech_' } });
   });
 
   it('modo simulação (desenvolvimento)', async () => {

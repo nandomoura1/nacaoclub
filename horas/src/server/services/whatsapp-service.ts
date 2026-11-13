@@ -5,7 +5,7 @@ import { assertCan } from '@/server/auth/authz';
 import type { Principal } from '@/server/auth/principal';
 import type { RequestMeta } from '@/server/auth/session';
 import { AppError } from '@/server/errors';
-import { maskDestination, normalizeDestination, previewOf, WA_KINDS } from '@/domain/whatsapp';
+import { maskDestination, normalizeDestination, previewOf, WA_KINDS, withSignature } from '@/domain/whatsapp';
 import { zapiConfig, zapiSendPdf, zapiSendText, zapiStatus } from '@/server/whatsapp/zapi';
 
 /**
@@ -50,7 +50,9 @@ export async function deliverWhatsApp(input: {
   if (!cfg.configured) throw new AppError('WhatsApp ainda não configurado: peça ao administrador para cadastrar a Z-API (Administração → WhatsApp).');
   const target = cfg.testPhone ? (normalizeDestination(cfg.testPhone) ?? dest) : dest;
   const testMode = !!cfg.testPhone;
-  const text = testMode ? `🧪 [TESTE — seria para ${maskDestination(dest)}]\n\n${input.text}` : input.text;
+  // Toda mensagem do sistema sai assinada (botões, automações, contratos, escalas…).
+  const signed = withSignature(input.text);
+  const text = testMode ? `🧪 [TESTE — seria para ${maskDestination(dest)}]\n\n${signed}` : signed;
 
   let providerId: string | null = null;
   let error: string | null = null;
