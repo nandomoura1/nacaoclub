@@ -961,6 +961,12 @@ export async function transportReport(principal: P | null, year: number, month: 
   const inputs: TransportInput[] = [];
   const status: { sector: string; schedule: string | null; prevSchedule: string | null }[] = [];
   const outside: { name: string; bond: string; sector: string }[] = [];
+  const pmi = monthInfo(p.y, p.m);
+  // Faltas e atestados que tocam o mês anterior (com id, para anular pela tela).
+  const discountLeaves = await prisma.leave.findMany({
+    where: { cancelledAt: null, slotId: null, type: { in: ['FALTA', 'ATESTADO'] }, startDate: { lte: toUtc(pmi.last) }, endDate: { gte: toUtc(pmi.first) }, teacher: { wsMembers: { some: { sectorId: { in: sectors.map((s) => s.id) } } } } },
+    select: { id: true, teacherId: true, type: true, startDate: true, endDate: true },
+  });
   for (const s of sectors) {
     const [c, pc] = await Promise.all([context(prisma, s.id, year, month), context(prisma, s.id, p.y, p.m)]);
     status.push({ sector: s.name, schedule: c.schedule?.status ?? null, prevSchedule: pc.schedule?.status ?? null });
@@ -978,11 +984,11 @@ export async function transportReport(principal: P | null, year: number, month: 
       const prevWorkDays = pc.schedule
         ? pc.schedule.cells.filter((x) => x.memberId === m.id && ['TRABALHO', 'FALTA', 'ATESTADO'].includes(x.kind)).map((x) => fromUtc(x.date)).filter((d) => d >= pc.mi.first && d <= pc.mi.last)
         : pm ? estimateWorkDays(pm, prevDays, pc.cycleRef, []) : [];
-      const prevLeaves = pc.absences.filter((a) => a.memberId === m.id).map((a) => ({ start: a.start, end: a.end, type: a.type }));
-      inputs.push({ teacherId: db.teacherId, name: m.name, bond: m.bond, sector: s.name, workDays, source: c.schedule ? 'escala' : 'estimado', prevWorkDays, prevLeaves, dailyCents: db.transportDailyCents });
+      const prevLeaves = discountLeaves.filter((l) => l.teacherId === db.teacherId).map((l) => ({ id: l.id, start: fromUtc(l.startDate), end: fromUtc(l.endDate), type: l.type }));
+      inputs.push({ teacherId: db.teacherId, name: m.name, bond: m.bond, sector: s.name, workDays, source: c.schedule ? 'escala' : 'estimado', prevWorkDays, prevLeaves, dailyCents: db.transportDailyCents, ref: { sectorId: s.id, memberId: m.id } });
     }
   }
-  return { year, month, label: monthInfo(year, month).label, prevLabel: monthInfo(p.y, p.m).label, rows: transportRows(inputs), status, outside, canEditValues: can(principal, 'ws.admin') };
+  return { year, month, label: monthInfo(year, month).label, prevLabel: pmi.label, prevFirst: pmi.first, prevLast: pmi.last, rows: transportRows(inputs), status, outside, canEditValues: can(principal, 'ws.admin'), canEditAbsences: can(principal, 'ws.edit') };
 }
 export type TransportReport = Awaited<ReturnType<typeof transportReport>>;
 

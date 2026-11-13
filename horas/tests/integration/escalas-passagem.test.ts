@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '@/server/db';
 import { AuthorizationError } from '@/server/errors';
-import { saveAbsence, saveMember, saveSector, saveTransportValue, transportReport } from '@/server/services/ws-service';
+import { cancelAbsence, saveAbsence, saveMember, saveSector, saveTransportValue, transportReport } from '@/server/services/ws-service';
 import { META, ensureCatalog, hasDb, makeUser } from './helpers';
 
 const H = (h: number) => h * 60;
@@ -45,5 +45,13 @@ describe.skipIf(!hasDb)('Escalas 5x2 · Passagem', () => {
     expect(r.rows.some((x) => x.name === `Caio ${tag}`)).toBe(false);
     expect(r.outside).toContainEqual({ name: `Caio ${tag}`, bond: 'MEI', sector: `ADM ${tag}` });
     expect(r.status.find((s) => s.sector === `ADM ${tag}`)).toMatchObject({ schedule: null });
+
+    // A tela lança e anula pelo setor/pessoa que vem no relatório (mesmo registro de Férias e ausências).
+    expect(me.refs).toEqual([{ sectorId: sector, memberId: ana }]);
+    expect(me.leaves.map((l) => [l.type, l.start, l.end])).toEqual([['FALTA', '2035-06-12', '2035-06-12'], ['ATESTADO', '2035-06-14', '2035-06-17']]);
+    await cancelAbsence(admin.principal, me.refs[0]!.sectorId, me.leaves[0]!.id, META);
+    const again = (await transportReport(admin.principal, 2035, 7)).rows.find((x) => x.name === `Ana ${tag}`)!;
+    expect(again).toMatchObject({ discount: 2, payDays: 18 - weekdayHolidays });
+    expect(again.leaves).toHaveLength(1);
   });
 });

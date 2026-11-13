@@ -15,7 +15,7 @@ export const receivesTransport = (bond: string) => (TRANSPORT_BONDS as readonly 
 /** Ausências que descontam no mês seguinte. */
 export const DISCOUNT_TYPES = ['FALTA', 'ATESTADO'] as const;
 
-export interface Leave { start: IsoDate; end: IsoDate; type: string }
+export interface Leave { id?: string; start: IsoDate; end: IsoDate; type: string }
 
 const covered = (leaves: Leave[], d: IsoDate) => leaves.some((l) => l.start <= d && d <= l.end);
 
@@ -53,6 +53,8 @@ export interface TransportInput {
   prevWorkDays: IsoDate[];
   prevLeaves: Leave[];
   dailyCents: number | null;
+  /** Onde a pessoa está (para lançar falta/atestado pela tela). */
+  ref?: { sectorId: string; memberId: string };
 }
 
 export interface TransportRow {
@@ -67,6 +69,9 @@ export interface TransportRow {
   payDays: number;
   dailyCents: number | null;
   totalCents: number | null;
+  refs: { sectorId: string; memberId: string }[];
+  /** Faltas e atestados do mês anterior já lançados (podem cair em dia de folga e não descontar). */
+  leaves: Required<Leave>[];
 }
 
 /** Junta a mesma pessoa em vários setores (dias sem repetir) e calcula os dias a pagar e o valor. */
@@ -86,6 +91,8 @@ export function transportRows(inputs: TransportInput[]): TransportRow[] {
       source: sources.size > 1 ? 'misto' : list[0]!.source,
       workDays: work.size, discount: disc.length, discountDates: disc, payDays,
       dailyCents: daily, totalCents: daily == null ? null : payDays * daily,
+      refs: list.flatMap((i) => (i.ref ? [i.ref] : [])),
+      leaves: [...new Map(list.flatMap((i) => i.prevLeaves).filter((l): l is Required<Leave> => !!l.id && (DISCOUNT_TYPES as readonly string[]).includes(l.type)).map((l) => [l.id, l])).values()].sort((a, b) => a.start.localeCompare(b.start)),
     };
   }).sort((a, b) => a.sectors[0]!.localeCompare(b.sectors[0]!, 'pt-BR') || a.name.localeCompare(b.name, 'pt-BR'));
 }

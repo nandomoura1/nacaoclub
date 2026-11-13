@@ -96,7 +96,8 @@ feriado específico (Nação inteira ou setor). Feriado no fim de semana usa o h
 **CLT e FUNAP** (MEI/freelancer listados como fora). Dias a pagar = dias de TRABALHO do mês (escala gerada; sem escala = **estimado** pelo
 padrão, máx. 5/sem CLT e 6 FUNAP, sem folga fixa e sem ausências) − **faltas e atestados do mês anterior** que caíram em dia de trabalho;
 × **valor diário** (ida e volta, `ws_members.transport_daily_cents`, igual em todas as equipes da pessoa). Mesma pessoa em 2 setores = dias sem
-repetir. "Copiar tabela" para planilha. `domain/escalas/passagem.ts`, `transportReport` no ws-service. Setor **ADM** = setor comum
+repetir. "Copiar tabela" para planilha. **Lançar falta/atestado na própria tabela** (clique no número de faltas; `ws.edit`): grava o mesmo registro
+de Férias e ausências (`saveAbsence`, no 1º setor da pessoa) e lista os já lançados com "anular". `domain/escalas/passagem.ts`, `transportReport` no ws-service. Setor **ADM** = setor comum
 (Pré-requisitos → Novo setor) para quem não está em outro setor.
 
 **Simulação de grade** (Grade semanal → "Simular nova grade"; `schedule.edit`, nas áreas da pessoa): copia a grade de

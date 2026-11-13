@@ -1,16 +1,16 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { Fragment, useMemo, useState, useTransition } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { Copy, Info } from 'lucide-react';
+import { Copy, Info, Plus, Undo2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { FormMessage } from '@/components/ui/alert';
-import { Input, Label } from '@/components/ui/input';
+import { Input, Label, Select } from '@/components/ui/input';
 import { formatDateBR } from '@/domain/dates';
 import type { TransportReport } from '@/server/services/ws-service';
-import { saveTransportValueAction } from '../actions';
+import { cancelAbsenceAction, saveAbsenceAction, saveTransportValueAction } from '../actions';
 
 const brl = (c: number | null) => (c == null ? '—' : (c / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
 const toCents = (v: string): number | null | 'erro' => {
@@ -27,6 +27,30 @@ export function TransportClient({ mes, report }: { mes: string; report: Transpor
   const [msg, setMsg] = useState<{ ok?: string; error?: string }>({});
   const [pending, start] = useTransition();
   const [editing, setEditing] = useState<Record<string, string>>({});
+  /** Linha aberta para lançar falta/atestado do mês anterior. */
+  const [openAbs, setOpenAbs] = useState<string | null>(null);
+  const [abs, setAbs] = useState({ type: 'FALTA', start: report.prevFirst, end: report.prevFirst });
+  const launch = (r: TransportReport['rows'][number]) => {
+    const ref = r.refs[0];
+    if (!ref) return;
+    if (abs.end < abs.start) return setMsg({ error: 'A data final é antes da inicial.' });
+    start(async () => {
+      const x = await saveAbsenceAction(ref.sectorId, { memberId: ref.memberId, type: abs.type, startDate: abs.start, endDate: abs.end });
+      if (!x.ok) return setMsg({ error: x.error });
+      setMsg({ ok: `${abs.type === 'FALTA' ? 'Falta' : 'Atestado'} lançado para ${r.name}. Passagem recalculada.` });
+      router.refresh();
+    });
+  };
+  const undo = (r: TransportReport['rows'][number], id: string) => {
+    const ref = r.refs[0];
+    if (!ref || !confirm('Anular esta falta/atestado? Ela sai também da escala e do histórico de ausências.')) return;
+    start(async () => {
+      const x = await cancelAbsenceAction(ref.sectorId, id);
+      if (!x.ok) return setMsg({ error: x.error });
+      setMsg({ ok: 'Ausência anulada. Passagem recalculada.' });
+      router.refresh();
+    });
+  };
   const rows = report.rows;
   const totals = useMemo(() => ({
     pay: rows.reduce((s, r) => s + r.payDays, 0),
@@ -99,11 +123,19 @@ export function TransportClient({ mes, report }: { mes: string; report: Transpor
             </tr></thead>
             <tbody className="divide-y divide-borda">
               {rows.filter((r) => r.sectors[0] === sector).map((r) => (
-                <tr key={r.teacherId}>
+                <Fragment key={r.teacherId}>
+                <tr>
                   <td className="px-4 py-2 font-semibold text-tinta">{r.name}{r.sectors.length > 1 && <span className="ml-1 text-xs font-normal text-tinta-suave">(também {r.sectors.slice(1).join(', ')})</span>}</td>
                   <td className="px-2 py-2">{r.bond}</td>
                   <td className="tabular px-2 py-2 text-right">{r.workDays}{r.source !== 'escala' && <Badge tone="amber" className="ml-1">{r.source}</Badge>}</td>
-                  <td className="tabular px-2 py-2 text-right" title={r.discountDates.map(formatDateBR).join(', ')}>{r.discount ? `−${r.discount}` : '0'}</td>
+                  <td className="tabular px-2 py-2 text-right" title={r.discountDates.map(formatDateBR).join(', ')}>
+                    {report.canEditAbsences && r.refs.length ? (
+                      <button type="button" className="inline-flex items-center gap-1 underline decoration-dotted hover:text-nacao"
+                        onClick={() => { setOpenAbs(openAbs === r.teacherId ? null : r.teacherId); setAbs({ type: 'FALTA', start: report.prevFirst, end: report.prevFirst }); }}>
+                        {r.discount ? `−${r.discount}` : '0'}<Plus className="size-3" />
+                      </button>
+                    ) : r.discount ? `−${r.discount}` : '0'}
+                  </td>
                   <td className="tabular px-2 py-2 text-right font-bold text-navy">{r.payDays}</td>
                   <td className="tabular px-2 py-2 text-right">
                     {report.canEditValues && editing[r.teacherId] !== undefined ? (
@@ -122,6 +154,33 @@ export function TransportClient({ mes, report }: { mes: string; report: Transpor
                   </td>
                   <td className="tabular px-4 py-2 text-right font-bold">{brl(r.totalCents)}</td>
                 </tr>
+                {openAbs === r.teacherId && (
+                  <tr className="bg-fundo">
+                    <td colSpan={7} className="px-4 py-3">
+                      <p className="mb-2 text-xs font-semibold uppercase text-tinta-suave">Faltas e atestados de {report.prevLabel} · {r.name}</p>
+                      {r.leaves.length ? (
+                        <ul className="mb-3 space-y-1 text-sm">
+                          {r.leaves.map((l) => (
+                            <li key={l.id} className="flex flex-wrap items-center gap-2">
+                              <Badge tone={l.type === 'FALTA' ? 'red' : 'amber'}>{l.type === 'FALTA' ? 'Falta' : 'Atestado'}</Badge>
+                              <span>{formatDateBR(l.start)}{l.end !== l.start && ` a ${formatDateBR(l.end)}`}</span>
+                              <Button size="sm" variant="ghost" disabled={pending} onClick={() => undo(r, l.id)}><Undo2 /> anular</Button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : <p className="mb-3 text-sm text-tinta-suave">Nenhuma lançada.</p>}
+                      <div className="flex flex-wrap items-end gap-2">
+                        <div><Label>Tipo</Label><Select value={abs.type} onChange={(e) => setAbs({ ...abs, type: e.target.value })} className="h-9 w-32"><option value="FALTA">Falta</option><option value="ATESTADO">Atestado</option></Select></div>
+                        <div><Label>De</Label><Input type="date" className="h-9" value={abs.start} onChange={(e) => setAbs({ ...abs, start: e.target.value, end: abs.end < e.target.value ? e.target.value : abs.end })} /></div>
+                        <div><Label>Até</Label><Input type="date" className="h-9" value={abs.end} min={abs.start} onChange={(e) => setAbs({ ...abs, end: e.target.value })} /></div>
+                        <Button size="sm" disabled={pending} onClick={() => launch(r)}><Plus /> Lançar</Button>
+                        <Button size="sm" variant="ghost" onClick={() => setOpenAbs(null)}>Fechar</Button>
+                      </div>
+                      <p className="mt-2 text-xs text-tinta-suave">É o mesmo registro de “Férias e ausências”: vale para a escala e o histórico. Só desconta o que cair em dia de trabalho{r.sectors.length > 1 ? ` (lançado no setor ${r.sectors[0]})` : ''}.</p>
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))}
             </tbody>
           </table>
