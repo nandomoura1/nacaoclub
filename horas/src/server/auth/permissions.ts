@@ -79,6 +79,8 @@ export const PERMISSIONS = {
   'tv.privacy': 'Check-ins na TV: ver os check-ins do dia e marcar quem não quer aparecer',
   'plans.view': 'Planos Nação: consultar a tabela de planos e preços vigente',
   'plans.edit': 'Planos Nação: criar e editar tabelas de preços (rascunhos) e publicar a nova tabela',
+  'contacts.view': 'Contatos: ver a agenda de telefones importantes (terceirizados, fornecedores, serviços)',
+  'contacts.edit': 'Contatos: cadastrar, editar, importar e desativar contatos da agenda',
 } as const;
 
 export type PermissionKey = keyof typeof PERMISSIONS;
@@ -123,6 +125,7 @@ export const SYSTEM_ROLES: Record<
       'ws.edit',
       'ws.all_sectors',
       'tv.privacy',
+      'contacts.view',
     ],
   },
   CONSULTA: {
@@ -147,6 +150,8 @@ export const SYSTEM_ROLES: Record<
       'contract.view', 'contract.edit', 'contract.templates',
       // Planos Nação: consulta a tabela vigente (rascunho e edição ficam com o Administrador).
       'plans.view',
+      // Contatos: agenda de telefones importantes.
+      'contacts.view', 'contacts.edit',
     ],
   },
   PROFESSOR: {
@@ -167,7 +172,7 @@ export const SYSTEM_ROLES: Record<
   LIDER: {
     name: 'Líder de setor',
     description: 'Acompanha e atualiza as demandas do próprio setor (Gestão de Processos), registra atas, publica materiais na Universidade Nação, cadastra colaboradores, cuida dos documentos da equipe (inclusive atestados), lança faltas, folgas e afastamentos, monta a grade e a escala de fim de semana/feriados das próprias áreas e vê a grade de todas; monta a escala mensal 5x2 dos setores que lidera (aprovar e publicar fica com a gestão). Combine com o perfil da função.',
-    permissions: ['proc.view', 'proc.edit', 'edu.view', 'edu.edit', 'teacher.view', 'teacher.edit', 'teacher.docs', 'schedule.view', 'schedule.view_all', 'schedule.edit', 'occurrence.exception', 'leave.manage', 'duty.edit', 'ws.view', 'ws.edit', 'ws.all_sectors', 'tv.privacy'],
+    permissions: ['proc.view', 'proc.edit', 'edu.view', 'edu.edit', 'teacher.view', 'teacher.edit', 'teacher.docs', 'schedule.view', 'schedule.view_all', 'schedule.edit', 'occurrence.exception', 'leave.manage', 'duty.edit', 'ws.view', 'ws.edit', 'ws.all_sectors', 'tv.privacy', 'contacts.view'],
   },
   CRM: {
     name: 'CRM / Cobrança',

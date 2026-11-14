@@ -249,3 +249,11 @@ tabela. **Publicar** exige nenhum "A decidir" e preço em todas as opções que 
 copia a vigente sem os que saíram. "Copiar para planilha" = TSV no formato da planilha. Primeira carga pelo botão "Importar planilha de
 2026" (`src/server/planos/planilha-2026.json`, da planilha de 13/11): 2026 vigente + rascunho 2027 do **repasse de nov/2026**; os 10
 planos fora do repasse entram como "A decidir".
+
+**Contatos** (Administração → Contatos; `contacts.view` = Administrador, DP/Financeiro, Coordenador, Líder; `contacts.edit` = Administrador e
+DP/Financeiro; decisão 14/11): **Agenda** = tabela `contacts` para quem é de fora do cadastro (terceirizados, fornecedores, monitoras Kids,
+serviços), por grupo livre, telefone 1 e 2, desativa (não exclui); **Importar** = colar linhas da planilha (linha só com texto vira o grupo
+das seguintes; TAB/";" = colunas Nome·Telefone·Grupo·Empresa·Obs.) → **prévia** marca "já na agenda"/"é da equipe" (mesmo nome ou
+8 últimos dígitos) desmarcados → grava só o confirmado. **Equipe** = colaboradores ativos direto do cadastro (fonte única: o telefone se
+corrige na ficha), só para `teacher.view_personal` (sem ela a aba nem vem do servidor). Copiar lista por grupo, ligar, abrir no WhatsApp.
+Números reais nunca no repositório: a carga da planilha "TEL. FUNCIONÁRIOS" é feita em produção, depois de mostrar a lista.

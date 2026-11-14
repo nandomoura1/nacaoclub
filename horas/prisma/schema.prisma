@@ -3256,3 +3256,22 @@ model PlanOption {
   @@index([itemId])
   @@map("plan_options")
 }
+
+/// Agenda de contatos importantes (Administração → Contatos): quem não está no cadastro de colaboradores.
+model Contact {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  /// Grupo livre: "Serviços terceirizados", "Fornecedores", "Monitoras Kids"…
+  groupName   String   @map("group_name")
+  company     String?
+  phone       String?
+  phone2      String?
+  note        String?
+  active      Boolean  @default(true)
+  createdById String?  @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([active, groupName])
+  @@map("contacts")
+}
