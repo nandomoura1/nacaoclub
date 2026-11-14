@@ -985,27 +985,36 @@ export async function transportReport(principal: P | null, year: number, month: 
         ? pc.schedule.cells.filter((x) => x.memberId === m.id && ['TRABALHO', 'FALTA', 'ATESTADO'].includes(x.kind)).map((x) => fromUtc(x.date)).filter((d) => d >= pc.mi.first && d <= pc.mi.last)
         : pm ? estimateWorkDays(pm, prevDays, pc.cycleRef, []) : [];
       const prevLeaves = discountLeaves.filter((l) => l.teacherId === db.teacherId).map((l) => ({ id: l.id, start: fromUtc(l.startDate), end: fromUtc(l.endDate), type: l.type }));
-      inputs.push({ teacherId: db.teacherId, name: m.name, bond: m.bond, sector: s.name, workDays, source: c.schedule ? 'escala' : 'estimado', prevWorkDays, prevLeaves, dailyCents: db.transportDailyCents, ref: { sectorId: s.id, memberId: m.id } });
+      inputs.push({ teacherId: db.teacherId, name: m.name, bond: m.bond, sector: s.name, workDays, source: c.schedule ? 'escala' : 'estimado', prevWorkDays, prevLeaves, dailyCents: db.transportDailyCents, mealDailyCents: db.mealDailyCents, ref: { sectorId: s.id, memberId: m.id } });
     }
   }
   return { year, month, label: monthInfo(year, month).label, prevLabel: pmi.label, prevFirst: pmi.first, prevLast: pmi.last, rows: transportRows(inputs), status, outside, canEditValues: can(principal, 'ws.admin'), canEditAbsences: can(principal, 'ws.edit') };
 }
 export type TransportReport = Awaited<ReturnType<typeof transportReport>>;
 
+/** Valor diário da alimentação da pessoa (vazio = sem direito), em todas as equipes dela. Só a gestão (DP). */
+export async function saveMealValue(principal: P | null, teacherId: string, cents: number | null, meta: RequestMeta) {
+  return saveBenefitValue(principal, teacherId, cents, meta, 'meal');
+}
+
 /** Valor diário da passagem (ida e volta) da pessoa, em todas as equipes dela. Só a gestão (DP). */
 export async function saveTransportValue(principal: P | null, teacherId: string, cents: number | null, meta: RequestMeta) {
+  return saveBenefitValue(principal, teacherId, cents, meta, 'transport');
+}
+
+async function saveBenefitValue(principal: P | null, teacherId: string, cents: number | null, meta: RequestMeta, kind: 'transport' | 'meal') {
   assertCan(principal, 'ws.admin');
   if (cents != null && (!Number.isInteger(cents) || cents < 0 || cents > 50_000)) throw new AppError('Valor diário inválido (até R$ 500,00).');
   return prisma.$transaction(async (tx) => {
     const members = await tx.wsMember.findMany({ where: { teacherId }, include: { teacher: { select: { name: true } } } });
     if (!members.length) throw new NotFoundError('Pessoa não está em nenhuma equipe da escala.');
-    const before = members[0]!.transportDailyCents;
-    await tx.wsMember.updateMany({ where: { teacherId }, data: { transportDailyCents: cents } });
-    const brl = (v: number | null) => (v == null ? 'não informado' : `R$ ${(v / 100).toFixed(2).replace('.', ',')}`);
+    const before = kind === 'meal' ? members[0]!.mealDailyCents : members[0]!.transportDailyCents;
+    await tx.wsMember.updateMany({ where: { teacherId }, data: kind === 'meal' ? { mealDailyCents: cents } : { transportDailyCents: cents } });
+    const brl = (v: number | null) => (v == null ? (kind === 'meal' ? 'sem direito' : 'não informado') : `R$ ${(v / 100).toFixed(2).replace('.', ',')}`);
     await audit(tx, ctx(principal, meta), {
-      action: 'ws.transport_value', entityType: 'teacher', entityId: teacherId,
+      action: kind === 'meal' ? 'ws.meal_value' : 'ws.transport_value', entityType: 'teacher', entityId: teacherId,
       before: { valor_diario_centavos: before }, after: { valor_diario_centavos: cents },
-      summary: `${principal.name} definiu a passagem diária de ${members[0]!.teacher.name}: ${brl(before)} → ${brl(cents)}`,
+      summary: `${principal.name} definiu ${kind === 'meal' ? 'a alimentação diária' : 'a passagem diária'} de ${members[0]!.teacher.name}: ${brl(before)} → ${brl(cents)}`,
     });
   });
 }

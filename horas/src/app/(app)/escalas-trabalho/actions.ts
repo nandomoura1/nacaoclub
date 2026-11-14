@@ -37,3 +37,4 @@ export const wsWhatsAppStatusAction = async () => ws.wsWhatsAppStatus();
 export const sendMemberScheduleAction = async (scheduleId: string, memberId: string, input: { to: string; text: string }) => act((p, m) => ws.sendMemberSchedule(p, scheduleId, memberId, input, m));
 export const sendTeamSchedulesAction = async (scheduleId: string) => act((p, m) => ws.sendTeamSchedules(p, scheduleId, m));
 export const saveTransportValueAction = async (teacherId: string, cents: number | null) => act((p, m) => ws.saveTransportValue(p, teacherId, cents, m), 'Valor da passagem salvo.');
+export const saveMealValueAction = async (teacherId: string, cents: number | null) => act((p, m) => ws.saveMealValue(p, teacherId, cents, m), 'Valor da alimentação salvo.');

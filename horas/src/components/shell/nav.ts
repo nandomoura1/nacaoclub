@@ -129,7 +129,7 @@ export const NAV_ESCALAS: NavItem[] = [
   { href: '/escalas-trabalho/feriados', label: 'Feriados', icon: 'ws-feriados', permission: 'ws.view' },
   { href: '/escalas-trabalho/funcionamento', label: 'Funcionamento da Nação', icon: 'ws-funcionamento', permission: 'ws.view' },
   { href: '/escalas-trabalho/ausencias', label: 'Férias e ausências', icon: 'ws-ausencias', permission: 'ws.view' },
-  { href: '/escalas-trabalho/passagem', label: 'Passagem', icon: 'ws-passagem', permission: 'ws.view' },
+  { href: '/escalas-trabalho/beneficios', label: 'Benefícios', icon: 'ws-passagem', permission: 'ws.view' },
   { href: '/escalas-trabalho/parametros', label: 'Parâmetros legais', icon: 'ws-legal', permission: 'ws.view' },
 ];
 

@@ -2601,6 +2601,8 @@ model WsMember {
   autoSchedule  Boolean  @default(true) @map("auto_schedule")
   /// Vale-transporte: valor por dia trabalhado (ida e volta), em centavos. Vazio = não informado.
   transportDailyCents Int? @map("transport_daily_cents")
+  /// Alimentação: valor por dia trabalhado, em centavos. Vazio = sem direito.
+  mealDailyCents Int? @map("meal_daily_cents")
   notes         String?
   sortOrder     Int      @default(0) @map("sort_order")
   active        Boolean  @default(true)

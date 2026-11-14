@@ -3,7 +3,8 @@ import { availableOn, shiftFor, weeklyOffs } from './engine';
 import type { DayPlan, Member } from './types';
 
 /**
- * Passagem (vale-transporte) da escala 5x2 — puro.
+ * Benefícios da escala 5x2 (passagem e alimentação) — puro.
+ * Alimentação = dias de trabalho do mês × valor diário (sem desconto do mês anterior; vazio = sem direito).
  * Dias a pagar no mês = dias de trabalho do mês − faltas e atestados do mês anterior
  * (só os que caíram em dia de trabalho). Valor = dias a pagar × valor diário (ida e volta).
  */
@@ -53,6 +54,8 @@ export interface TransportInput {
   prevWorkDays: IsoDate[];
   prevLeaves: Leave[];
   dailyCents: number | null;
+  /** Alimentação por dia trabalhado (vazio = sem direito). */
+  mealDailyCents?: number | null;
   /** Onde a pessoa está (para lançar falta/atestado pela tela). */
   ref?: { sectorId: string; memberId: string };
 }
@@ -69,9 +72,18 @@ export interface TransportRow {
   payDays: number;
   dailyCents: number | null;
   totalCents: number | null;
+  mealDailyCents: number | null;
+  mealCents: number | null;
+  /** Passagem + alimentação (vazio = nenhum valor informado). */
+  depositCents: number | null;
   refs: { sectorId: string; memberId: string }[];
   /** Faltas e atestados do mês anterior já lançados (podem cair em dia de folga e não descontar). */
   leaves: Required<Leave>[];
+}
+
+function meal(daily: number | null, workDays: number, transport: number | null) {
+  const mealCents = daily == null ? null : workDays * daily;
+  return { mealDailyCents: daily, mealCents, depositCents: transport == null && mealCents == null ? null : (transport ?? 0) + (mealCents ?? 0) };
 }
 
 /** Junta a mesma pessoa em vários setores (dias sem repetir) e calcula os dias a pagar e o valor. */
@@ -91,6 +103,7 @@ export function transportRows(inputs: TransportInput[]): TransportRow[] {
       source: sources.size > 1 ? 'misto' : list[0]!.source,
       workDays: work.size, discount: disc.length, discountDates: disc, payDays,
       dailyCents: daily, totalCents: daily == null ? null : payDays * daily,
+      ...meal(list.find((i) => i.mealDailyCents != null)?.mealDailyCents ?? null, work.size, daily == null ? null : payDays * daily),
       refs: list.flatMap((i) => (i.ref ? [i.ref] : [])),
       leaves: [...new Map(list.flatMap((i) => i.prevLeaves).filter((l): l is Required<Leave> => !!l.id && (DISCOUNT_TYPES as readonly string[]).includes(l.type)).map((l) => [l.id, l])).values()].sort((a, b) => a.start.localeCompare(b.start)),
     };

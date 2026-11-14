@@ -95,7 +95,10 @@ Lanchonete, Cozinha e Limpeza = como sábado. Todo feriado pede confirmação; d
 feriado específico (Nação inteira ou setor). Feriado no fim de semana usa o horário do próprio dia.
 **FUNAP** (6x1, 44h, até 2h de intervalo) trabalha o feriado normalmente e só folga nos dias fixos.
 
-**Passagem (vale-transporte)** (Escalas 5x2 → Passagem; ver `ws.view`, valor só `ws.admin`): todos os setores que a pessoa vê,
+**Benefícios** (Escalas 5x2 → Benefícios, `/escalas-trabalho/beneficios`; `/passagem` redireciona) = passagem + alimentação numa tabela com
+grupos (aprovado 14/11, opção A) e coluna **A depositar**. **Alimentação** = dias de trabalho do mês × `ws_members.meal_daily_cents`
+(vazio = **sem direito**; sem desconto do mês anterior); colunas de alimentação só aparecem no setor se alguém tem direito (gestão marca
+"Mostrar quem não tem alimentação" para dar o direito). **Passagem (vale-transporte)** (ver `ws.view`, valores só `ws.admin`): todos os setores que a pessoa vê,
 **CLT e FUNAP** (MEI/freelancer listados como fora). Dias a pagar = dias de TRABALHO do mês (escala gerada; sem escala = **estimado** pelo
 padrão, máx. 5/sem CLT e 6 FUNAP, sem folga fixa e sem ausências) − **faltas e atestados do mês anterior** que caíram em dia de trabalho;
 × **valor diário** (ida e volta, `ws_members.transport_daily_cents`, igual em todas as equipes da pessoa). Mesma pessoa em 2 setores = dias sem

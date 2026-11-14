@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '@/server/db';
 import { AuthorizationError } from '@/server/errors';
-import { cancelAbsence, saveAbsence, saveMember, saveSector, saveTransportValue, transportReport } from '@/server/services/ws-service';
+import { cancelAbsence, saveAbsence, saveMealValue, saveMember, saveSector, saveTransportValue, transportReport } from '@/server/services/ws-service';
 import { META, ensureCatalog, hasDb, makeUser } from './helpers';
 
 const H = (h: number) => h * 60;
@@ -34,6 +34,8 @@ describe.skipIf(!hasDb)('Escalas 5x2 · Passagem', () => {
     const teacherId = (await prisma.wsMember.findUniqueOrThrow({ where: { id: ana } })).teacherId;
     await expect(saveTransportValue(lider.principal, teacherId, 1100, META)).rejects.toBeInstanceOf(AuthorizationError);
     await saveTransportValue(admin.principal, teacherId, 1100, META);
+    await expect(saveMealValue(lider.principal, teacherId, 1500, META)).rejects.toBeInstanceOf(AuthorizationError);
+    await saveMealValue(admin.principal, teacherId, 1500, META);
 
     const r = await transportReport(admin.principal, 2035, 7);
     const me = r.rows.find((x) => x.name === `Ana ${tag}`)!;
@@ -41,6 +43,9 @@ describe.skipIf(!hasDb)('Escalas 5x2 · Passagem', () => {
     expect(me).toMatchObject({ source: 'estimado', workDays: 20 - weekdayHolidays, discount: 3, payDays: 17 - weekdayHolidays, dailyCents: 1100 });
     expect(me.discountDates).toEqual(['2035-06-12', '2035-06-14', '2035-06-15']);
     expect(me.totalCents).toBe((17 - weekdayHolidays) * 1100);
+    // Alimentação: todos os dias de trabalho do mês (sem o desconto da passagem).
+    expect([me.mealDailyCents, me.mealCents]).toEqual([1500, (20 - weekdayHolidays) * 1500]);
+    expect(me.depositCents).toBe((17 - weekdayHolidays) * 1100 + (20 - weekdayHolidays) * 1500);
     expect(r.rows.find((x) => x.name === `Beto ${tag}`)).toMatchObject({ bond: 'FUNAP', dailyCents: null, totalCents: null });
     expect(r.rows.some((x) => x.name === `Caio ${tag}`)).toBe(false);
     expect(r.outside).toContainEqual({ name: `Caio ${tag}`, bond: 'MEI', sector: `ADM ${tag}` });

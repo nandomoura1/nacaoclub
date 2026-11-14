@@ -27,4 +27,15 @@ describe('passagem (vale-transporte)', () => {
       ['Beto', 'Cozinha', 'escala', 1, 0, 1, null],
     ]);
   });
+
+  it('alimentação: dias de trabalho do mês × valor (sem desconto); a depositar = passagem + alimentação', () => {
+    const [ana, beto, caio] = transportRows([
+      base({ workDays: ['2035-07-02', '2035-07-03', '2035-07-04'], prevWorkDays: ['2035-06-12'], prevLeaves: [{ start: '2035-06-12', end: '2035-06-12', type: 'FALTA' }], dailyCents: 1100, mealDailyCents: 1500 }),
+      base({ teacherId: 't2', name: 'Beto', workDays: ['2035-07-02'], dailyCents: 1100 }),
+      base({ teacherId: 't3', name: 'Caio', workDays: ['2035-07-02', '2035-07-03'], mealDailyCents: 2000 }),
+    ]);
+    expect([ana!.payDays, ana!.totalCents, ana!.mealCents, ana!.depositCents]).toEqual([2, 2200, 4500, 6700]);
+    expect([beto!.mealDailyCents, beto!.mealCents, beto!.depositCents]).toEqual([null, null, 1100]);
+    expect([caio!.totalCents, caio!.mealCents, caio!.depositCents]).toEqual([null, 4000, 4000]);
+  });
 });
