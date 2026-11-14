@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '@/server/db';
 import { AuthorizationError } from '@/server/errors';
-import { cancelAbsence, saveAbsence, saveMealValue, saveMember, saveSector, saveTransportValue, transportReport } from '@/server/services/ws-service';
+import { cancelAbsence, saveAbsence, saveBenefitMonth, saveMealValue, saveMember, saveSector, saveTransportValue, setBenefitPerson, transportReport } from '@/server/services/ws-service';
 import { META, ensureCatalog, hasDb, makeUser } from './helpers';
 
 const H = (h: number) => h * 60;
@@ -58,5 +58,42 @@ describe.skipIf(!hasDb)('Escalas 5x2 · Passagem', () => {
     const again = (await transportReport(admin.principal, 2035, 7)).rows.find((x) => x.name === `Ana ${tag}`)!;
     expect(again).toMatchObject({ discount: 2, payDays: 18 - weekdayHolidays });
     expect(again.leaves).toHaveLength(1);
+  });
+
+  it('ajuste do mês: dias informados e valor fixo (só a gestão); vazio volta ao cálculo', async () => {
+    const teacherId = (await prisma.wsMember.findUniqueOrThrow({ where: { id: ana } })).teacherId;
+    await expect(saveBenefitMonth(lider.principal, { teacherId, month: '2035-07', days: 10, fixedCents: null }, META)).rejects.toBeInstanceOf(AuthorizationError);
+    await saveBenefitMonth(admin.principal, { teacherId, month: '2035-07', days: 10, fixedCents: null }, META);
+    let me = (await transportReport(admin.principal, 2035, 7)).rows.find((x) => x.teacherId === teacherId)!;
+    expect(me).toMatchObject({ payDays: 10, manualDays: 10, totalCents: 11000 });
+    expect(me.calcPayDays).toBeGreaterThan(10);
+    expect(me.mealCents).toBe(me.workDays * 1500); // alimentação segue os dias de trabalho
+    await saveBenefitMonth(admin.principal, { teacherId, month: '2035-07', days: 10, fixedCents: 20000 }, META);
+    me = (await transportReport(admin.principal, 2035, 7)).rows.find((x) => x.teacherId === teacherId)!;
+    expect(me).toMatchObject({ totalCents: 20000, fixedCents: 20000 });
+    // Outro mês não é afetado.
+    expect((await transportReport(admin.principal, 2035, 8)).rows.find((x) => x.teacherId === teacherId)!.manualDays).toBeNull();
+    await saveBenefitMonth(admin.principal, { teacherId, month: '2035-07', days: null, fixedCents: null }, META);
+    me = (await transportReport(admin.principal, 2035, 7)).rows.find((x) => x.teacherId === teacherId)!;
+    expect(me.payDays).toBe(me.calcPayDays);
+    expect(await prisma.benefitMonth.count({ where: { teacherId } })).toBe(0);
+  });
+
+  it('fora das escalas (professor): incluir, valor diário e dias do mês; quem está em equipe não entra', async () => {
+    const prof = await prisma.teacher.create({ data: { name: `Prof Benef ${tag}` } });
+    let r = await transportReport(admin.principal, 2035, 7);
+    expect(r.candidates.some((c) => c.id === prof.id)).toBe(true);
+    await expect(setBenefitPerson(lider.principal, prof.id, true, META)).rejects.toBeInstanceOf(AuthorizationError);
+    await setBenefitPerson(admin.principal, prof.id, true, META);
+    await saveTransportValue(admin.principal, prof.id, 760, META);
+    await saveBenefitMonth(admin.principal, { teacherId: prof.id, month: '2035-07', days: 22, fixedCents: null }, META);
+    r = await transportReport(admin.principal, 2035, 7);
+    expect(r.rows.find((x) => x.teacherId === prof.id)).toMatchObject({ external: true, payDays: 22, dailyCents: 760, totalCents: 16720, depositCents: 16720 });
+    expect(r.candidates.some((c) => c.id === prof.id)).toBe(false);
+    const anaTeacher = (await prisma.wsMember.findUniqueOrThrow({ where: { id: ana } })).teacherId;
+    await expect(setBenefitPerson(admin.principal, anaTeacher, true, META)).rejects.toThrow(/já está numa equipe/);
+    await setBenefitPerson(admin.principal, prof.id, false, META);
+    expect((await transportReport(admin.principal, 2035, 7)).rows.some((x) => x.teacherId === prof.id)).toBe(false);
+    await prisma.teacher.delete({ where: { id: prof.id } });
   });
 });

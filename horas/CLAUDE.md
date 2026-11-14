@@ -105,6 +105,11 @@ padrão, máx. 5/sem CLT e 6 FUNAP, sem folga fixa e sem ausências) − **falta
 repetir. "Copiar tabela" para planilha. **Lançar falta/atestado na própria tabela** (clique no número de faltas; `ws.edit`): grava o mesmo registro
 de Férias e ausências (`saveAbsence`, no 1º setor da pessoa) e lista os já lançados com "anular". `domain/escalas/passagem.ts`, `transportReport` no ws-service. Setor **ADM** = setor comum
 (Pré-requisitos → Novo setor) para quem não está em outro setor.
+**Ajuste do mês** (decisão 14/11, planilha de passagem do DP; só `ws.admin`): clicar em **Dias a pagar** informa os dias do mês à mão
+(`benefit_months.transport_days`, substitui o cálculo; selo "informado", o calculado fica no título) e em **Total** um **valor fixo**
+(`transport_total_cents`, ex.: R$ 200); vazio volta ao cálculo; vale só para aquele mês (`month` = "AAAA-MM"). **Fora das escalas
+(professores e outros)**: quem não está em equipe da 5x2 entra pela caixa "Incluir" (`benefit_people`, com valor diário próprio; grupo
+próprio na tabela; só para quem vê todos os setores); dias só informados; alimentação dessas pessoas = dias informados × valor.
 
 **Simulação de grade** (Grade semanal → "Simular nova grade"; `schedule.edit`, nas áreas da pessoa): copia a grade de
 uma data para um rascunho (`grade_simulations.items`, sem tocar na grade real), edita (aulas, troca de professor em

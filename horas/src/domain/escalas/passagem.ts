@@ -65,11 +65,19 @@ export interface TransportRow {
   name: string;
   bond: string;
   sectors: string[];
-  source: 'escala' | 'estimado' | 'misto';
+  source: 'escala' | 'estimado' | 'misto' | 'fora';
   workDays: number;
   discount: number;
   discountDates: IsoDate[];
+  /** Dias a pagar: os informados no mês (manualDays) ou os calculados (calcPayDays). */
   payDays: number;
+  calcPayDays: number;
+  manualDays: number | null;
+  /** Valor fixo da passagem no mês (substitui dias × valor diário). */
+  fixedCents: number | null;
+  note: string | null;
+  /** Fora das equipes da escala 5x2 (professores, Kids…): dias só informados. */
+  external: boolean;
   dailyCents: number | null;
   totalCents: number | null;
   mealDailyCents: number | null;
@@ -101,11 +109,43 @@ export function transportRows(inputs: TransportInput[]): TransportRow[] {
       teacherId: list[0]!.teacherId, name: list[0]!.name, bond: list[0]!.bond,
       sectors: [...new Set(list.map((i) => i.sector))],
       source: sources.size > 1 ? 'misto' : list[0]!.source,
-      workDays: work.size, discount: disc.length, discountDates: disc, payDays,
+      workDays: work.size, discount: disc.length, discountDates: disc, payDays, calcPayDays: payDays,
+      manualDays: null, fixedCents: null, note: null, external: false,
       dailyCents: daily, totalCents: daily == null ? null : payDays * daily,
       ...meal(list.find((i) => i.mealDailyCents != null)?.mealDailyCents ?? null, work.size, daily == null ? null : payDays * daily),
       refs: list.flatMap((i) => (i.ref ? [i.ref] : [])),
       leaves: [...new Map(list.flatMap((i) => i.prevLeaves).filter((l): l is Required<Leave> => !!l.id && (DISCOUNT_TYPES as readonly string[]).includes(l.type)).map((l) => [l.id, l])).values()].sort((a, b) => a.start.localeCompare(b.start)),
     };
   }).sort((a, b) => a.sectors[0]!.localeCompare(b.sectors[0]!, 'pt-BR') || a.name.localeCompare(b.name, 'pt-BR'));
+}
+
+/** Ajuste do mês informado pelo DP (planilha de passagem). */
+export interface MonthAdjust { teacherId: string; days: number | null; fixedCents: number | null; note: string | null }
+
+/**
+ * Aplica o ajuste do mês: dias informados substituem os calculados (passagem e, para quem está fora
+ * das escalas, também a alimentação); valor fixo substitui dias × valor diário.
+ */
+export function applyAdjust(row: TransportRow, a: MonthAdjust | undefined): TransportRow {
+  if (!a) return row;
+  const payDays = a.days ?? row.calcPayDays;
+  const transport = a.fixedCents ?? (row.dailyCents == null ? null : payDays * row.dailyCents);
+  const mealDays = row.external ? payDays : row.workDays;
+  return {
+    ...row, payDays, manualDays: a.days, fixedCents: a.fixedCents, note: a.note, totalCents: transport,
+    ...meal(row.mealDailyCents, mealDays, transport),
+  };
+}
+
+export const OUTSIDE_GROUP = 'Fora das escalas (professores e outros)';
+
+/** Linha de quem recebe benefício sem estar numa equipe da escala: dias só por ajuste do mês. */
+export function externalRow(p: { teacherId: string; name: string; bond: string; dailyCents: number | null; mealDailyCents: number | null }): TransportRow {
+  return {
+    teacherId: p.teacherId, name: p.name, bond: p.bond, sectors: [OUTSIDE_GROUP], source: 'fora',
+    workDays: 0, discount: 0, discountDates: [], payDays: 0, calcPayDays: 0, manualDays: null, fixedCents: null, note: null, external: true,
+    dailyCents: p.dailyCents, totalCents: p.dailyCents == null ? null : 0,
+    ...meal(p.mealDailyCents, 0, p.dailyCents == null ? null : 0),
+    refs: [], leaves: [],
+  };
 }

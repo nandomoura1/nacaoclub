@@ -411,6 +411,8 @@ model Teacher {
   personalWorkouts PersonalWorkout[]
   documents        TeacherDocument[]
   wsMembers        WsMember[]
+  benefitMonths    BenefitMonth[]
+  benefitPerson    BenefitPerson?
 
   @@index([active, name])
   @@index([team, active])
@@ -3274,4 +3276,30 @@ model Contact {
 
   @@index([active, groupName])
   @@map("contacts")
+}
+
+/// Benefícios: ajuste do mês (dias de passagem informados e/ou valor fixo) por pessoa. Mês "AAAA-MM".
+model BenefitMonth {
+  teacherId           String   @map("teacher_id") @db.Uuid
+  month               String
+  transportDays       Int?     @map("transport_days")
+  transportTotalCents Int?     @map("transport_total_cents")
+  note                String?
+  updatedAt           DateTime @updatedAt @map("updated_at")
+  teacher             Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@id([teacherId, month])
+  @@map("benefit_months")
+}
+
+/// Benefícios de quem não está em equipe da escala 5x2 (professores, Kids…).
+model BenefitPerson {
+  teacherId           String   @id @map("teacher_id") @db.Uuid
+  transportDailyCents Int?     @map("transport_daily_cents")
+  mealDailyCents      Int?     @map("meal_daily_cents")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+  teacher             Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@map("benefit_people")
 }

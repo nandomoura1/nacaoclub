@@ -37,4 +37,6 @@ export const wsWhatsAppStatusAction = async () => ws.wsWhatsAppStatus();
 export const sendMemberScheduleAction = async (scheduleId: string, memberId: string, input: { to: string; text: string }) => act((p, m) => ws.sendMemberSchedule(p, scheduleId, memberId, input, m));
 export const sendTeamSchedulesAction = async (scheduleId: string) => act((p, m) => ws.sendTeamSchedules(p, scheduleId, m));
 export const saveTransportValueAction = async (teacherId: string, cents: number | null) => act((p, m) => ws.saveTransportValue(p, teacherId, cents, m), 'Valor da passagem salvo.');
+export const saveBenefitMonthAction = async (input: { teacherId: string; month: string; days: number | null; fixedCents: number | null; note?: string | null }) => act((p, m) => ws.saveBenefitMonth(p, input, m), 'Ajuste do mês salvo.');
+export const setBenefitPersonAction = async (teacherId: string, on: boolean) => act((p, m) => ws.setBenefitPerson(p, teacherId, on, m), on ? 'Pessoa incluída nos benefícios.' : 'Pessoa retirada dos benefícios.');
 export const saveMealValueAction = async (teacherId: string, cents: number | null) => act((p, m) => ws.saveMealValue(p, teacherId, cents, m), 'Valor da alimentação salvo.');

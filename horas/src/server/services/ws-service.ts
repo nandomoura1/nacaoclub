@@ -13,7 +13,7 @@ import { describeRule, parseRule, RULE_KINDS, type RuleKind } from '@/domain/esc
 import type { Absence, Bond, Cell, CellKind, DayPlan, Grid, HoursMap, LegalParams, Member, MemberHours, Post, Rule } from '@/domain/escalas/types';
 import { validate, type Analysis } from '@/domain/escalas/validate';
 import { fairness, type FairnessRow } from '@/domain/escalas/fairness';
-import { estimateWorkDays, receivesTransport, transportRows, type TransportInput } from '@/domain/escalas/passagem';
+import { applyAdjust, estimateWorkDays, externalRow, receivesTransport, transportRows, type TransportInput } from '@/domain/escalas/passagem';
 import { cancelLeave, saveLeave } from './leave-service';
 import { deliverWhatsApp } from './whatsapp-service';
 import { zapiConfig } from '@/server/whatsapp/zapi';
@@ -988,7 +988,30 @@ export async function transportReport(principal: P | null, year: number, month: 
       inputs.push({ teacherId: db.teacherId, name: m.name, bond: m.bond, sector: s.name, workDays, source: c.schedule ? 'escala' : 'estimado', prevWorkDays, prevLeaves, dailyCents: db.transportDailyCents, mealDailyCents: db.mealDailyCents, ref: { sectorId: s.id, memberId: m.id } });
     }
   }
-  return { year, month, label: monthInfo(year, month).label, prevLabel: pmi.label, prevFirst: pmi.first, prevLast: pmi.last, rows: transportRows(inputs), status, outside, canEditValues: can(principal, 'ws.admin'), canEditAbsences: can(principal, 'ws.edit') };
+  const canEditValues = can(principal, 'ws.admin');
+  const rows = transportRows(inputs);
+  // Quem recebe benefício sem estar numa equipe da escala (professores, Kids…): só para quem vê todos os setores.
+  if (!scope) {
+    const inRows = new Set(rows.map((r) => r.teacherId));
+    const people = await prisma.benefitPerson.findMany({
+      where: { teacher: { active: true } },
+      include: { teacher: { select: { name: true, contractType: { select: { name: true } }, position: { select: { name: true } } } } },
+    });
+    rows.push(...people.filter((x) => !inRows.has(x.teacherId))
+      .map((x) => externalRow({ teacherId: x.teacherId, name: x.teacher.name, bond: x.teacher.contractType?.name ?? x.teacher.position?.name ?? '—', dailyCents: x.transportDailyCents, mealDailyCents: x.mealDailyCents }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')));
+  }
+  const key = monthKey(year, month);
+  const adj = new Map((await prisma.benefitMonth.findMany({ where: { month: key, teacherId: { in: rows.map((r) => r.teacherId) } } }))
+    .map((a) => [a.teacherId, { teacherId: a.teacherId, days: a.transportDays, fixedCents: a.transportTotalCents, note: a.note }]));
+  const candidates = canEditValues && !scope
+    ? await prisma.teacher.findMany({ where: { active: true, wsMembers: { none: {} }, benefitPerson: null }, orderBy: { name: 'asc' }, select: { id: true, name: true } })
+    : [];
+  return {
+    year, month, monthKey: key, label: monthInfo(year, month).label, prevLabel: pmi.label, prevFirst: pmi.first, prevLast: pmi.last,
+    rows: rows.map((r) => applyAdjust(r, adj.get(r.teacherId))), status, outside, candidates,
+    canEditValues, canEditAbsences: can(principal, 'ws.edit'),
+  };
 }
 export type TransportReport = Awaited<ReturnType<typeof transportReport>>;
 
@@ -1007,14 +1030,76 @@ async function saveBenefitValue(principal: P | null, teacherId: string, cents: n
   if (cents != null && (!Number.isInteger(cents) || cents < 0 || cents > 50_000)) throw new AppError('Valor diário inválido (até R$ 500,00).');
   return prisma.$transaction(async (tx) => {
     const members = await tx.wsMember.findMany({ where: { teacherId }, include: { teacher: { select: { name: true } } } });
-    if (!members.length) throw new NotFoundError('Pessoa não está em nenhuma equipe da escala.');
-    const before = kind === 'meal' ? members[0]!.mealDailyCents : members[0]!.transportDailyCents;
-    await tx.wsMember.updateMany({ where: { teacherId }, data: kind === 'meal' ? { mealDailyCents: cents } : { transportDailyCents: cents } });
+    // Fora das escalas: o valor fica em benefit_people.
+    const ext = members.length ? null : await tx.benefitPerson.findUnique({ where: { teacherId }, include: { teacher: { select: { name: true } } } });
+    if (!members.length && !ext) throw new NotFoundError('Pessoa não está em nenhuma equipe da escala nem na lista de fora das escalas.');
+    const src = members[0] ?? ext!;
+    const before = kind === 'meal' ? src.mealDailyCents : src.transportDailyCents;
+    const data = kind === 'meal' ? { mealDailyCents: cents } : { transportDailyCents: cents };
+    if (ext) await tx.benefitPerson.update({ where: { teacherId }, data });
+    else await tx.wsMember.updateMany({ where: { teacherId }, data });
     const brl = (v: number | null) => (v == null ? (kind === 'meal' ? 'sem direito' : 'não informado') : `R$ ${(v / 100).toFixed(2).replace('.', ',')}`);
     await audit(tx, ctx(principal, meta), {
       action: kind === 'meal' ? 'ws.meal_value' : 'ws.transport_value', entityType: 'teacher', entityId: teacherId,
       before: { valor_diario_centavos: before }, after: { valor_diario_centavos: cents },
-      summary: `${principal.name} definiu ${kind === 'meal' ? 'a alimentação diária' : 'a passagem diária'} de ${members[0]!.teacher.name}: ${brl(before)} → ${brl(cents)}`,
+      summary: `${principal.name} definiu ${kind === 'meal' ? 'a alimentação diária' : 'a passagem diária'} de ${src.teacher.name}: ${brl(before)} → ${brl(cents)}`,
+    });
+  });
+}
+
+const monthKey = (y: number, m: number) => `${y}-${String(m).padStart(2, '0')}`;
+
+const AdjustSchema = z.object({
+  teacherId: z.string().uuid(),
+  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Mês inválido.'),
+  days: z.number().int().min(0).max(31).nullable(),
+  fixedCents: z.number().int().min(0).max(500_000).nullable(),
+  note: z.string().trim().max(200).nullable().optional(),
+});
+
+/**
+ * Ajuste do mês (só a gestão, `ws.admin`): dias de passagem informados (substituem o cálculo) e/ou valor
+ * fixo do mês. Tudo vazio = volta ao cálculo.
+ */
+export async function saveBenefitMonth(principal: P | null, input: unknown, meta: RequestMeta) {
+  assertCan(principal, 'ws.admin');
+  const r = AdjustSchema.safeParse(input);
+  if (!r.success) throw new AppError(r.error.issues[0]?.message ?? 'Dados inválidos.');
+  const v = r.data;
+  const note = v.note || null;
+  return prisma.$transaction(async (tx) => {
+    const t = await tx.teacher.findUnique({ where: { id: v.teacherId }, select: { name: true } });
+    if (!t) throw new NotFoundError('Pessoa não encontrada.');
+    const id = { teacherId_month: { teacherId: v.teacherId, month: v.month } };
+    const before = await tx.benefitMonth.findUnique({ where: id });
+    if (v.days == null && v.fixedCents == null && !note) await tx.benefitMonth.deleteMany({ where: { teacherId: v.teacherId, month: v.month } });
+    else await tx.benefitMonth.upsert({ where: id, create: { teacherId: v.teacherId, month: v.month, transportDays: v.days, transportTotalCents: v.fixedCents, note }, update: { transportDays: v.days, transportTotalCents: v.fixedCents, note } });
+    const desc = (d: number | null, c: number | null) => [d == null ? 'dias calculados' : `${d} dias`, c == null ? null : `valor fixo R$ ${(c / 100).toFixed(2).replace('.', ',')}`].filter(Boolean).join(', ');
+    await audit(tx, ctx(principal, meta), {
+      action: 'ws.benefit_month', entityType: 'teacher', entityId: v.teacherId,
+      before: before ? { dias: before.transportDays, valor_fixo_centavos: before.transportTotalCents, obs: before.note } : null,
+      after: { mes: v.month, dias: v.days, valor_fixo_centavos: v.fixedCents, obs: note },
+      summary: `${principal.name} ajustou a passagem de ${t.name} em ${v.month}: ${desc(before?.transportDays ?? null, before?.transportTotalCents ?? null)} → ${desc(v.days, v.fixedCents)}`,
+    });
+  });
+}
+
+/** Inclui/tira da lista de benefícios quem não está em equipe da escala (professores, Kids…). Só a gestão. */
+export async function setBenefitPerson(principal: P | null, teacherId: string, on: boolean, meta: RequestMeta) {
+  assertCan(principal, 'ws.admin');
+  return prisma.$transaction(async (tx) => {
+    const t = await tx.teacher.findUnique({ where: { id: teacherId }, select: { name: true, active: true, _count: { select: { wsMembers: true } } } });
+    if (!t) throw new NotFoundError('Pessoa não encontrada.');
+    if (on) {
+      if (!t.active) throw new AppError('Colaborador inativo.');
+      if (t._count.wsMembers) throw new AppError(`${t.name} já está numa equipe da escala: aparece no setor dela.`);
+      await tx.benefitPerson.upsert({ where: { teacherId }, create: { teacherId }, update: {} });
+    } else {
+      await tx.benefitPerson.deleteMany({ where: { teacherId } });
+    }
+    await audit(tx, ctx(principal, meta), {
+      action: on ? 'ws.benefit_person_added' : 'ws.benefit_person_removed', entityType: 'teacher', entityId: teacherId,
+      summary: `${principal.name} ${on ? 'incluiu' : 'tirou'} ${t.name} ${on ? 'na' : 'da'} lista de benefícios fora das escalas`,
     });
   });
 }

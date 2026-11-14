@@ -2,7 +2,7 @@
 
 import { Fragment, useMemo, useState, useTransition } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { Copy, Info, Plus, Undo2 } from 'lucide-react';
+import { Copy, Info, Plus, Undo2, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -11,7 +11,7 @@ import { Input, Label, Select } from '@/components/ui/input';
 import { formatDateBR } from '@/domain/dates';
 import { cn } from '@/lib/cn';
 import type { TransportReport } from '@/server/services/ws-service';
-import { cancelAbsenceAction, saveAbsenceAction, saveMealValueAction, saveTransportValueAction } from '../actions';
+import { cancelAbsenceAction, saveAbsenceAction, saveBenefitMonthAction, saveMealValueAction, saveTransportValueAction, setBenefitPersonAction } from '../actions';
 
 const brl = (c: number | null) => (c == null ? '—' : (c / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
 const toCents = (v: string): number | null | 'erro' => {
@@ -65,8 +65,44 @@ export function TransportClient({ mes, report }: { mes: string; report: Transpor
   }), [rows]);
   const sectors = [...new Set(rows.flatMap((r) => r.sectors))];
 
+  /** Ajuste do mês: "days:<id>" (dias informados; vazio = calculado) ou "fixed:<id>" (valor fixo; vazio = dias × valor). */
+  const saveAdjust = (key: string) => {
+    const [kind, teacherId] = key.split(':') as ['days' | 'fixed', string];
+    const r = rows.find((x) => x.teacherId === teacherId)!;
+    const raw = (editing[key] ?? '').trim();
+    let days = r.manualDays, fixedCents = r.fixedCents;
+    if (kind === 'days') {
+      const n = raw === '' ? null : Number(raw);
+      if (n != null && (!Number.isInteger(n) || n < 0 || n > 31)) return setMsg({ error: 'Dias inválidos (0 a 31).' });
+      days = n;
+    } else {
+      const c = toCents(raw);
+      if (c === 'erro') return setMsg({ error: 'Valor inválido. Use, por exemplo, 200,00.' });
+      fixedCents = c;
+    }
+    start(async () => {
+      const x = await saveBenefitMonthAction({ teacherId, month: report.monthKey, days, fixedCents, note: r.note });
+      if (!x.ok) return setMsg({ error: x.error });
+      setMsg({ ok: `Ajuste de ${report.label} salvo para ${r.name}.` });
+      setEditing((e) => { const n = { ...e }; delete n[key]; return n; });
+      router.refresh();
+    });
+  };
+  const [addId, setAddId] = useState('');
+  const setPerson = (teacherId: string, on: boolean) => {
+    if (!on && !confirm('Tirar esta pessoa da lista de benefícios fora das escalas?')) return;
+    start(async () => {
+      const x = await setBenefitPersonAction(teacherId, on);
+      if (!x.ok) return setMsg({ error: x.error });
+      setMsg({ ok: on ? 'Incluída. Informe o valor diário e os dias do mês.' : 'Retirada da lista.' });
+      setAddId('');
+      router.refresh();
+    });
+  };
+
   /** `key` = id da pessoa (passagem) ou "meal:<id>" (alimentação; vazio = tira o direito). */
   const save = (key: string) => {
+    if (key.startsWith('days:') || key.startsWith('fixed:')) return saveAdjust(key);
     const c = toCents(editing[key] ?? '');
     if (c === 'erro') return setMsg({ error: 'Valor inválido. Use, por exemplo, 11,00.' });
     const meal = key.startsWith('meal:');
@@ -82,8 +118,9 @@ export function TransportClient({ mes, report }: { mes: string; report: Transpor
 
   const csv = () => {
     const n = (c: number | null) => (c == null ? '' : (c / 100).toFixed(2).replace('.', ','));
-    const head = 'Setor;Nome;Vínculo;Dias de trabalho;Passagem: faltas/atestados mês anterior;Passagem: dias a pagar;Passagem: valor diário;Passagem: total;Alimentação: valor diário;Alimentação: total;A depositar';
-    const lines = rows.map((r) => [r.sectors.join(' + '), r.name, r.bond, r.workDays, r.discount, r.payDays, n(r.dailyCents), n(r.totalCents), n(r.mealDailyCents), n(r.mealCents), n(r.depositCents)].join(';'));
+    const head = 'Setor;Nome;Vínculo;Dias de trabalho;Passagem: faltas/atestados mês anterior;Passagem: dias a pagar;Passagem: valor diário;Passagem: total;Alimentação: valor diário;Alimentação: total;A depositar;Ajuste do mês';
+    const adj = (r: TransportReport['rows'][number]) => [r.manualDays != null ? `dias informados (calculado ${r.calcPayDays})` : '', r.fixedCents != null ? 'valor fixo' : ''].filter(Boolean).join(', ');
+    const lines = rows.map((r) => [r.sectors.join(' + '), r.name, r.bond, r.external ? '' : r.workDays, r.discount, r.payDays, n(r.dailyCents), n(r.totalCents), n(r.mealDailyCents), n(r.mealCents), n(r.depositCents), adj(r)].join(';'));
     return [head, ...lines].join('\n');
   };
 
@@ -110,7 +147,7 @@ export function TransportClient({ mes, report }: { mes: string; report: Transpor
           <b className="text-tinta">{report.label}:</b> dias de trabalho pela escala do mês; setor sem escala gerada usa o horário padrão da pessoa (marcado <i>estimado</i>).
           Desconto = faltas e atestados de <b className="text-tinta">{report.prevLabel}</b> que caíram em dia de trabalho.
           Alimentação = dias de trabalho do mês × valor diário (sem desconto do mês anterior), só para quem tem direito.
-          A mesma pessoa em mais de um setor conta cada dia uma vez. {report.canEditValues ? 'Clique no valor diário para alterar.' : 'Os valores diários são definidos pela gestão (DP).'}
+          A mesma pessoa em mais de um setor conta cada dia uma vez. {report.canEditValues ? <>Clique no valor diário para alterar; em <b className="text-tinta">Dias a pagar</b> ou <b className="text-tinta">Total</b> para informar o número do mês à mão (o calculado continua visível; apagar volta ao cálculo).</> : 'Os valores diários e ajustes do mês são definidos pela gestão (DP).'}
         </p>
       </Card>
       {report.canEditValues && (
@@ -133,7 +170,7 @@ export function TransportClient({ mes, report }: { mes: string; report: Transpor
         const mealCols = allMeal || list.some((r) => r.mealDailyCents != null);
         const cols = mealCols ? 11 : 8;
         const vt = 'bg-nacao/[0.04]', va = 'bg-sucesso/[0.05]';
-        const money = (key: string, value: number | null, placeholder: string, empty: string) => report.canEditValues && editing[key] !== undefined ? (
+        const money = (key: string, value: number | null, placeholder: string, empty: string, show?: React.ReactNode, initial?: string) => report.canEditValues && editing[key] !== undefined ? (
           <span className="inline-flex items-center gap-1">
             <Input autoFocus inputMode="decimal" className="h-8 w-24 text-right" value={editing[key]} placeholder={placeholder}
               onChange={(e) => setEditing((x) => ({ ...x, [key]: e.target.value }))}
@@ -141,11 +178,11 @@ export function TransportClient({ mes, report }: { mes: string; report: Transpor
             <Button size="sm" disabled={pending} onClick={() => save(key)}>OK</Button>
           </span>
         ) : report.canEditValues ? (
-          <button type="button" className={value == null ? 'font-semibold text-atencao underline' : 'underline decoration-dotted'}
-            onClick={() => setEditing((x) => ({ ...x, [key]: value == null ? '' : (value / 100).toFixed(2).replace('.', ',') }))}>
-            {value == null ? empty : brl(value)}
+          <button type="button" className={value == null && show === undefined ? 'font-semibold text-atencao underline' : 'underline decoration-dotted'}
+            onClick={() => setEditing((x) => ({ ...x, [key]: initial ?? (value == null ? '' : (value / 100).toFixed(2).replace('.', ',')) }))}>
+            {show ?? (value == null ? empty : brl(value))}
           </button>
-        ) : value == null ? '' : brl(value);
+        ) : show ?? (value == null ? '' : brl(value));
         return (
         <Card key={sector} className="overflow-x-auto">
           <h3 className="px-4 pt-3 font-extrabold text-navy">{sector}</h3>
@@ -169,9 +206,10 @@ export function TransportClient({ mes, report }: { mes: string; report: Transpor
               {list.map((r) => (
                 <Fragment key={r.teacherId}>
                 <tr>
-                  <td className="px-4 py-2 font-semibold text-tinta">{r.name}{r.sectors.length > 1 && <span className="ml-1 text-xs font-normal text-tinta-suave">(também {r.sectors.slice(1).join(', ')})</span>}</td>
+                  <td className="px-4 py-2 font-semibold text-tinta">{r.name}{r.sectors.length > 1 && <span className="ml-1 text-xs font-normal text-tinta-suave">(também {r.sectors.slice(1).join(', ')})</span>}
+                    {r.external && report.canEditValues && <button type="button" title="Tirar da lista" className="ml-1 align-middle text-tinta-fraca hover:text-critico" onClick={() => setPerson(r.teacherId, false)}><X className="inline size-3.5" /></button>}</td>
                   <td className="px-2 py-2">{r.bond}</td>
-                  <td className="tabular px-2 py-2 text-right">{r.workDays}{r.source !== 'escala' && <Badge tone="amber" className="ml-1">{r.source}</Badge>}</td>
+                  <td className="tabular px-2 py-2 text-right">{r.external ? <span className="text-tinta-fraca">—</span> : <>{r.workDays}{r.source !== 'escala' && <Badge tone="amber" className="ml-1">{r.source}</Badge>}</>}</td>
                   <td className={cn('tabular px-2 py-2 text-right', vt)} title={r.discountDates.map(formatDateBR).join(', ')}>
                     {report.canEditAbsences && r.refs.length ? (
                       <button type="button" className="inline-flex items-center gap-1 underline decoration-dotted hover:text-nacao"
@@ -180,9 +218,13 @@ export function TransportClient({ mes, report }: { mes: string; report: Transpor
                       </button>
                     ) : r.discount ? `−${r.discount}` : '0'}
                   </td>
-                  <td className={cn('tabular px-2 py-2 text-right font-bold text-navy', vt)}>{r.payDays}</td>
+                  <td className={cn('tabular px-2 py-2 text-right font-bold text-navy', vt)} title={r.manualDays != null ? `Informado à mão · calculado: ${r.calcPayDays}` : undefined}>
+                    {money(`days:${r.teacherId}`, null, String(r.calcPayDays), '', <>{r.payDays}{r.manualDays != null && !r.external && <Badge tone="blue" className="ml-1">informado</Badge>}</>, r.manualDays == null ? '' : String(r.manualDays))}
+                  </td>
                   <td className={cn('tabular px-2 py-2 text-right', vt)}>{money(r.teacherId, r.dailyCents, '11,00', 'informar')}</td>
-                  <td className={cn('tabular px-2 py-2 text-right font-bold', vt)}>{brl(r.totalCents)}</td>
+                  <td className={cn('tabular px-2 py-2 text-right font-bold', vt)}>
+                    {money(`fixed:${r.teacherId}`, r.fixedCents, '200,00', '', <>{brl(r.totalCents)}{r.fixedCents != null && <Badge tone="blue" className="ml-1">fixo</Badge>}</>)}
+                  </td>
                   {mealCols && (r.mealDailyCents != null || allMeal || editing[`meal:${r.teacherId}`] !== undefined ? <>
                     <td className={cn('tabular px-2 py-2 text-right', va)}>{money(`meal:${r.teacherId}`, r.mealDailyCents, '15,00', 'dar direito')}</td>
                     <td className={cn('tabular px-2 py-2 text-right font-bold', va)}>{r.mealCents == null ? '' : brl(r.mealCents)}</td>
@@ -223,6 +265,19 @@ export function TransportClient({ mes, report }: { mes: string; report: Transpor
         </Card>
         );
       })}
+
+      {report.canEditValues && report.candidates.length > 0 && (
+        <Card className="flex flex-wrap items-end gap-2 p-4">
+          <div className="min-w-[16rem] flex-1">
+            <Label htmlFor="ben-add">Incluir quem não está nas escalas (professor, Kids…)</Label>
+            <Select id="ben-add" value={addId} onChange={(e) => setAddId(e.target.value)}>
+              <option value="">Escolha o colaborador…</option>
+              {report.candidates.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </Select>
+          </div>
+          <Button disabled={!addId || pending} onClick={() => setPerson(addId, true)}><Plus /> Incluir</Button>
+        </Card>
+      )}
 
       {report.outside.length > 0 && (
         <p className="text-xs text-tinta-suave">Fora da passagem (vínculo sem vale-transporte): {report.outside.map((o) => `${o.name} (${o.bond}, ${o.sector})`).join(' · ')}.</p>
