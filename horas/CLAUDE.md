@@ -110,6 +110,10 @@ de Férias e ausências (`saveAbsence`, no 1º setor da pessoa) e lista os já l
 (`transport_total_cents`, ex.: R$ 200); vazio volta ao cálculo; vale só para aquele mês (`month` = "AAAA-MM"). **Fora das escalas
 (professores e outros)**: quem não está em equipe da 5x2 entra pela caixa "Incluir" (`benefit_people`, com valor diário próprio; grupo
 próprio na tabela; só para quem vê todos os setores); dias só informados; alimentação dessas pessoas = dias informados × valor.
+**Cadastro duplicado** (Equipes → ícone de cópia no cartão; `ws.edit` + `teacher.edit`; decisão 15/11): escolhe o cadastro que **fica**;
+o duplicado é **desativado** (nada se apaga; nota "Cadastro duplicado de X" na ficha) e quem fica herda as equipes (onde já está, a vaga
+repetida sai — desativada se já está em escala salva), as ausências, os ajustes do mês/benefícios e o telefone/e-mail que faltarem.
+Recusa duplicado com acesso ao sistema ou aulas na grade. `mergeDuplicate` no ws-service.
 
 **Simulação de grade** (Grade semanal → "Simular nova grade"; `schedule.edit`, nas áreas da pessoa): copia a grade de
 uma data para um rascunho (`grade_simulations.items`, sem tocar na grade real), edita (aulas, troca de professor em

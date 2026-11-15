@@ -1103,3 +1103,63 @@ export async function setBenefitPerson(principal: P | null, teacherId: string, o
     });
   });
 }
+
+/**
+ * Cadastro duplicado (Equipes → "Duplicado"): a mesma pessoa cadastrada duas vezes. Quem fica (`keepTeacherId`) herda
+ * as equipes do duplicado (no setor em que já está, a vaga do duplicado sai), as ausências, os benefícios e o telefone/e-mail
+ * que faltarem; o duplicado é **desativado** (nada é apagado; histórico de escala salva continua). Precisa de `ws.edit` +
+ * `teacher.edit`. Não vale para quem tem acesso ao sistema ou aulas na grade (resolver na ficha/Gestão de Horas).
+ */
+export async function mergeDuplicate(principal: P | null, sectorId: string, memberId: string, keepTeacherId: string, meta: RequestMeta) {
+  assertCan(principal, 'ws.edit');
+  assertCan(principal, 'teacher.edit');
+  const keepId = z.string().uuid('Escolha quem fica.').parse(keepTeacherId);
+  return prisma.$transaction(async (tx) => {
+    await assertSector(principal, sectorId, tx);
+    const m = await tx.wsMember.findFirst({ where: { id: memberId, sectorId } });
+    if (!m) throw new NotFoundError('Colaborador não encontrado na equipe.');
+    const dupId = m.teacherId;
+    if (dupId === keepId) throw new AppError('Escolha outra pessoa: é o mesmo cadastro.');
+    const [dup, keep] = await Promise.all([
+      tx.teacher.findUnique({ where: { id: dupId }, include: { userLink: true, _count: { select: { slotAssignments: true } } } }),
+      tx.teacher.findUnique({ where: { id: keepId } }),
+    ]);
+    if (!dup || !keep) throw new NotFoundError('Pessoa não encontrada.');
+    if (!keep.active) throw new AppError(`${keep.name} está inativo: escolha um cadastro ativo.`);
+    if (dup.userLink) throw new AppError(`${dup.name} tem acesso ao sistema. Desvincule o usuário antes (Administração → Usuários).`);
+    if (dup._count.slotAssignments) throw new AppError(`${dup.name} tem aulas na grade. Resolva na Gestão de Horas antes.`);
+
+    // Equipes: passa a vaga para quem fica; onde quem fica já está, a do duplicado sai.
+    const dupMembers = await tx.wsMember.findMany({ where: { teacherId: dupId }, include: { sector: { select: { name: true } }, _count: { select: { cells: true } } } });
+    const keepSectors = new Set((await tx.wsMember.findMany({ where: { teacherId: keepId }, select: { sectorId: true } })).map((x) => x.sectorId));
+    const moved: string[] = [], dropped: string[] = [];
+    for (const dm of dupMembers) {
+      if (!keepSectors.has(dm.sectorId)) { await tx.wsMember.update({ where: { id: dm.id }, data: { teacherId: keepId } }); moved.push(dm.sector.name); }
+      else { if (dm._count.cells) await tx.wsMember.update({ where: { id: dm.id }, data: { active: false } }); else await tx.wsMember.delete({ where: { id: dm.id } }); dropped.push(dm.sector.name); }
+    }
+    const leaves = await tx.leave.updateMany({ where: { teacherId: dupId }, data: { teacherId: keepId } });
+    // Benefícios: o ajuste do mês/fora das escalas só passa se quem fica não tem o seu.
+    const keepMonths = new Set((await tx.benefitMonth.findMany({ where: { teacherId: keepId }, select: { month: true } })).map((x) => x.month));
+    for (const b of await tx.benefitMonth.findMany({ where: { teacherId: dupId } })) {
+      await tx.benefitMonth.delete({ where: { teacherId_month: { teacherId: dupId, month: b.month } } });
+      if (!keepMonths.has(b.month)) await tx.benefitMonth.create({ data: { ...b, teacherId: keepId } });
+    }
+    const bp = await tx.benefitPerson.findUnique({ where: { teacherId: dupId } });
+    if (bp) {
+      await tx.benefitPerson.delete({ where: { teacherId: dupId } });
+      if (!(await tx.benefitPerson.findUnique({ where: { teacherId: keepId } })) && !(await tx.wsMember.count({ where: { teacherId: keepId } }))) {
+        await tx.benefitPerson.create({ data: { teacherId: keepId, transportDailyCents: bp.transportDailyCents, mealDailyCents: bp.mealDailyCents } });
+      }
+    }
+    const fill = { ...(!keep.phone?.trim() && dup.phone?.trim() ? { phone: dup.phone } : {}), ...(!keep.email?.trim() && dup.email?.trim() ? { email: dup.email } : {}) };
+    if (Object.keys(fill).length) await tx.teacher.update({ where: { id: keepId }, data: fill });
+    const stamp = `Cadastro duplicado de ${keep.name} — desativado em ${new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}.`;
+    await tx.teacher.update({ where: { id: dupId }, data: { active: false, notes: dup.notes ? `${dup.notes}\n${stamp}` : stamp } });
+    await audit(tx, ctx(principal, meta), {
+      action: 'ws.member.duplicate', entityType: 'teacher', entityId: dupId,
+      before: { ativo: true }, after: { ativo: false, fica: keepId, equipes_passadas: moved, equipes_retiradas: dropped, ausencias_passadas: leaves.count, completou: Object.keys(fill) },
+      summary: `${principal.name} marcou ${dup.name} como cadastro duplicado de ${keep.name}: ${dup.name} desativado${moved.length ? `; equipes passadas: ${moved.join(', ')}` : ''}${dropped.length ? `; vaga retirada em: ${dropped.join(', ')}` : ''}`,
+    });
+    return { keep: keep.name, dup: dup.name, moved, dropped };
+  });
+}

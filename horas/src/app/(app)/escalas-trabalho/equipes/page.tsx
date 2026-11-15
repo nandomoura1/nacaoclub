@@ -28,7 +28,7 @@ export default async function EquipesPage({ searchParams }: { searchParams: Prom
         <SectorMonthPicker sectors={sectors} sectorId={q.sectorId} month={q.mes} showMonth={false} />
         {can(principal, 'ws.admin') && <Link href="/escalas-trabalho/pre-requisitos" className={buttonVariants({ variant: 'secondary', size: 'sm' })} title="Criar setor (ex.: ADM), com horário de funcionamento — em Pré-requisitos"><Plus /> Novo setor</Link>}
       </Card>
-      <TeamClient key={q.sectorId} sectorId={q.sectorId} members={setup.sector.members.map((m) => ({ ...m, name: m.teacher.displayName || m.teacher.name, hours: m.hours as never }))} people={setup.people} canEdit={can(principal, 'ws.edit')} cycleRef={setup.sector.cycleRef.toISOString().slice(0, 10)} />
+      <TeamClient key={q.sectorId} sectorId={q.sectorId} members={setup.sector.members.map((m) => ({ ...m, name: m.teacher.displayName || m.teacher.name, hours: m.hours as never }))} people={setup.people} canEdit={can(principal, 'ws.edit')} canMerge={can(principal, 'ws.edit') && can(principal, 'teacher.edit')} cycleRef={setup.sector.cycleRef.toISOString().slice(0, 10)} />
     </>
   );
 }

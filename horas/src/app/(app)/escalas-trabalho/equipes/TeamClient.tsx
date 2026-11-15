@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Pencil, Plus, RefreshCw, UserMinus } from 'lucide-react';
+import { Copy, Pencil, Plus, RefreshCw, UserMinus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -14,7 +14,7 @@ import { cycleIndex, mondayOf } from '@/domain/escalas/calendar';
 import { todayIso } from '@/lib/today';
 import { BOND_LABEL, hhmm } from '@/domain/escalas/labels';
 import type { Bond, MemberHours, Mode, Shift3 } from '@/domain/escalas/types';
-import { removeMemberAction, saveMemberAction, setRotationAction } from '../actions';
+import { mergeDuplicateAction, removeMemberAction, saveMemberAction, setRotationAction } from '../actions';
 import { MemberHoursEditor, WeekPatternEditor, WeekdayPicker } from '../shared';
 
 export interface TeamMember {
@@ -26,7 +26,8 @@ export interface TeamMember {
 const weekText = (w: (readonly [number, number, number] | null)[]) => w.map((x, i) => `${WEEKDAYS[i]!.short.toLowerCase()} ${x ? `${hhmm(x[0])}–${hhmm(x[1])}` : 'folga'}`).join(' · ');
 const days = (ns: number[]) => ns.map((n) => WEEKDAYS[n - 1]!.short.toLowerCase()).join('/');
 
-export function TeamClient({ sectorId, members, people, canEdit, cycleRef }: { sectorId: string; members: TeamMember[]; people: { id: string; name: string }[]; canEdit: boolean; cycleRef: string }) {
+export function TeamClient({ sectorId, members, people, canEdit, canMerge = false, cycleRef }: { sectorId: string; members: TeamMember[]; people: { id: string; name: string }[]; canEdit: boolean; canMerge?: boolean; cycleRef: string }) {
+  const [dup, setDup] = useState<TeamMember | null>(null);
   const [rotation, setRotation] = useState(false);
   const router = useRouter();
   const [open, setOpen] = useState<TeamMember | 'new' | null>(null);
@@ -59,6 +60,7 @@ export function TeamClient({ sectorId, members, people, canEdit, cycleRef }: { s
               {canEdit && (
                 <div className="flex gap-1">
                   <button type="button" aria-label="Editar" onClick={() => setOpen(m)} className="text-tinta-fraca hover:text-nacao"><Pencil className="size-4" /></button>
+                  {canMerge && m.active && <button type="button" aria-label="Cadastro duplicado" title="Cadastro duplicado (mesma pessoa cadastrada duas vezes)" disabled={pending} onClick={() => setDup(m)} className="text-tinta-fraca hover:text-atencao"><Copy className="size-4" /></button>}
                   <button type="button" aria-label="Tirar da equipe" disabled={pending} onClick={() => remove(m)} className="text-tinta-fraca hover:text-critico"><UserMinus className="size-4" /></button>
                 </div>
               )}
@@ -82,6 +84,7 @@ export function TeamClient({ sectorId, members, people, canEdit, cycleRef }: { s
         ))}
       </div>
       {members.length === 0 && <Card className="p-6 text-center text-sm text-tinta-suave">Nenhum colaborador neste setor ainda.</Card>}
+      {dup && <DuplicateSheet sectorId={sectorId} member={dup} members={members.filter((m) => m.active && m.id !== dup.id)} people={people.filter((p) => p.id !== dup.teacherId)} onClose={() => setDup(null)} onSaved={() => { setDup(null); router.refresh(); }} />}
       {rotation && <RotationSheet sectorId={sectorId} members={members.filter((m) => m.active)} cycleRef={cycleRef} onClose={() => setRotation(false)} onSaved={() => { setRotation(false); router.refresh(); }} />}
       {open && <MemberSheet sectorId={sectorId} member={open === 'new' ? null : open} people={people.filter((p) => !members.some((m) => m.teacherId === p.id))} onClose={() => setOpen(null)} onSaved={() => { setOpen(null); router.refresh(); }} />}
     </>
@@ -225,6 +228,51 @@ function RotationSheet({ sectorId, members, cycleRef, onClose, onSaved }: { sect
         </div>
       )}
       {members.length > eligible.length && <p className="text-xs text-tinta-fraca">Só entra quem tem grade semanal fixa.</p>}
+      <FormMessage error={error} />
+    </Sheet>
+  );
+}
+
+/** Mesma pessoa cadastrada duas vezes: escolhe quem fica; o duplicado é desativado (nada se apaga). */
+function DuplicateSheet({ sectorId, member, members, people, onClose, onSaved }: { sectorId: string; member: TeamMember; members: TeamMember[]; people: { id: string; name: string }[]; onClose: () => void; onSaved: () => void }) {
+  const [keep, setKeep] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const sameTeam = new Set(members.map((m) => m.teacherId));
+  const keepName = people.find((p) => p.id === keep)?.name;
+  return (
+    <Sheet
+      title="Cadastro duplicado"
+      onClose={onClose}
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!keep) return setError('Escolha quem fica.');
+        if (!confirm(`${member.name} será desativado e ${keepName} fica no lugar. Confirmar?`)) return;
+        start(async () => {
+          const r = await mergeDuplicateAction(sectorId, member.id, keep);
+          if (!r.ok) return setError(r.error);
+          onSaved();
+        });
+      }}
+      footer={<><Button type="submit" disabled={pending || !keep}>Resolver duplicado</Button><Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button></>}
+    >
+      <p className="text-sm text-tinta-suave">
+        <b className="text-tinta">{member.name}</b> é a mesma pessoa que outro cadastro? Escolha o cadastro que <b className="text-tinta">fica</b>.
+      </p>
+      <div>
+        <Label htmlFor="dup-keep">Fica</Label>
+        <Select id="dup-keep" value={keep} onChange={(e) => setKeep(e.target.value)}>
+          <option value="">Escolha…</option>
+          {members.length > 0 && <optgroup label="Nesta equipe">{members.map((m) => <option key={m.teacherId} value={m.teacherId}>{m.name}</option>)}</optgroup>}
+          <optgroup label="Outros colaboradores">{people.filter((p) => !sameTeam.has(p.id)).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</optgroup>
+        </Select>
+      </div>
+      <ul className="list-disc space-y-1 pl-5 text-xs text-tinta-suave">
+        <li>{member.name} é <b>desativado</b> (nada é apagado; escalas já salvas continuam no histórico).</li>
+        <li>Equipes, férias/ausências e benefícios de {member.name} passam para quem fica; onde quem fica já está, a vaga repetida sai.</li>
+        <li>Telefone e e-mail que faltarem em quem fica são completados.</li>
+        <li>Escala do mês em rascunho: gere de novo para refletir.</li>
+      </ul>
       <FormMessage error={error} />
     </Sheet>
   );
