@@ -3,7 +3,7 @@ import type { Bond, Cell, CellKind } from './types';
 
 /** Rótulos e cores da grade (puro; usado na tela, na impressão e na planilha). */
 
-export const BOND_LABEL: Record<Bond, string> = { CLT: 'CLT', FUNAP: 'FUNAP', MEI: 'MEI', FREELANCER: 'Freelancer' };
+export const BOND_LABEL: Record<Bond, string> = { CLT: 'CLT', FUNAP: 'FUNAP', MEI: 'MEI', FREELANCER: 'Freelancer', ESTAGIO: 'Estágio' };
 
 export const CELL_LABEL: Record<CellKind, string> = {
   TRABALHO: 'Trabalho', FOLGA: 'Folga', BANCO: 'Folga (banco de horas)', FECHADO: 'Fechado', SEM_GRADE: 'Sem grade',

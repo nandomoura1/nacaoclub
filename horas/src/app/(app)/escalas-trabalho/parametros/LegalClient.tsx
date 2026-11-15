@@ -39,6 +39,8 @@ const show = (v: number | null, unit: string) => (v == null ? '—' : unit === '
 /** Sugestão inicial CLT para o DP conferir (não vale como validada até o DP marcar). */
 /** FUNAP (contrato 6x1): 44h semanais, 6 dias seguidos, intervalo de até 2h; sem domingo, interjornada e intervalo mínimo. */
 const FUNAP_DRAFT = { maxWeeklyMin: 2640, maxConsecutiveDays: 6, maxBreakMin: 120 };
+/** Estágio (Lei 11.788/2008, art. 10): até 6h/dia e 30h/semana. */
+const ESTAGIO_DRAFT = { maxDailyMin: 360, maxWeeklyMin: 1800, maxConsecutiveDays: 6, minRestBetweenMin: 660 };
 const CLT_DRAFT = { maxDailyMin: 480, maxDailyExtraMin: 120, maxWeeklyMin: 2400, minRestBetweenMin: 660, maxConsecutiveDays: 6, sundayOffEveryWeeks: 3, breakLongOverMin: 360, breakLongMin: 60, breakShortOverMin: 240, breakShortMin: 15 };
 
 export function LegalClient({ rows, canEdit }: { rows: Row[]; canEdit: boolean }) {
@@ -78,7 +80,7 @@ function LegalSheet({ row, onClose }: { row: Row | null; onClose: () => void }) 
   const [validFrom, setValidFrom] = useState(row?.validFrom ?? '');
   const [notes, setNotes] = useState(row?.notes ?? '');
   const [validated, setValidated] = useState(!!row?.validatedAt);
-  const init = (k: keyof Row) => (row ? (row[k] as number | null) : bond === 'CLT' ? (CLT_DRAFT as Record<string, number>)[k] ?? null : bond === 'FUNAP' ? (FUNAP_DRAFT as Record<string, number>)[k] ?? null : null);
+  const init = (k: keyof Row) => (row ? (row[k] as number | null) : bond === 'CLT' ? (CLT_DRAFT as Record<string, number>)[k] ?? null : bond === 'FUNAP' ? (FUNAP_DRAFT as Record<string, number>)[k] ?? null : bond === 'ESTAGIO' ? (ESTAGIO_DRAFT as Record<string, number>)[k] ?? null : null);
   const [vals, setVals] = useState<Record<string, string>>(Object.fromEntries(FIELDS.map((f) => { const v = init(f.key); return [f.key, v == null ? '' : f.unit === 'h' ? String(v / 60) : String(v)]; })));
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,9 +95,10 @@ function LegalSheet({ row, onClose }: { row: Row | null; onClose: () => void }) 
     <Sheet title={row ? 'Editar parâmetros' : 'Nova vigência'} onClose={onClose} onSubmit={submit}
       footer={<><Button type="submit" disabled={pending}>Salvar</Button><Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button></>}>
       <div className="grid grid-cols-2 gap-2">
-        <div><Label htmlFor="l-b">Vínculo</Label><Select id="l-b" value={bond} disabled={!!row} onChange={(e) => { const b = e.target.value as Bond; setBond(b); const d = (b === 'CLT' ? CLT_DRAFT : b === 'FUNAP' ? FUNAP_DRAFT : {}) as Record<string, number>; setVals(Object.fromEntries(FIELDS.map((f) => { const v = d[f.key]; return [f.key, v == null ? '' : f.unit === 'h' ? String(v / 60) : String(v)]; }))); }}>{(['CLT', 'FUNAP', 'MEI', 'FREELANCER'] as Bond[]).map((b) => <option key={b} value={b}>{BOND_LABEL[b]}</option>)}</Select></div>
+        <div><Label htmlFor="l-b">Vínculo</Label><Select id="l-b" value={bond} disabled={!!row} onChange={(e) => { const b = e.target.value as Bond; setBond(b); const d = (b === 'CLT' ? CLT_DRAFT : b === 'FUNAP' ? FUNAP_DRAFT : b === 'ESTAGIO' ? ESTAGIO_DRAFT : {}) as Record<string, number>; setVals(Object.fromEntries(FIELDS.map((f) => { const v = d[f.key]; return [f.key, v == null ? '' : f.unit === 'h' ? String(v / 60) : String(v)]; }))); }}>{(['CLT', 'FUNAP', 'ESTAGIO', 'MEI', 'FREELANCER'] as Bond[]).map((b) => <option key={b} value={b}>{BOND_LABEL[b]}</option>)}</Select></div>
         <div><Label htmlFor="l-v">Vigência a partir de</Label><Input id="l-v" type="date" value={validFrom} onChange={(e) => setValidFrom(e.target.value)} /></div>
       </div>
+      {!row && bond === 'ESTAGIO' && <p className="text-xs text-atencao">Estágio (Lei 11.788/2008, art. 10): jornada de até 6h por dia e 30h por semana (ensino superior, profissional de nível médio e médio regular). Confirme com o DP e o termo de compromisso.</p>}
       {!row && bond === 'FUNAP' && <p className="text-xs text-atencao">Contrato FUNAP (6x1): 44h semanais, até 6 dias seguidos e intervalo de até 2h por dia. Sem folga obrigatória no domingo, sem descanso mínimo entre jornadas e sem intervalo mínimo (deixe esses campos vazios).</p>}
       {!row && bond === 'CLT' && <p className="text-xs text-atencao">Valores sugeridos para a escala da Nação (8h/dia, 40h/semana — a CLT permite até 44h —, 11h entre jornadas, intervalo de 1h acima de 6h e 15 min acima de 4h, 1 domingo a cada 3 semanas no comércio). Confira com a convenção coletiva antes de marcar como validado.</p>}
       <div className="grid grid-cols-2 gap-2">

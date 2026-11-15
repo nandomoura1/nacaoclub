@@ -6,7 +6,7 @@ import type { IsoDate } from '@/domain/dates';
  * a grade + a análise. Tudo determinístico (mesma entrada → mesma escala).
  */
 
-export type Bond = 'CLT' | 'FUNAP' | 'MEI' | 'FREELANCER';
+export type Bond = 'CLT' | 'FUNAP' | 'MEI' | 'FREELANCER' | 'ESTAGIO';
 export type Mode = 'FIXO' | 'COBERTURA';
 /** Janela [início, fim) em minutos desde a meia-noite. */
 export type Window = [number, number];

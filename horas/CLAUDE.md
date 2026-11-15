@@ -114,6 +114,9 @@ próprio na tabela; só para quem vê todos os setores); dias só informados; al
 o duplicado é **desativado** (nada se apaga; nota "Cadastro duplicado de X" na ficha) e quem fica herda as equipes (onde já está, a vaga
 repetida sai — desativada se já está em escala salva), as ausências, os ajustes do mês/benefícios e o telefone/e-mail que faltarem.
 Recusa duplicado com acesso ao sistema ou aulas na grade. `mergeDuplicate` no ws-service.
+**Vínculo Estágio** (`WsBond.ESTAGIO`, decisão 15/11): 5x2 como CLT, carga padrão **30h/semana**, recebe **auxílio-transporte** (entra em
+Benefícios, Lei 11.788 art. 12); Parâmetros legais sugerem **6h/dia e 30h/semana** (art. 10) — a gestão cadastra e valida antes de
+declarar a escala regular.
 
 **Simulação de grade** (Grade semanal → "Simular nova grade"; `schedule.edit`, nas áreas da pessoa): copia a grade de
 uma data para um rascunho (`grade_simulations.items`, sem tocar na grade real), edita (aulas, troca de professor em

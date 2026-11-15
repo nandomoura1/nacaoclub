@@ -2507,6 +2507,8 @@ enum WsBond {
   FUNAP
   MEI
   FREELANCER
+  /// Estágio (Lei 11.788/2008): até 6h/dia e 30h/semana, 5x2, com auxílio-transporte.
+  ESTAGIO
 }
 
 /// FIXO = entra na escala nos dias dele; COBERTURA = só cobre buracos nos dias disponíveis (MEI/freelancer).

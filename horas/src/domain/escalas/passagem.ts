@@ -9,8 +9,8 @@ import type { DayPlan, Member } from './types';
  * (só os que caíram em dia de trabalho). Valor = dias a pagar × valor diário (ida e volta).
  */
 
-/** Vínculos que recebem passagem (decisão de 12/11): CLT e FUNAP. */
-export const TRANSPORT_BONDS = ['CLT', 'FUNAP'] as const;
+/** Vínculos que recebem passagem (decisão de 12/11): CLT e FUNAP; estágio = auxílio-transporte (Lei 11.788, art. 12). */
+export const TRANSPORT_BONDS = ['CLT', 'FUNAP', 'ESTAGIO'] as const;
 export const receivesTransport = (bond: string) => (TRANSPORT_BONDS as readonly string[]).includes(bond);
 
 /** Ausências que descontam no mês seguinte. */

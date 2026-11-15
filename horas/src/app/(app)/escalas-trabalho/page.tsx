@@ -49,7 +49,7 @@ export default async function EscalasTrabalhoPage({ searchParams }: { searchPara
   const nameOf = new Map(v.members.map((x) => [x.id, x.name]));
   const active = v.members.filter((x) => x.active);
   const pend = active.filter((x) => x.mode === 'FIXO' && x.autoSchedule && !x.hours.base && !x.hours.week);
-  const legalBonds = [...new Set(active.map((x) => x.bond))].filter((b) => b === 'CLT' || b === 'FUNAP');
+  const legalBonds = [...new Set(active.map((x) => x.bond))].filter((b) => b === 'CLT' || b === 'FUNAP' || b === 'ESTAGIO');
 
   return (
     <>

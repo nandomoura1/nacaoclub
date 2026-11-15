@@ -95,7 +95,7 @@ const memberSchema = z.object({
   newName: text(120),
   functionName: text(60),
   altFunctions: z.array(z.string().trim().min(1).max(60)).max(10).default([]),
-  bond: z.enum(['CLT', 'FUNAP', 'MEI', 'FREELANCER']),
+  bond: z.enum(['CLT', 'FUNAP', 'MEI', 'FREELANCER', 'ESTAGIO']),
   mode: z.enum(['FIXO', 'COBERTURA']).default('FIXO'),
   hours: memberHoursSchema,
   weeklyMin: z.number().int().min(0).max(4400).default(2400),
@@ -120,7 +120,7 @@ const overrideSchema = z.object({
   extraPeople: z.number().int().min(0).max(50).default(0),
 });
 const legalSchema = z.object({
-  bond: z.enum(['CLT', 'FUNAP', 'MEI', 'FREELANCER']),
+  bond: z.enum(['CLT', 'FUNAP', 'MEI', 'FREELANCER', 'ESTAGIO']),
   validFrom: z.string().refine(isIsoDate, 'Vigência inválida.'),
   maxDailyMin: min.nullable(), maxDailyExtraMin: min.nullable(), maxWeeklyMin: z.number().int().min(0).max(10080).nullable(),
   minRestBetweenMin: min.nullable(), maxConsecutiveDays: z.number().int().min(1).max(31).nullable(),

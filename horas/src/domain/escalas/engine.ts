@@ -57,8 +57,8 @@ export function patternShift(m: Member, d: DayPlan, cycleRef: IsoDate): Shift3 |
   const week = cyclePhase(d.date, cycleRef) === 'B' && w.B?.length ? w.B : w.A;
   return week[wd - 1] ?? null;
 }
-/** Vínculos com meta semanal de dias (CLT 5x2, FUNAP 6x1); MEI e freelancer seguem a disponibilidade. */
-export const fiveByTwo = (m: Member) => m.bond === 'CLT' || m.bond === 'FUNAP';
+/** Vínculos com meta semanal de dias (CLT e estágio 5x2, FUNAP 6x1); MEI e freelancer seguem a disponibilidade. */
+export const fiveByTwo = (m: Member) => m.bond === 'CLT' || m.bond === 'FUNAP' || m.bond === 'ESTAGIO';
 /** Folgas por semana do vínculo: CLT 2 (5x2), FUNAP 1 (contrato 6x1). */
 export const weeklyOffs = (m: Member) => (m.bond === 'FUNAP' ? 1 : 2);
 
