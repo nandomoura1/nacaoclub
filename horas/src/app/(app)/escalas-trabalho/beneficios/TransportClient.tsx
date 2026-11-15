@@ -20,6 +20,8 @@ const toCents = (v: string): number | null | 'erro' => {
   const n = Number(t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t);
   return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : 'erro';
 };
+const ABS_LABEL: Record<string, string> = { FALTA: 'Falta', ATESTADO: 'Atestado', HOME_OFFICE: 'Home office' };
+const ABS_TONE = (t: string) => (t === 'FALTA' ? 'red' : t === 'HOME_OFFICE' ? 'blue' : 'amber') as 'red' | 'blue' | 'amber';
 const STATUS: Record<string, string> = { RASCUNHO: 'rascunho', APROVADA: 'aprovada', PUBLICADA: 'publicada' };
 
 export function TransportClient({ mes, report }: { mes: string; report: TransportReport }) {
@@ -38,13 +40,13 @@ export function TransportClient({ mes, report }: { mes: string; report: Transpor
     start(async () => {
       const x = await saveAbsenceAction(ref.sectorId, { memberId: ref.memberId, type: abs.type, startDate: abs.start, endDate: abs.end });
       if (!x.ok) return setMsg({ error: x.error });
-      setMsg({ ok: `${abs.type === 'FALTA' ? 'Falta' : 'Atestado'} lançado para ${r.name}. Benefícios recalculados.` });
+      setMsg({ ok: `${ABS_LABEL[abs.type] ?? abs.type} lançado para ${r.name}. Benefícios recalculados.` });
       router.refresh();
     });
   };
   const undo = (r: TransportReport['rows'][number], id: string) => {
     const ref = r.refs[0];
-    if (!ref || !confirm('Anular esta falta/atestado? Ela sai também da escala e do histórico de ausências.')) return;
+    if (!ref || !confirm('Anular este lançamento (falta, atestado ou home office)? Ele sai também da escala e do histórico de ausências.')) return;
     start(async () => {
       const x = await cancelAbsenceAction(ref.sectorId, id);
       if (!x.ok) return setMsg({ error: x.error });
@@ -118,7 +120,7 @@ export function TransportClient({ mes, report }: { mes: string; report: Transpor
 
   const csv = () => {
     const n = (c: number | null) => (c == null ? '' : (c / 100).toFixed(2).replace('.', ','));
-    const head = 'Setor;Nome;Vínculo;Dias de trabalho;Passagem: faltas/atestados mês anterior;Passagem: dias a pagar;Passagem: valor diário;Passagem: total;Alimentação: valor diário;Alimentação: total;A depositar;Ajuste do mês';
+    const head = 'Setor;Nome;Vínculo;Dias de trabalho;Passagem: faltas/atestados/home office mês anterior;Passagem: dias a pagar;Passagem: valor diário;Passagem: total;Alimentação: valor diário;Alimentação: total;A depositar;Ajuste do mês';
     const adj = (r: TransportReport['rows'][number]) => [r.manualDays != null ? `dias informados (calculado ${r.calcPayDays})` : '', r.fixedCents != null ? 'valor fixo' : ''].filter(Boolean).join(', ');
     const lines = rows.map((r) => [r.sectors.join(' + '), r.name, r.bond, r.external ? '' : r.workDays, r.discount, r.payDays, n(r.dailyCents), n(r.totalCents), n(r.mealDailyCents), n(r.mealCents), n(r.depositCents), adj(r)].join(';'));
     return [head, ...lines].join('\n');
@@ -145,8 +147,8 @@ export function TransportClient({ mes, report }: { mes: string; report: Transpor
         <Info className="mt-0.5 size-4 shrink-0 text-nacao" />
         <p>
           <b className="text-tinta">{report.label}:</b> dias de trabalho pela escala do mês; setor sem escala gerada usa o horário padrão da pessoa (marcado <i>estimado</i>).
-          Desconto = faltas e atestados de <b className="text-tinta">{report.prevLabel}</b> que caíram em dia de trabalho.
-          Alimentação = dias de trabalho do mês × valor diário (sem desconto do mês anterior), só para quem tem direito.
+          Desconto = faltas, atestados e home office de <b className="text-tinta">{report.prevLabel}</b> que caíram em dia de trabalho.
+          Alimentação = dias de trabalho do mês × valor diário, menos o <b className="text-tinta">home office</b> de {(report.prevLabel.split(' ')[0] ?? '').toLowerCase()} (falta e atestado descontam só a passagem), só para quem tem direito.
           A mesma pessoa em mais de um setor conta cada dia uma vez. {report.canEditValues ? <>Clique no valor diário para alterar; em <b className="text-tinta">Dias a pagar</b> ou <b className="text-tinta">Total</b> para informar o número do mês à mão (o calculado continua visível; apagar volta ao cálculo).</> : 'Os valores diários e ajustes do mês são definidos pela gestão (DP).'}
         </p>
       </Card>
@@ -196,7 +198,7 @@ export function TransportClient({ mes, report }: { mes: string; report: Transpor
               </tr>
               <tr className="border-b border-borda text-left text-xs uppercase text-tinta-suave">
                 <th className="px-4 py-2">Nome</th><th className="px-2 py-2">Vínculo</th><th className="px-2 py-2 text-right">Dias de trabalho</th>
-                <th className={cn('px-2 py-2 text-right', vt)}>Faltas/atest. ({report.prevLabel.split(' ')[0]})</th><th className={cn('px-2 py-2 text-right', vt)}>Dias a pagar</th>
+                <th className={cn('px-2 py-2 text-right', vt)} title="Faltas, atestados e home office do mês anterior">Ausências ({report.prevLabel.split(' ')[0]})</th><th className={cn('px-2 py-2 text-right', vt)}>Dias a pagar</th>
                 <th className={cn('px-2 py-2 text-right', vt)}>Valor diário</th><th className={cn('px-2 py-2 text-right', vt)}>Total</th>
                 {mealCols && <><th className={cn('px-2 py-2 text-right', va)}>Valor diário</th><th className={cn('px-2 py-2 text-right', va)}>Total</th></>}
                 <th className="px-4 py-2 text-right">A depositar</th>
@@ -227,19 +229,19 @@ export function TransportClient({ mes, report }: { mes: string; report: Transpor
                   </td>
                   {mealCols && (r.mealDailyCents != null || allMeal || editing[`meal:${r.teacherId}`] !== undefined ? <>
                     <td className={cn('tabular px-2 py-2 text-right', va)}>{money(`meal:${r.teacherId}`, r.mealDailyCents, '15,00', 'dar direito')}</td>
-                    <td className={cn('tabular px-2 py-2 text-right font-bold', va)}>{r.mealCents == null ? '' : brl(r.mealCents)}</td>
+                    <td className={cn('tabular px-2 py-2 text-right font-bold', va)} title={r.mealDiscount ? `${r.mealDays} dias (−${r.mealDiscount} de home office)` : `${r.mealDays} dias`}>{r.mealCents == null ? '' : brl(r.mealCents)}{r.mealCents != null && r.mealDiscount > 0 && <span className="block text-[11px] font-normal text-nacao">−{r.mealDiscount} HO</span>}</td>
                   </> : <><td className={va} /><td className={va} /></>)}
                   <td className="tabular px-4 py-2 text-right font-extrabold text-navy">{brl(r.depositCents)}</td>
                 </tr>
                 {openAbs === r.teacherId && (
                   <tr className="bg-fundo">
                     <td colSpan={cols} className="px-4 py-3">
-                      <p className="mb-2 text-xs font-semibold uppercase text-tinta-suave">Faltas e atestados de {report.prevLabel} · {r.name}</p>
+                      <p className="mb-2 text-xs font-semibold uppercase text-tinta-suave">Faltas, atestados e home office de {report.prevLabel} · {r.name}</p>
                       {r.leaves.length ? (
                         <ul className="mb-3 space-y-1 text-sm">
                           {r.leaves.map((l) => (
                             <li key={l.id} className="flex flex-wrap items-center gap-2">
-                              <Badge tone={l.type === 'FALTA' ? 'red' : 'amber'}>{l.type === 'FALTA' ? 'Falta' : 'Atestado'}</Badge>
+                              <Badge tone={ABS_TONE(l.type)}>{ABS_LABEL[l.type] ?? l.type}</Badge>
                               <span>{formatDateBR(l.start)}{l.end !== l.start && ` a ${formatDateBR(l.end)}`}</span>
                               <Button size="sm" variant="ghost" disabled={pending} onClick={() => undo(r, l.id)}><Undo2 /> anular</Button>
                             </li>
@@ -247,13 +249,13 @@ export function TransportClient({ mes, report }: { mes: string; report: Transpor
                         </ul>
                       ) : <p className="mb-3 text-sm text-tinta-suave">Nenhuma lançada.</p>}
                       <div className="flex flex-wrap items-end gap-2">
-                        <div><Label>Tipo</Label><Select value={abs.type} onChange={(e) => setAbs({ ...abs, type: e.target.value })} className="h-9 w-32"><option value="FALTA">Falta</option><option value="ATESTADO">Atestado</option></Select></div>
+                        <div><Label>Tipo</Label><Select value={abs.type} onChange={(e) => setAbs({ ...abs, type: e.target.value })} className="h-9 w-36"><option value="FALTA">Falta</option><option value="ATESTADO">Atestado</option><option value="HOME_OFFICE">Home office</option></Select></div>
                         <div><Label>De</Label><Input type="date" className="h-9" value={abs.start} onChange={(e) => setAbs({ ...abs, start: e.target.value, end: abs.end < e.target.value ? e.target.value : abs.end })} /></div>
                         <div><Label>Até</Label><Input type="date" className="h-9" value={abs.end} min={abs.start} onChange={(e) => setAbs({ ...abs, end: e.target.value })} /></div>
                         <Button size="sm" disabled={pending} onClick={() => launch(r)}><Plus /> Lançar</Button>
                         <Button size="sm" variant="ghost" onClick={() => setOpenAbs(null)}>Fechar</Button>
                       </div>
-                      <p className="mt-2 text-xs text-tinta-suave">É o mesmo registro de “Férias e ausências”: vale para a escala e o histórico. Só desconta o que cair em dia de trabalho{r.sectors.length > 1 ? ` (lançado no setor ${r.sectors[0]})` : ''}.</p>
+                      <p className="mt-2 text-xs text-tinta-suave">É o mesmo registro de “Férias e ausências”: vale para a escala e o histórico. Falta e atestado descontam a passagem; home office desconta passagem e alimentação. Só desconta o que cair em dia de trabalho{r.sectors.length > 1 ? ` (lançado no setor ${r.sectors[0]})` : ''}.</p>
                     </td>
                   </tr>
                 )}

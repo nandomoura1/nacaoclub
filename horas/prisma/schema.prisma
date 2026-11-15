@@ -705,6 +705,8 @@ enum LeaveType {
   FOLGA
   FALTA
   INDISPONIVEL
+  /// Escala 5x2: trabalhou de casa — desconta passagem e alimentação nos Benefícios.
+  HOME_OFFICE
 }
 
 enum LeaveCoverage {

@@ -7,10 +7,10 @@ export const BOND_LABEL: Record<Bond, string> = { CLT: 'CLT', FUNAP: 'FUNAP', ME
 
 export const CELL_LABEL: Record<CellKind, string> = {
   TRABALHO: 'Trabalho', FOLGA: 'Folga', BANCO: 'Folga (banco de horas)', FECHADO: 'Fechado', SEM_GRADE: 'Sem grade',
-  FERIAS: 'Férias', ATESTADO: 'Atestado', FALTA: 'Falta', AFASTAMENTO: 'Afastamento', INDISPONIVEL: 'Indisponível',
+  FERIAS: 'Férias', ATESTADO: 'Atestado', FALTA: 'Falta', AFASTAMENTO: 'Afastamento', INDISPONIVEL: 'Indisponível', HOME_OFFICE: 'Home office',
 };
 export const CELL_SHORT: Record<CellKind, string> = {
-  TRABALHO: '', FOLGA: 'FOLGA', BANCO: 'BANCO', FECHADO: 'FECH', SEM_GRADE: '—', FERIAS: 'FÉRIAS', ATESTADO: 'ATEST', FALTA: 'FALTA', AFASTAMENTO: 'AFAST', INDISPONIVEL: 'INDISP',
+  TRABALHO: '', FOLGA: 'FOLGA', BANCO: 'BANCO', FECHADO: 'FECH', SEM_GRADE: '—', FERIAS: 'FÉRIAS', ATESTADO: 'ATEST', FALTA: 'FALTA', AFASTAMENTO: 'AFAST', INDISPONIVEL: 'INDISP', HOME_OFFICE: 'HOME',
 };
 /** Classes Tailwind por situação (fundo + texto). */
 export const CELL_TONE: Record<CellKind, string> = {
@@ -22,12 +22,13 @@ export const CELL_TONE: Record<CellKind, string> = {
   FERIAS: 'bg-ciano/20 text-navy-700',
   ATESTADO: 'bg-atencao/15 text-atencao',
   FALTA: 'bg-critico/10 text-critico',
+  HOME_OFFICE: 'bg-nacao/10 text-nacao',
   AFASTAMENTO: 'bg-atencao/15 text-atencao',
   INDISPONIVEL: 'bg-fundo text-tinta-suave',
 };
 /** Cores para a planilha (ARGB). */
 export const CELL_FILL: Record<CellKind, string> = {
-  TRABALHO: 'FFFFFFFF', FOLGA: 'FFDDF5E6', BANCO: 'FFDDEBFF', FECHADO: 'FFEDEFF3', SEM_GRADE: 'FFFFFFFF', FERIAS: 'FFD2F3FB', ATESTADO: 'FFFFF0D6', FALTA: 'FFFDE0E0', AFASTAMENTO: 'FFFFF0D6', INDISPONIVEL: 'FFEDEFF3',
+  TRABALHO: 'FFFFFFFF', FOLGA: 'FFDDF5E6', BANCO: 'FFDDEBFF', FECHADO: 'FFEDEFF3', SEM_GRADE: 'FFFFFFFF', FERIAS: 'FFD2F3FB', ATESTADO: 'FFFFF0D6', FALTA: 'FFFDE0E0', AFASTAMENTO: 'FFFFF0D6', INDISPONIVEL: 'FFEDEFF3', HOME_OFFICE: 'FFDDEBFF',
 };
 
 export const hhmm = (m: number | null | undefined) => (m == null ? '' : formatClock(m));

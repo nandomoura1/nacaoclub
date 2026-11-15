@@ -35,8 +35,8 @@ export interface EngineInput {
   holidayStaff?: number | null;
 }
 
-export const OFF_KINDS: ReadonlySet<CellKind> = new Set(['FOLGA', 'BANCO', 'FECHADO', 'FERIAS', 'ATESTADO', 'FALTA', 'AFASTAMENTO', 'INDISPONIVEL']);
-const ABSENCE_KIND: Record<string, CellKind> = { FERIAS: 'FERIAS', ATESTADO: 'ATESTADO', FALTA: 'FALTA', AFASTAMENTO: 'AFASTAMENTO', INDISPONIVEL: 'INDISPONIVEL', FOLGA: 'FOLGA' };
+export const OFF_KINDS: ReadonlySet<CellKind> = new Set(['FOLGA', 'BANCO', 'FECHADO', 'FERIAS', 'ATESTADO', 'FALTA', 'AFASTAMENTO', 'INDISPONIVEL', 'HOME_OFFICE']);
+const ABSENCE_KIND: Record<string, CellKind> = { FERIAS: 'FERIAS', ATESTADO: 'ATESTADO', FALTA: 'FALTA', AFASTAMENTO: 'AFASTAMENTO', INDISPONIVEL: 'INDISPONIVEL', HOME_OFFICE: 'HOME_OFFICE', FOLGA: 'FOLGA' };
 
 /** Quem entra na geração automática (com horário habitual definido). */
 export const isScheduled = (m: Member) => m.mode === 'FIXO' && m.autoSchedule && (!!m.hours.base || !!m.hours.week);

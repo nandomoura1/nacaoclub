@@ -13,7 +13,7 @@ import { describeRule, parseRule, RULE_KINDS, type RuleKind } from '@/domain/esc
 import type { Absence, Bond, Cell, CellKind, DayPlan, Grid, HoursMap, LegalParams, Member, MemberHours, Post, Rule } from '@/domain/escalas/types';
 import { validate, type Analysis } from '@/domain/escalas/validate';
 import { fairness, type FairnessRow } from '@/domain/escalas/fairness';
-import { applyAdjust, estimateWorkDays, externalRow, receivesTransport, transportRows, type TransportInput } from '@/domain/escalas/passagem';
+import { DISCOUNT_TYPES, applyAdjust, estimateWorkDays, externalRow, receivesTransport, transportRows, type TransportInput } from '@/domain/escalas/passagem';
 import { cancelLeave, saveLeave } from './leave-service';
 import { deliverWhatsApp } from './whatsapp-service';
 import { zapiConfig } from '@/server/whatsapp/zapi';
@@ -131,7 +131,7 @@ const legalSchema = z.object({
   validated: z.boolean().default(false),
 });
 const cellSchema = z.object({
-  kind: z.enum(['TRABALHO', 'FOLGA', 'BANCO', 'FECHADO', 'SEM_GRADE', 'FERIAS', 'ATESTADO', 'FALTA', 'AFASTAMENTO', 'INDISPONIVEL']),
+  kind: z.enum(['TRABALHO', 'FOLGA', 'BANCO', 'FECHADO', 'SEM_GRADE', 'FERIAS', 'ATESTADO', 'FALTA', 'AFASTAMENTO', 'INDISPONIVEL', 'HOME_OFFICE']),
   startMin: min.nullable().optional(), endMin: min.nullable().optional(), breakMin: z.number().int().min(0).max(240).nullable().optional(),
   note: text(120),
 }).refine((c) => c.kind !== 'TRABALHO' || (c.startMin != null && c.endMin != null && c.endMin > c.startMin), 'Informe entrada e saída (a saída depois da entrada).');
@@ -522,7 +522,7 @@ export async function listAbsences(principal: P | null, sectorId: string, year: 
 
 const absenceSchema = z.object({
   memberId: z.string().uuid(),
-  type: z.enum(['FERIAS', 'ATESTADO', 'AFASTAMENTO', 'FOLGA', 'FALTA', 'INDISPONIVEL']),
+  type: z.enum(['FERIAS', 'ATESTADO', 'AFASTAMENTO', 'FOLGA', 'FALTA', 'INDISPONIVEL', 'HOME_OFFICE']),
   startDate: z.string().refine(isIsoDate, 'Data inicial inválida.'),
   endDate: z.string().refine(isIsoDate, 'Data final inválida.'),
   substituteMemberId: z.string().uuid().nullable().or(z.literal('').transform(() => null)).default(null),
@@ -964,7 +964,7 @@ export async function transportReport(principal: P | null, year: number, month: 
   const pmi = monthInfo(p.y, p.m);
   // Faltas e atestados que tocam o mês anterior (com id, para anular pela tela).
   const discountLeaves = await prisma.leave.findMany({
-    where: { cancelledAt: null, slotId: null, type: { in: ['FALTA', 'ATESTADO'] }, startDate: { lte: toUtc(pmi.last) }, endDate: { gte: toUtc(pmi.first) }, teacher: { wsMembers: { some: { sectorId: { in: sectors.map((s) => s.id) } } } } },
+    where: { cancelledAt: null, slotId: null, type: { in: [...DISCOUNT_TYPES] }, startDate: { lte: toUtc(pmi.last) }, endDate: { gte: toUtc(pmi.first) }, teacher: { wsMembers: { some: { sectorId: { in: sectors.map((s) => s.id) } } } } },
     select: { id: true, teacherId: true, type: true, startDate: true, endDate: true },
   });
   for (const s of sectors) {
@@ -982,7 +982,7 @@ export async function transportReport(principal: P | null, year: number, month: 
       // Mês anterior: dias em que a pessoa trabalharia (inclusive os que virou falta/atestado na escala).
       const pm = pc.members.find((x) => x.id === m.id);
       const prevWorkDays = pc.schedule
-        ? pc.schedule.cells.filter((x) => x.memberId === m.id && ['TRABALHO', 'FALTA', 'ATESTADO'].includes(x.kind)).map((x) => fromUtc(x.date)).filter((d) => d >= pc.mi.first && d <= pc.mi.last)
+        ? pc.schedule.cells.filter((x) => x.memberId === m.id && ['TRABALHO', 'FALTA', 'ATESTADO', 'HOME_OFFICE'].includes(x.kind)).map((x) => fromUtc(x.date)).filter((d) => d >= pc.mi.first && d <= pc.mi.last)
         : pm ? estimateWorkDays(pm, prevDays, pc.cycleRef, []) : [];
       const prevLeaves = discountLeaves.filter((l) => l.teacherId === db.teacherId).map((l) => ({ id: l.id, start: fromUtc(l.startDate), end: fromUtc(l.endDate), type: l.type }));
       inputs.push({ teacherId: db.teacherId, name: m.name, bond: m.bond, sector: s.name, workDays, source: c.schedule ? 'escala' : 'estimado', prevWorkDays, prevLeaves, dailyCents: db.transportDailyCents, mealDailyCents: db.mealDailyCents, ref: { sectorId: s.id, memberId: m.id } });

@@ -4,7 +4,7 @@ import type { DayPlan, Member } from './types';
 
 /**
  * Benefícios da escala 5x2 (passagem e alimentação) — puro.
- * Alimentação = dias de trabalho do mês × valor diário (sem desconto do mês anterior; vazio = sem direito).
+ * Alimentação = (dias de trabalho do mês − home office do mês anterior) × valor diário (vazio = sem direito).
  * Dias a pagar no mês = dias de trabalho do mês − faltas e atestados do mês anterior
  * (só os que caíram em dia de trabalho). Valor = dias a pagar × valor diário (ida e volta).
  */
@@ -13,8 +13,10 @@ import type { DayPlan, Member } from './types';
 export const TRANSPORT_BONDS = ['CLT', 'FUNAP', 'ESTAGIO'] as const;
 export const receivesTransport = (bond: string) => (TRANSPORT_BONDS as readonly string[]).includes(bond);
 
-/** Ausências que descontam no mês seguinte. */
-export const DISCOUNT_TYPES = ['FALTA', 'ATESTADO'] as const;
+/** Ausências que descontam a passagem no mês seguinte (decisão 15/11: home office também). */
+export const DISCOUNT_TYPES = ['FALTA', 'ATESTADO', 'HOME_OFFICE'] as const;
+/** Ausências que descontam também a alimentação no mês seguinte. */
+export const MEAL_DISCOUNT_TYPES = ['HOME_OFFICE'] as const;
 
 export interface Leave { id?: string; start: IsoDate; end: IsoDate; type: string }
 
@@ -37,8 +39,8 @@ export function estimateWorkDays(m: Member, days: DayPlan[], cycleRef: IsoDate, 
 }
 
 /** Faltas e atestados do mês anterior que caíram em dia de trabalho. */
-export function discountDays(prevWorkDays: Set<IsoDate>, leaves: Leave[]): IsoDate[] {
-  const disc = leaves.filter((l) => (DISCOUNT_TYPES as readonly string[]).includes(l.type));
+export function discountDays(prevWorkDays: Set<IsoDate>, leaves: Leave[], types: readonly string[] = DISCOUNT_TYPES): IsoDate[] {
+  const disc = leaves.filter((l) => types.includes(l.type));
   return [...prevWorkDays].filter((d) => covered(disc, d)).sort();
 }
 
@@ -81,6 +83,9 @@ export interface TransportRow {
   dailyCents: number | null;
   totalCents: number | null;
   mealDailyCents: number | null;
+  /** Dias de alimentação: dias de trabalho − home office do mês anterior. */
+  mealDays: number;
+  mealDiscount: number;
   mealCents: number | null;
   /** Passagem + alimentação (vazio = nenhum valor informado). */
   depositCents: number | null;
@@ -89,8 +94,8 @@ export interface TransportRow {
   leaves: Required<Leave>[];
 }
 
-function meal(daily: number | null, workDays: number, transport: number | null) {
-  const mealCents = daily == null ? null : workDays * daily;
+function meal(daily: number | null, mealDays: number, transport: number | null) {
+  const mealCents = daily == null ? null : mealDays * daily;
   return { mealDailyCents: daily, mealCents, depositCents: transport == null && mealCents == null ? null : (transport ?? 0) + (mealCents ?? 0) };
 }
 
@@ -102,6 +107,8 @@ export function transportRows(inputs: TransportInput[]): TransportRow[] {
     const work = new Set(list.flatMap((i) => i.workDays));
     const prev = new Set(list.flatMap((i) => i.prevWorkDays));
     const disc = discountDays(prev, list.flatMap((i) => i.prevLeaves));
+    const mealDisc = discountDays(prev, list.flatMap((i) => i.prevLeaves), MEAL_DISCOUNT_TYPES).length;
+    const mealDays = Math.max(0, work.size - mealDisc);
     const payDays = Math.max(0, work.size - disc.length);
     const daily = list.find((i) => i.dailyCents != null)?.dailyCents ?? null;
     const sources = new Set(list.map((i) => i.source));
@@ -112,7 +119,8 @@ export function transportRows(inputs: TransportInput[]): TransportRow[] {
       workDays: work.size, discount: disc.length, discountDates: disc, payDays, calcPayDays: payDays,
       manualDays: null, fixedCents: null, note: null, external: false,
       dailyCents: daily, totalCents: daily == null ? null : payDays * daily,
-      ...meal(list.find((i) => i.mealDailyCents != null)?.mealDailyCents ?? null, work.size, daily == null ? null : payDays * daily),
+      mealDays, mealDiscount: mealDisc,
+      ...meal(list.find((i) => i.mealDailyCents != null)?.mealDailyCents ?? null, mealDays, daily == null ? null : payDays * daily),
       refs: list.flatMap((i) => (i.ref ? [i.ref] : [])),
       leaves: [...new Map(list.flatMap((i) => i.prevLeaves).filter((l): l is Required<Leave> => !!l.id && (DISCOUNT_TYPES as readonly string[]).includes(l.type)).map((l) => [l.id, l])).values()].sort((a, b) => a.start.localeCompare(b.start)),
     };
@@ -130,9 +138,9 @@ export function applyAdjust(row: TransportRow, a: MonthAdjust | undefined): Tran
   if (!a) return row;
   const payDays = a.days ?? row.calcPayDays;
   const transport = a.fixedCents ?? (row.dailyCents == null ? null : payDays * row.dailyCents);
-  const mealDays = row.external ? payDays : row.workDays;
+  const mealDays = row.external ? payDays : row.mealDays;
   return {
-    ...row, payDays, manualDays: a.days, fixedCents: a.fixedCents, note: a.note, totalCents: transport,
+    ...row, payDays, mealDays, manualDays: a.days, fixedCents: a.fixedCents, note: a.note, totalCents: transport,
     ...meal(row.mealDailyCents, mealDays, transport),
   };
 }
@@ -144,7 +152,7 @@ export function externalRow(p: { teacherId: string; name: string; bond: string; 
   return {
     teacherId: p.teacherId, name: p.name, bond: p.bond, sectors: [OUTSIDE_GROUP], source: 'fora',
     workDays: 0, discount: 0, discountDates: [], payDays: 0, calcPayDays: 0, manualDays: null, fixedCents: null, note: null, external: true,
-    dailyCents: p.dailyCents, totalCents: p.dailyCents == null ? null : 0,
+    dailyCents: p.dailyCents, totalCents: p.dailyCents == null ? null : 0, mealDays: 0, mealDiscount: 0,
     ...meal(p.mealDailyCents, 0, p.dailyCents == null ? null : 0),
     refs: [], leaves: [],
   };

@@ -21,7 +21,7 @@ import {
 const MAX_DAYS = 400;
 
 export const leaveSchema = z.object({
-  type: z.enum(['FERIAS', 'ATESTADO', 'AFASTAMENTO', 'FOLGA', 'FALTA', 'INDISPONIVEL']),
+  type: z.enum(['FERIAS', 'ATESTADO', 'AFASTAMENTO', 'FOLGA', 'FALTA', 'INDISPONIVEL', 'HOME_OFFICE']),
   startDate: z.string().refine(isIsoDate, 'Data inicial inválida.'),
   endDate: z.string().refine(isIsoDate, 'Data final inválida.'),
   coverage: z.enum(['PENDENTE', 'CANCELAR', 'SUBSTITUIR']),

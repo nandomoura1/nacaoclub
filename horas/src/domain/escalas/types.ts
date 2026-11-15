@@ -33,8 +33,8 @@ export type WeekCycle = { A: WeekPattern; B?: WeekPattern; cycle?: WeekPattern[]
 
 export type CellKind =
   | 'TRABALHO' | 'FOLGA' | 'BANCO' | 'FECHADO' | 'SEM_GRADE'
-  | 'FERIAS' | 'ATESTADO' | 'FALTA' | 'AFASTAMENTO' | 'INDISPONIVEL';
-export const ABSENCE_KINDS = ['FERIAS', 'ATESTADO', 'FALTA', 'AFASTAMENTO', 'INDISPONIVEL', 'FOLGA_EXTRA'] as const;
+  | 'FERIAS' | 'ATESTADO' | 'FALTA' | 'AFASTAMENTO' | 'INDISPONIVEL' | 'HOME_OFFICE';
+export const ABSENCE_KINDS = ['FERIAS', 'ATESTADO', 'FALTA', 'AFASTAMENTO', 'INDISPONIVEL', 'HOME_OFFICE', 'FOLGA_EXTRA'] as const;
 
 export interface Cell {
   kind: CellKind;

@@ -18,7 +18,7 @@ import { LEAVE_LABEL, type LeaveType } from '@/domain/leave';
 import { cancelAbsenceAction, saveAbsenceAction } from '../actions';
 
 type Leave = { id: string; teacherId: string; name: string; type: string; start: string; end: string; notes: string | null; substitute: string | null; cancelled: boolean };
-const TYPES: [LeaveType, string][] = [['FERIAS', 'Férias'], ['FALTA', 'Falta'], ['ATESTADO', 'Atestado'], ['AFASTAMENTO', 'Afastamento'], ['FOLGA', 'Folga extraordinária'], ['INDISPONIVEL', 'Indisponibilidade']];
+const TYPES: [LeaveType, string][] = [['FERIAS', 'Férias'], ['FALTA', 'Falta'], ['ATESTADO', 'Atestado'], ['AFASTAMENTO', 'Afastamento'], ['FOLGA', 'Folga extraordinária'], ['INDISPONIVEL', 'Indisponibilidade'], ['HOME_OFFICE', 'Home office']];
 
 export function AbsenceClient({ sectorId, mes, members, leaves, impact, stats, hasSchedule, monthLabel, canEdit }: {
   sectorId: string; mes: string; members: { id: string; teacherId: string; name: string }[]; leaves: Leave[]; impact: Alert[]; stats: MemberStats[]; hasSchedule: boolean; monthLabel: string; canEdit: boolean;
@@ -61,7 +61,7 @@ export function AbsenceClient({ sectorId, mes, members, leaves, impact, stats, h
         <ul className="divide-y divide-borda text-sm">
           {leaves.map((l) => (
             <li key={l.id} className={l.cancelled ? 'flex flex-wrap items-center gap-2 py-2 opacity-50' : 'flex flex-wrap items-center gap-2 py-2'}>
-              <Badge tone={l.type === 'FERIAS' ? 'cyan' : l.type === 'FALTA' ? 'red' : 'amber'}>{LEAVE_LABEL[l.type as LeaveType] ?? l.type}</Badge>
+              <Badge tone={l.type === 'FERIAS' ? 'cyan' : l.type === 'FALTA' ? 'red' : l.type === 'HOME_OFFICE' ? 'blue' : 'amber'}>{LEAVE_LABEL[l.type as LeaveType] ?? l.type}</Badge>
               <b className="text-navy">{l.name}</b>
               <span>{formatDateBR(l.start)}{l.end !== l.start ? ` a ${formatDateBR(l.end)}` : ''}</span>
               {l.substitute && <span className="text-xs text-tinta-suave">substituto: {l.substitute}</span>}

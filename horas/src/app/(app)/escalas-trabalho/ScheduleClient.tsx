@@ -20,7 +20,7 @@ import { confirmDayAction, editCellAction, generateAction, sendMemberScheduleAct
 import { memberScheduleText } from '@/domain/escalas/whatsapp';
 import { TopScroll } from '@/components/ui/top-scroll';
 
-const KINDS: CellKind[] = ['TRABALHO', 'FOLGA', 'BANCO', 'FERIAS', 'ATESTADO', 'FALTA', 'AFASTAMENTO', 'INDISPONIVEL', 'FECHADO', 'SEM_GRADE'];
+const KINDS: CellKind[] = ['TRABALHO', 'FOLGA', 'BANCO', 'FERIAS', 'ATESTADO', 'FALTA', 'AFASTAMENTO', 'INDISPONIVEL', 'HOME_OFFICE', 'FECHADO', 'SEM_GRADE'];
 const LEVEL_TONE = { CONFLITO: 'red', AJUSTE: 'amber', INFO: 'neutral' } as const;
 const CLASS_TONE = { SEM_CONFLITOS: 'border-sucesso/40 bg-sucesso/10 text-sucesso', AJUSTES: 'border-atencao/40 bg-atencao/10 text-atencao', COM_CONFLITO: 'border-critico/40 bg-critico/10 text-critico' } as const;
 

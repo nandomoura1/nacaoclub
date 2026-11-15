@@ -96,4 +96,17 @@ describe.skipIf(!hasDb)('Escalas 5x2 · Passagem', () => {
     expect((await transportReport(admin.principal, 2035, 7)).rows.some((x) => x.teacherId === prof.id)).toBe(false);
     await prisma.teacher.delete({ where: { id: prof.id } });
   });
+
+  it('home office do mês anterior desconta passagem e alimentação (falta/atestado só a passagem)', async () => {
+    const before = (await transportReport(admin.principal, 2035, 7)).rows.find((x) => x.name === `Ana ${tag}`)!;
+    expect(before.mealDiscount).toBe(0);
+    await saveAbsence(admin.principal, sector, { memberId: ana, type: 'HOME_OFFICE', startDate: '2035-06-05', endDate: '2035-06-05' }, META); // terça
+    const me = (await transportReport(admin.principal, 2035, 7)).rows.find((x) => x.name === `Ana ${tag}`)!;
+    expect(me.discount).toBe(before.discount + 1);
+    expect(me.payDays).toBe(before.payDays - 1);
+    expect([me.mealDiscount, me.mealDays]).toEqual([1, me.workDays - 1]);
+    expect(me.mealCents).toBe((me.workDays - 1) * 1500);
+    expect(me.leaves.map((l) => l.type)).toContain('HOME_OFFICE');
+  });
 });
+

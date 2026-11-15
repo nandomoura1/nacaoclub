@@ -33,7 +33,7 @@ export async function scheduleXlsx(v: MonthView): Promise<Buffer> {
   ws.getColumn(1).width = 22; ws.getColumn(2).width = 18;
   for (let i = 0; i < days.length; i++) ws.getColumn(3 + i).width = 10;
   ws.addRow([]);
-  ws.addRow(['Legenda: ' + (['FOLGA', 'FERIAS', 'ATESTADO', 'FALTA', 'AFASTAMENTO', 'INDISPONIVEL', 'FECHADO'] as const).map((k) => CELL_LABEL[k]).join(' · ') + ' · ★ feriado']);
+  ws.addRow(['Legenda: ' + (['FOLGA', 'FERIAS', 'ATESTADO', 'FALTA', 'AFASTAMENTO', 'INDISPONIVEL', 'HOME_OFFICE', 'FECHADO'] as const).map((k) => CELL_LABEL[k]).join(' · ') + ' · ★ feriado']);
 
   const al = wb.addWorksheet('Alertas');
   al.addRow(['Nível', 'Data', 'Mensagem', 'Sugestões']).font = { bold: true };
