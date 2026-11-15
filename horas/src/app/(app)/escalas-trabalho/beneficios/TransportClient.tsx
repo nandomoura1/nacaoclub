@@ -148,7 +148,7 @@ export function TransportClient({ mes, report }: { mes: string; report: Transpor
         <p>
           <b className="text-tinta">{report.label}:</b> dias de trabalho pela escala do mês; setor sem escala gerada usa o horário padrão da pessoa (marcado <i>estimado</i>).
           Desconto = faltas, atestados e home office de <b className="text-tinta">{report.prevLabel}</b> que caíram em dia de trabalho.
-          Alimentação = dias de trabalho do mês × valor diário, menos o <b className="text-tinta">home office</b> de {(report.prevLabel.split(' ')[0] ?? '').toLowerCase()} (falta e atestado descontam só a passagem), só para quem tem direito.
+          Alimentação = dias de trabalho do mês × valor diário, menos as mesmas ausências (é benefício de quem trabalha no dia), só para quem tem direito.
           A mesma pessoa em mais de um setor conta cada dia uma vez. {report.canEditValues ? <>Clique no valor diário para alterar; em <b className="text-tinta">Dias a pagar</b> ou <b className="text-tinta">Total</b> para informar o número do mês à mão (o calculado continua visível; apagar volta ao cálculo).</> : 'Os valores diários e ajustes do mês são definidos pela gestão (DP).'}
         </p>
       </Card>
@@ -229,7 +229,7 @@ export function TransportClient({ mes, report }: { mes: string; report: Transpor
                   </td>
                   {mealCols && (r.mealDailyCents != null || allMeal || editing[`meal:${r.teacherId}`] !== undefined ? <>
                     <td className={cn('tabular px-2 py-2 text-right', va)}>{money(`meal:${r.teacherId}`, r.mealDailyCents, '15,00', 'dar direito')}</td>
-                    <td className={cn('tabular px-2 py-2 text-right font-bold', va)} title={r.mealDiscount ? `${r.mealDays} dias (−${r.mealDiscount} de home office)` : `${r.mealDays} dias`}>{r.mealCents == null ? '' : brl(r.mealCents)}{r.mealCents != null && r.mealDiscount > 0 && <span className="block text-[11px] font-normal text-nacao">−{r.mealDiscount} HO</span>}</td>
+                    <td className={cn('tabular px-2 py-2 text-right font-bold', va)} title={r.mealDiscount ? `${r.mealDays} dias (−${r.mealDiscount} de ausências do mês anterior)` : `${r.mealDays} dias`}>{r.mealCents == null ? '' : brl(r.mealCents)}{r.mealCents != null && r.mealDiscount > 0 && <span className="block text-[11px] font-normal text-tinta-suave">−{r.mealDiscount} {r.mealDiscount === 1 ? 'dia' : 'dias'}</span>}</td>
                   </> : <><td className={va} /><td className={va} /></>)}
                   <td className="tabular px-4 py-2 text-right font-extrabold text-navy">{brl(r.depositCents)}</td>
                 </tr>
@@ -255,7 +255,7 @@ export function TransportClient({ mes, report }: { mes: string; report: Transpor
                         <Button size="sm" disabled={pending} onClick={() => launch(r)}><Plus /> Lançar</Button>
                         <Button size="sm" variant="ghost" onClick={() => setOpenAbs(null)}>Fechar</Button>
                       </div>
-                      <p className="mt-2 text-xs text-tinta-suave">É o mesmo registro de “Férias e ausências”: vale para a escala e o histórico. Falta e atestado descontam a passagem; home office desconta passagem e alimentação. Só desconta o que cair em dia de trabalho{r.sectors.length > 1 ? ` (lançado no setor ${r.sectors[0]})` : ''}.</p>
+                      <p className="mt-2 text-xs text-tinta-suave">É o mesmo registro de “Férias e ausências”: vale para a escala e o histórico. Falta, atestado e home office descontam passagem e alimentação. Só desconta o que cair em dia de trabalho{r.sectors.length > 1 ? ` (lançado no setor ${r.sectors[0]})` : ''}.</p>
                     </td>
                   </tr>
                 )}

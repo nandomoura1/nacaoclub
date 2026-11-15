@@ -97,7 +97,7 @@ feriado específico (Nação inteira ou setor). Feriado no fim de semana usa o h
 
 **Benefícios** (Escalas 5x2 → Benefícios, `/escalas-trabalho/beneficios`; `/passagem` redireciona) = passagem + alimentação numa tabela com
 grupos (aprovado 14/11, opção A) e coluna **A depositar**. **Alimentação** = dias de trabalho do mês × `ws_members.meal_daily_cents`
-(vazio = **sem direito**; desconta só o **home office** do mês anterior); colunas de alimentação só aparecem no setor se alguém tem direito (gestão marca
+(vazio = **sem direito**; desconta as **mesmas faltas, atestados e home office** do mês anterior que a passagem — decisão 15/11); colunas de alimentação só aparecem no setor se alguém tem direito (gestão marca
 "Mostrar quem não tem alimentação" para dar o direito). **Passagem (vale-transporte)** (ver `ws.view`, valores só `ws.admin`): todos os setores que a pessoa vê,
 **CLT e FUNAP** (MEI/freelancer listados como fora). Dias a pagar = dias de TRABALHO do mês (escala gerada; sem escala = **estimado** pelo
 padrão, máx. 5/sem CLT e 6 FUNAP, sem folga fixa e sem ausências) − **faltas e atestados do mês anterior** que caíram em dia de trabalho;
@@ -119,7 +119,7 @@ Benefícios, Lei 11.788 art. 12); Parâmetros legais sugerem **6h/dia e 30h/sema
 declarar a escala regular.
 **Home office** (`LeaveType.HOME_OFFICE`, decisão 15/11): lançado em Benefícios (clique em **Ausências**: Falta / Atestado / Home office) ou em
 Férias e ausências; na escala vira célula "Home office" (fora do posto). Nos Benefícios do mês seguinte desconta **passagem e alimentação**
-(`DISCOUNT_TYPES` e `MEAL_DISCOUNT_TYPES` em `passagem.ts`); falta e atestado descontam só a passagem.
+(`DISCOUNT_TYPES` = `MEAL_DISCOUNT_TYPES` em `passagem.ts`); falta e atestado também descontam as duas (alimentação = benefício de quem trabalha no dia).
 
 **Simulação de grade** (Grade semanal → "Simular nova grade"; `schedule.edit`, nas áreas da pessoa): copia a grade de
 uma data para um rascunho (`grade_simulations.items`, sem tocar na grade real), edita (aulas, troca de professor em

@@ -4,7 +4,8 @@ import type { DayPlan, Member } from './types';
 
 /**
  * Benefícios da escala 5x2 (passagem e alimentação) — puro.
- * Alimentação = (dias de trabalho do mês − home office do mês anterior) × valor diário (vazio = sem direito).
+ * Alimentação = (dias de trabalho do mês − faltas, atestados e home office do mês anterior) × valor diário (vazio = sem direito):
+ * é benefício de quem trabalha no dia (decisão 15/11).
  * Dias a pagar no mês = dias de trabalho do mês − faltas e atestados do mês anterior
  * (só os que caíram em dia de trabalho). Valor = dias a pagar × valor diário (ida e volta).
  */
@@ -15,8 +16,8 @@ export const receivesTransport = (bond: string) => (TRANSPORT_BONDS as readonly 
 
 /** Ausências que descontam a passagem no mês seguinte (decisão 15/11: home office também). */
 export const DISCOUNT_TYPES = ['FALTA', 'ATESTADO', 'HOME_OFFICE'] as const;
-/** Ausências que descontam também a alimentação no mês seguinte. */
-export const MEAL_DISCOUNT_TYPES = ['HOME_OFFICE'] as const;
+/** Ausências que descontam a alimentação no mês seguinte (decisão 15/11: as mesmas da passagem). */
+export const MEAL_DISCOUNT_TYPES = DISCOUNT_TYPES;
 
 export interface Leave { id?: string; start: IsoDate; end: IsoDate; type: string }
 
@@ -83,7 +84,7 @@ export interface TransportRow {
   dailyCents: number | null;
   totalCents: number | null;
   mealDailyCents: number | null;
-  /** Dias de alimentação: dias de trabalho − home office do mês anterior. */
+  /** Dias de alimentação: dias de trabalho − faltas, atestados e home office do mês anterior. */
   mealDays: number;
   mealDiscount: number;
   mealCents: number | null;

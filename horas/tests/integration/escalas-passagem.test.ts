@@ -43,9 +43,9 @@ describe.skipIf(!hasDb)('Escalas 5x2 · Passagem', () => {
     expect(me).toMatchObject({ source: 'estimado', workDays: 20 - weekdayHolidays, discount: 3, payDays: 17 - weekdayHolidays, dailyCents: 1100 });
     expect(me.discountDates).toEqual(['2035-06-12', '2035-06-14', '2035-06-15']);
     expect(me.totalCents).toBe((17 - weekdayHolidays) * 1100);
-    // Alimentação: todos os dias de trabalho do mês (sem o desconto da passagem).
-    expect([me.mealDailyCents, me.mealCents]).toEqual([1500, (20 - weekdayHolidays) * 1500]);
-    expect(me.depositCents).toBe((17 - weekdayHolidays) * 1100 + (20 - weekdayHolidays) * 1500);
+    // Alimentação: dias de trabalho menos as mesmas faltas/atestados (benefício de quem trabalha no dia).
+    expect([me.mealDailyCents, me.mealDiscount, me.mealCents]).toEqual([1500, 3, (17 - weekdayHolidays) * 1500]);
+    expect(me.depositCents).toBe((17 - weekdayHolidays) * 1100 + (17 - weekdayHolidays) * 1500);
     expect(r.rows.find((x) => x.name === `Beto ${tag}`)).toMatchObject({ bond: 'FUNAP', dailyCents: null, totalCents: null });
     expect(r.rows.some((x) => x.name === `Caio ${tag}`)).toBe(false);
     expect(r.outside).toContainEqual({ name: `Caio ${tag}`, bond: 'MEI', sector: `ADM ${tag}` });
@@ -67,7 +67,7 @@ describe.skipIf(!hasDb)('Escalas 5x2 · Passagem', () => {
     let me = (await transportReport(admin.principal, 2035, 7)).rows.find((x) => x.teacherId === teacherId)!;
     expect(me).toMatchObject({ payDays: 10, manualDays: 10, totalCents: 11000 });
     expect(me.calcPayDays).toBeGreaterThan(10);
-    expect(me.mealCents).toBe(me.workDays * 1500); // alimentação segue os dias de trabalho
+    expect(me.mealCents).toBe(me.mealDays * 1500); // alimentação segue os dias de trabalho menos ausências
     await saveBenefitMonth(admin.principal, { teacherId, month: '2035-07', days: 10, fixedCents: 20000 }, META);
     me = (await transportReport(admin.principal, 2035, 7)).rows.find((x) => x.teacherId === teacherId)!;
     expect(me).toMatchObject({ totalCents: 20000, fixedCents: 20000 });
@@ -97,15 +97,15 @@ describe.skipIf(!hasDb)('Escalas 5x2 · Passagem', () => {
     await prisma.teacher.delete({ where: { id: prof.id } });
   });
 
-  it('home office do mês anterior desconta passagem e alimentação (falta/atestado só a passagem)', async () => {
+  it('home office do mês anterior desconta passagem e alimentação, como falta e atestado', async () => {
     const before = (await transportReport(admin.principal, 2035, 7)).rows.find((x) => x.name === `Ana ${tag}`)!;
-    expect(before.mealDiscount).toBe(0);
+    expect(before.mealDiscount).toBe(before.discount);
     await saveAbsence(admin.principal, sector, { memberId: ana, type: 'HOME_OFFICE', startDate: '2035-06-05', endDate: '2035-06-05' }, META); // terça
     const me = (await transportReport(admin.principal, 2035, 7)).rows.find((x) => x.name === `Ana ${tag}`)!;
     expect(me.discount).toBe(before.discount + 1);
     expect(me.payDays).toBe(before.payDays - 1);
-    expect([me.mealDiscount, me.mealDays]).toEqual([1, me.workDays - 1]);
-    expect(me.mealCents).toBe((me.workDays - 1) * 1500);
+    expect([me.mealDiscount, me.mealDays]).toEqual([me.discount, me.workDays - me.discount]);
+    expect(me.mealCents).toBe((me.workDays - me.discount) * 1500);
     expect(me.leaves.map((l) => l.type)).toContain('HOME_OFFICE');
   });
 });
