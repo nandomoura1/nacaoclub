@@ -1,28 +1,36 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_VALUES, awardPeriod, awardTotal, awardTsv, currentAwardMonth, lostLabel, payDay, suggest } from '@/domain/premiacao';
+import { DEFAULT_VALUES, NO_OVERRIDES, applyOverrides, awardPeriod, awardTotal, awardTsv, currentAwardMonth, daysIn, lostLabel, payDay, suggest, toggleOverride } from '@/domain/premiacao';
 
 describe('Premiação (puro)', () => {
-  it('sugestão: atestado perde assiduidade; falta perde os três; admitido no mês zera', () => {
-    expect(suggest([], '2035-06-01', '2035-06-30', null)).toEqual({ state: { productivity: true, punctuality: true, attendance: true, extraCents: 0 }, reasons: [] });
-    const at = suggest([{ type: 'ATESTADO', start: '2035-06-10', end: '2035-06-11' }], '2035-06-01', '2035-06-30', null);
-    expect(at.state).toMatchObject({ productivity: true, punctuality: true, attendance: false });
-    expect(at.reasons).toEqual(['Atestado 10/06/2035 a 11/06/2035']);
-    const fa = suggest([{ type: 'FALTA', start: '2035-06-12', end: '2035-06-12' }, { type: 'ATESTADO', start: '2035-05-28', end: '2035-05-30' }], '2035-06-01', '2035-06-30', null);
+  it('regra: atestado perde assiduidade; atraso perde pontualidade; falta perde os três; admitido no meio zera', () => {
+    expect(suggest([], '2035-05-15', '2035-06-14', null).state).toEqual({ productivity: true, punctuality: true, attendance: true, extraCents: 0 });
+    const at = suggest([{ type: 'ATESTADO', start: '2035-06-10', end: '2035-06-11' }], '2035-05-15', '2035-06-14', null, 2);
+    expect(at.state).toMatchObject({ productivity: true, punctuality: false, attendance: false });
+    expect(at.reasons).toEqual(['2 dias de atestado (10/06, 11/06)', '2 atrasos > 15 min']);
+    const fa = suggest([{ type: 'FALTA', start: '2035-06-12', end: '2035-06-12' }, { type: 'ATESTADO', start: '2035-05-10', end: '2035-05-14' }], '2035-05-15', '2035-06-14', null);
     expect(fa.state).toMatchObject({ productivity: false, punctuality: false, attendance: false });
-    expect(fa.reasons).toEqual(['Falta 12/06/2035']); // atestado de maio não conta
-    const adm = suggest([], '2035-06-01', '2035-06-30', '2035-06-10');
+    expect(fa.reasons).toEqual(['Falta (12/06)']); // atestado antes do dia 15 é da competência anterior
+    const adm = suggest([], '2035-05-15', '2035-06-14', '2035-05-20');
     expect(adm.state.productivity).toBe(false);
     expect(adm.reasons[0]).toMatch(/não completou a competência/);
+    expect(daysIn([{ type: 'FALTA', start: '2035-05-13', end: '2035-05-16' }], 'FALTA', '2035-05-15', '2035-06-14')).toEqual(['2035-05-15', '2035-05-16']);
   });
 
-  it('total, rótulo do que perdeu, dia do pagamento e tabela', () => {
+  it('correção à mão: clicar inverte; voltar ao valor da regra = automático', () => {
+    const auto = { productivity: true, punctuality: false, attendance: true, extraCents: 0 };
+    const o1 = toggleOverride(auto, NO_OVERRIDES, 'productivity');
+    expect(o1.productivity).toBe(false);
+    expect(toggleOverride(auto, o1, 'productivity').productivity).toBeNull();
+    const o2 = toggleOverride(auto, NO_OVERRIDES, 'punctuality'); // perdoa o atraso
+    expect(applyOverrides(auto, o2, 5000)).toEqual({ productivity: true, punctuality: true, attendance: true, extraCents: 5000 });
+  });
+
+  it('total, rótulo, competência 15→14 paga no dia 15 e tabela', () => {
     const s = { productivity: true, punctuality: false, attendance: true, extraCents: 0 };
     expect(awardTotal(DEFAULT_VALUES, s)).toBe(20000);
     expect(awardTotal(DEFAULT_VALUES, { ...s, extraCents: -50000 })).toBe(0);
-    expect(awardTotal({ productivity: 25000, punctuality: 25000, attendance: 25000 }, { ...s, punctuality: true })).toBe(75000);
     expect(lostLabel(s)).toBe('Perdeu: Pontualidade');
     expect(lostLabel({ ...s, productivity: false, attendance: false })).toBe('Perdeu os 3 critérios');
-    // Competência 15/11/2026 a 14/12/2026, paga em 15/12/2026 (identificada pelo mês do pagamento).
     expect(payDay('2026-12')).toBe('2026-12-15');
     expect(awardPeriod('2026-12')).toEqual({ first: '2026-11-15', last: '2026-12-14' });
     expect(awardPeriod('2027-01')).toEqual({ first: '2026-12-15', last: '2027-01-14' });

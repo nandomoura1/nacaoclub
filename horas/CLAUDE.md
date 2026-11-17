@@ -125,15 +125,17 @@ nos Benefícios do **mês seguinte** (grupo "Fora das escalas" se não estão nu
 `duty_sectors.meal_sat_cents`/`meal_sun_cents` (Academia **R$ 20 / R$ 35**, acumulativo; mesmo dia conta uma vez; feriado em dia útil não
 entra) — `weekendMeal`/`addWeekend` em `passagem.ts`, somado na alimentação e no A depositar. **DP / Financeiro** (`CONSULTA`) tem `duty.edit`
 (menu Escalas de fim de semana).
-**Premiação** (Escalas 5x2 → Premiação, abaixo de Benefícios; `award.view`/`award.edit` = Administrador e DP/Financeiro; decisão 17/11):
-gratificação mensal; **competência do dia 15 ao dia 14 do mês seguinte, paga no dia 15** (decisão 17/11) — identificada pelo **mês do
-pagamento** ("2026-12" = 15/11/2026 a 14/12/2026, paga em 15/12/2026; `awardPeriod`/`payDay`/`currentAwardMonth`). Três critérios com valor **por pessoa** (`award_people`: equipe +
-Produtividade/Pontualidade/Assiduidade, padrão **R$ 100** cada; Cozinha e outros com valores próprios): Produtividade (app Task/checklists)
-e Pontualidade (atraso > 15 min) são marcadas à mão; **Assiduidade** perde com falta ou atestado no período; **falta** perde os três; admitido
-depois do início zera ("não completou a competência"). Sem avaliação salva = **sugestão** do sistema pelas ausências (`suggest` em `domain/premiacao.ts`);
-clicar no critério marca ganhou/perdeu (`award_months`), **ajuste em R$** (+/−) e observação para o que foge da regra; "voltar à sugestão".
-**Fechar mês** congela (`award_closures.snapshot`), **Marcar como pago**; reabrir só sem pagamento e com motivo. "Copiar tabela" = TSV
-Equipe · Nome · Valor · Obs. com subtotais (formato da planilha de controle). Competência padrão: a em aberto (a partir do dia 15, a que paga no mês seguinte).
+**Premiação** (Escalas 5x2 → Premiação, abaixo de Benefícios; `award.view`/`award.edit` = Administrador e DP/Financeiro; decisões 17/11):
+painel no formato de Benefícios. Gratificação mensal; **competência do dia 15 ao dia 14 do mês seguinte, paga no dia 15** — identificada pelo
+**mês do pagamento** ("2026-12" = 15/11/2026 a 14/12/2026, paga em 15/12/2026; `awardPeriod`/`payDay`/`currentAwardMonth`). **Quem entra**:
+automático = equipes da escala 5x2 (CLT, FUNAP, estágio; agrupadas pelo 1º setor) + incluídos à mão (professores, Kids… "Incluir", `award_people`);
+"Tirar da Premiação" = `award_people.active = false` (vale também para quem vem da escala). Valores por pessoa (`award_people`, padrão
+**R$ 100** por critério; "Valores da equipe" aplica a todo o grupo — ex.: Cozinha). Colunas da competência: **Faltas** (clique lança
+falta/atestado = `saveAbsence`, mesmo registro da escala e dos Benefícios), **Atestados**, **Atrasos > 15 min** (contador, `award_months.late_count`).
+**Regra** (`suggest`): falta perde os três; atestado perde Assiduidade; atraso perde Pontualidade; admitido depois do início zera; Produtividade
+(app Task/checklists) ganha até ser marcada. Clique no critério = **correção manual** (`award_months.productivity/punctuality/attendance`,
+null = regra; clicar de novo volta à regra — `toggleOverride`), **ajuste em R$** (+/−) e observação. **Fechar competência** congela
+(`award_closures.snapshot`), **Marcar como pago**; reabrir só sem pagamento e com motivo. "Copiar tabela" = TSV Equipe · Nome · Valor · Obs.
 
 **Simulação de grade** (Grade semanal → "Simular nova grade"; `schedule.edit`, nas áreas da pessoa): copia a grade de
 uma data para um rascunho (`grade_simulations.items`, sem tocar na grade real), edita (aulas, troca de professor em

@@ -3329,13 +3329,16 @@ model AwardPerson {
   @@map("award_people")
 }
 
-/// Premiação: avaliação do mês ("AAAA-MM"). Sem linha = sugestão automática.
+/// Premiação: competência ("AAAA-MM" = mês do pagamento). Sem linha = tudo automático.
 model AwardMonth {
   teacherId    String   @map("teacher_id") @db.Uuid
   month        String
-  productivity Boolean
-  punctuality  Boolean
-  attendance   Boolean
+  /// Critério corrigido à mão (vazio = automático pela regra).
+  productivity Boolean?
+  punctuality  Boolean?
+  attendance   Boolean?
+  /// Atrasos de mais de 15 min na competência (perde Pontualidade).
+  lateCount    Int      @default(0) @map("late_count")
   extraCents   Int      @default(0) @map("extra_cents")
   note         String?
   updatedAt    DateTime @updatedAt @map("updated_at")

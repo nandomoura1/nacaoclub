@@ -6,7 +6,7 @@ import type { Principal } from '@/server/auth/principal';
 import type { RequestMeta } from '@/server/auth/session';
 import { AppError, NotFoundError } from '@/server/errors';
 import { fromUtc, toUtc, type IsoDate } from '@/domain/dates';
-import { awardPeriod, awardTotal, lostLabel, maxOf, payDay, suggest, type AwardState, type AwardValues } from '@/domain/premiacao';
+import { DEFAULT_VALUES, NO_OVERRIDES, applyOverrides, awardPeriod, awardTotal, daysIn, lostLabel, maxOf, payDay, suggest, type AwardOverrides, type AwardState, type AwardValues } from '@/domain/premiacao';
 
 /**
  * Premiação (Escalas 5x2 → Premiação; `award.view` / `award.edit` = Administrador e DP/Financeiro).
@@ -26,59 +26,85 @@ const parse = <S extends z.ZodType>(s: S, v: unknown): z.output<S> => {
 const brl = (c: number) => `R$ ${(c / 100).toFixed(2).replace('.', ',')}`;
 const actx = (p: Principal, meta: RequestMeta) => ({ actorId: p.id, ...meta });
 
+/** Vínculos da escala 5x2 que entram na Premiação automaticamente. */
+const AWARD_BONDS = ['CLT', 'FUNAP', 'ESTAGIO'] as const;
+
 export interface AwardRow {
-  teacherId: string; name: string; group: string; values: AwardValues; max: number;
-  state: AwardState; reviewed: boolean; reasons: string[]; suggested: AwardState;
-  total: number; note: string | null; lost: string; active: boolean;
+  teacherId: string; name: string; group: string; bond: string; values: AwardValues; max: number;
+  /** De onde veio: equipe da escala 5x2 ou incluído à mão (professores e outros). */
+  source: 'escala' | 'incluido';
+  /** Onde lançar falta/atestado pela tela (equipe da escala). */
+  ref: { sectorId: string; memberId: string } | null;
+  faltas: string[]; atestados: string[]; lateCount: number;
+  leaves: { id: string; type: string; start: string; end: string }[];
+  auto: AwardState; overrides: AwardOverrides; state: AwardState;
+  reasons: string[]; total: number; note: string | null; lost: string; reviewed: boolean;
 }
 
 async function computeRows(month: string): Promise<AwardRow[]> {
-  const mi = awardPeriod(month);
-  const people = await prisma.awardPerson.findMany({
-    where: { OR: [{ active: true, teacher: { active: true } }, { teacher: { awardMonths: { some: { month } } } }] },
-    include: { teacher: { select: { name: true, admissionDate: true, awardMonths: { where: { month } } } } },
-  });
-  const ids = people.map((p) => p.teacherId);
-  const leaves = await prisma.leave.findMany({
-    where: { teacherId: { in: ids }, cancelledAt: null, slotId: null, type: { in: ['FALTA', 'ATESTADO'] }, startDate: { lte: toUtc(mi.last) }, endDate: { gte: toUtc(mi.first) } },
-    select: { teacherId: true, type: true, startDate: true, endDate: true },
-  });
-  return people.map((p): AwardRow => {
-    const values = { productivity: p.productivityCents, punctuality: p.punctualityCents, attendance: p.attendanceCents };
-    const sug = suggest(
-      leaves.filter((l) => l.teacherId === p.teacherId).map((l) => ({ type: l.type, start: fromUtc(l.startDate), end: fromUtc(l.endDate) })),
-      mi.first, mi.last, p.teacher.admissionDate ? fromUtc(p.teacher.admissionDate) as IsoDate : null,
-    );
-    const saved = p.teacher.awardMonths[0];
-    const state: AwardState = saved ? { productivity: saved.productivity, punctuality: saved.punctuality, attendance: saved.attendance, extraCents: saved.extraCents } : sug.state;
+  const per = awardPeriod(month);
+  const [members, people] = await Promise.all([
+    prisma.wsMember.findMany({
+      where: { active: true, bond: { in: [...AWARD_BONDS] }, sector: { active: true }, teacher: { active: true } },
+      orderBy: [{ sector: { sortOrder: 'asc' } }, { sector: { name: 'asc' } }],
+      select: { id: true, sectorId: true, bond: true, teacherId: true, sector: { select: { name: true } } },
+    }),
+    prisma.awardPerson.findMany(),
+  ]);
+  const cfg = new Map(people.map((p) => [p.teacherId, p]));
+  // Equipe da escala (1ª equipe da pessoa) + incluídos à mão; "tirado da Premiação" (active = false) fica de fora.
+  const base = new Map<string, { group: string; bond: string; ref: AwardRow['ref']; source: AwardRow['source'] }>();
+  for (const m of members) if (!base.has(m.teacherId)) base.set(m.teacherId, { group: m.sector.name, bond: m.bond, ref: { sectorId: m.sectorId, memberId: m.id }, source: 'escala' });
+  for (const p of people) if (!base.has(p.teacherId)) base.set(p.teacherId, { group: p.groupName, bond: '', ref: null, source: 'incluido' });
+  const saved = new Map((await prisma.awardMonth.findMany({ where: { month } })).map((x) => [x.teacherId, x]));
+  const ids = [...base.keys()].filter((id) => cfg.get(id)?.active !== false || saved.has(id));
+  const [teachers, leaves] = await Promise.all([
+    prisma.teacher.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, admissionDate: true, active: true, contractType: { select: { name: true } }, position: { select: { name: true } } } }),
+    prisma.leave.findMany({
+      where: { teacherId: { in: ids }, cancelledAt: null, slotId: null, type: { in: ['FALTA', 'ATESTADO'] }, startDate: { lte: toUtc(per.last) }, endDate: { gte: toUtc(per.first) } },
+      select: { id: true, teacherId: true, type: true, startDate: true, endDate: true }, orderBy: { startDate: 'asc' },
+    }),
+  ]);
+  return teachers.filter((t) => t.active || saved.has(t.id)).map((t): AwardRow => {
+    const b = base.get(t.id)!, c = cfg.get(t.id), sv = saved.get(t.id);
+    const values: AwardValues = c ? { productivity: c.productivityCents, punctuality: c.punctualityCents, attendance: c.attendanceCents } : DEFAULT_VALUES;
+    const ls = leaves.filter((l) => l.teacherId === t.id).map((l) => ({ id: l.id, type: l.type, start: fromUtc(l.startDate), end: fromUtc(l.endDate) }));
+    const lateCount = sv?.lateCount ?? 0;
+    const sug = suggest(ls, per.first, per.last, t.admissionDate ? (fromUtc(t.admissionDate) as IsoDate) : null, lateCount);
+    const overrides: AwardOverrides = sv ? { productivity: sv.productivity, punctuality: sv.punctuality, attendance: sv.attendance } : NO_OVERRIDES;
+    const state = applyOverrides(sug.state, overrides, sv?.extraCents ?? 0);
     return {
-      teacherId: p.teacherId, name: p.teacher.name, group: p.groupName, values, max: maxOf(values),
-      state, reviewed: !!saved, reasons: sug.reasons, suggested: sug.state,
-      total: awardTotal(values, state), note: saved?.note ?? null, lost: lostLabel(state), active: p.active,
+      teacherId: t.id, name: t.name, group: c?.groupName ?? b.group, bond: b.bond || t.contractType?.name || t.position?.name || '—',
+      values, max: maxOf(values), source: b.source, ref: b.ref,
+      faltas: daysIn(ls, 'FALTA', per.first, per.last), atestados: daysIn(ls, 'ATESTADO', per.first, per.last), lateCount, leaves: ls,
+      auto: sug.state, overrides, state, reasons: sug.reasons, total: awardTotal(values, state),
+      note: sv?.note ?? null, lost: lostLabel(state),
+      reviewed: !!sv && (Object.values(overrides).some((v) => v !== null) || !!sv.extraCents || !!sv.note),
     };
-  }).sort((a, b) => a.group.localeCompare(b.group, 'pt-BR') || a.name.localeCompare(b.name, 'pt-BR'));
+  }).sort((a, b) => (a.source === b.source ? 0 : a.source === 'escala' ? -1 : 1) || a.group.localeCompare(b.group, 'pt-BR') || a.name.localeCompare(b.name, 'pt-BR'));
 }
 
-/** Tela do mês avaliado ("AAAA-MM"). Mês fechado mostra os valores congelados. */
+/** Painel da competência ("AAAA-MM" = mês do pagamento). Competência fechada mostra os valores congelados. */
 export async function awardBoard(principal: P | null, month: string) {
   assertCan(principal, 'award.view');
   const mo = parse(MONTH, month);
   const canEdit = can(principal, 'award.edit');
   const closure = await prisma.awardClosure.findUnique({ where: { month: mo } });
   const rows = closure ? (closure.snapshot as unknown as AwardRow[]) : await computeRows(mo);
+  const inRows = new Set(rows.map((r) => r.teacherId));
   const candidates = canEdit && !closure
-    ? await prisma.teacher.findMany({ where: { active: true, awardPerson: null }, orderBy: { name: 'asc' }, select: { id: true, name: true, team: true } })
+    ? (await prisma.teacher.findMany({ where: { active: true }, orderBy: { name: 'asc' }, select: { id: true, name: true, team: true } })).filter((t) => !inRows.has(t.id))
     : [];
-  const groups = [...new Set((await prisma.awardPerson.findMany({ select: { groupName: true } })).map((g) => g.groupName))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const groups = [...new Set([...rows.map((r) => r.group), ...(await prisma.awardPerson.findMany({ select: { groupName: true } })).map((g) => g.groupName)])].sort((a, b) => a.localeCompare(b, 'pt-BR'));
   return {
-    month: mo, payDay: payDay(mo), period: awardPeriod(mo), canEdit, rows, candidates, groups,
+    month: mo, payDay: payDay(mo), period: awardPeriod(mo), canEdit, canEditAbsences: can(principal, 'ws.edit'), rows, candidates, groups,
     closure: closure ? { closedAt: closure.closedAt.toISOString(), paidAt: closure.paidAt?.toISOString() ?? null } : null,
   };
 }
 export type AwardBoard = Awaited<ReturnType<typeof awardBoard>>;
 
 async function assertOpen(month: string) {
-  if (await prisma.awardClosure.findUnique({ where: { month } })) throw new AppError('Mês fechado: reabra para alterar.');
+  if (await prisma.awardClosure.findUnique({ where: { month } })) throw new AppError('Competência fechada: reabra para alterar.');
 }
 
 const PersonSchema = z.object({
@@ -115,53 +141,58 @@ export async function addAwardPeople(principal: P | null, input: unknown, meta: 
   return v.teacherIds.length;
 }
 
-/** Tira da Premiação (não apaga: avaliações antigas ficam). */
-export async function setAwardPersonActive(principal: P | null, teacherId: string, active: boolean, meta: RequestMeta = {}) {
+/** Tira da Premiação (ou volta). Não apaga: apurações antigas ficam. Vale também para quem vem da escala. */
+export async function setAwardPersonActive(principal: P | null, teacherId: string, active: boolean, meta: RequestMeta = {}, groupName = 'Outros') {
   assertCan(principal, 'award.edit');
   return prisma.$transaction(async (tx) => {
-    const p = await tx.awardPerson.findUnique({ where: { teacherId }, include: { teacher: { select: { name: true } } } });
-    if (!p) throw new NotFoundError('Pessoa não está na Premiação.');
-    await tx.awardPerson.update({ where: { teacherId }, data: { active } });
-    await audit(tx, actx(principal, meta), { action: active ? 'award.person_reactivated' : 'award.person_removed', entityType: 'teacher', entityId: teacherId, summary: `${principal.name} ${active ? 'voltou' : 'tirou'} ${p.teacher.name} ${active ? 'para a' : 'da'} Premiação` });
+    const t = await tx.teacher.findUnique({ where: { id: teacherId }, select: { name: true } });
+    if (!t) throw new NotFoundError('Colaborador não encontrado.');
+    await tx.awardPerson.upsert({ where: { teacherId }, create: { teacherId, groupName, active }, update: { active } });
+    await audit(tx, actx(principal, meta), { action: active ? 'award.person_reactivated' : 'award.person_removed', entityType: 'teacher', entityId: teacherId, summary: `${principal.name} ${active ? 'voltou' : 'tirou'} ${t.name} ${active ? 'para a' : 'da'} Premiação` });
   });
 }
 
 const MonthSchema = z.object({
   teacherId: z.string().uuid(), month: MONTH,
-  productivity: z.boolean(), punctuality: z.boolean(), attendance: z.boolean(),
+  /** Correção à mão por critério (null = automático pela regra). */
+  productivity: z.boolean().nullable(), punctuality: z.boolean().nullable(), attendance: z.boolean().nullable(),
+  lateCount: z.number().int().min(0).max(31),
   extraCents: z.number().int().min(-500_000).max(500_000),
   note: z.string().trim().max(200).nullable().optional(),
-  /** true = volta à sugestão do sistema (apaga a avaliação do mês). */
-  reset: z.boolean().optional(),
 });
 
-/** Avaliação do mês de uma pessoa (critérios, ajuste em R$ e observação). */
+/** Apuração da pessoa na competência: correções dos critérios, atrasos > 15 min, ajuste em R$ e observação. */
 export async function saveAwardMonth(principal: P | null, input: unknown, meta: RequestMeta = {}) {
   assertCan(principal, 'award.edit');
   const v = parse(MonthSchema, input);
   await assertOpen(v.month);
   return prisma.$transaction(async (tx) => {
-    const p = await tx.awardPerson.findUnique({ where: { teacherId: v.teacherId }, include: { teacher: { select: { name: true } } } });
-    if (!p) throw new NotFoundError('Pessoa não está na Premiação.');
+    const t = await tx.teacher.findUnique({ where: { id: v.teacherId }, select: { name: true } });
+    if (!t) throw new NotFoundError('Colaborador não encontrado.');
     const id = { teacherId_month: { teacherId: v.teacherId, month: v.month } };
     const before = await tx.awardMonth.findUnique({ where: id });
     const note = v.note || null;
-    if (v.reset) await tx.awardMonth.deleteMany({ where: { teacherId: v.teacherId, month: v.month } });
-    else {
-      const data = { productivity: v.productivity, punctuality: v.punctuality, attendance: v.attendance, extraCents: v.extraCents, note };
-      await tx.awardMonth.upsert({ where: id, create: { teacherId: v.teacherId, month: v.month, ...data }, update: data });
-    }
-    const values = { productivity: p.productivityCents, punctuality: p.punctualityCents, attendance: p.attendanceCents };
-    const after = v.reset ? null : { produtividade: v.productivity, pontualidade: v.punctuality, assiduidade: v.attendance, ajuste: v.extraCents, obs: note };
+    const data = { productivity: v.productivity, punctuality: v.punctuality, attendance: v.attendance, lateCount: v.lateCount, extraCents: v.extraCents, note };
+    const empty = v.productivity === null && v.punctuality === null && v.attendance === null && !v.lateCount && !v.extraCents && !note;
+    if (empty) await tx.awardMonth.deleteMany({ where: { teacherId: v.teacherId, month: v.month } });
+    else await tx.awardMonth.upsert({ where: id, create: { teacherId: v.teacherId, month: v.month, ...data }, update: data });
+    const show = (x: boolean | null) => (x === null ? 'auto' : x ? 'ganhou' : 'perdeu');
     await audit(tx, actx(principal, meta), {
       action: 'award.month', entityType: 'teacher', entityId: v.teacherId,
-      before: before ? { produtividade: before.productivity, pontualidade: before.punctuality, assiduidade: before.attendance, ajuste: before.extraCents, obs: before.note } : null,
-      after: after ? { mes: v.month, ...after } : { mes: v.month, voltou_a_sugestao: true },
-      summary: v.reset
-        ? `${principal.name} voltou a Premiação de ${p.teacher.name} (${v.month}) à sugestão do sistema`
-        : `${principal.name} avaliou ${p.teacher.name} na Premiação de ${v.month}: ${brl(awardTotal(values, { ...v }))}`,
+      before: before ? { produtividade: before.productivity, pontualidade: before.punctuality, assiduidade: before.attendance, atrasos: before.lateCount, ajuste: before.extraCents, obs: before.note } : null,
+      after: { mes: v.month, produtividade: v.productivity, pontualidade: v.punctuality, assiduidade: v.attendance, atrasos: v.lateCount, ajuste: v.extraCents, obs: note },
+      summary: `${principal.name} apurou a Premiação de ${t.name} (${v.month}): produtividade ${show(v.productivity)}, pontualidade ${show(v.punctuality)}, assiduidade ${show(v.attendance)}, ${v.lateCount} atraso(s)${v.extraCents ? `, ajuste ${brl(v.extraCents)}` : ''}`,
     });
   });
+}
+
+/** Valores da equipe: aplica os mesmos valores a todos (da equipe na tela). */
+export async function setGroupValues(principal: P | null, input: unknown, meta: RequestMeta = {}) {
+  assertCan(principal, 'award.edit');
+  const v = parse(z.object({ month: MONTH, group: z.string().trim().min(2).max(60), productivity: CENTS, punctuality: CENTS, attendance: CENTS }), input);
+  const rows = (await computeRows(v.month)).filter((r) => r.group === v.group);
+  for (const r of rows) await saveAwardPerson(principal, { teacherId: r.teacherId, groupName: r.group, productivity: v.productivity, punctuality: v.punctuality, attendance: v.attendance }, meta);
+  return rows.length;
 }
 
 /** Fecha o mês: congela os valores (a tela passa a mostrar o fechado). */
@@ -170,7 +201,7 @@ export async function closeAwardMonth(principal: P | null, month: string, meta: 
   const mo = parse(MONTH, month);
   await assertOpen(mo);
   const rows = await computeRows(mo);
-  if (!rows.length) throw new AppError('Ninguém na Premiação deste mês.');
+  if (!rows.length) throw new AppError('Ninguém na Premiação desta competência.');
   const total = rows.reduce((a, r) => a + r.total, 0);
   await prisma.$transaction(async (tx) => {
     await tx.awardClosure.create({ data: { month: mo, snapshot: rows as never, closedById: principal.id } });
@@ -185,7 +216,7 @@ export async function reopenAwardMonth(principal: P | null, month: string, reaso
   const mo = parse(MONTH, month);
   const why = parse(z.string().trim().min(3, 'Informe o motivo.').max(200), reason);
   const c = await prisma.awardClosure.findUnique({ where: { month: mo } });
-  if (!c) throw new AppError('O mês não está fechado.');
+  if (!c) throw new AppError('A competência não está fechada.');
   if (c.paidAt) throw new AppError('Premiação já paga: desmarque o pagamento antes de reabrir.');
   await prisma.$transaction(async (tx) => {
     await tx.awardClosure.delete({ where: { month: mo } });
@@ -198,7 +229,7 @@ export async function setAwardPaid(principal: P | null, month: string, paid: boo
   assertCan(principal, 'award.edit');
   const mo = parse(MONTH, month);
   const c = await prisma.awardClosure.findUnique({ where: { month: mo } });
-  if (!c) throw new AppError('Feche o mês antes de registrar o pagamento.');
+  if (!c) throw new AppError('Feche a competência antes de registrar o pagamento.');
   await prisma.$transaction(async (tx) => {
     await tx.awardClosure.update({ where: { month: mo }, data: paid ? { paidAt: new Date(), paidById: principal.id } : { paidAt: null, paidById: null } });
     await audit(tx, actx(principal, meta), { action: paid ? 'award.paid' : 'award.unpaid', entityType: 'award_month', entityId: mo, summary: `${principal.name} ${paid ? 'registrou o pagamento' : 'desmarcou o pagamento'} da Premiação de ${mo}` });

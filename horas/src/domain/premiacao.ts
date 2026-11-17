@@ -19,29 +19,59 @@ export type CriterionKey = (typeof CRITERIA)[number]['key'];
 
 export interface AwardValues { productivity: number; punctuality: number; attendance: number }
 export interface AwardState { productivity: boolean; punctuality: boolean; attendance: boolean; extraCents: number }
-export interface AwardLeave { type: string; start: IsoDate; end: IsoDate }
+export interface AwardLeave { id?: string; type: string; start: IsoDate; end: IsoDate }
+/** Correção à mão por critério (null = automático pela regra). */
+export type AwardOverrides = Record<CriterionKey, boolean | null>;
+export const NO_OVERRIDES: AwardOverrides = { productivity: null, punctuality: null, attendance: null };
 
 export const DEFAULT_VALUES: AwardValues = { productivity: 10000, punctuality: 10000, attendance: 10000 };
 export const maxOf = (v: AwardValues) => v.productivity + v.punctuality + v.attendance;
 
-/** Sugestão do sistema para o mês, a partir das ausências lançadas e da admissão. */
-export function suggest(leaves: AwardLeave[], monthFirst: IsoDate, monthLast: IsoDate, admission: IsoDate | null): { state: AwardState; reasons: string[] } {
-  const inMonth = leaves.filter((l) => l.start <= monthLast && l.end >= monthFirst);
-  const span = (l: AwardLeave) => {
-    const s = l.start < monthFirst ? monthFirst : l.start, e = l.end > monthLast ? monthLast : l.end;
-    return s === e ? formatDateBR(s) : `${formatDateBR(s)} a ${formatDateBR(e)}`;
-  };
-  const faltas = inMonth.filter((l) => l.type === 'FALTA');
-  const atestados = inMonth.filter((l) => l.type === 'ATESTADO');
-  const reasons = [
-    ...faltas.map((l) => `Falta ${span(l)}`),
-    ...atestados.map((l) => `Atestado ${span(l)}`),
-  ];
-  if (admission && admission > monthFirst) {
-    return { state: { productivity: false, punctuality: false, attendance: false, extraCents: 0 }, reasons: [`Admitido em ${formatDateBR(admission)}: não completou a competência`, ...reasons] };
+/** Dias de falta/atestado dentro do período (cada dia uma vez). */
+export function daysIn(leaves: AwardLeave[], type: string, first: IsoDate, last: IsoDate): IsoDate[] {
+  const out = new Set<IsoDate>();
+  for (const l of leaves) {
+    if (l.type !== type) continue;
+    for (let d = l.start < first ? first : l.start; d <= (l.end > last ? last : l.end); d = nextDay(d)) out.add(d);
   }
-  if (faltas.length) return { state: { productivity: false, punctuality: false, attendance: false, extraCents: 0 }, reasons };
-  return { state: { productivity: true, punctuality: true, attendance: atestados.length === 0, extraCents: 0 }, reasons };
+  return [...out].sort();
+}
+const nextDay = (d: IsoDate): IsoDate => { const t = new Date(`${d}T00:00:00Z`); t.setUTCDate(t.getUTCDate() + 1); return t.toISOString().slice(0, 10) as IsoDate; };
+
+/**
+ * Regra da competência (automático): falta perde os três; atestado perde Assiduidade; atraso > 15 min perde
+ * Pontualidade; admitido depois do início zera. Produtividade fica ganha até ser marcada à mão.
+ */
+export function suggest(leaves: AwardLeave[], first: IsoDate, last: IsoDate, admission: IsoDate | null, lateCount = 0): { state: AwardState; reasons: string[] } {
+  const faltas = daysIn(leaves, 'FALTA', first, last);
+  const atestados = daysIn(leaves, 'ATESTADO', first, last);
+  const dates = (ds: IsoDate[]) => ds.map((d) => formatDateBR(d).slice(0, 5)).join(', ');
+  const reasons = [
+    ...(faltas.length ? [`${faltas.length === 1 ? 'Falta' : `${faltas.length} faltas`} (${dates(faltas)})`] : []),
+    ...(atestados.length ? [`${atestados.length === 1 ? 'Atestado' : `${atestados.length} dias de atestado`} (${dates(atestados)})`] : []),
+    ...(lateCount > 0 ? [`${lateCount} ${lateCount === 1 ? 'atraso' : 'atrasos'} > 15 min`] : []),
+  ];
+  const none = { productivity: false, punctuality: false, attendance: false, extraCents: 0 };
+  if (admission && admission > first) return { state: none, reasons: [`Admitido em ${formatDateBR(admission)}: não completou a competência`, ...reasons] };
+  if (faltas.length) return { state: none, reasons };
+  return { state: { productivity: true, punctuality: lateCount === 0, attendance: atestados.length === 0, extraCents: 0 }, reasons };
+}
+
+/** Estado final: correção à mão onde houver, senão a regra. */
+export function applyOverrides(auto: AwardState, o: AwardOverrides, extraCents: number): AwardState {
+  return {
+    productivity: o.productivity ?? auto.productivity,
+    punctuality: o.punctuality ?? auto.punctuality,
+    attendance: o.attendance ?? auto.attendance,
+    extraCents,
+  };
+}
+
+/** Clique no critério: inverte; se o resultado for igual à regra, volta a "automático". */
+export function toggleOverride(auto: AwardState, o: AwardOverrides, k: CriterionKey): AwardOverrides {
+  const current = o[k] ?? auto[k];
+  const next = !current;
+  return { ...o, [k]: next === auto[k] ? null : next };
 }
 
 /** Total do mês: critérios alcançados × valor + ajuste (nunca negativo). */
