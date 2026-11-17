@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_VALUES, awardTotal, awardTsv, lostLabel, payDay, suggest } from '@/domain/premiacao';
+import { DEFAULT_VALUES, awardPeriod, awardTotal, awardTsv, currentAwardMonth, lostLabel, payDay, suggest } from '@/domain/premiacao';
 
 describe('Premiação (puro)', () => {
   it('sugestão: atestado perde assiduidade; falta perde os três; admitido no mês zera', () => {
@@ -12,7 +12,7 @@ describe('Premiação (puro)', () => {
     expect(fa.reasons).toEqual(['Falta 12/06/2035']); // atestado de maio não conta
     const adm = suggest([], '2035-06-01', '2035-06-30', '2035-06-10');
     expect(adm.state.productivity).toBe(false);
-    expect(adm.reasons[0]).toMatch(/não completou o mês/);
+    expect(adm.reasons[0]).toMatch(/não completou a competência/);
   });
 
   it('total, rótulo do que perdeu, dia do pagamento e tabela', () => {
@@ -22,8 +22,13 @@ describe('Premiação (puro)', () => {
     expect(awardTotal({ productivity: 25000, punctuality: 25000, attendance: 25000 }, { ...s, punctuality: true })).toBe(75000);
     expect(lostLabel(s)).toBe('Perdeu: Pontualidade');
     expect(lostLabel({ ...s, productivity: false, attendance: false })).toBe('Perdeu os 3 critérios');
-    expect(payDay('2026-11')).toBe('2026-12-15');
-    expect(payDay('2026-12')).toBe('2027-01-15');
+    // Competência 15/11/2026 a 14/12/2026, paga em 15/12/2026 (identificada pelo mês do pagamento).
+    expect(payDay('2026-12')).toBe('2026-12-15');
+    expect(awardPeriod('2026-12')).toEqual({ first: '2026-11-15', last: '2026-12-14' });
+    expect(awardPeriod('2027-01')).toEqual({ first: '2026-12-15', last: '2027-01-14' });
+    expect(currentAwardMonth('2026-11-17')).toBe('2026-12');
+    expect(currentAwardMonth('2026-12-14')).toBe('2026-12');
+    expect(currentAwardMonth('2026-12-15')).toBe('2027-01');
     expect(awardTsv([{ group: 'Kids', name: 'A', total: 20000, note: 'Atraso' }, { group: 'Kids', name: 'B', total: 30000, note: '' }]))
       .toBe('Equipe\tNome\tValor a receber\tObs.\nKids\tA\t200,00\tAtraso\nKids\tB\t300,00\t\nSubtotal — Kids\t\t500,00\t\n\nTOTAL GERAL\t\t500,00\t');
   });

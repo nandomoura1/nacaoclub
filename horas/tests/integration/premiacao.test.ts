@@ -36,7 +36,8 @@ describe.skipIf(!hasDb)('Premiação', () => {
     expect([row(0).total, row(0).max, row(0).group]).toEqual([40000, 40000, `Cozinha ${tag}`]);
     expect(row(1)).toMatchObject({ total: 20000, reviewed: false, reasons: ['Atestado 10/06/2035'] });
     expect(row(2).total).toBe(0);
-    expect(b.payDay).toBe('2035-07-15');
+    expect(b.payDay).toBe('2035-06-15');
+    expect(b.period).toEqual({ first: '2035-05-15', last: '2035-06-14' });
 
     // Ana atrasou (perde pontualidade) e ganha ajuste de R$ 50; Caio: falta justificada depois → volta.
     await saveAwardMonth(dp.principal, { teacherId: ids[0]!, month: M, productivity: true, punctuality: false, attendance: true, extraCents: 5000, note: 'Atraso 05/06' }, META);

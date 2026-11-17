@@ -6,12 +6,11 @@ import type { Principal } from '@/server/auth/principal';
 import type { RequestMeta } from '@/server/auth/session';
 import { AppError, NotFoundError } from '@/server/errors';
 import { fromUtc, toUtc, type IsoDate } from '@/domain/dates';
-import { monthInfo } from '@/domain/escalas/calendar';
-import { awardTotal, lostLabel, maxOf, payDay, suggest, type AwardState, type AwardValues } from '@/domain/premiacao';
+import { awardPeriod, awardTotal, lostLabel, maxOf, payDay, suggest, type AwardState, type AwardValues } from '@/domain/premiacao';
 
 /**
  * Premiação (Escalas 5x2 → Premiação; `award.view` / `award.edit` = Administrador e DP/Financeiro).
- * Gratificação mensal paga no dia 15 do mês seguinte ao avaliado. Quem participa fica em `award_people`
+ * Gratificação mensal: competência do dia 15 ao dia 14 do mês seguinte, paga no dia 15 ("AAAA-MM" = mês do pagamento). Quem participa fica em `award_people`
  * (equipe + valor de cada critério); a avaliação do mês em `award_months` (sem linha = sugestão do sistema,
  * pelas faltas/atestados lançados e pela admissão). Fechar o mês congela os valores (`award_closures.snapshot`).
  */
@@ -34,8 +33,7 @@ export interface AwardRow {
 }
 
 async function computeRows(month: string): Promise<AwardRow[]> {
-  const [y, m] = month.split('-').map(Number) as [number, number];
-  const mi = monthInfo(y, m);
+  const mi = awardPeriod(month);
   const people = await prisma.awardPerson.findMany({
     where: { OR: [{ active: true, teacher: { active: true } }, { teacher: { awardMonths: { some: { month } } } }] },
     include: { teacher: { select: { name: true, admissionDate: true, awardMonths: { where: { month } } } } },
@@ -73,7 +71,7 @@ export async function awardBoard(principal: P | null, month: string) {
     : [];
   const groups = [...new Set((await prisma.awardPerson.findMany({ select: { groupName: true } })).map((g) => g.groupName))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
   return {
-    month: mo, payDay: payDay(mo), canEdit, rows, candidates, groups,
+    month: mo, payDay: payDay(mo), period: awardPeriod(mo), canEdit, rows, candidates, groups,
     closure: closure ? { closedAt: closure.closedAt.toISOString(), paidAt: closure.paidAt?.toISOString() ?? null } : null,
   };
 }

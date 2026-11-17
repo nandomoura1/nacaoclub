@@ -24,8 +24,6 @@ const toCents = (v: string): number | 'erro' => {
   return Number.isFinite(n) ? Math.round(n * 100) : 'erro';
 };
 const centsText = (c: number) => (c ? (c / 100).toFixed(2).replace('.', ',') : '');
-const MONTHS = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
-const monthLabel = (m: string) => { const [y, mm] = m.split('-').map(Number) as [number, number]; return `${MONTHS[mm - 1]} de ${y}`; };
 
 export function AwardClient({ board }: { board: AwardBoard }) {
   const router = useRouter();
@@ -84,7 +82,7 @@ export function AwardClient({ board }: { board: AwardBoard }) {
     <div className="space-y-4">
       <Card className="flex flex-wrap items-end gap-4 p-4">
         <div>
-          <Label htmlFor="pr-mes">Mês avaliado</Label>
+          <Label htmlFor="pr-mes">Pagamento (dia 15 de)</Label>
           <Input id="pr-mes" type="month" value={board.month} onChange={(e) => e.target.value && router.push(`${path}?mes=${e.target.value}`)} className="w-44" />
         </div>
         <div className="flex flex-wrap gap-6 text-sm">
@@ -121,8 +119,8 @@ export function AwardClient({ board }: { board: AwardBoard }) {
       </Card>
 
       <Card className="p-3 text-sm text-tinta-suave">
-        <b className="text-tinta">Premiação de {monthLabel(board.month)}</b>, paga em {formatDateBR(board.payDay)}.
-        {edit ? <> Clique nos critérios para marcar o que a pessoa <b className="text-tinta">perdeu</b>. Falta e atestado lançados no sistema já vêm marcados (selo <i>sugestão</i>); ajuste em R$ para o que foge da regra. Clique no nome para mudar a equipe ou os valores (ex.: Cozinha).</> : locked ? ' Mês fechado: valores congelados.' : ''}
+        <b className="text-tinta">Competência de {formatDateBR(board.period.first)} a {formatDateBR(board.period.last)}</b>, paga em <b className="text-tinta">{formatDateBR(board.payDay)}</b>.
+        {edit ? <> Clique nos critérios para marcar o que a pessoa <b className="text-tinta">perdeu</b>. Falta e atestado lançados no período já vêm marcados (selo <i>sugestão</i>); ajuste em R$ para o que foge da regra. Clique no nome para mudar a equipe ou os valores (ex.: Cozinha).</> : locked ? ' Mês fechado: valores congelados.' : ''}
       </Card>
 
       <div className="flex flex-wrap items-center gap-2">

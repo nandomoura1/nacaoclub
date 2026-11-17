@@ -1,7 +1,8 @@
 import { formatDateBR, type IsoDate } from '@/domain/dates';
 
 /**
- * Premiação (gratificação mensal, paga no dia 15 do mês seguinte) — puro.
+ * Premiação (gratificação mensal) — puro. Competência = dia 15 de um mês até o dia 14 do seguinte, paga no dia 15
+ * (decisão 17/11): a competência é identificada pelo mês do PAGAMENTO ("2026-12" = 15/11/2026 a 14/12/2026, paga em 15/12/2026).
  * Três critérios, cada um com valor próprio por pessoa (padrão R$ 100):
  * - Produtividade: feedback das tarefas (app Task) e checklists diários — avaliação manual.
  * - Pontualidade: atraso de mais de 15 min no mês faz perder — avaliação manual (sem ponto integrado).
@@ -37,7 +38,7 @@ export function suggest(leaves: AwardLeave[], monthFirst: IsoDate, monthLast: Is
     ...atestados.map((l) => `Atestado ${span(l)}`),
   ];
   if (admission && admission > monthFirst) {
-    return { state: { productivity: false, punctuality: false, attendance: false, extraCents: 0 }, reasons: [`Admitido em ${formatDateBR(admission)}: não completou o mês`, ...reasons] };
+    return { state: { productivity: false, punctuality: false, attendance: false, extraCents: 0 }, reasons: [`Admitido em ${formatDateBR(admission)}: não completou a competência`, ...reasons] };
   }
   if (faltas.length) return { state: { productivity: false, punctuality: false, attendance: false, extraCents: 0 }, reasons };
   return { state: { productivity: true, punctuality: true, attendance: atestados.length === 0, extraCents: 0 }, reasons };
@@ -55,10 +56,21 @@ export function lostLabel(s: AwardState): string {
   return lost.length === 3 ? 'Perdeu os 3 critérios' : lost.length ? `Perdeu: ${lost.join(', ')}` : '';
 }
 
-/** Dia do pagamento: 15 do mês seguinte ao avaliado. */
-export function payDay(month: string): IsoDate {
+/** Dia do pagamento da competência ("AAAA-MM" = mês do pagamento): dia 15 desse mês. */
+export const payDay = (month: string): IsoDate => `${month}-15`;
+
+/** Período avaliado: dia 15 do mês anterior ao pagamento até o dia 14 do mês do pagamento. */
+export function awardPeriod(month: string): { first: IsoDate; last: IsoDate } {
   const [y, m] = month.split('-').map(Number) as [number, number];
-  return m === 12 ? `${y + 1}-01-15` : `${y}-${String(m + 1).padStart(2, '0')}-15`;
+  const prev = m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`;
+  return { first: `${prev}-15`, last: `${month}-14` };
+}
+
+/** Competência em aberto numa data: a partir do dia 15, a que termina no dia 14 do mês seguinte. */
+export function currentAwardMonth(today: IsoDate): string {
+  const [y, m, d] = today.split('-').map(Number) as [number, number, number];
+  if (d < 15) return `${y}-${String(m).padStart(2, '0')}`;
+  return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
 }
 
 export interface AwardRowText { group: string; name: string; total: number; note: string }
