@@ -933,6 +933,9 @@ model DutySector {
   active      Boolean @default(true)
   /// false = escala só organizacional (ex.: Aulões, pagos pelos próprios alunos): não gera horas.
   countsHours Boolean @default(true) @map("counts_hours")
+  /// Alimentação por sábado / domingo trabalhado na escala (centavos; vazio = sem). Entra nos Benefícios do mês seguinte.
+  mealSatCents Int?   @map("meal_sat_cents")
+  mealSunCents Int?   @map("meal_sun_cents")
 
   modality Modality    @relation(fields: [modalityId], references: [id], onDelete: Restrict)
   shifts   DutyShift[]

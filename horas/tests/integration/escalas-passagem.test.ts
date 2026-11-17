@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '@/server/db';
 import { AuthorizationError } from '@/server/errors';
 import { cancelAbsence, saveAbsence, saveBenefitMonth, saveMealValue, saveMember, saveSector, saveTransportValue, setBenefitPerson, transportReport } from '@/server/services/ws-service';
-import { META, ensureCatalog, hasDb, makeUser } from './helpers';
+import { META, ensureCatalog, hasDb, makeArea, makeUser } from './helpers';
 
 const H = (h: number) => h * 60;
 const WEEKDAYS = { 1: [[H(8), H(18)]], 2: [[H(8), H(18)]], 3: [[H(8), H(18)]], 4: [[H(8), H(18)]], 5: [[H(8), H(18)]], 6: [], 7: [] };
@@ -107,6 +107,25 @@ describe.skipIf(!hasDb)('Escalas 5x2 · Passagem', () => {
     expect([me.mealDiscount, me.mealDays]).toEqual([me.discount, me.workDays - me.discount]);
     expect(me.mealCents).toBe((me.workDays - me.discount) * 1500);
     expect(me.leaves.map((l) => l.type)).toContain('HOME_OFFICE');
+  });
+
+  it('professores escalados no fim de semana (mês anterior) entram com alimentação de sábado e domingo', async () => {
+    const area = await makeArea();
+    const mod = await prisma.modality.create({ data: { name: `Mod FDS ${tag}`, areaId: area.id } });
+    const ds = await prisma.dutySector.create({ data: { name: `Academia ${tag}`, modalityId: mod.id, mealSatCents: 2000, mealSunCents: 3500 } });
+    const prof = await prisma.teacher.create({ data: { name: `Prof FDS ${tag}` } });
+    for (const date of ['2035-06-02', '2035-06-09', '2035-06-10', '2035-07-07']) { // 2 sáb + 1 dom em junho; julho não conta
+      const sh = await prisma.dutyShift.create({ data: { sectorId: ds.id, date: new Date(`${date}T00:00:00Z`), startMin: 480, endMin: 720 } });
+      await prisma.dutyAssignment.create({ data: { shiftId: sh.id, teacherId: prof.id } });
+    }
+    const r = await transportReport(admin.principal, 2035, 7);
+    expect(r.rows.find((x) => x.teacherId === prof.id)).toMatchObject({ external: true, weekend: { saturdays: 2, sundays: 1, cents: 7500 }, mealCents: 7500, depositCents: 7500 });
+    // Agosto usa a escala de julho (1 sábado).
+    expect((await transportReport(admin.principal, 2035, 8)).rows.find((x) => x.teacherId === prof.id)?.weekend).toEqual({ saturdays: 1, sundays: 0, cents: 2000 });
+    await prisma.dutyShift.deleteMany({ where: { sectorId: ds.id } });
+    await prisma.dutySector.delete({ where: { id: ds.id } });
+    await prisma.teacher.delete({ where: { id: prof.id } });
+    await prisma.modality.delete({ where: { id: mod.id } });
   });
 });
 

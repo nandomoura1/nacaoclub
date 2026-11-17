@@ -62,7 +62,7 @@ export function TransportClient({ mes, report }: { mes: string; report: Transpor
     cents: rows.reduce((s, r) => s + (r.totalCents ?? 0), 0),
     missing: rows.filter((r) => r.dailyCents == null).length,
     meal: rows.reduce((s, r) => s + (r.mealCents ?? 0), 0),
-    mealPeople: rows.filter((r) => r.mealDailyCents != null).length,
+    mealPeople: rows.filter((r) => r.mealDailyCents != null || r.weekend).length,
     deposit: rows.reduce((s, r) => s + (r.depositCents ?? 0), 0),
   }), [rows]);
   const sectors = [...new Set(rows.flatMap((r) => r.sectors))];
@@ -121,7 +121,7 @@ export function TransportClient({ mes, report }: { mes: string; report: Transpor
   const csv = () => {
     const n = (c: number | null) => (c == null ? '' : (c / 100).toFixed(2).replace('.', ','));
     const head = 'Setor;Nome;Vínculo;Dias de trabalho;Passagem: faltas/atestados/home office mês anterior;Passagem: dias a pagar;Passagem: valor diário;Passagem: total;Alimentação: valor diário;Alimentação: total;A depositar;Ajuste do mês';
-    const adj = (r: TransportReport['rows'][number]) => [r.manualDays != null ? `dias informados (calculado ${r.calcPayDays})` : '', r.fixedCents != null ? 'valor fixo' : ''].filter(Boolean).join(', ');
+    const adj = (r: TransportReport['rows'][number]) => [r.manualDays != null ? `dias informados (calculado ${r.calcPayDays})` : '', r.fixedCents != null ? 'valor fixo' : '', r.weekend ? `alimentação fim de semana ${r.weekend.saturdays} sáb + ${r.weekend.sundays} dom` : ''].filter(Boolean).join(', ');
     const lines = rows.map((r) => [r.sectors.join(' + '), r.name, r.bond, r.external ? '' : r.workDays, r.discount, r.payDays, n(r.dailyCents), n(r.totalCents), n(r.mealDailyCents), n(r.mealCents), n(r.depositCents), adj(r)].join(';'));
     return [head, ...lines].join('\n');
   };
@@ -149,6 +149,7 @@ export function TransportClient({ mes, report }: { mes: string; report: Transpor
           <b className="text-tinta">{report.label}:</b> dias de trabalho pela escala do mês; setor sem escala gerada usa o horário padrão da pessoa (marcado <i>estimado</i>).
           Desconto = faltas, atestados e home office de <b className="text-tinta">{report.prevLabel}</b> que caíram em dia de trabalho.
           Alimentação = dias de trabalho do mês × valor diário, menos as mesmas ausências (é benefício de quem trabalha no dia), só para quem tem direito.
+          Professores escalados no fim de semana (Gestão de Horas → Escalas) em {report.prevLabel} entram sozinhos com a alimentação de cada sábado e domingo (Academia: R$ 20 e R$ 35).
           A mesma pessoa em mais de um setor conta cada dia uma vez. {report.canEditValues ? <>Clique no valor diário para alterar; em <b className="text-tinta">Dias a pagar</b> ou <b className="text-tinta">Total</b> para informar o número do mês à mão (o calculado continua visível; apagar volta ao cálculo).</> : 'Os valores diários e ajustes do mês são definidos pela gestão (DP).'}
         </p>
       </Card>
@@ -169,7 +170,7 @@ export function TransportClient({ mes, report }: { mes: string; report: Transpor
       {sectors.length === 0 ? <Card className="p-6 text-sm text-tinta-suave">Nenhum CLT ou FUNAP nas equipes da escala.</Card> : sectors.map((sector) => {
         const list = rows.filter((r) => r.sectors[0] === sector);
         // Alimentação só aparece no setor se alguém tem direito (ou a gestão pediu para ver todos).
-        const mealCols = allMeal || list.some((r) => r.mealDailyCents != null);
+        const mealCols = allMeal || list.some((r) => r.mealDailyCents != null || r.weekend);
         const cols = mealCols ? 11 : 8;
         const vt = 'bg-nacao/[0.04]', va = 'bg-sucesso/[0.05]';
         const money = (key: string, value: number | null, placeholder: string, empty: string, show?: React.ReactNode, initial?: string) => report.canEditValues && editing[key] !== undefined ? (
@@ -227,9 +228,9 @@ export function TransportClient({ mes, report }: { mes: string; report: Transpor
                   <td className={cn('tabular px-2 py-2 text-right font-bold', vt)}>
                     {money(`fixed:${r.teacherId}`, r.fixedCents, '200,00', '', <>{brl(r.totalCents)}{r.fixedCents != null && <Badge tone="blue" className="ml-1">fixo</Badge>}</>)}
                   </td>
-                  {mealCols && (r.mealDailyCents != null || allMeal || editing[`meal:${r.teacherId}`] !== undefined ? <>
+                  {mealCols && (r.mealDailyCents != null || r.weekend || allMeal || editing[`meal:${r.teacherId}`] !== undefined ? <>
                     <td className={cn('tabular px-2 py-2 text-right', va)}>{money(`meal:${r.teacherId}`, r.mealDailyCents, '15,00', 'dar direito')}</td>
-                    <td className={cn('tabular px-2 py-2 text-right font-bold', va)} title={r.mealDiscount ? `${r.mealDays} dias (−${r.mealDiscount} de ausências do mês anterior)` : `${r.mealDays} dias`}>{r.mealCents == null ? '' : brl(r.mealCents)}{r.mealCents != null && r.mealDiscount > 0 && <span className="block text-[11px] font-normal text-tinta-suave">−{r.mealDiscount} {r.mealDiscount === 1 ? 'dia' : 'dias'}</span>}</td>
+                    <td className={cn('tabular px-2 py-2 text-right font-bold', va)} title={r.mealDiscount ? `${r.mealDays} dias (−${r.mealDiscount} de ausências do mês anterior)` : `${r.mealDays} dias`}>{r.mealCents == null ? '' : brl(r.mealCents)}{r.mealCents != null && r.mealDiscount > 0 && <span className="block text-[11px] font-normal text-tinta-suave">−{r.mealDiscount} {r.mealDiscount === 1 ? 'dia' : 'dias'}</span>}{r.weekend && <span className="block text-[11px] font-normal text-sucesso" title={`Escala de fim de semana de ${report.prevLabel}: ${brl(r.weekend.cents)}`}>fim de semana: {[r.weekend.saturdays ? `${r.weekend.saturdays} sáb` : '', r.weekend.sundays ? `${r.weekend.sundays} dom` : ''].filter(Boolean).join(' + ')}</span>}</td>
                   </> : <><td className={va} /><td className={va} /></>)}
                   <td className="tabular px-4 py-2 text-right font-extrabold text-navy">{brl(r.depositCents)}</td>
                 </tr>

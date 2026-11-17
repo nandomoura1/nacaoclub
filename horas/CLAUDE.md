@@ -120,6 +120,11 @@ declarar a escala regular.
 **Home office** (`LeaveType.HOME_OFFICE`, decisão 15/11): lançado em Benefícios (clique em **Ausências**: Falta / Atestado / Home office) ou em
 Férias e ausências; na escala vira célula "Home office" (fora do posto). Nos Benefícios do mês seguinte desconta **passagem e alimentação**
 (`DISCOUNT_TYPES` = `MEAL_DISCOUNT_TYPES` em `passagem.ts`); falta e atestado também descontam as duas (alimentação = benefício de quem trabalha no dia).
+**Alimentação de fim de semana** (decisão 17/11): professores escalados em **Gestão de Horas → Escalas** (fim de semana) entram sozinhos
+nos Benefícios do **mês seguinte** (grupo "Fora das escalas" se não estão numa equipe 5x2): cada **sábado** e **domingo** trabalhado vale
+`duty_sectors.meal_sat_cents`/`meal_sun_cents` (Academia **R$ 20 / R$ 35**, acumulativo; mesmo dia conta uma vez; feriado em dia útil não
+entra) — `weekendMeal`/`addWeekend` em `passagem.ts`, somado na alimentação e no A depositar. **DP / Financeiro** (`CONSULTA`) tem `duty.edit`
+(menu Escalas de fim de semana).
 
 **Simulação de grade** (Grade semanal → "Simular nova grade"; `schedule.edit`, nas áreas da pessoa): copia a grade de
 uma data para um rascunho (`grade_simulations.items`, sem tocar na grade real), edita (aulas, troca de professor em

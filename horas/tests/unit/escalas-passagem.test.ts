@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { discountDays, transportRows, type TransportInput } from '@/domain/escalas/passagem';
+import { weekendMeal } from '@/domain/escalas/passagem';
 
 const base = (o: Partial<TransportInput>): TransportInput => ({
   teacherId: 't1', name: 'Ana', bond: 'CLT', sector: 'ADM', workDays: [], source: 'escala', prevWorkDays: [], prevLeaves: [], dailyCents: null, ...o,
@@ -38,4 +39,17 @@ describe('passagem (vale-transporte)', () => {
     expect([beto!.mealDailyCents, beto!.mealCents, beto!.depositCents]).toEqual([null, null, 1100]);
     expect([caio!.totalCents, caio!.mealCents, caio!.depositCents]).toEqual([null, 4000, 4000]);
   });
+
+  it('alimentação de fim de semana: sábado e domingo acumulam; mesmo dia conta uma vez; dia útil não entra', () => {
+    const w = weekendMeal([
+      { date: '2035-06-02', weekday: 6, satCents: 2000, sunCents: 3500 },
+      { date: '2035-06-02', weekday: 6, satCents: 2000, sunCents: 3500 }, // dois turnos no mesmo sábado
+      { date: '2035-06-09', weekday: 6, satCents: 2000, sunCents: 3500 },
+      { date: '2035-06-10', weekday: 7, satCents: 2000, sunCents: 3500 },
+      { date: '2035-06-12', weekday: 2, satCents: 2000, sunCents: 3500 }, // feriado em dia útil: não entra
+    ]);
+    expect(w).toEqual({ saturdays: 2, sundays: 1, cents: 7500 });
+    expect(weekendMeal([{ date: '2035-06-02', weekday: 6, satCents: null, sunCents: null }]).cents).toBe(0);
+  });
 });
+

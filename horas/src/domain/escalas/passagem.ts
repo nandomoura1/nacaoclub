@@ -88,6 +88,8 @@ export interface TransportRow {
   mealDays: number;
   mealDiscount: number;
   mealCents: number | null;
+  /** Alimentação de fim de semana (escala da Gestão de Horas, mês anterior): já somada em mealCents. */
+  weekend: WeekendMeal | null;
   /** Passagem + alimentação (vazio = nenhum valor informado). */
   depositCents: number | null;
   refs: { sectorId: string; memberId: string }[];
@@ -120,7 +122,7 @@ export function transportRows(inputs: TransportInput[]): TransportRow[] {
       workDays: work.size, discount: disc.length, discountDates: disc, payDays, calcPayDays: payDays,
       manualDays: null, fixedCents: null, note: null, external: false,
       dailyCents: daily, totalCents: daily == null ? null : payDays * daily,
-      mealDays, mealDiscount: mealDisc,
+      mealDays, mealDiscount: mealDisc, weekend: null,
       ...meal(list.find((i) => i.mealDailyCents != null)?.mealDailyCents ?? null, mealDays, daily == null ? null : payDays * daily),
       refs: list.flatMap((i) => (i.ref ? [i.ref] : [])),
       leaves: [...new Map(list.flatMap((i) => i.prevLeaves).filter((l): l is Required<Leave> => !!l.id && (DISCOUNT_TYPES as readonly string[]).includes(l.type)).map((l) => [l.id, l])).values()].sort((a, b) => a.start.localeCompare(b.start)),
@@ -153,8 +155,35 @@ export function externalRow(p: { teacherId: string; name: string; bond: string; 
   return {
     teacherId: p.teacherId, name: p.name, bond: p.bond, sectors: [OUTSIDE_GROUP], source: 'fora',
     workDays: 0, discount: 0, discountDates: [], payDays: 0, calcPayDays: 0, manualDays: null, fixedCents: null, note: null, external: true,
-    dailyCents: p.dailyCents, totalCents: p.dailyCents == null ? null : 0, mealDays: 0, mealDiscount: 0,
+    dailyCents: p.dailyCents, totalCents: p.dailyCents == null ? null : 0, mealDays: 0, mealDiscount: 0, weekend: null,
     ...meal(p.mealDailyCents, 0, p.dailyCents == null ? null : 0),
     refs: [], leaves: [],
   };
+}
+
+/** Fim de semana trabalhado na escala (Gestão de Horas → Escalas) no mês anterior. */
+export interface WeekendMeal { saturdays: number; sundays: number; cents: number }
+
+/**
+ * Alimentação de fim de semana (decisão 17/11): cada sábado e cada domingo trabalhado no setor da escala vale o
+ * valor do setor (Academia: R$ 20 sábado, R$ 35 domingo), acumulativo. Mesmo dia em dois turnos/setores conta uma
+ * vez (o maior valor). Só sábado e domingo — feriado em dia de semana não entra.
+ */
+export function weekendMeal(worked: { date: IsoDate; weekday: number; satCents: number | null; sunCents: number | null }[]): WeekendMeal {
+  const byDay = new Map<IsoDate, number>();
+  let saturdays = 0, sundays = 0;
+  for (const w of worked) {
+    const v = w.weekday === 6 ? w.satCents : w.weekday === 7 ? w.sunCents : null;
+    if (v == null) continue;
+    if (!byDay.has(w.date)) { if (w.weekday === 6) saturdays++; else sundays++; }
+    byDay.set(w.date, Math.max(byDay.get(w.date) ?? 0, v));
+  }
+  return { saturdays, sundays, cents: [...byDay.values()].reduce((a, b) => a + b, 0) };
+}
+
+/** Soma a alimentação de fim de semana na linha (e no total a depositar). */
+export function addWeekend(row: TransportRow, w: WeekendMeal | undefined): TransportRow {
+  if (!w || w.cents === 0) return row;
+  const mealCents = (row.mealCents ?? 0) + w.cents;
+  return { ...row, weekend: w, mealCents, depositCents: (row.totalCents ?? 0) + mealCents };
 }

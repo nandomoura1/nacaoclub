@@ -5,7 +5,7 @@ import { assertCan, can } from '@/server/auth/authz';
 import type { Principal } from '@/server/auth/principal';
 import type { RequestMeta } from '@/server/auth/session';
 import { AppError, NotFoundError } from '@/server/errors';
-import { addDays, eachDay, formatDateBR, fromUtc, isIsoDate, toUtc, type IsoDate } from '@/domain/dates';
+import { addDays, eachDay, formatDateBR, fromUtc, isIsoDate, toUtc, weekdayOf, type IsoDate } from '@/domain/dates';
 import { HOLIDAY_MODES, holidayModeOf, mondayOf, monthInfo, resolveDay, type MonthInfo, type Override } from '@/domain/escalas/calendar';
 import { generate } from '@/domain/escalas/engine';
 import { buildRotation } from '@/domain/escalas/rotation';
@@ -13,7 +13,7 @@ import { describeRule, parseRule, RULE_KINDS, type RuleKind } from '@/domain/esc
 import type { Absence, Bond, Cell, CellKind, DayPlan, Grid, HoursMap, LegalParams, Member, MemberHours, Post, Rule } from '@/domain/escalas/types';
 import { validate, type Analysis } from '@/domain/escalas/validate';
 import { fairness, type FairnessRow } from '@/domain/escalas/fairness';
-import { DISCOUNT_TYPES, applyAdjust, estimateWorkDays, externalRow, receivesTransport, transportRows, type TransportInput } from '@/domain/escalas/passagem';
+import { DISCOUNT_TYPES, addWeekend, applyAdjust, estimateWorkDays, externalRow, weekendMeal, type WeekendMeal, receivesTransport, transportRows, type TransportInput } from '@/domain/escalas/passagem';
 import { cancelLeave, saveLeave } from './leave-service';
 import { deliverWhatsApp } from './whatsapp-service';
 import { zapiConfig } from '@/server/whatsapp/zapi';
@@ -1001,6 +1001,27 @@ export async function transportReport(principal: P | null, year: number, month: 
       .map((x) => externalRow({ teacherId: x.teacherId, name: x.teacher.name, bond: x.teacher.contractType?.name ?? x.teacher.position?.name ?? '—', dailyCents: x.transportDailyCents, mealDailyCents: x.mealDailyCents }))
       .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')));
   }
+  // Alimentação de fim de semana: professores escalados (Gestão de Horas → Escalas) no mês anterior, nos setores com valor.
+  const weekend = new Map<string, WeekendMeal>();
+  if (!scope) {
+    const duty = await prisma.dutyAssignment.findMany({
+      where: { teacher: { active: true }, shift: { date: { gte: toUtc(pmi.first), lte: toUtc(pmi.last) }, sector: { OR: [{ mealSatCents: { not: null } }, { mealSunCents: { not: null } }] } } },
+      select: { teacherId: true, teacher: { select: { name: true, contractType: { select: { name: true } }, position: { select: { name: true } } } }, shift: { select: { date: true, sector: { select: { mealSatCents: true, mealSunCents: true } } } } },
+    });
+    const byTeacher = new Map<string, typeof duty>();
+    for (const d of duty) byTeacher.set(d.teacherId, [...(byTeacher.get(d.teacherId) ?? []), d]);
+    const have = new Set(rows.map((r) => r.teacherId));
+    for (const [teacherId, list] of byTeacher) {
+      const w = weekendMeal(list.map((d) => { const date = fromUtc(d.shift.date); return { date, weekday: weekdayOf(date), satCents: d.shift.sector.mealSatCents, sunCents: d.shift.sector.mealSunCents }; }));
+      if (!w.cents) continue;
+      weekend.set(teacherId, w);
+      if (!have.has(teacherId)) {
+        const t = list[0]!.teacher;
+        rows.push(externalRow({ teacherId, name: t.name, bond: t.contractType?.name ?? t.position?.name ?? '—', dailyCents: null, mealDailyCents: null }));
+      }
+    }
+    rows.sort((a, b) => (a.external === b.external ? 0 : a.external ? 1 : -1) || (a.external ? a.name.localeCompare(b.name, 'pt-BR') : 0));
+  }
   const key = monthKey(year, month);
   const adj = new Map((await prisma.benefitMonth.findMany({ where: { month: key, teacherId: { in: rows.map((r) => r.teacherId) } } }))
     .map((a) => [a.teacherId, { teacherId: a.teacherId, days: a.transportDays, fixedCents: a.transportTotalCents, note: a.note }]));
@@ -1009,7 +1030,7 @@ export async function transportReport(principal: P | null, year: number, month: 
     : [];
   return {
     year, month, monthKey: key, label: monthInfo(year, month).label, prevLabel: pmi.label, prevFirst: pmi.first, prevLast: pmi.last,
-    rows: rows.map((r) => applyAdjust(r, adj.get(r.teacherId))), status, outside, candidates,
+    rows: rows.map((r) => addWeekend(applyAdjust(r, adj.get(r.teacherId)), weekend.get(r.teacherId))), status, outside, candidates,
     canEditValues, canEditAbsences: can(principal, 'ws.edit'),
   };
 }

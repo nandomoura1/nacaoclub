@@ -144,6 +144,8 @@ export const SYSTEM_ROLES: Record<
       'condo.view', 'condo.edit', 'condo.close', 'condo.payments',
       // Empresas, histórico, envio de cobranças/acessos e demandas do setor.
       'company.view', 'company.edit', 'audit.view', 'whatsapp.send', 'proc.view', 'proc.edit',
+      // Escalas de fim de semana e feriados (RH/DP/Financeiro acompanham e lançam; alimentação de fim de semana).
+      'duty.edit',
       'edu.view',
       // Escalas de Trabalho 5x2: o DP cadastra e valida os parâmetros legais e acompanha todos os setores.
       'ws.view', 'ws.edit', 'ws.publish', 'ws.admin',
