@@ -79,6 +79,8 @@ export const PERMISSIONS = {
   'tv.privacy': 'Check-ins na TV: ver os check-ins do dia e marcar quem não quer aparecer',
   'plans.view': 'Planos Nação: consultar a tabela de planos e preços vigente',
   'plans.edit': 'Planos Nação: criar e editar tabelas de preços (rascunhos) e publicar a nova tabela',
+  'award.view': 'Premiação: ver a avaliação e os valores da gratificação mensal',
+  'award.edit': 'Premiação: avaliar, ajustar valores, fechar o mês e registrar o pagamento',
   'contacts.view': 'Contatos: ver a agenda de telefones importantes (terceirizados, fornecedores, serviços)',
   'contacts.edit': 'Contatos: cadastrar, editar, importar e desativar contatos da agenda',
 } as const;
@@ -154,6 +156,8 @@ export const SYSTEM_ROLES: Record<
       'plans.view',
       // Contatos: agenda de telefones importantes.
       'contacts.view', 'contacts.edit',
+      // Premiação (gratificação mensal paga no dia 15).
+      'award.view', 'award.edit',
     ],
   },
   PROFESSOR: {

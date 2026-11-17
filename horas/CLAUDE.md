@@ -125,6 +125,14 @@ nos Benefícios do **mês seguinte** (grupo "Fora das escalas" se não estão nu
 `duty_sectors.meal_sat_cents`/`meal_sun_cents` (Academia **R$ 20 / R$ 35**, acumulativo; mesmo dia conta uma vez; feriado em dia útil não
 entra) — `weekendMeal`/`addWeekend` em `passagem.ts`, somado na alimentação e no A depositar. **DP / Financeiro** (`CONSULTA`) tem `duty.edit`
 (menu Escalas de fim de semana).
+**Premiação** (Escalas 5x2 → Premiação, abaixo de Benefícios; `award.view`/`award.edit` = Administrador e DP/Financeiro; decisão 17/11):
+gratificação mensal paga no **dia 15 do mês seguinte** ao avaliado. Três critérios com valor **por pessoa** (`award_people`: equipe +
+Produtividade/Pontualidade/Assiduidade, padrão **R$ 100** cada; Cozinha e outros com valores próprios): Produtividade (app Task/checklists)
+e Pontualidade (atraso > 15 min) são marcadas à mão; **Assiduidade** perde com falta ou atestado no mês; **falta** perde os três; admitido no
+meio do mês zera ("não completou o mês"). Sem avaliação salva = **sugestão** do sistema pelas ausências (`suggest` em `domain/premiacao.ts`);
+clicar no critério marca ganhou/perdeu (`award_months`), **ajuste em R$** (+/−) e observação para o que foge da regra; "voltar à sugestão".
+**Fechar mês** congela (`award_closures.snapshot`), **Marcar como pago**; reabrir só sem pagamento e com motivo. "Copiar tabela" = TSV
+Equipe · Nome · Valor · Obs. com subtotais (formato da planilha de controle). Mês padrão: até dia 15 o anterior, depois o corrente.
 
 **Simulação de grade** (Grade semanal → "Simular nova grade"; `schedule.edit`, nas áreas da pessoa): copia a grade de
 uma data para um rascunho (`grade_simulations.items`, sem tocar na grade real), edita (aulas, troca de professor em

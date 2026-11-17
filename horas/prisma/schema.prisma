@@ -413,6 +413,8 @@ model Teacher {
   wsMembers        WsMember[]
   benefitMonths    BenefitMonth[]
   benefitPerson    BenefitPerson?
+  awardPerson      AwardPerson?
+  awardMonths      AwardMonth[]
 
   @@index([active, name])
   @@index([team, active])
@@ -3309,4 +3311,48 @@ model BenefitPerson {
   teacher             Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
 
   @@map("benefit_people")
+}
+
+/// Premiação: quem participa da gratificação mensal, a equipe e o valor de cada critério.
+model AwardPerson {
+  teacherId         String   @id @map("teacher_id") @db.Uuid
+  groupName         String   @map("group_name")
+  productivityCents Int      @default(10000) @map("productivity_cents")
+  punctualityCents  Int      @default(10000) @map("punctuality_cents")
+  attendanceCents   Int      @default(10000) @map("attendance_cents")
+  active            Boolean  @default(true)
+  note              String?
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  teacher           Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@map("award_people")
+}
+
+/// Premiação: avaliação do mês ("AAAA-MM"). Sem linha = sugestão automática.
+model AwardMonth {
+  teacherId    String   @map("teacher_id") @db.Uuid
+  month        String
+  productivity Boolean
+  punctuality  Boolean
+  attendance   Boolean
+  extraCents   Int      @default(0) @map("extra_cents")
+  note         String?
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  teacher      Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@id([teacherId, month])
+  @@map("award_months")
+}
+
+/// Premiação: mês fechado (valores congelados) e pago.
+model AwardClosure {
+  month      String    @id
+  snapshot   Json
+  closedAt   DateTime  @default(now()) @map("closed_at")
+  closedById String?   @map("closed_by_id") @db.Uuid
+  paidAt     DateTime? @map("paid_at")
+  paidById   String?   @map("paid_by_id") @db.Uuid
+
+  @@map("award_closures")
 }

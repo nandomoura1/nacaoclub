@@ -79,6 +79,7 @@ const ICONS: Record<NavIcon, React.ComponentType<{ className?: string }>> = {
   crm: HandCoins,
   planos: Tags,
   contatos: BookUser,
+  'ws-premiacao': Trophy,
 };
 
 function isActive(pathname: string, href: string) {

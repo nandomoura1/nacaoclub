@@ -8,7 +8,7 @@ export type NavIcon =
   | 'mkt' | 'mkt-campanhas' | 'mkt-kanban' | 'mkt-eventos' | 'mkt-reuniao' | 'mkt-conteudo' | 'mkt-interna' | 'mkt-canais' | 'mkt-leads' | 'mkt-biblioteca' | 'mkt-trafego' | 'mkt-performance' | 'mkt-memoria' | 'mkt-conexoes' | 'mkt-criativo' | 'whatsapp'
   | 'wa-auto' | 'processos' | 'proc-demandas' | 'proc-setores' | 'proc-task' | 'proc-reuniao'
   | 'edu' | 'edu-trilhas' | 'edu-painel' | 'proc-atas' | 'treinos-tv'
-  | 'ws' | 'ws-equipes' | 'ws-regras' | 'ws-funcionamento' | 'ws-feriados' | 'ws-ausencias' | 'ws-legal' | 'ws-passagem' | 'contratos' | 'contratos-modelos' | 'treinos-timer' | 'crm' | 'planos' | 'contatos';
+  | 'ws' | 'ws-equipes' | 'ws-regras' | 'ws-funcionamento' | 'ws-feriados' | 'ws-ausencias' | 'ws-legal' | 'ws-passagem' | 'contratos' | 'contratos-modelos' | 'treinos-timer' | 'crm' | 'planos' | 'contatos' | 'ws-premiacao';
 
 export interface NavItem {
   href: string;
@@ -130,6 +130,7 @@ export const NAV_ESCALAS: NavItem[] = [
   { href: '/escalas-trabalho/funcionamento', label: 'Funcionamento da Nação', icon: 'ws-funcionamento', permission: 'ws.view' },
   { href: '/escalas-trabalho/ausencias', label: 'Férias e ausências', icon: 'ws-ausencias', permission: 'ws.view' },
   { href: '/escalas-trabalho/beneficios', label: 'Benefícios', icon: 'ws-passagem', permission: 'ws.view' },
+  { href: '/escalas-trabalho/premiacao', label: 'Premiação', icon: 'ws-premiacao', permission: 'award.view' },
   { href: '/escalas-trabalho/parametros', label: 'Parâmetros legais', icon: 'ws-legal', permission: 'ws.view' },
 ];
 
