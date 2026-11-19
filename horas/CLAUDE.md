@@ -281,6 +281,13 @@ copia a vigente sem os que saíram. "Copiar para planilha" = TSV no formato da p
 2026" (`src/server/planos/planilha-2026.json`, da planilha de 13/11): 2026 vigente + rascunho 2027 do **repasse de nov/2026**; os 10
 planos fora do repasse entram como "A decidir".
 
+**Atas de reunião → Arquivos para download** (decisão 19/11): propostas, projetos e apresentações anexados à ata (`proc_meeting_files`,
+bucket privado `atas/AAAA-MM/…`; tipo Proposta/Projeto/Apresentação/Outro). Envio direto do navegador por URL assinada (como a
+Universidade), até **50 MB**, PDF/Word/Excel/PowerPoint/OpenDocument/imagem/TXT/CSV/ZIP (**sem HTML/SVG**). **Anexa**: diretoria
+(`proc.admin`), quem registrou a ata ou quem participou (com `proc.edit`); **baixa**: quem vê as atas (`proc.view`, link de 1 h com o
+nome original); **exclui**: quem anexou ou a diretoria. Excluir a ata apaga os arquivos do bucket. `startAtaUpload`/`addAtaFile`/
+`ataFileUrl`/`deleteAtaFile` no proc-meeting-service; regras em `domain/atas-arquivos.ts`.
+
 **Contatos** (Administração → Contatos; `contacts.view` = Administrador, DP/Financeiro, Coordenador, Líder; `contacts.edit` = Administrador e
 DP/Financeiro; decisão 14/11): **Agenda** = tabela `contacts` para quem é de fora do cadastro (terceirizados, fornecedores, monitoras Kids,
 serviços), por grupo livre, telefone 1 e 2, desativa (não exclui); **Importar** = colar linhas da planilha (linha só com texto vira o grupo

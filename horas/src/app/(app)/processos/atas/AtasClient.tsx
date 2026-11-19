@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronDown, ExternalLink, Pencil, Plus, Search, Trash2, Users, Video } from 'lucide-react';
+import { ChevronDown, Download, ExternalLink, FileText, Paperclip, Pencil, Plus, Search, Trash2, Upload, Users, Video } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -12,7 +12,8 @@ import { Input, Label, Select } from '@/components/ui/input';
 import { DEMAND_STATUSES } from '@/domain/processos';
 import { cn } from '@/lib/cn';
 import type { AtaRow } from '@/server/services/proc-meeting-service';
-import { deleteAtaAction, saveAtaAction, saveDemandAction } from '../actions';
+import { ATA_ACCEPT, ATA_FILE_KINDS, ATA_MAX_BYTES, fileSize } from '@/domain/atas-arquivos';
+import { addAtaFileAction, ataFileUrlAction, deleteAtaAction, deleteAtaFileAction, saveAtaAction, saveDemandAction, startAtaUploadAction } from '../actions';
 
 type Opt = { id: string; name: string };
 type Form = { date: string; title: string; mode: string; participantIds: string[]; guests: string; agenda: string; decisions: string; link: string };
@@ -58,6 +59,7 @@ export function AtasClient({ atas, people, sectors, today, perms }: { atas: AtaR
               <span className="min-w-0 flex-1 font-semibold text-navy">{a.title}</span>
               {a.mode && <Badge tone={a.mode === 'ONLINE' ? 'cyan' : 'neutral'}>{a.mode === 'ONLINE' ? 'online' : 'presencial'}</Badge>}
               <span className="inline-flex items-center gap-1 text-xs text-tinta-suave"><Users className="size-3.5" />{a.participants.length + (a.guests ? 1 : 0)}</span>
+              {a.files.length > 0 && <span className="inline-flex items-center gap-1 text-xs text-tinta-suave"><Paperclip className="size-3.5" />{a.files.length}</span>}
               {a.demands.length > 0 && <span className="text-xs text-tinta-suave">{done}/{a.demands.length} demandas entregues</span>}
               <ChevronDown className={cn('size-4 text-tinta-fraca transition-transform', isOpen && 'rotate-180')} />
             </button>
@@ -76,6 +78,8 @@ export function AtasClient({ atas, people, sectors, today, perms }: { atas: AtaR
                   <p className="mt-1 whitespace-pre-line">{a.decisions}</p>
                 </div>}
                 {a.link && <a href={a.link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-nacao"><Video className="size-4" /> Gravação / documento <ExternalLink className="size-3.5" /></a>}
+
+                <AtaFiles ata={a} run={run} setMsg={setMsg} />
 
                 <div className="rounded-xl bg-fundo p-3">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-tinta-suave">Demandas desta reunião</p>
@@ -105,6 +109,80 @@ export function AtasClient({ atas, people, sectors, today, perms }: { atas: AtaR
           </Card>
         );
       })}
+    </div>
+  );
+}
+
+function put(url: string, file: File, mime: string, onProgress: (p: number) => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const x = new XMLHttpRequest();
+    x.open('PUT', url); x.setRequestHeader('Content-Type', mime); x.setRequestHeader('x-upsert', 'false');
+    x.upload.onprogress = (e) => e.lengthComputable && onProgress(Math.round((e.loaded / e.total) * 100));
+    x.onload = () => (x.status >= 200 && x.status < 300 ? resolve() : reject(new Error(`Falha no envio (${x.status}).`)));
+    x.onerror = () => reject(new Error('Sem conexão com o armazenamento.'));
+    x.send(file);
+  });
+}
+
+/** Arquivos para download da ata (propostas, projetos…): enviar, baixar e excluir. */
+function AtaFiles({ ata, run, setMsg }: {
+  ata: AtaRow;
+  run: (fn: () => Promise<{ ok: boolean; error?: string; message?: string }>) => void;
+  setMsg: (m: { ok?: string | null; error?: string | null }) => void;
+}) {
+  const [kind, setKind] = useState<string>('PROPOSTA');
+  const [progress, setProgress] = useState<number | null>(null);
+  const kindLabel = (k: string) => ATA_FILE_KINDS.find((x) => x.id === k)?.label ?? k;
+  const upload = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setMsg({});
+    for (const fl of Array.from(files)) {
+      if (fl.size > ATA_MAX_BYTES) { setMsg({ error: `${fl.name}: acima de 50 MB. Para arquivos maiores, use o link do Drive na ata.` }); continue; }
+      setProgress(0);
+      try {
+        const s = await startAtaUploadAction(ata.id, { name: fl.name, size: fl.size });
+        if (!s.ok) throw new Error(s.error);
+        await put(s.data.uploadUrl, fl, s.data.mime, setProgress);
+        await new Promise<void>((done) => { run(async () => { const r = await addAtaFileAction(ata.id, { path: s.data.path, fileName: fl.name, kind }); done(); return r; }); });
+      } catch (e) { setMsg({ error: e instanceof Error ? `${fl.name}: ${e.message}` : 'Falha no envio.' }); }
+    }
+    setProgress(null);
+  };
+  const download = async (id: string) => {
+    const r = await ataFileUrlAction(id);
+    if (!r.ok) return setMsg({ error: r.error });
+    window.location.href = r.data;
+  };
+  if (!ata.files.length && !ata.canAttach) return null;
+  return (
+    <div className="rounded-xl border border-borda p-3">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-tinta-suave">Arquivos para download <span className="normal-case">· propostas, projetos e apresentações</span></p>
+      {ata.files.length === 0 ? <p className="mt-1 text-tinta-suave">Nenhum arquivo ainda.</p> : (
+        <ul className="mt-1 divide-y divide-borda">
+          {ata.files.map((f) => (
+            <li key={f.id} className="flex flex-wrap items-center gap-2 py-1.5">
+              <FileText className="size-4 shrink-0 text-nacao" />
+              <button type="button" onClick={() => download(f.id)} className="min-w-0 flex-1 truncate text-left font-semibold text-navy hover:text-nacao hover:underline" title="Baixar">{f.fileName}</button>
+              <Badge tone={f.kind === 'PROPOSTA' ? 'blue' : f.kind === 'PROJETO' ? 'green' : 'neutral'}>{kindLabel(f.kind)}</Badge>
+              <span className="text-xs text-tinta-suave">{fileSize(f.sizeBytes)}{f.createdBy ? ` · ${f.createdBy}` : ''}</span>
+              <Button size="sm" variant="ghost" onClick={() => download(f.id)} title="Baixar"><Download /></Button>
+              {f.canDelete && <Button size="sm" variant="ghost" onClick={() => { if (confirm(`Excluir o arquivo “${f.fileName}”?`)) run(() => deleteAtaFileAction(f.id)); }} title="Excluir"><Trash2 /></Button>}
+            </li>
+          ))}
+        </ul>
+      )}
+      {ata.canAttach && (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <Select value={kind} onChange={(e) => setKind(e.target.value)} className="h-9 w-40" aria-label="Tipo do arquivo">
+            {ATA_FILE_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
+          </Select>
+          <label className={cn('inline-flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-borda bg-white px-3 text-sm font-semibold text-tinta hover:bg-fundo', progress !== null && 'pointer-events-none opacity-60')}>
+            <Upload className="size-4" />{progress !== null ? `Enviando… ${progress}%` : 'Anexar arquivo'}
+            <input type="file" multiple accept={ATA_ACCEPT} className="hidden" disabled={progress !== null} onChange={(e) => { void upload(e.target.files); e.target.value = ''; }} />
+          </label>
+          <span className="text-xs text-tinta-suave">PDF, Word, Excel, PowerPoint, imagem ou ZIP · até 50 MB</span>
+        </div>
+      )}
     </div>
   );
 }

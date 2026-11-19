@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { getPrincipal, requestMeta } from '@/server/auth/session';
 import { runAction, type ActionResult } from '@/server/action-result';
 import { todayIso } from '@/lib/today';
-import { closeProcMeeting, deleteAta, quickUpdateDemand, saveAta, saveMeetingNotes, setDemandBlocker, setDemandFocus, startProcMeeting } from '@/server/services/proc-meeting-service';
+import { addAtaFile, ataFileUrl, closeProcMeeting, deleteAta, deleteAtaFile, quickUpdateDemand, saveAta, startAtaUpload, saveMeetingNotes, setDemandBlocker, setDemandFocus, startProcMeeting } from '@/server/services/proc-meeting-service';
 import { addDemandComment, deleteDemand, demandComments, saveDemand, saveSector, setDemandStatus } from '@/server/services/proc-service';
 
 const refresh = () => { revalidatePath('/processos', 'layout'); revalidatePath('/hoje'); };
@@ -53,4 +53,17 @@ export async function saveAtaAction(id: string | null, values: Record<string, un
 }
 export async function deleteAtaAction(id: string): Promise<ActionResult> {
   return runAction(async () => { await deleteAta(await getPrincipal(), id, await requestMeta()); refresh(); return undefined; }, 'Ata excluída.');
+}
+
+export async function startAtaUploadAction(ataId: string, file: { name: string; size: number }): Promise<ActionResult<{ path: string; mime: string; uploadUrl: string }>> {
+  return runAction(async () => startAtaUpload(await getPrincipal(), ataId, file));
+}
+export async function addAtaFileAction(ataId: string, input: { path: string; fileName: string; kind: string }): Promise<ActionResult<string>> {
+  return runAction(async () => { const r = await addAtaFile(await getPrincipal(), ataId, input, await requestMeta()); refresh(); return r; }, 'Arquivo anexado à ata.');
+}
+export async function ataFileUrlAction(fileId: string): Promise<ActionResult<string>> {
+  return runAction(async () => ataFileUrl(await getPrincipal(), fileId));
+}
+export async function deleteAtaFileAction(fileId: string): Promise<ActionResult> {
+  return runAction(async () => { await deleteAtaFile(await getPrincipal(), fileId, await requestMeta()); refresh(); return undefined; }, 'Arquivo excluído.');
 }

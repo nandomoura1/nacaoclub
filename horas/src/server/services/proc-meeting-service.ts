@@ -14,6 +14,9 @@ import { zapiConfig } from '@/server/whatsapp/zapi';
 import { deliverWhatsApp } from '@/server/services/whatsapp-service';
 import { canWork, listDemands, type DemandRow } from './proc-service';
 import { dt, iso } from './marketing-service';
+import { randomUUID } from 'node:crypto';
+import { ATA_FILE_KINDS, ATA_MAX_BYTES, ATA_PATH_RE, ataMime, ataPath } from '@/domain/atas-arquivos';
+import { objectSize, removeObjects, signedReadUrls, signedUploadUrl, storageConfig } from '@/server/storage';
 
 /**
  * Reunião de líderes: quem conduz (diretoria, proc.admin) abre a semanal ou
@@ -184,13 +187,17 @@ export interface AtaRow {
   id: string; date: string; title: string; mode: string | null; participants: { id: string; name: string }[]; guests: string | null;
   agenda: string | null; decisions: string | null; link: string | null; createdBy: string | null; canEdit: boolean;
   demands: { id: string; title: string; sector: string; owner: string | null; status: string; dueDate: string | null }[];
+  /** Arquivos para download (propostas, projetos…). */
+  files: { id: string; kind: string; fileName: string; sizeBytes: number; createdBy: string | null; createdAt: string; canDelete: boolean }[];
+  /** Pode anexar arquivo: diretoria, quem registrou ou quem participou. */
+  canAttach: boolean;
 }
 
 export async function listAtas(principal: Principal | null): Promise<AtaRow[]> {
   assertCan(principal, 'proc.view');
-  const rows = await prisma.procMeeting.findMany({ where: { kind: 'ATA' }, orderBy: [{ date: 'desc' }, { createdAt: 'desc' }], take: 200 });
+  const rows = await prisma.procMeeting.findMany({ where: { kind: 'ATA' }, orderBy: [{ date: 'desc' }, { createdAt: 'desc' }], take: 200, include: { files: { orderBy: { createdAt: 'asc' } } } });
   const demands = await prisma.procDemand.findMany({ where: { meetingId: { in: rows.map((r) => r.id) } }, include: { sector: { select: { name: true } } }, orderBy: { createdAt: 'asc' } });
-  const ids = [...new Set([...rows.flatMap((r) => [...r.participantIds, r.createdById]), ...demands.map((d) => d.ownerId)].filter(Boolean) as string[])];
+  const ids = [...new Set([...rows.flatMap((r) => [...r.participantIds, r.createdById, ...r.files.map((f) => f.createdById)]), ...demands.map((d) => d.ownerId)].filter(Boolean) as string[])];
   const names = new Map((await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })).map((u) => [u.id, u.name]));
   const admin = can(principal, 'proc.admin');
   return rows.map((r) => ({
@@ -199,6 +206,8 @@ export async function listAtas(principal: Principal | null): Promise<AtaRow[]> {
     createdBy: r.createdById ? names.get(r.createdById) ?? null : null,
     canEdit: admin || (can(principal, 'proc.edit') && r.createdById === principal.id),
     demands: demands.filter((d) => d.meetingId === r.id).map((d) => ({ id: d.id, title: d.title, sector: d.sector.name, owner: d.ownerId ? names.get(d.ownerId) ?? null : null, status: d.status, dueDate: iso(d.dueDate) })),
+    files: r.files.map((f) => ({ id: f.id, kind: f.kind, fileName: f.fileName, sizeBytes: f.sizeBytes, createdBy: f.createdById ? names.get(f.createdById) ?? null : null, createdAt: f.createdAt.toISOString(), canDelete: admin || f.createdById === principal.id })),
+    canAttach: canAttach(principal, r),
   }));
 }
 
@@ -235,12 +244,90 @@ export async function saveAta(principal: Principal | null, id: string | null, in
 
 export async function deleteAta(principal: Principal | null, id: string, meta: RequestMeta) {
   assertCan(principal, 'proc.admin');
+  const files = await prisma.procMeetingFile.findMany({ where: { meetingId: id }, select: { path: true } });
   await prisma.$transaction(async (tx) => {
     const m = await tx.procMeeting.findUnique({ where: { id } });
     if (!m || m.kind !== 'ATA') throw new NotFoundError('Ata não encontrada.');
     // As demandas abertas na ata continuam; só perdem o vínculo.
     await tx.procDemand.updateMany({ where: { meetingId: id }, data: { meetingId: null } });
     await tx.procMeeting.delete({ where: { id } });
-    await audit(tx, { actorId: principal.id, ...meta }, { action: 'proc.ata_deleted', entityType: 'proc_meeting', entityId: id, before: m, summary: `${principal.name} excluiu a ata “${m.title}”` });
+    await audit(tx, { actorId: principal.id, ...meta }, { action: 'proc.ata_deleted', entityType: 'proc_meeting', entityId: id, before: { ...m, arquivos: files.length }, summary: `${principal.name} excluiu a ata “${m.title}”${files.length ? ` e ${files.length} arquivo(s)` : ''}` });
   });
+  if (files.length) await removeObjects(files.map((f) => f.path)).catch(() => undefined);
+}
+
+// ── Arquivos da ata (propostas, projetos…) ─────────────────
+
+/** Anexa: diretoria, quem registrou a ata ou quem participou dela (precisa poder trabalhar em Processos). */
+function canAttach(principal: Principal, m: { createdById: string | null; participantIds: string[] }) {
+  if (can(principal, 'proc.admin')) return true;
+  return can(principal, 'proc.edit') && (m.createdById === principal.id || m.participantIds.includes(principal.id));
+}
+
+async function ataFor(principal: Principal, ataId: string) {
+  const m = await prisma.procMeeting.findUnique({ where: { id: ataId }, select: { id: true, kind: true, title: true, createdById: true, participantIds: true } });
+  if (!m || m.kind !== 'ATA') throw new NotFoundError('Ata não encontrada.');
+  if (!canAttach(principal, m)) throw new AuthorizationError('Só a diretoria, quem registrou a ata ou quem participou dela anexa arquivos.');
+  return m;
+}
+
+/** Passo 1: valida e devolve a URL para o navegador enviar direto ao armazenamento. */
+export async function startAtaUpload(principal: Principal | null, ataId: string, file: { name: string; size: number }) {
+  assertCan(principal, 'proc.view');
+  await ataFor(principal, ataId);
+  if (!storageConfig().configured) throw new AppError('Armazenamento de arquivos não configurado.');
+  const mime = ataMime(file.name);
+  if (!mime) throw new AppError('Formato não aceito. Use PDF, Word, Excel, PowerPoint, OpenDocument, imagem, TXT/CSV ou ZIP.');
+  if (file.size <= 0) throw new AppError('Arquivo vazio.');
+  if (file.size > ATA_MAX_BYTES) throw new AppError('Arquivo acima de 50 MB. Para arquivos maiores, use o campo de link (Drive).');
+  const path = ataPath(randomUUID(), file.name);
+  return { path, mime, uploadUrl: await signedUploadUrl(path) };
+}
+
+const fileSchema = z.object({
+  path: z.string().regex(ATA_PATH_RE, 'Envio inválido.'),
+  fileName: z.string().trim().min(1).max(200),
+  kind: z.enum(ATA_FILE_KINDS.map((k) => k.id) as [string, ...string[]]),
+});
+
+/** Passo 2: confere que o arquivo chegou e registra na ata. */
+export async function addAtaFile(principal: Principal | null, ataId: string, input: unknown, meta: RequestMeta) {
+  assertCan(principal, 'proc.view');
+  const m = await ataFor(principal, ataId);
+  const r = fileSchema.safeParse(input);
+  if (!r.success) throw new AppError(r.error.issues[0]?.message ?? 'Dados inválidos.');
+  const d = r.data;
+  const mime = ataMime(d.fileName) ?? ataMime(d.path);
+  if (!mime) throw new AppError('Formato não aceito.');
+  const size = await objectSize(d.path);
+  if (size === null) throw new AppError('O arquivo não chegou ao armazenamento. Envie de novo.');
+  return prisma.$transaction(async (tx) => {
+    const f = await tx.procMeetingFile.create({ data: { meetingId: m.id, kind: d.kind, path: d.path, fileName: d.fileName, mime, sizeBytes: size, createdById: principal.id } });
+    await audit(tx, { actorId: principal.id, ...meta }, { action: 'proc.ata_file_added', entityType: 'proc_meeting', entityId: m.id, after: { arquivo: d.fileName, tipo: d.kind, bytes: size }, summary: `${principal.name} anexou “${d.fileName}” à ata “${m.title}”` });
+    return f.id;
+  });
+}
+
+/** Link de download (1 hora), com o nome original do arquivo. Quem vê as atas baixa. */
+export async function ataFileUrl(principal: Principal | null, fileId: string) {
+  assertCan(principal, 'proc.view');
+  const f = await prisma.procMeetingFile.findUnique({ where: { id: fileId } });
+  if (!f) throw new NotFoundError('Arquivo não encontrado.');
+  const urls = await signedReadUrls([f.path], { download: { [f.path]: f.fileName } });
+  const url = urls[f.path];
+  if (!url) throw new AppError('Arquivo indisponível no armazenamento.');
+  return url;
+}
+
+/** Exclui: quem anexou ou a diretoria. */
+export async function deleteAtaFile(principal: Principal | null, fileId: string, meta: RequestMeta) {
+  assertCan(principal, 'proc.view');
+  const f = await prisma.procMeetingFile.findUnique({ where: { id: fileId }, include: { meeting: { select: { title: true } } } });
+  if (!f) throw new NotFoundError('Arquivo não encontrado.');
+  if (!can(principal, 'proc.admin') && f.createdById !== principal.id) throw new AuthorizationError('Só quem anexou (ou a diretoria) exclui o arquivo.');
+  await prisma.$transaction(async (tx) => {
+    await tx.procMeetingFile.delete({ where: { id: fileId } });
+    await audit(tx, { actorId: principal.id, ...meta }, { action: 'proc.ata_file_deleted', entityType: 'proc_meeting', entityId: f.meetingId, before: { arquivo: f.fileName, tipo: f.kind }, summary: `${principal.name} excluiu o arquivo “${f.fileName}” da ata “${f.meeting.title}”` });
+  });
+  await removeObjects([f.path]).catch(() => undefined);
 }

@@ -2153,8 +2153,29 @@ model ProcMeeting {
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
 
+  files ProcMeetingFile[]
+
   @@index([date])
   @@map("proc_meetings")
+}
+
+/// Ata de reunião: arquivo para download (proposta, projeto…) no bucket privado (`atas/AAAA-MM/…`).
+model ProcMeetingFile {
+  id          String   @id @default(uuid()) @db.Uuid
+  meetingId   String   @map("meeting_id") @db.Uuid
+  /// PROPOSTA | PROJETO | APRESENTACAO | OUTRO
+  kind        String   @default("OUTRO")
+  path        String
+  fileName    String   @map("file_name")
+  mime        String
+  sizeBytes   Int      @map("size_bytes")
+  createdById String?  @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  meeting ProcMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@index([meetingId])
+  @@map("proc_meeting_files")
 }
 
 model ProcComment {
