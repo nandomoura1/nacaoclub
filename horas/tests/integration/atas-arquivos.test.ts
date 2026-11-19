@@ -25,7 +25,8 @@ describe.skipIf(!hasDb)('Atas de reunião · arquivos', () => {
 
     await expect(startAtaUpload(outro.principal, ata, { name: 'x.pdf', size: 3 })).rejects.toBeInstanceOf(AuthorizationError); // não participou
     await expect(startAtaUpload(prof.principal, ata, { name: 'x.pdf', size: 3 })).rejects.toBeInstanceOf(AuthorizationError);
-    await expect(startAtaUpload(lider.principal, ata, { name: 'pagina.html', size: 3 })).rejects.toThrow(/Formato não aceito/);
+    await expect(startAtaUpload(lider.principal, ata, { name: 'logo.svg', size: 3 })).rejects.toThrow(/Formato não aceito/);
+    expect((await startAtaUpload(lider.principal, ata, { name: 'Apresentação.html', size: 3 })).mime).toBe('text/html');
 
     const up = await startAtaUpload(lider.principal, ata, { name: 'Proposta Eventos 2027.pdf', size: 3 });
     await expect(addAtaFile(lider.principal, ata, { path: up.path, fileName: 'Proposta Eventos 2027.pdf', kind: 'PROPOSTA' }, META)).rejects.toThrow(/não chegou/);

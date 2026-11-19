@@ -180,7 +180,7 @@ function AtaFiles({ ata, run, setMsg }: {
             <Upload className="size-4" />{progress !== null ? `Enviando… ${progress}%` : 'Anexar arquivo'}
             <input type="file" multiple accept={ATA_ACCEPT} className="hidden" disabled={progress !== null} onChange={(e) => { void upload(e.target.files); e.target.value = ''; }} />
           </label>
-          <span className="text-xs text-tinta-suave">PDF, Word, Excel, PowerPoint, imagem ou ZIP · até 50 MB</span>
+          <span className="text-xs text-tinta-suave">PDF, Word, Excel, PowerPoint, HTML, imagem ou ZIP · até 50 MB</span>
         </div>
       )}
     </div>

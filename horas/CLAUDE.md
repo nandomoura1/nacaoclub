@@ -283,7 +283,7 @@ planos fora do repasse entram como "A decidir".
 
 **Atas de reunião → Arquivos para download** (decisão 19/11): propostas, projetos e apresentações anexados à ata (`proc_meeting_files`,
 bucket privado `atas/AAAA-MM/…`; tipo Proposta/Projeto/Apresentação/Outro). Envio direto do navegador por URL assinada (como a
-Universidade), até **50 MB**, PDF/Word/Excel/PowerPoint/OpenDocument/imagem/TXT/CSV/ZIP (**sem HTML/SVG**). **Anexa**: diretoria
+Universidade), até **50 MB**, PDF/Word/Excel/PowerPoint/OpenDocument/**HTML**/imagem/TXT/CSV/ZIP (HTML liberado em 19/11: sempre **baixado**, nunca aberto no app; SVG fora). **Anexa**: diretoria
 (`proc.admin`), quem registrou a ata ou quem participou (com `proc.edit`); **baixa**: quem vê as atas (`proc.view`, link de 1 h com o
 nome original); **exclui**: quem anexou ou a diretoria. Excluir a ata apaga os arquivos do bucket. `startAtaUpload`/`addAtaFile`/
 `ataFileUrl`/`deleteAtaFile` no proc-meeting-service; regras em `domain/atas-arquivos.ts`.

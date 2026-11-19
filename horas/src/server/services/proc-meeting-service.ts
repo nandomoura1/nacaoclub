@@ -277,7 +277,7 @@ export async function startAtaUpload(principal: Principal | null, ataId: string,
   await ataFor(principal, ataId);
   if (!storageConfig().configured) throw new AppError('Armazenamento de arquivos não configurado.');
   const mime = ataMime(file.name);
-  if (!mime) throw new AppError('Formato não aceito. Use PDF, Word, Excel, PowerPoint, OpenDocument, imagem, TXT/CSV ou ZIP.');
+  if (!mime) throw new AppError('Formato não aceito. Use PDF, Word, Excel, PowerPoint, OpenDocument, HTML, imagem, TXT/CSV ou ZIP.');
   if (file.size <= 0) throw new AppError('Arquivo vazio.');
   if (file.size > ATA_MAX_BYTES) throw new AppError('Arquivo acima de 50 MB. Para arquivos maiores, use o campo de link (Drive).');
   const path = ataPath(randomUUID(), file.name);

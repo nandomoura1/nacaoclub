@@ -11,14 +11,17 @@ export type AtaFileKind = (typeof ATA_FILE_KINDS)[number]['id'];
 /** Limite por arquivo (o do bucket). */
 export const ATA_MAX_BYTES = 50 * 1024 * 1024;
 
-/** Formatos aceitos: documentos, planilhas, apresentações, imagens e zip (sem HTML/SVG: só download). */
+/**
+ * Formatos aceitos: documentos, planilhas, apresentações, imagens, zip e HTML (decisão 19/11). Tudo é sempre BAIXADO
+ * (link com download=, nunca aberto dentro do app), então o HTML não roda no domínio do sistema. SVG segue fora.
+ */
 const MIME: Record<string, string> = {
   pdf: 'application/pdf',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', doc: 'application/msword',
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', xls: 'application/vnd.ms-excel', csv: 'text/csv',
   pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', ppt: 'application/vnd.ms-powerpoint',
   odt: 'application/vnd.oasis.opendocument.text', ods: 'application/vnd.oasis.opendocument.spreadsheet', odp: 'application/vnd.oasis.opendocument.presentation',
-  txt: 'text/plain', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', zip: 'application/zip',
+  txt: 'text/plain', html: 'text/html', htm: 'text/html', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', zip: 'application/zip',
 };
 export const ATA_ACCEPT = Object.keys(MIME).map((e) => `.${e}`).join(',');
 const ext = (name: string) => name.toLowerCase().match(/\.([a-z0-9]{2,5})$/)?.[1] ?? '';
