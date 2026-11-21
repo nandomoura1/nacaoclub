@@ -60,6 +60,36 @@ export function personOf(r: Record<string, unknown>, keys = PERSON_KEYS): TfPers
   }
   return null;
 }
+/**
+ * Consultor do CADASTRO do aluno (tela "Responsabilidade → Consultor" da Tecnofit; decisão 21/11). A documentação não
+ * fixa o nome do campo: tenta os conhecidos e qualquer campo com "consult"/"vendedor"/"respons" no nome — objeto
+ * { id, name } ou "...Id" —, também um nível abaixo (ex.: responsibility{consultant{id,name}}). Só id e nome.
+ */
+export function consultantOf(r: Record<string, unknown> | null | undefined): TfPerson | null {
+  if (!r) return null;
+  const known = personOf(r, ['consultant', 'salesConsultant', 'responsibleConsultant', 'consultor', 'responsavel', 'responsible', 'seller', 'salesman', 'employee']);
+  if (known) return known;
+  const re = /consult|vendedor|seller|respons/i;
+  const pick = (o: Record<string, unknown>, depth: number): TfPerson | null => {
+    for (const [k, v] of Object.entries(o)) {
+      if (!re.test(k)) {
+        if (depth > 0 && v && typeof v === 'object' && !Array.isArray(v)) { const p = pick(v as Record<string, unknown>, depth - 1); if (p) return p; }
+        continue;
+      }
+      if (v && typeof v === 'object' && !Array.isArray(v)) {
+        const x = v as Record<string, unknown>;
+        const id = x.id ?? x.employeeId ?? x.userId;
+        if (id != null && String(id).trim()) return { id: String(id).trim(), name: x.name != null ? String(x.name).trim() || null : null };
+        if (depth > 0) { const p = pick(x, depth - 1); if (p) return p; }
+      } else if (/id$/i.test(k) && v != null && typeof v !== 'object' && String(v).trim()) {
+        return { id: String(v).trim(), name: null };
+      }
+    }
+    return null;
+  };
+  return pick(r, 1);
+}
+
 /** Só os NOMES dos campos (nunca valores) para diagnóstico: "a,b,customer{id,name}". */
 export function shapeOf(r: Record<string, unknown> | undefined): string {
   if (!r) return '';
@@ -69,9 +99,9 @@ export function shapeOf(r: Record<string, unknown> | undefined): string {
   }).join(',');
 }
 /** Diagnóstico da última leitura (contagens e nomes de campos — sem dado de aluno). */
-export interface TfDiag { calls?: { raw: number; parsed: number; withConsultant: number; shape: string }; sales?: { total: number; withSeller: number; shape: string } }
+export interface TfDiag { calls?: { raw: number; parsed: number; withConsultant: number; shape: string }; sales?: { total: number; withSeller: number; shape: string }; customers?: { read: number; withConsultant: number; shape: string } }
 export interface TfContact { contact: string; type: string | null }
-export interface TfCustomer { id: string; name: string; status: string | null }
+export interface TfCustomer { id: string; name: string; status: string | null; /** Consultor do cadastro (só no detalhe /customers/{id}). */ consultant?: TfPerson | null }
 export interface TfEmployee { id: string; name: string; types: string[] }
 /** Ligação do CRM da Tecnofit. `done` = concluída; `deadline` = data agendada; `doneAt` = quando foi feita. Notas NÃO são lidas. */
 export interface TfCall { customerId: string; consultantId: string | null; consultantName: string | null; at: string | null; done: boolean; deadline: string | null; doneAt: string | null }
@@ -256,7 +286,12 @@ export class HttpTecnofit implements TecnofitApi, TecnofitAgendaApi {
   async customer(id: string) {
     const res = (await this.get(`/customers/${encodeURIComponent(id)}`)) as Record<string, unknown>;
     const r = (res?.data && !Array.isArray(res.data) ? res.data : res) as Record<string, unknown>;
-    return r?.id ? { id: str(r.id), name: str(r.name), status: r.status ? str(r.status) : null } : null;
+    if (!r?.id) return null;
+    const consultant = consultantOf(r);
+    const dc = (this.diag.customers ??= { read: 0, withConsultant: 0, shape: '' });
+    dc.read++; if (consultant) dc.withConsultant++;
+    if (!dc.shape) dc.shape = shapeOf(r);
+    return { id: str(r.id), name: str(r.name), status: r.status ? str(r.status) : null, consultant };
   }
 
   async checkinsPage(date: string, type: 'class' | 'crossfit', page: number) {

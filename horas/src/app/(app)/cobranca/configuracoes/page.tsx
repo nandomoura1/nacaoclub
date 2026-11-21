@@ -5,7 +5,8 @@ import { Card, PageHeader } from '@/components/ui/card';
 import { formatDateBR } from '@/domain/dates';
 import { can } from '@/server/auth/authz';
 import { requirePrincipal } from '@/server/auth/session';
-import { crmAgents, listConsultants, syncOverview } from '@/server/services/crm-service';
+import { crmAgents, crmLeader, listConsultants, syncOverview } from '@/server/services/crm-service';
+import { LeaderPicker } from './LeaderPicker';
 import { ConsultantLinks } from './ConsultantLinks';
 import { SyncButton } from './SyncButton';
 import { WebhookPanel } from './WebhookPanel';
@@ -24,7 +25,7 @@ const at = (iso: string | null) => (iso ? new Date(iso).toLocaleString('pt-BR', 
 export default async function Page() {
   const principal = await requirePrincipal();
   if (!can(principal, 'crm.admin')) redirect('/cobranca');
-  const [sync, consultants, agents, hooks] = await Promise.all([syncOverview(principal), listConsultants(principal), crmAgents(principal), webhookOverview(principal)]);
+  const [sync, consultants, agents, hooks, leader] = await Promise.all([syncOverview(principal), listConsultants(principal), crmAgents(principal), webhookOverview(principal), crmLeader(principal)]);
   const c = sync.config;
   return (
     <>
@@ -73,10 +74,20 @@ export default async function Page() {
         <WebhookPanel o={hooks} />
       </Card>
 
+      <Card className="mb-4 p-4">
+        <h2 className="mb-1 font-semibold text-tinta">Líder Comercial</h2>
+        <p className="mb-3 text-xs text-tinta-suave">
+          Fica com as cobranças de <strong>mais de 30 dias de atraso</strong> (os casos e as tarefas passam para ele na sincronização). Até 30 dias, a cobrança é do
+          consultor do aluno. Caso redistribuído à mão pelo líder não muda mais sozinho.
+        </p>
+        <LeaderPicker current={leader} agents={agents} />
+      </Card>
+
       <Card className="p-4">
         <h2 className="mb-1 font-semibold text-tinta">Consultores da Tecnofit ↔ usuários</h2>
         <p className="mb-3 text-xs text-tinta-suave">
-          O responsável por cada caso é o consultor do aluno na Tecnofit (o da ligação de CRM mais recente). Vincule cada consultor ao usuário dele aqui —
+          O responsável por cada caso é o <strong>Consultor do cadastro do aluno na Tecnofit</strong> (Cadastro → Responsabilidade → Consultor; relido a cada 7 dias).
+          Cobrança com <strong>mais de 30 dias de atraso</strong> vai para o Líder Comercial (abaixo). Vincule cada consultor ao usuário dele aqui —
           sempre escolhendo a pessoa, nunca pelo nome. Aluno sem consultor vinculado cai em &quot;Sem responsável&quot; e o líder distribui.
           Só aparecem na lista usuários com o perfil CRM / Cobrança ou Líder de CRM.
         </p>

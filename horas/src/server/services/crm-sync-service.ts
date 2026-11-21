@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/server/db';
 import { audit } from '@/server/audit';
 import { addDays, toUtc, fromUtc, type IsoDate } from '@/domain/dates';
-import { isBlockedStatus, isCollectible, isoFromApi, money, overdueValue, pickMobile, type DebtIn } from '@/domain/cobranca';
+import { caseOwnerTarget, isBlockedStatus, isCollectible, isoFromApi, money, overdueValue, pickMobile, type DebtIn } from '@/domain/cobranca';
 import { tecnofitApi, type TecnofitApi, type TfCustomerSale, type TfPerson } from '@/server/tecnofit/client';
 import { generateTasks } from './crm-task-service';
 
@@ -24,12 +24,14 @@ const CALLS_LOOKBACK_DAYS = 90;
 /** Retornos agendados (promessas) até 60 dias à frente. */
 const CALLS_AHEAD_DAYS = 60;
 const CONTACTS_REFRESH_DAYS = 7;
+/** Consultor do cadastro do aluno é relido a cada 7 dias (a Tecnofit não avisa troca de consultor). */
+const CONSULTANT_REFRESH_DAYS = 7;
 /** LGPD: aluno sem débito nem caso há mais de 90 dias sai do espelho. */
 const RETENTION_DAYS = 90;
 const SAVE_EVERY = 10;
 
 interface Pending { id: string; name: string; status: string | null; consultant: string | null; lastCallDone?: string | null; nextCall?: string | null }
-interface Stats { candidates?: number; processed?: number; casesOpened?: number; casesResolved?: number; debtsPaid?: number; consultants?: number; purged?: number; renewalsChecked?: number; warning?: string; tasksCreated?: number; tasksDone?: number; salesRead?: number; salesWithSeller?: number; salesShape?: string; errors?: { customer: string; error: string }[] }
+interface Stats { candidates?: number; processed?: number; casesOpened?: number; casesResolved?: number; debtsPaid?: number; consultants?: number; purged?: number; renewalsChecked?: number; warning?: string; tasksCreated?: number; tasksDone?: number; salesRead?: number; salesWithSeller?: number; salesShape?: string; customersRead?: number; customersWithConsultant?: number; customersShape?: string; reassigned?: number; errors?: { customer: string; error: string }[] }
 
 const SYSTEM = { actorId: null, userAgent: 'sincronizacao-tecnofit' };
 const d = (iso: IsoDate) => toUtc(iso);
@@ -119,6 +121,22 @@ function sellerOfOpenSale(sales: TfCustomerSale[], openSaleIds: string[]): TfPer
   return withSeller[0]?.seller ?? null;
 }
 
+/** Líder Comercial (Configurações): fica com as cobranças de mais de 30 dias de atraso. Usuário inativo = nenhum. */
+async function commercialLeader(): Promise<string | null> {
+  const id = (await prisma.appSettings.findUnique({ where: { id: 1 }, select: { crmLeaderUserId: true } }))?.crmLeaderUserId ?? null;
+  if (!id) return null;
+  return (await prisma.user.findFirst({ where: { id, active: true }, select: { id: true } }))?.id ?? null;
+}
+
+/** Troca o responsável do caso e leva junto as tarefas abertas (auditado, sem dado de aluno). */
+async function reassign(tx: Prisma.TransactionClient, caseId: string, from: string | null, to: string, why: string, customerTecId: string) {
+  await tx.crmCase.update({ where: { id: caseId }, data: { ownerId: to } });
+  await tx.crmTask.updateMany({ where: { caseId, status: 'ABERTA' }, data: { ownerId: to } });
+  await audit(tx, SYSTEM, { action: 'crm.case_reassigned', entityType: 'crm_case', entityId: caseId, before: { ownerId: from }, after: { ownerId: to, motivo: why }, summary: `Sincronização Tecnofit definiu o responsável do caso (aluno Tecnofit ${customerTecId}): ${why}` });
+  reassignedCount++;
+}
+let reassignedCount = 0;
+
 async function ownerFor(consultantTecId: string | null): Promise<string | null> {
   if (!consultantTecId) return null;
   const c = await prisma.crmConsultant.findUnique({ where: { tecnofitId: consultantTecId } });
@@ -156,11 +174,25 @@ async function processCustomer(api: TecnofitApi, p: Pending, today: IsoDate): Pr
     contactsCheckedOn = d(today);
   }
 
-  // Responsável (decisão 13/11): consultor da ligação mais recente; sem ligação, o da venda em aberto mais recente.
+  // Responsável (decisão 21/11): consultor do CADASTRO do aluno na Tecnofit ("Responsabilidade → Consultor");
+  // sem ele, o da ligação de CRM mais recente; sem ligação, o vendedor da venda em aberto.
+  const consChecked = iso(existing?.consultantCheckedOn ?? null);
+  const needConsultant = (debts.length > 0 || isBlockedStatus(p.status)) && (!consChecked || consChecked < addDays(today, -CONSULTANT_REFRESH_DAYS));
+  let consultantCheckedOn = existing?.consultantCheckedOn ?? null;
+  let fromCustomer: TfPerson | null = null;
+  if (needConsultant) {
+    fromCustomer = (await api.customer(p.id).catch(() => null))?.consultant ?? null;
+    consultantCheckedOn = d(today);
+  }
   const seller = sellerOfOpenSale(sales, debts.map((x) => x.saleId));
-  if (seller) await prisma.crmConsultant.upsert({ where: { tecnofitId: seller.id }, create: { tecnofitId: seller.id, name: seller.name || `Funcionário Tecnofit ${seller.id}` }, update: {} });
-  const consultantTec = p.consultant ?? seller?.id ?? existing?.consultantTecId ?? null;
-  const owner = await ownerFor(consultantTec);
+  for (const x of [fromCustomer, seller]) if (x) await prisma.crmConsultant.upsert({ where: { tecnofitId: x.id }, create: { tecnofitId: x.id, name: x.name || `Funcionário Tecnofit ${x.id}` }, update: {} });
+  // Cadastro lido há menos de 7 dias: o consultor guardado é o dele.
+  const fresh = !needConsultant && !!consChecked && !!existing?.consultantTecId;
+  const consultantTec = fromCustomer?.id ?? (fresh ? existing!.consultantTecId : null) ?? p.consultant ?? seller?.id ?? existing?.consultantTecId ?? null;
+  const consultantUser = await ownerFor(consultantTec);
+  const leader = await commercialLeader();
+  const target = (kind: 'COBRANCA' | 'PENDENCIA', oldest: Date | null, cur: { ownerId: string | null; ownerManual: boolean } | null) =>
+    caseOwnerTarget({ kind, oldestDue: iso(oldest), today, consultantUserId: consultantUser, leaderUserId: leader, currentOwnerId: cur?.ownerId ?? null, manual: cur?.ownerManual ?? false });
   // Ligações: mantém a última concluída conhecida (a janela de 90 dias pode não alcançá-la mais).
   const prevDone = iso(existing?.lastCallDoneOn ?? null);
   const doneDay = [p.lastCallDone ?? null, prevDone].filter((x): x is string => !!x).sort().at(-1) ?? null;
@@ -170,8 +202,8 @@ async function processCustomer(api: TecnofitApi, p: Pending, today: IsoDate): Pr
   await prisma.$transaction(async (tx) => {
     const cust = await tx.tecCustomer.upsert({
       where: { tecnofitId: p.id },
-      create: { tecnofitId: p.id, name: p.name || 'Aluno sem nome', status: p.status, mobile, consultantTecId: consultantTec, contactsCheckedOn, lastCallDoneOn: calls.lastDone, nextCallOn: calls.next, lastSeenOn: d(today) },
-      update: { name: p.name || undefined, status: p.status, mobile, consultantTecId: consultantTec ?? undefined, contactsCheckedOn, lastCallDoneOn: calls.lastDone, nextCallOn: calls.next, lastSeenOn: d(today) },
+      create: { tecnofitId: p.id, name: p.name || 'Aluno sem nome', status: p.status, mobile, consultantTecId: consultantTec, consultantCheckedOn, contactsCheckedOn, lastCallDoneOn: calls.lastDone, nextCallOn: calls.next, lastSeenOn: d(today) },
+      update: { name: p.name || undefined, status: p.status, mobile, consultantTecId: consultantTec ?? undefined, consultantCheckedOn, contactsCheckedOn, lastCallDoneOn: calls.lastDone, nextCallOn: calls.next, lastSeenOn: d(today) },
     });
 
     // Débitos: atualiza os que seguem em aberto; os que sumiram viram QUITADO.
@@ -205,8 +237,11 @@ async function processCustomer(api: TecnofitApi, p: Pending, today: IsoDate): Pr
       const openedOn = cob ? iso(cob.openedOn)! : today;
       const v = await caseValues(tx, cust.id, openedOn);
       if (cob) {
-        await tx.crmCase.update({ where: { id: cob.id }, data: { ...v, oldestDue, ...(cob.ownerId ? {} : { ownerId: owner }) } });
+        await tx.crmCase.update({ where: { id: cob.id }, data: { ...v, oldestDue } });
+        const to = target('COBRANCA', oldestDue, cob);
+        if (to) await reassign(tx, cob.id, cob.ownerId, to, leader === to ? 'mais de 30 dias de atraso: Líder Comercial' : 'consultor do cadastro na Tecnofit', p.id);
       } else {
+        const owner = target('COBRANCA', oldestDue, null);
         const created = await tx.crmCase.create({ data: { customerId: cust.id, kind: 'COBRANCA', ownerId: owner, openedOn: d(today), ...v, oldestDue } });
         await audit(tx, SYSTEM, { action: 'crm.case_opened', entityType: 'crm_case', entityId: created.id, after: { kind: 'COBRANCA', openValue: num(v.openValue), ownerId: owner }, summary: `Sincronização Tecnofit abriu caso de cobrança (aluno Tecnofit ${p.id})` });
         opened++;
@@ -222,6 +257,7 @@ async function processCustomer(api: TecnofitApi, p: Pending, today: IsoDate): Pr
     const pen = await tx.crmCase.findFirst({ where: { customerId: cust.id, kind: 'PENDENCIA', status: 'ABERTO' } });
     const pendencia = isBlockedStatus(p.status) && !open.length;
     if (pendencia && !pen) {
+      const owner = target('PENDENCIA', null, null);
       const created = await tx.crmCase.create({ data: { customerId: cust.id, kind: 'PENDENCIA', ownerId: owner, openedOn: d(today) } });
       await audit(tx, SYSTEM, { action: 'crm.case_opened', entityType: 'crm_case', entityId: created.id, after: { kind: 'PENDENCIA', status: p.status, ownerId: owner }, summary: `Sincronização Tecnofit abriu pendência na recepção (aluno Tecnofit ${p.id})` });
       opened++;
@@ -230,8 +266,9 @@ async function processCustomer(api: TecnofitApi, p: Pending, today: IsoDate): Pr
       await tx.crmCase.update({ where: { id: pen.id }, data: { status: 'RESOLVIDO', closedOn: d(today), closeReason: reason } });
       await audit(tx, SYSTEM, { action: 'crm.case_resolved', entityType: 'crm_case', entityId: pen.id, summary: `Sincronização Tecnofit resolveu pendência (aluno Tecnofit ${p.id}): ${reason}` });
       resolved++;
-    } else if (pen && !pen.ownerId && owner) {
-      await tx.crmCase.update({ where: { id: pen.id }, data: { ownerId: owner } });
+    } else if (pen) {
+      const to = target('PENDENCIA', null, pen);
+      if (to) await reassign(tx, pen.id, pen.ownerId, to, 'consultor do cadastro na Tecnofit', p.id);
     }
   });
   return { opened, resolved, paid };
@@ -445,6 +482,16 @@ async function runLocked(today: IsoDate, budget: number, opts: { force?: boolean
   }
 
   // Vendas lidas e quantas trazem vendedor (sem dado de aluno): mostra se o responsável pela venda está chegando.
+  // Cadastro do aluno lido e quantos trazem consultor (sem dado de aluno): mostra se o campo "Consultor" está chegando.
+  const dc = api.diag?.customers;
+  if (dc) {
+    stats.customersRead = (stats.customersRead ?? 0) + dc.read;
+    stats.customersWithConsultant = (stats.customersWithConsultant ?? 0) + dc.withConsultant;
+    if (!stats.customersShape && dc.shape) stats.customersShape = dc.shape.slice(0, 400);
+    if (api.diag) api.diag.customers = undefined;
+  }
+  stats.reassigned = (stats.reassigned ?? 0) + reassignedCount;
+  reassignedCount = 0;
   const ds = api.diag?.sales;
   if (ds) {
     stats.salesRead = (stats.salesRead ?? 0) + ds.total;
@@ -452,7 +499,12 @@ async function runLocked(today: IsoDate, budget: number, opts: { force?: boolean
     if (!stats.salesShape && ds.shape) stats.salesShape = ds.shape.slice(0, 300);
   }
   const done = pending.length === 0;
-  if (done && (stats.salesRead ?? 0) > 0 && !stats.salesWithSeller) {
+  if (done && (stats.customersRead ?? 0) > 0) {
+    // O consultor do cadastro é a fonte principal: com ele chegando, os avisos de ligação/venda sem consultor não importam.
+    if (stats.customersWithConsultant) stats.warning = undefined;
+    else stats.warning = `O cadastro do aluno veio sem o campo Consultor (${stats.customersRead} lidos; campos: ${(stats.customersShape ?? '').slice(0, 300)}). ${stats.warning ?? ''}`.trim().slice(0, 600);
+  }
+  if (done && (stats.salesRead ?? 0) > 0 && !stats.salesWithSeller && !stats.customersWithConsultant) {
     stats.warning = `${stats.warning ? `${stats.warning} ` : ''}As vendas também vieram sem vendedor/consultor (campos: ${(stats.salesShape ?? '').slice(0, 200)}): sem responsável automático.`.slice(0, 600);
   }
   if (done) {

@@ -36,6 +36,8 @@ model AppSettings {
   doubleHoursFrom   DateTime? @map("double_hours_from") @db.Date
   /// Funcionamento geral da Nação (referência para os setores sem horário próprio): { "1": [[360, 1320]], …, "F": […] }.
   nacaoHours        Json      @default("{}") @map("nacao_hours")
+  /// Cobrança e CRM: Líder Comercial — fica com as cobranças de mais de 30 dias de atraso.
+  crmLeaderUserId   String?   @map("crm_leader_user_id") @db.Uuid
   updatedAt         DateTime  @updatedAt @map("updated_at")
 
   @@map("app_settings")
@@ -2930,6 +2932,8 @@ model TecCustomer {
   mobile            String?
   /// Consultor da Tecnofit (id do funcionário), vindo das ligações do CRM.
   consultantTecId   String?   @map("consultant_tec_id")
+  /// Último dia em que o consultor foi lido do cadastro do aluno (refaz a cada 7 dias).
+  consultantCheckedOn DateTime? @map("consultant_checked_on") @db.Date
   contactsCheckedOn DateTime? @map("contacts_checked_on") @db.Date
   /// Última ligação de CRM CONCLUÍDA na Tecnofit (dá baixa nas tarefas). Notas da ligação não são guardadas.
   lastCallDoneOn    DateTime? @map("last_call_done_on") @db.Date
@@ -3000,6 +3004,8 @@ model CrmCase {
   status         String    @default("ABERTO")
   /// Responsável (usuário). null = "Sem responsável" (o líder distribui).
   ownerId        String?   @map("owner_id") @db.Uuid
+  /// Redistribuído à mão pelo líder: a sincronização não troca mais o responsável.
+  ownerManual Boolean @default(false) @map("owner_manual")
   openedOn       DateTime  @map("opened_on") @db.Date
   closedOn       DateTime? @map("closed_on") @db.Date
   closeReason    String?   @map("close_reason")

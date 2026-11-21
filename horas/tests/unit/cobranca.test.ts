@@ -200,3 +200,30 @@ describe('Cliente HTTP da Tecnofit', () => {
     expect(isOldDebt(null, today)).toBe(false);
   });
 });
+
+import { caseOwnerTarget } from '@/domain/cobranca';
+import { consultantOf } from '@/server/tecnofit/client';
+
+describe('Responsável do caso (decisão 21/11)', () => {
+  const base = { today: '2026-11-21', consultantUserId: 'deb', leaderUserId: 'lider', currentOwnerId: null, manual: false } as const;
+  it('até 30 dias = consultor do cadastro; mais de 30 = Líder Comercial; manual não muda', () => {
+    expect(caseOwnerTarget({ ...base, kind: 'COBRANCA', oldestDue: '2026-11-01' })).toBe('deb'); // 20 dias
+    expect(caseOwnerTarget({ ...base, kind: 'COBRANCA', oldestDue: '2026-10-21' })).toBe('lider'); // 31 dias
+  });
+  it('limites e casos sem mudança', () => {
+    expect(caseOwnerTarget({ ...base, kind: 'COBRANCA', oldestDue: '2026-10-22' })).toBe('deb'); // 30 dias exatos
+    expect(caseOwnerTarget({ ...base, kind: 'COBRANCA', oldestDue: '2026-10-20' })).toBe('lider'); // 32 dias
+    expect(caseOwnerTarget({ ...base, kind: 'PENDENCIA', oldestDue: null })).toBe('deb');
+    expect(caseOwnerTarget({ ...base, kind: 'COBRANCA', oldestDue: '2026-10-01', leaderUserId: null })).toBe('deb'); // sem líder definido
+    expect(caseOwnerTarget({ ...base, kind: 'COBRANCA', oldestDue: '2026-11-01', currentOwnerId: 'deb' })).toBeNull(); // já é dela
+    expect(caseOwnerTarget({ ...base, kind: 'COBRANCA', oldestDue: '2026-10-01', currentOwnerId: 'outra', manual: true })).toBeNull(); // redistribuído à mão
+    expect(caseOwnerTarget({ ...base, kind: 'COBRANCA', oldestDue: '2026-11-01', consultantUserId: null })).toBeNull(); // consultor sem vínculo: mantém
+  });
+  it('acha o consultor no cadastro em vários formatos', () => {
+    expect(consultantOf({ id: 1, consultant: { id: 30111552, name: 'DEBORA' } })).toEqual({ id: '30111552', name: 'DEBORA' });
+    expect(consultantOf({ id: 1, consultantId: 30111552 })).toEqual({ id: '30111552', name: null });
+    expect(consultantOf({ id: 1, responsibility: { consultant: { id: 7, name: 'X' } } })).toEqual({ id: '7', name: 'X' });
+    expect(consultantOf({ id: 1, responsibleEmployee: { id: 9, name: 'Y' } })).toEqual({ id: '9', name: 'Y' });
+    expect(consultantOf({ id: 1, name: 'Aluno', status: 'active' })).toBeNull();
+  });
+});

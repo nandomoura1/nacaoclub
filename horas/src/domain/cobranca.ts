@@ -57,6 +57,24 @@ export const kindAllowed = (kind: string, allowed: readonly string[]) =>
   kind === 'MANUAL' || (!LEADER_ONLY_KINDS.includes(kind) && (allowed.length ? allowed.includes(kind) : !OPT_IN_KINDS.includes(kind)));
 
 /** Parcela vencida há mais que isso: sai da régua do consultor e vai para a lista do líder (decisão 13/11). */
+/** Atraso a partir do qual a cobrança passa ao Líder Comercial (decisão 21/11). */
+export const LEADER_AFTER_DAYS = 30;
+
+/**
+ * Responsável do caso (decisão 21/11): consultor do cadastro do aluno na Tecnofit (vinculado ao usuário);
+ * cobrança com mais de 30 dias de atraso vai para o Líder Comercial. Redistribuído à mão = fica com quem o
+ * líder escolheu. `null` = sem mudança (mantém o atual).
+ */
+export function caseOwnerTarget(o: {
+  kind: 'COBRANCA' | 'PENDENCIA'; oldestDue: IsoDate | null; today: IsoDate;
+  consultantUserId: string | null; leaderUserId: string | null; currentOwnerId: string | null; manual: boolean;
+}): string | null {
+  if (o.manual && o.currentOwnerId) return null;
+  const late = o.kind === 'COBRANCA' && !!o.oldestDue && daysLate(o.oldestDue, o.today) > LEADER_AFTER_DAYS;
+  const target = late && o.leaderUserId ? o.leaderUserId : o.consultantUserId;
+  return target && target !== o.currentOwnerId ? target : null;
+}
+
 export const OLD_DEBT_DAYS = 180;
 export const isOldDebt = (oldestDue: IsoDate | null, today: IsoDate) => !!oldestDue && daysLate(oldestDue, today) > OLD_DEBT_DAYS;
 

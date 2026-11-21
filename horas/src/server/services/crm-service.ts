@@ -124,7 +124,8 @@ export async function assignCases(principal: P | null, input: unknown, meta: Req
   return prisma.$transaction(async (tx) => {
     const cases = await tx.crmCase.findMany({ where: { id: { in: caseIds }, status: 'ABERTO' }, select: { id: true, ownerId: true } });
     if (!cases.length) throw new NotFoundError('Nenhum caso aberto encontrado.');
-    await tx.crmCase.updateMany({ where: { id: { in: cases.map((c) => c.id) } }, data: { ownerId } });
+    // Redistribuído à mão: a sincronização não troca mais o responsável ("Sem responsável" devolve ao automático).
+    await tx.crmCase.updateMany({ where: { id: { in: cases.map((c) => c.id) } }, data: { ownerId, ownerManual: ownerId !== null } });
     // As tarefas abertas desses casos vão junto para o novo responsável.
     await tx.crmTask.updateMany({ where: { caseId: { in: cases.map((c) => c.id) }, status: 'ABERTA' }, data: { ownerId } });
     const who = ownerId ? (await tx.user.findUnique({ where: { id: ownerId }, select: { name: true } }))?.name : null;
@@ -140,6 +141,25 @@ export async function assignCases(principal: P | null, input: unknown, meta: Req
 }
 
 // ── Configurações (crm.admin) ─────────────────────────────────
+
+/** Líder Comercial atual (fica com as cobranças de mais de 30 dias de atraso). */
+export async function crmLeader(principal: P | null) {
+  assertCan(principal, 'crm.admin');
+  return (await prisma.appSettings.findUnique({ where: { id: 1 }, select: { crmLeaderUserId: true } }))?.crmLeaderUserId ?? null;
+}
+
+/** Define o Líder Comercial. Vale na próxima sincronização (casos redistribuídos à mão não mudam). */
+export async function setCrmLeader(principal: P | null, userId: string | null, meta: RequestMeta) {
+  assertCan(principal, 'crm.admin');
+  const v = parse(z.string().uuid().nullable(), userId);
+  if (v && !(await crmAgents(principal)).some((u) => u.id === v)) throw new AppError('Essa pessoa não está no time de CRM (precisa do perfil CRM / Cobrança ou Líder de CRM).');
+  await prisma.$transaction(async (tx) => {
+    const before = (await tx.appSettings.findUnique({ where: { id: 1 }, select: { crmLeaderUserId: true } }))?.crmLeaderUserId ?? null;
+    await tx.appSettings.upsert({ where: { id: 1 }, create: { id: 1, crmLeaderUserId: v }, update: { crmLeaderUserId: v } });
+    const who = v ? (await tx.user.findUnique({ where: { id: v }, select: { name: true } }))?.name : null;
+    await audit(tx, { actorId: principal.id, ...meta }, { action: 'crm.leader_set', entityType: 'app_settings', entityId: '1', before: { crmLeaderUserId: before }, after: { crmLeaderUserId: v }, summary: `${principal.name} definiu o Líder Comercial do CRM: ${who ?? 'ninguém'}` });
+  });
+}
 
 export async function listConsultants(principal: P | null) {
   assertCan(principal, 'crm.admin');

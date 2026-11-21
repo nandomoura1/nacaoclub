@@ -1,6 +1,6 @@
 import { addDays } from '@/domain/dates';
 import { todayIso } from '@/lib/today';
-import type { TfContract, TecnofitAgendaApi, TecnofitApi, TfCall, TfCheckin, TfClass, TfContact, TfCustomer, TfCustomerSale, TfEmployee, TfScheduleEvent, TfUnreceivedSale } from './client';
+import type { TfContract, TecnofitAgendaApi, TecnofitApi, TfCall, TfDiag, TfCheckin, TfClass, TfContact, TfCustomer, TfCustomerSale, TfEmployee, TfScheduleEvent, TfUnreceivedSale } from './client';
 
 /**
  * Tecnofit simulada (TECNOFIT_FAKE=1 e testes): mesmos formatos da API real,
@@ -55,6 +55,8 @@ export function sampleData(today = todayIso()): FakeData {
 
 export class FakeTecnofit implements TecnofitApi, TecnofitAgendaApi {
   constructor(readonly data: FakeData = sampleData()) {}
+  /** Diagnóstico como na real (só contagens e nomes de campos). */
+  diag: TfDiag = {};
 
   private find(id: string) { return this.data.customers.find((c) => c.id === id); }
 
@@ -68,7 +70,10 @@ export class FakeTecnofit implements TecnofitApi, TecnofitAgendaApi {
   }
   async customer(id: string) {
     const c = this.find(id);
-    return c ? { id: c.id, name: c.name, status: c.status } : null;
+    if (!c) return null;
+    const dc = (this.diag.customers ??= { read: 0, withConsultant: 0, shape: 'id,name,status,consultant{id,name}' });
+    dc.read++; if (c.consultant) dc.withConsultant++;
+    return { id: c.id, name: c.name, status: c.status, consultant: c.consultant ?? null };
   }
   async customerSales(id: string, saleStartDate: string) {
     return (this.find(id)?.sales ?? []).filter((s) => String(s.saleDate) >= saleStartDate);
