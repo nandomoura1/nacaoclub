@@ -60,7 +60,7 @@ async function prepare(api: TecnofitApi, today: IsoDate): Promise<{ pending: Pen
   // Consultores
   const consultants = await api.consultants();
   for (const c of consultants) {
-    await prisma.crmConsultant.upsert({ where: { tecnofitId: c.id }, create: { tecnofitId: c.id, name: c.name }, update: { name: c.name, active: true } });
+    await prisma.crmConsultant.upsert({ where: { tecnofitId: c.id }, create: { tecnofitId: c.id, name: c.name }, update: { name: c.name } }); // "Não é mais consultor(a)" (Configurações) não volta sozinho
   }
 
   // Consultor de cada aluno = o da ligação de CRM mais recente.
@@ -142,6 +142,12 @@ async function ownerFor(consultantTecId: string | null): Promise<string | null> 
   const c = await prisma.crmConsultant.findUnique({ where: { tecnofitId: consultantTecId } });
   return c?.active && c.userId ? c.userId : null;
 }
+/** Consultor marcado como "não é mais consultor(a)" em Configurações: o aluno vai para o líder designar outro. */
+async function consultantGone(consultantTecId: string | null): Promise<boolean> {
+  if (!consultantTecId) return false;
+  const c = await prisma.crmConsultant.findUnique({ where: { tecnofitId: consultantTecId }, select: { active: true } });
+  return !!c && !c.active;
+}
 
 /**
  * Valores do caso a partir dos débitos que estiveram abertos desde a abertura:
@@ -190,9 +196,10 @@ async function processCustomer(api: TecnofitApi, p: Pending, today: IsoDate): Pr
   const fresh = !needConsultant && !!consChecked && !!existing?.consultantTecId;
   const consultantTec = fromCustomer?.id ?? (fresh ? existing!.consultantTecId : null) ?? p.consultant ?? seller?.id ?? existing?.consultantTecId ?? null;
   const consultantUser = await ownerFor(consultantTec);
+  const gone = await consultantGone(consultantTec);
   const leader = await commercialLeader();
   const target = (kind: 'COBRANCA' | 'PENDENCIA', oldest: Date | null, cur: { ownerId: string | null; ownerManual: boolean } | null) =>
-    caseOwnerTarget({ kind, oldestDue: iso(oldest), today, consultantUserId: consultantUser, leaderUserId: leader, currentOwnerId: cur?.ownerId ?? null, manual: cur?.ownerManual ?? false });
+    caseOwnerTarget({ kind, oldestDue: iso(oldest), today, consultantUserId: consultantUser, leaderUserId: leader, currentOwnerId: cur?.ownerId ?? null, manual: cur?.ownerManual ?? false, consultantGone: gone });
   // Ligações: mantém a última concluída conhecida (a janela de 90 dias pode não alcançá-la mais).
   const prevDone = iso(existing?.lastCallDoneOn ?? null);
   const doneDay = [p.lastCallDone ?? null, prevDone].filter((x): x is string => !!x).sort().at(-1) ?? null;
@@ -239,7 +246,7 @@ async function processCustomer(api: TecnofitApi, p: Pending, today: IsoDate): Pr
       if (cob) {
         await tx.crmCase.update({ where: { id: cob.id }, data: { ...v, oldestDue } });
         const to = target('COBRANCA', oldestDue, cob);
-        if (to) await reassign(tx, cob.id, cob.ownerId, to, leader === to ? 'mais de 30 dias de atraso: Líder Comercial' : 'consultor do cadastro na Tecnofit', p.id);
+        if (to) await reassign(tx, cob.id, cob.ownerId, to, leader === to ? (gone ? 'consultor não está mais na Nação: Líder Comercial designa' : 'mais de 30 dias de atraso: Líder Comercial') : 'consultor do cadastro na Tecnofit', p.id);
       } else {
         const owner = target('COBRANCA', oldestDue, null);
         const created = await tx.crmCase.create({ data: { customerId: cust.id, kind: 'COBRANCA', ownerId: owner, openedOn: d(today), ...v, oldestDue } });
@@ -268,7 +275,7 @@ async function processCustomer(api: TecnofitApi, p: Pending, today: IsoDate): Pr
       resolved++;
     } else if (pen) {
       const to = target('PENDENCIA', null, pen);
-      if (to) await reassign(tx, pen.id, pen.ownerId, to, 'consultor do cadastro na Tecnofit', p.id);
+      if (to) await reassign(tx, pen.id, pen.ownerId, to, gone && leader === to ? 'consultor não está mais na Nação: Líder Comercial designa' : 'consultor do cadastro na Tecnofit', p.id);
     }
   });
   return { opened, resolved, paid };

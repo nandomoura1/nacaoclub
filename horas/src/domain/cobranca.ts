@@ -62,16 +62,18 @@ export const LEADER_AFTER_DAYS = 30;
 
 /**
  * Responsável do caso (decisão 21/11): consultor do cadastro do aluno na Tecnofit (vinculado ao usuário);
- * cobrança com mais de 30 dias de atraso vai para o Líder Comercial. Redistribuído à mão = fica com quem o
+ * cobrança com mais de 30 dias de atraso vai para o Líder Comercial, e aluno de quem NÃO é mais consultor
+ * (`consultantGone`) também — o líder designa o novo consultor. Redistribuído à mão = fica com quem o
  * líder escolheu. `null` = sem mudança (mantém o atual).
  */
 export function caseOwnerTarget(o: {
   kind: 'COBRANCA' | 'PENDENCIA'; oldestDue: IsoDate | null; today: IsoDate;
   consultantUserId: string | null; leaderUserId: string | null; currentOwnerId: string | null; manual: boolean;
+  consultantGone?: boolean;
 }): string | null {
   if (o.manual && o.currentOwnerId) return null;
   const late = o.kind === 'COBRANCA' && !!o.oldestDue && daysLate(o.oldestDue, o.today) > LEADER_AFTER_DAYS;
-  const target = late && o.leaderUserId ? o.leaderUserId : o.consultantUserId;
+  const target = (late || o.consultantGone) && o.leaderUserId ? o.leaderUserId : o.consultantGone ? null : o.consultantUserId;
   return target && target !== o.currentOwnerId ? target : null;
 }
 

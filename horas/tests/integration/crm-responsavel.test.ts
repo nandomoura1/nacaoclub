@@ -6,7 +6,7 @@ import { todayIso } from '@/lib/today';
 import { setFakeTecnofit } from '@/server/tecnofit/client';
 import { FakeTecnofit, type FakeData } from '@/server/tecnofit/fake';
 import { runTecnofitSync } from '@/server/services/crm-sync-service';
-import { assignCases, linkConsultant, listConsultants, setCrmLeader } from '@/server/services/crm-service';
+import { assignCases, linkConsultant, listConsultants, setConsultantActive, setCrmLeader } from '@/server/services/crm-service';
 import { META, ensureCatalog, hasDb, makeUser, wipeCrm } from './helpers';
 
 /**
@@ -85,6 +85,16 @@ describe.skipIf(!hasDb)('Cobrança e CRM — responsável pelo consultor do cada
     await prisma.tecCustomer.update({ where: { tecnofitId: '801' }, data: { consultantCheckedOn: null } });
     await runTecnofitSync(today, { force: true });
     expect((await caseOf('801')).ownerId).toBe(agent.principal.id);
-    expect(await prisma.auditLog.count({ where: { action: 'crm.case_reassigned' } })).toBeGreaterThanOrEqual(1); // Débora → Igor (o de 45 dias já nasce com o líder)
+    expect(await prisma.auditLog.count({ where: { action: 'crm.case_reassigned' } })).toBeGreaterThanOrEqual(1);
+
+    // Débora sai da Nação: os alunos dela (pendência do 803) vão para o Líder Comercial, agora e nas próximas rodadas.
+    const deb = (await listConsultants(admin.principal)).find((c) => c.tecnofitId === '7001')!;
+    await expect(setConsultantActive(agent.principal, { consultantId: deb.id, active: false }, META)).rejects.toBeInstanceOf(AuthorizationError);
+    expect(await setConsultantActive(admin.principal, { consultantId: deb.id, active: false }, META)).toBe(1);
+    expect((await caseOf('803', 'PENDENCIA')).ownerId).toBe(leader.principal.id);
+    await prisma.tecCustomer.update({ where: { tecnofitId: '803' }, data: { consultantCheckedOn: null } });
+    await runTecnofitSync(today, { force: true });
+    expect((await caseOf('803', 'PENDENCIA')).ownerId).toBe(leader.principal.id);
+    expect((await prisma.crmConsultant.findUniqueOrThrow({ where: { tecnofitId: '7001' } })).active).toBe(false); // a sincronização não reativa
   });
 });

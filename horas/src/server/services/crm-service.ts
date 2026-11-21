@@ -209,6 +209,33 @@ export async function linkConsultant(principal: P | null, input: unknown, meta: 
   });
 }
 
+/**
+ * "Não é mais consultor(a)" (ou reativar). Desativado: os casos abertos dos alunos dele (não redistribuídos à mão)
+ * vão para o Líder Comercial designar outro consultor; a sincronização mantém isso enquanto a Tecnofit não trocar.
+ */
+export async function setConsultantActive(principal: P | null, input: unknown, meta: RequestMeta) {
+  assertCan(principal, 'crm.admin');
+  const { consultantId, active } = parse(z.object({ consultantId: z.string().uuid(), active: z.boolean() }), input);
+  return prisma.$transaction(async (tx) => {
+    const c = await tx.crmConsultant.findUnique({ where: { id: consultantId } });
+    if (!c) throw new NotFoundError('Consultor não encontrado.');
+    await tx.crmConsultant.update({ where: { id: c.id }, data: { active } });
+    let moved = 0;
+    const leaderId = (await tx.appSettings.findUnique({ where: { id: 1 }, select: { crmLeaderUserId: true } }))?.crmLeaderUserId ?? null;
+    if (!active && leaderId) {
+      const ids = (await tx.crmCase.findMany({ where: { status: 'ABERTO', ownerManual: false, customer: { consultantTecId: c.tecnofitId } }, select: { id: true } })).map((x) => x.id);
+      moved = (await tx.crmCase.updateMany({ where: { id: { in: ids } }, data: { ownerId: leaderId } })).count;
+      await tx.crmTask.updateMany({ where: { caseId: { in: ids }, status: 'ABERTA' }, data: { ownerId: leaderId } });
+    }
+    await audit(tx, { actorId: principal.id, ...meta }, {
+      action: active ? 'crm.consultant_reactivated' : 'crm.consultant_deactivated', entityType: 'crm_consultant', entityId: c.id,
+      before: { active: c.active }, after: { active, casesToLeader: moved },
+      summary: `${principal.name} ${active ? 'reativou' : 'marcou como "não é mais consultor(a)"'} ${c.name} (Tecnofit)${moved ? `; ${moved} caso(s) foram para o Líder Comercial` : ''}`,
+    });
+    return moved;
+  });
+}
+
 export async function syncOverview(principal: P | null) {
   assertCan(principal, 'crm.admin');
   const cfg = tecnofitConfig();

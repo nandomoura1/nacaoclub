@@ -218,6 +218,10 @@ describe('Responsável do caso (decisão 21/11)', () => {
     expect(caseOwnerTarget({ ...base, kind: 'COBRANCA', oldestDue: '2026-11-01', currentOwnerId: 'deb' })).toBeNull(); // já é dela
     expect(caseOwnerTarget({ ...base, kind: 'COBRANCA', oldestDue: '2026-10-01', currentOwnerId: 'outra', manual: true })).toBeNull(); // redistribuído à mão
     expect(caseOwnerTarget({ ...base, kind: 'COBRANCA', oldestDue: '2026-11-01', consultantUserId: null })).toBeNull(); // consultor sem vínculo: mantém
+    // Consultor que não é mais da Nação: vai para o líder (mesmo com até 30 dias); sem líder, ninguém.
+    expect(caseOwnerTarget({ ...base, kind: 'COBRANCA', oldestDue: '2026-11-15', consultantGone: true })).toBe('lider');
+    expect(caseOwnerTarget({ ...base, kind: 'PENDENCIA', oldestDue: null, consultantGone: true })).toBe('lider');
+    expect(caseOwnerTarget({ ...base, kind: 'PENDENCIA', oldestDue: null, consultantGone: true, leaderUserId: null })).toBeNull();
   });
   it('acha o consultor no cadastro em vários formatos', () => {
     expect(consultantOf({ id: 1, consultant: { id: 30111552, name: 'DEBORA' } })).toEqual({ id: '30111552', name: 'DEBORA' });

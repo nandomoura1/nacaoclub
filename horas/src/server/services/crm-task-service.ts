@@ -142,7 +142,9 @@ async function renewalTasks(today: IsoDate, customerIds?: string[]) {
     const exists = await prisma.crmTask.findFirst({ where: { customerId: c.customerId, kind: 'RENOVACAO', refDate: c.dueDate } });
     if (exists) continue;
     const consultant = c.customer.consultantTecId ? await prisma.crmConsultant.findUnique({ where: { tecnofitId: c.customer.consultantTecId } }) : null;
-    await prisma.crmTask.create({ data: { kind: 'RENOVACAO', customerId: c.customerId, ownerId: consultant?.active ? consultant.userId : null, refDate: c.dueDate, createdOn: d(today), showFrom: d(today), title: c.name } });
+    // Ex-consultor ("não é mais consultor(a)"): a renovação vai para o Líder Comercial designar.
+    const leaderId = consultant && !consultant.active ? (await prisma.appSettings.findUnique({ where: { id: 1 }, select: { crmLeaderUserId: true } }))?.crmLeaderUserId ?? null : null;
+    await prisma.crmTask.create({ data: { kind: 'RENOVACAO', customerId: c.customerId, ownerId: consultant?.active ? consultant.userId : leaderId, refDate: c.dueDate, createdOn: d(today), showFrom: d(today), title: c.name } });
     created++;
   }
   return { created, closed };

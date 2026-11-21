@@ -6,7 +6,7 @@ import { todayIso } from '@/lib/today';
 import { selfBaseUrl } from '@/lib/app-url';
 import { getPrincipal, requestMeta } from '@/server/auth/session';
 import { runAction, type ActionResult } from '@/server/action-result';
-import { assignCases, linkConsultant, setCrmLeader, syncNow } from '@/server/services/crm-service';
+import { assignCases, linkConsultant, setConsultantActive, setCrmLeader, syncNow } from '@/server/services/crm-service';
 import { registerWebhook } from '@/server/services/tecnofit-webhook-service';
 import { createManualTask, markTaskDone, removeTask, saveAgentRule, searchCustomers, snoozeTask } from '@/server/services/crm-task-service';
 
@@ -17,6 +17,9 @@ export async function assignCasesAction(caseIds: string[], ownerId: string | nul
 }
 export async function setCrmLeaderAction(userId: string | null): Promise<ActionResult> {
   return runAction(async () => { await setCrmLeader(await getPrincipal(), userId, await requestMeta()); refresh(); return undefined; }, 'Líder Comercial salvo. Vale a partir da próxima sincronização.');
+}
+export async function setConsultantActiveAction(consultantId: string, active: boolean): Promise<ActionResult<number>> {
+  return runAction(async () => { const n = await setConsultantActive(await getPrincipal(), { consultantId, active }, await requestMeta()); refresh(); return n; });
 }
 export async function linkConsultantAction(consultantId: string, userId: string | null): Promise<ActionResult<number>> {
   return runAction(async () => { const n = await linkConsultant(await getPrincipal(), { consultantId, userId }, await requestMeta()); refresh(); return n; });
