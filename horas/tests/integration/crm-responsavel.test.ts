@@ -56,12 +56,12 @@ describe.skipIf(!hasDb)('Cobrança e CRM — responsável pelo consultor do cada
     await expect(setCrmLeader(agent.principal, leader.principal.id, META)).rejects.toBeInstanceOf(AuthorizationError);
     await setCrmLeader(admin.principal, leader.principal.id, META);
 
-    // 1ª rodada: consultores ainda sem vínculo → sem responsável, exceto o de 45 dias (Líder Comercial).
+    // 1ª rodada: consultores ainda sem vínculo → tudo com o Líder Comercial para designar (decisão 22/11).
     let r = await runTecnofitSync(today);
     expect(r.status).toBe('CONCLUIDA');
     expect(r.stats).toMatchObject({ customersRead: 3, customersWithConsultant: 3 });
     expect((await prisma.tecCustomer.findUniqueOrThrow({ where: { tecnofitId: '801' } })).consultantTecId).toBe('7001');
-    expect((await caseOf('801')).ownerId).toBeNull();
+    expect((await caseOf('801')).ownerId).toBe(leader.principal.id);
     expect((await caseOf('802')).ownerId).toBe(leader.principal.id);
 
     // Vincula Débora e Igor (Configurações): os casos até 30 dias vão para a consultora do cadastro.

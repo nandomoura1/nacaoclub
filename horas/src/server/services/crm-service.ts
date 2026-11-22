@@ -6,7 +6,7 @@ import type { Principal } from '@/server/auth/principal';
 import type { RequestMeta } from '@/server/auth/session';
 import { AppError, AuthorizationError, NotFoundError } from '@/server/errors';
 import { fromUtc } from '@/domain/dates';
-import { agingOf, cadenceStep, daysLate, formatMobile, isOldDebt, maskMobile, priorityScore, type CaseKind } from '@/domain/cobranca';
+import { agingOf, cadenceStep, daysLate, formatMobile, isOldDebt, LEADER_AFTER_DAYS, maskMobile, priorityScore, type CaseKind } from '@/domain/cobranca';
 import { todayIso } from '@/lib/today';
 import { tecnofitConfig } from '@/server/tecnofit/client';
 import { runTecnofitSync } from './crm-sync-service';
@@ -193,8 +193,11 @@ export async function linkConsultant(principal: P | null, input: unknown, meta: 
     }
     await tx.crmConsultant.update({ where: { id: c.id }, data: { userId } });
     let moved = 0;
-    if (userId) {
-      const ids = (await tx.crmCase.findMany({ where: { status: 'ABERTO', ownerId: null, customer: { consultantTecId: c.tecnofitId } }, select: { id: true } })).map((x) => x.id);
+    if (userId && c.active) {
+      // Sem responsável ou com o líder só por falta de vínculo (não à mão; cobrança ≤ 30 dias): passa ao consultor agora.
+      const today = todayIso();
+      const open = await tx.crmCase.findMany({ where: { status: 'ABERTO', ownerManual: false, customer: { consultantTecId: c.tecnofitId } }, select: { id: true, kind: true, oldestDue: true } });
+      const ids = open.filter((x) => !(x.kind === 'COBRANCA' && x.oldestDue && daysLate(fromUtc(x.oldestDue), today) > LEADER_AFTER_DAYS)).map((x) => x.id);
       const r = await tx.crmCase.updateMany({ where: { id: { in: ids } }, data: { ownerId: userId } });
       await tx.crmTask.updateMany({ where: { caseId: { in: ids }, status: 'ABERTA' }, data: { ownerId: userId } });
       moved = r.count;

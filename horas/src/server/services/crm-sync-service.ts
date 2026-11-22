@@ -196,7 +196,8 @@ async function processCustomer(api: TecnofitApi, p: Pending, today: IsoDate): Pr
   const fresh = !needConsultant && !!consChecked && !!existing?.consultantTecId;
   const consultantTec = fromCustomer?.id ?? (fresh ? existing!.consultantTecId : null) ?? p.consultant ?? seller?.id ?? existing?.consultantTecId ?? null;
   const consultantUser = await ownerFor(consultantTec);
-  const gone = await consultantGone(consultantTec);
+  // Sem consultor que responda (inativo, sem usuário vinculado ou ficha sem consultor): o líder designa (decisão 22/11).
+  const gone = !consultantUser || await consultantGone(consultantTec);
   const leader = await commercialLeader();
   const target = (kind: 'COBRANCA' | 'PENDENCIA', oldest: Date | null, cur: { ownerId: string | null; ownerManual: boolean } | null) =>
     caseOwnerTarget({ kind, oldestDue: iso(oldest), today, consultantUserId: consultantUser, leaderUserId: leader, currentOwnerId: cur?.ownerId ?? null, manual: cur?.ownerManual ?? false, consultantGone: gone });

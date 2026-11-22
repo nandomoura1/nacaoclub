@@ -220,8 +220,9 @@ de 30 dias de atraso** (1ª parcela em aberto) = **Líder Comercial** (`app_sett
 exceto caso **redistribuído à mão** pelo líder (`crm_cases.owner_manual`; "Sem responsável" devolve ao automático). **"Não é mais consultor(a)"**
 (Configurações; `crm_consultants.active = false`, a sincronização **não** reativa): alunos dele (casos, tarefas e renovações) vão para o **Líder
 Comercial** designar outro consultor (decisão 21/11: Bruna, Leonardo e Thais; o cadastro da Lawana sem vínculo também). Diagnóstico em `stats`
-(`customersRead`/`customersWithConsultant`/`customersShape` — só nomes de campos) e aviso se o cadastro vier sem consultor; sem vínculo =
-"Sem responsável", o **líder distribui** e vê tudo. **O sistema NÃO fala com o aluno** (decisão de 11/11): cada passo da régua
+(`customersRead`/`customersWithConsultant`/`customersShape` — só nomes de campos) e aviso se o cadastro vier sem consultor. **Sem consultor que
+responda** (ficha sem consultor, consultor sem usuário vinculado ou inativo) = **Líder Comercial** designa (decisão 22/11); vincular o consultor em
+Configurações passa na hora os casos dele que não foram redistribuídos à mão (cobrança > 30 dias fica com o líder). O líder vê tudo. **O sistema NÃO fala com o aluno** (decisão de 11/11): cada passo da régua
 (**D-3, D0, D+3, D+5, D+7, D+15**) vira **tarefa do consultor** (`crm_tasks`, `crm-task-service.ts`; tela Cobrança e CRM →
 Tarefas de CRM), mais pendência na recepção e "Retorno / promessa". O consultor **registra o contato na Tecnofit** (Ligações do
 CRM): ligação **concluída** depois que a tarefa entrou na lista dá baixa sozinha; ligação **pendente agendada** (retorno/promessa)
