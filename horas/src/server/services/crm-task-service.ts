@@ -407,7 +407,12 @@ export async function dailyDigests(today: IsoDate, opts: { hour?: number | null 
   const old = all.filter((t) => LEADER_ONLY.includes(t.kind)).length;
   const tasks = all.filter((t) => !LEADER_ONLY.includes(t.kind));
   const owners = [...new Set(tasks.map((t) => t.ownerId).filter((x): x is string => !!x))];
-  const leaders = await prisma.user.findMany({ where: { active: true, roles: { some: { role: { permissions: { some: { permission: { key: 'crm.view_all' } } } } } } }, select: { id: true } });
+  // Resumo do time = só o Líder Comercial de Configurações (decisão 23/11: o Administrador também vê tudo, mas não recebe);
+  // sem líder escolhido, quem tem crm.view_all.
+  const chosen = (await prisma.appSettings.findUnique({ where: { id: 1 }, select: { crmLeaderUserId: true } }))?.crmLeaderUserId ?? null;
+  const leaders = chosen
+    ? await prisma.user.findMany({ where: { id: chosen, active: true }, select: { id: true } })
+    : await prisma.user.findMany({ where: { active: true, roles: { some: { role: { permissions: { some: { permission: { key: 'crm.view_all' } } } } } } }, select: { id: true } });
   const leaderIds = new Set(leaders.map((l) => l.id));
   const ids = [...new Set([...owners, ...leaderIds])];
   const rule = await rulesFor(ids);

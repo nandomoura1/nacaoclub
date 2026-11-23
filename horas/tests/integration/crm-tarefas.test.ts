@@ -248,6 +248,19 @@ describe.skipIf(!hasDb)('Cobrança — tarefas de CRM do consultor', () => {
     // O líder vê o atraso antigo no WhatsApp do time (só a contagem).
     const lead = (await dailyDigests(addDays(todayIso(), 1), { hour: null })).find((x) => x.userId === lider.principal.id);
     expect(lead?.text ?? '').toMatch(/atraso antigo/);
+    // Sem Líder Comercial escolhido, todos com crm.view_all recebem o resumo do time (inclusive o Administrador).
+    const tomorrow = addDays(todayIso(), 1);
+    expect((await dailyDigests(tomorrow, { hour: null })).some((x) => x.userId === admin.principal.id)).toBe(true);
+    // Com o Líder Comercial escolhido em Configurações, só ele recebe o resumo do time (decisão 23/11).
+    const before = await prisma.appSettings.findUnique({ where: { id: 1 }, select: { crmLeaderUserId: true } });
+    await prisma.appSettings.upsert({ where: { id: 1 }, create: { id: 1, crmLeaderUserId: lider.principal.id }, update: { crmLeaderUserId: lider.principal.id } });
+    try {
+      const digests = await dailyDigests(tomorrow, { hour: null });
+      expect(digests.some((x) => x.userId === admin.principal.id)).toBe(false);
+      expect(digests.find((x) => x.userId === lider.principal.id)?.text ?? '').toMatch(/\*Time\*/);
+    } finally {
+      await prisma.appSettings.update({ where: { id: 1 }, data: { crmLeaderUserId: before?.crmLeaderUserId ?? null } });
+    }
   });
 
   it('se a Tecnofit recusar as ligações, a sincronização segue e registra o aviso', async () => {

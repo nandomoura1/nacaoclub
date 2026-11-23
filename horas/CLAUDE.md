@@ -235,7 +235,8 @@ fica com o líder em "Fora das regras") e o **horário (6h–14h) e dias** do Wh
 o que fazer, aluno opcional só entre os que estão na Cobrança; com aluno, a ligação na Tecnofit dá baixa). Tarefa guarda `owner_id`
 (acompanha o caso na redistribuição). **WhatsApp no horário de cada consultor**: crons diários `/api/cron/crm-tarefas?hora=6…14`
 (9 entradas, uma por hora — vale em qualquer plano da Vercel; chega a partir da hora, nunca antes), 1 envio por pessoa por dia
-(`crm_digest_sends`), texto e liga/desliga na automação "Tarefas de CRM do dia" (público `CRM_TAREFAS`, nasce **desligada**; o
+(`crm_digest_sends`); o bloco **Time** (sem responsável, D+15, atraso antigo) vai **só para o Líder Comercial** de Configurações (decisão 23/11 — o
+Administrador vê tudo na tela mas não recebe; sem líder escolhido, todos com `crm.view_all`), texto e liga/desliga na automação "Tarefas de CRM do dia" (público `CRM_TAREFAS`, nasce **desligada**; o
 agendador das 8h não a roda): **só contagens, valor e link** — nunca nome/telefone de aluno. Pagar = app da Tecnofit, Pix ou
 recepção; histórico de cobrança 5 anos. Painel do gestor e renovações = próximas fases; webhooks só quando a Tecnofit documentar.
 
