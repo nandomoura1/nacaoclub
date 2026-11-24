@@ -421,6 +421,7 @@ model Teacher {
   @@index([active, name])
   @@index([team, active])
   @@map("teachers")
+  lateness TeacherLateness[]
 }
 
 /// Habilitação: alimenta a sugestão de substitutos.
@@ -2571,6 +2572,8 @@ model WsSector {
   holidayRotate  Boolean  @default(false) @map("holiday_rotate")
   /// Quantas pessoas trabalham no feriado (ex.: Recepção = 1). Vazio = a equipe do dia.
   holidayStaff   Int?     @map("holiday_staff")
+  /// Fora dos Benefícios (passagem/alimentação): a equipe não entra no cálculo (decisão 24/11). Reversível.
+  benefitsOff    Boolean  @default(false) @map("benefits_off")
   notes          String?
   sortOrder      Int      @default(0) @map("sort_order")
   active         Boolean  @default(true)
@@ -3444,4 +3447,24 @@ model MktContentPost {
   @@index([planId, date])
   @@index([date])
   @@map("mkt_content_posts")
+}
+
+/// Atraso do professor horista (decisão 24/11): 1h de atraso = 1h a menos na carga horária. Desconta dos minutos das aulas do dia
+/// (a partir da primeira); `applied` = [{ assignmentId, before, after }] para anular. Anulado não se apaga.
+model TeacherLateness {
+  id          String    @id @default(uuid()) @db.Uuid
+  teacherId   String    @map("teacher_id") @db.Uuid
+  date        DateTime  @db.Date
+  minutes     Int
+  notes       String?
+  applied     Json      @default("[]")
+  createdBy   String?   @map("created_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+  cancelledAt DateTime? @map("cancelled_at")
+  cancelledBy String?   @map("cancelled_by") @db.Uuid
+
+  teacher Teacher @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+
+  @@index([teacherId, date])
+  @@map("teacher_lateness")
 }

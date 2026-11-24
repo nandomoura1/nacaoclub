@@ -110,6 +110,9 @@ de Férias e ausências (`saveAbsence`, no 1º setor da pessoa) e lista os já l
 (`transport_total_cents`, ex.: R$ 200); vazio volta ao cálculo; vale só para aquele mês (`month` = "AAAA-MM"). **Fora das escalas
 (professores e outros)**: quem não está em equipe da 5x2 entra pela caixa "Incluir" (`benefit_people`, com valor diário próprio; grupo
 próprio na tabela; só para quem vê todos os setores); dias só informados; alimentação dessas pessoas = dias informados × valor.
+**Equipe fora dos Benefícios** (decisão 24/11; só `ws.admin`): botão "Tirar dos Benefícios" no título da equipe (`ws_sectors.benefits_off`,
+`setSectorBenefits`, auditado) — a equipe sai do cálculo e dos selos de escala; quem também está em outra equipe segue por ela; "devolver"
+no rodapé da tela. A gestão escolhe quais (Kids, Cozinha, Lanchonete… não vêm marcadas).
 **Cadastro duplicado** (Equipes → ícone de cópia no cartão; `ws.edit` + `teacher.edit`; decisão 15/11): escolhe o cadastro que **fica**;
 o duplicado é **desativado** (nada se apaga; nota "Cadastro duplicado de X" na ficha) e quem fica herda as equipes (onde já está, a vaga
 repetida sai — desativada se já está em escala salva), as ausências, os ajustes do mês/benefícios e o telefone/e-mail que faltarem.
@@ -159,6 +162,11 @@ viram um período ("Seg a Sex - 5h às 8h"), mesmos filtros da grade; copiar, ab
 **Ausências de professor**: padrão "desconta" para tudo, menos **folga** (abonada); atestado desconta e o líder abona à mão quando for o caso. Lançadas antes de gerar a competência valem quando ela for gerada
 (a prévia mostra as aulas pendentes e oferece "Gerar competência agora").
 
+**Atraso do horista** (ficha do professor → Ausências → card **Atrasos**; `leave.manage`; decisão 24/11): **1h atrasado = 1h a menos na
+carga horária**. Dia + tempo (h:mm) → tira os minutos das aulas que ele deu no dia (`class_assignments.minutes`), a partir da primeira e
+seguindo para a próxima se passar dela (`applyLateness` em `domain/lateness.ts`); o total da competência cai sozinho. Não é falta (as aulas
+continuam dadas); atraso maior que as aulas do dia é recusado (lance falta). Registro em `teacher_lateness` (`applied` = antes/depois) com
+**anular** (volta só o que ainda está como o atraso deixou); competência fechada trava. `lateness-service.ts`.
 **Cobertura de ausência** (ficha do professor → Horas → "Cobrir férias / atestado"; `occurrence.exception`): escolhe a
 ausência de outro professor e marca **em lote** as aulas que este cobre → cadeira vira SUBSTITUIDA (horas de substituição
 para quem cobriu; quem faltou segue a regra da ausência). Registro `SUBSTITUICAO` com `after.cover = true`, desfazível;

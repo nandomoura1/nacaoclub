@@ -11,7 +11,7 @@ import { Input, Label, Select } from '@/components/ui/input';
 import { formatDateBR } from '@/domain/dates';
 import { cn } from '@/lib/cn';
 import type { TransportReport } from '@/server/services/ws-service';
-import { cancelAbsenceAction, saveAbsenceAction, saveBenefitMonthAction, saveMealValueAction, saveTransportValueAction, setBenefitPersonAction } from '../actions';
+import { cancelAbsenceAction, saveAbsenceAction, saveBenefitMonthAction, saveMealValueAction, saveTransportValueAction, setBenefitPersonAction, setSectorBenefitsAction } from '../actions';
 
 const brl = (c: number | null) => (c == null ? '—' : (c / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
 const toCents = (v: string): number | null | 'erro' => {
@@ -91,6 +91,12 @@ export function TransportClient({ mes, report }: { mes: string; report: Transpor
     });
   };
   const [addId, setAddId] = useState('');
+  const toggleSector = (sectorId: string, off: boolean) => start(async () => {
+    const x = await setSectorBenefitsAction(sectorId, off);
+    if (!x.ok) return setMsg({ error: x.error });
+    setMsg({ ok: off ? 'Equipe fora dos Benefícios (dá para devolver no fim da página).' : 'Equipe de volta aos Benefícios.' });
+    router.refresh();
+  });
   const setPerson = (teacherId: string, on: boolean) => {
     if (!on && !confirm('Tirar esta pessoa da lista de benefícios fora das escalas?')) return;
     start(async () => {
@@ -188,7 +194,15 @@ export function TransportClient({ mes, report }: { mes: string; report: Transpor
         ) : show ?? (value == null ? '' : brl(value));
         return (
         <Card key={sector} className="overflow-x-auto">
-          <h3 className="px-4 pt-3 font-extrabold text-navy">{sector}</h3>
+          <div className="flex items-center gap-2 px-4 pt-3">
+            <h3 className="font-extrabold text-navy">{sector}</h3>
+            {report.canEditValues && report.sectorIds[sector] && (
+              <button type="button" className="ml-auto text-xs font-semibold text-tinta-suave underline decoration-dotted hover:text-critico" disabled={pending}
+                onClick={() => { if (confirm(`Tirar a equipe ${sector} do cálculo dos Benefícios? Quem também está em outra equipe continua por ela. Dá para devolver depois.`)) toggleSector(report.sectorIds[sector]!, true); }}>
+                Tirar dos Benefícios
+              </button>
+            )}
+          </div>
           <table className={cn('w-full text-sm', mealCols ? 'min-w-[60rem]' : 'min-w-[46rem]')}>
             <thead>
               <tr className="text-[11px] font-bold uppercase tracking-wider">
@@ -282,6 +296,11 @@ export function TransportClient({ mes, report }: { mes: string; report: Transpor
         </Card>
       )}
 
+      {report.offSectors.length > 0 && (
+        <p className="text-xs text-tinta-suave">Equipes fora dos Benefícios: {report.offSectors.map((o, i) => (
+          <Fragment key={o.id}>{i > 0 && ' · '}<b className="text-tinta">{o.name}</b> ({o.members} pessoa{o.members === 1 ? '' : 's'}){report.canEditValues && <> <button type="button" className="font-semibold text-nacao underline" disabled={pending} onClick={() => toggleSector(o.id, false)}>devolver</button></>}</Fragment>
+        ))}.</p>
+      )}
       {report.outside.length > 0 && (
         <p className="text-xs text-tinta-suave">Fora da passagem (vínculo sem vale-transporte): {report.outside.map((o) => `${o.name} (${o.bond}, ${o.sector})`).join(' · ')}.</p>
       )}

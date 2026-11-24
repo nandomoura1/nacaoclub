@@ -16,8 +16,10 @@ import { formatMinutes } from '@/lib/format';
 import type { GradeItem } from '@/server/services/schedule-service';
 import type { CoverableLeave, CoveredItem, LeaveClassRow, LeaveItem } from '@/server/services/leave-service';
 import { RemoveSlotSheet, SlotCard, SlotSheet, type Editing, type SheetProps } from '../../grade/GradeClient';
-import { cancelLeaveAction, coverLeaveClassesAction, listLeaveClassesAction, previewLeaveAction, removeExtraHoursAction, saveExtraHoursAction, saveLeaveAction, setLeaveDeductsAction, uncoverLeaveClassesAction } from './actions';
+import { cancelLatenessAction, saveLatenessAction, cancelLeaveAction, coverLeaveClassesAction, listLeaveClassesAction, previewLeaveAction, removeExtraHoursAction, saveExtraHoursAction, saveLeaveAction, setLeaveDeductsAction, uncoverLeaveClassesAction } from './actions';
 import type { ExtraHoursItem } from '@/server/services/extra-hours-service';
+import type { LatenessItem } from '@/server/services/lateness-service';
+import { parseLateness } from '@/domain/lateness';
 import { generatePeriodAction } from '../../calendario/actions';
 
 /* ───────────────────────── Aulas fixas ───────────────────────── */
@@ -588,5 +590,61 @@ function CoverLeavePanel({ teacherId, leaves, onClose, onDone }: { teacherId: st
         </div>
       )}
     </div>
+  );
+}
+
+/* ───────────────────────── Atrasos (horista) ───────────────────────── */
+
+/** Atraso: 1h atrasado = 1h a menos na carga do dia (tira das aulas a partir da primeira). Decisão 24/11. */
+export function LatenessCard({ teacherId, items, canManage, today }: { teacherId: string; items: LatenessItem[]; canManage: boolean; today: string }) {
+  const router = useRouter();
+  const [v, setV] = useState({ date: today, time: '', notes: '' });
+  const [msg, setMsg] = useState<{ error?: string; ok?: string }>({});
+  const [pending, start] = useTransition();
+  const minutes = parseLateness(v.time);
+  const active = items.filter((i) => !i.cancelled);
+  return (
+    <Card className="p-5">
+      <h3 className="mb-1 flex items-center gap-2 font-extrabold text-navy"><CalendarOff className="size-4" /> Atrasos</h3>
+      <p className="mb-3 text-xs text-tinta-suave">Para o professor horista: o tempo de atraso sai da carga horária do dia (das aulas, a partir da primeira). Não é falta: as aulas continuam dadas.</p>
+      {canManage && (
+        <form className="grid gap-3 sm:grid-cols-[1fr_1fr_2fr_auto] sm:items-end" onSubmit={(e) => {
+          e.preventDefault();
+          setMsg({});
+          if (!minutes) return setMsg({ error: 'Informe o atraso: ex. 0:30, 1:00 ou 45.' });
+          start(async () => {
+            const r = await saveLatenessAction(teacherId, { date: v.date, minutes, notes: v.notes || null });
+            if (!r.ok) return setMsg({ error: r.error });
+            setMsg({ ok: `Atraso lançado: ${formatMinutes(minutes)} a menos em ${r.data.classes} aula(s).` });
+            setV({ date: v.date, time: '', notes: '' });
+            router.refresh();
+          });
+        }}>
+          <div><Label htmlFor="late-date">Dia</Label><Input id="late-date" type="date" required value={v.date} onChange={(e) => setV({ ...v, date: e.target.value })} /></div>
+          <div><Label htmlFor="late-time">Atraso (h:mm)</Label><Input id="late-time" inputMode="numeric" placeholder="1:00" value={v.time} onChange={(e) => setV({ ...v, time: e.target.value })} /></div>
+          <div><Label htmlFor="late-notes">Observação (opcional)</Label><Input id="late-notes" maxLength={300} value={v.notes} onChange={(e) => setV({ ...v, notes: e.target.value })} placeholder="Ex.: chegou 7h no lugar de 6h" /></div>
+          <Button type="submit" disabled={pending}>Lançar atraso</Button>
+        </form>
+      )}
+      <FormMessage error={msg.error} success={msg.ok} />
+      {items.length > 0 && (
+        <ul className="mt-3 divide-y divide-borda text-sm">
+          {items.map((i) => (
+            <li key={i.id} className={cn('flex flex-wrap items-center gap-2 py-2', i.cancelled && 'opacity-50')}>
+              <b className="text-navy">{formatDateBR(i.date)}</b>
+              <Badge tone={i.cancelled ? 'neutral' : 'amber'}>{i.cancelled ? 'Anulado' : `− ${formatMinutes(i.minutes)}`}</Badge>
+              <span className="text-xs text-tinta-suave">{i.classes} aula(s){i.notes ? ` · ${i.notes}` : ''}</span>
+              {canManage && !i.cancelled && (
+                <button type="button" className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-tinta-suave hover:text-critico" disabled={pending}
+                  onClick={() => { if (confirm('Anular este atraso? As aulas voltam ao tempo de antes.')) start(async () => { const r = await cancelLatenessAction(i.id); if (!r.ok) return setMsg({ error: r.error }); setMsg({ ok: 'Atraso anulado.' }); router.refresh(); }); }}>
+                  <Undo2 className="size-3.5" /> anular
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {active.length > 0 && <p className="mt-2 text-xs text-tinta-suave">Total lançado (não anulado, últimos registros): {formatMinutes(active.reduce((a, i) => a + i.minutes, 0))}.</p>}
+    </Card>
   );
 }

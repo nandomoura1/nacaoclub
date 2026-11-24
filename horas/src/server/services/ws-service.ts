@@ -956,7 +956,10 @@ export const RULE_KIND_OPTIONS = (Object.keys(RULE_KINDS) as RuleKind[]).map((k)
 export async function transportReport(principal: P | null, year: number, month: number) {
   assertCan(principal, 'ws.view');
   const scope = await sectorScope(principal);
-  const sectors = await prisma.wsSector.findMany({ where: { active: true, ...(scope ? { id: { in: scope } } : {}) }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }] });
+  const all = await prisma.wsSector.findMany({ where: { active: true, ...(scope ? { id: { in: scope } } : {}) }, orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }], include: { _count: { select: { members: { where: { active: true } } } } } });
+  // Equipe "fora dos Benefícios" (decisão 24/11): não entra no cálculo; quem também está em outra equipe segue por ela.
+  const sectors = all.filter((s) => !s.benefitsOff);
+  const offSectors = all.filter((s) => s.benefitsOff).map((s) => ({ id: s.id, name: s.name, members: s._count.members }));
   const p = prevMonth(year, month);
   const inputs: TransportInput[] = [];
   const status: { sector: string; schedule: string | null; prevSchedule: string | null }[] = [];
@@ -1031,9 +1034,25 @@ export async function transportReport(principal: P | null, year: number, month: 
   return {
     year, month, monthKey: key, label: monthInfo(year, month).label, prevLabel: pmi.label, prevFirst: pmi.first, prevLast: pmi.last,
     rows: rows.map((r) => addWeekend(applyAdjust(r, adj.get(r.teacherId)), weekend.get(r.teacherId))), status, outside, candidates,
+    sectorIds: Object.fromEntries(sectors.map((x) => [x.name, x.id])) as Record<string, string>, offSectors,
     canEditValues, canEditAbsences: can(principal, 'ws.edit'),
   };
 }
+/** Tira (ou devolve) uma equipe do cálculo dos Benefícios. Só a gestão (ws.admin). */
+export async function setSectorBenefits(principal: P | null, sectorId: string, off: boolean, meta: RequestMeta) {
+  assertCan(principal, 'ws.admin');
+  await prisma.$transaction(async (tx) => {
+    const s = await tx.wsSector.findUnique({ where: { id: sectorId }, select: { name: true, benefitsOff: true } });
+    if (!s) throw new NotFoundError('Equipe não encontrada.');
+    if (s.benefitsOff === off) return;
+    await tx.wsSector.update({ where: { id: sectorId }, data: { benefitsOff: off } });
+    await audit(tx, { actorId: principal.id, ...meta }, {
+      action: 'ws.sector_benefits', entityType: 'ws_sector', entityId: sectorId, before: { benefitsOff: s.benefitsOff }, after: { benefitsOff: off },
+      summary: `${principal.name} ${off ? 'tirou' : 'devolveu'} a equipe ${s.name} ${off ? 'dos' : 'aos'} Benefícios`,
+    });
+  });
+}
+
 export type TransportReport = Awaited<ReturnType<typeof transportReport>>;
 
 /** Valor diário da alimentação da pessoa (vazio = sem direito), em todas as equipes dela. Só a gestão (DP). */

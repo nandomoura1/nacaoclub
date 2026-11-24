@@ -7,6 +7,7 @@ import { removeTeacherFromSlot } from '@/server/services/schedule-service';
 import { cancelLeave, coverLeaveClasses, listLeaveClasses, previewLeave, saveLeave, setLeaveDeducts, uncoverLeaveClasses } from '@/server/services/leave-service';
 import { saveGuidelines } from '@/server/services/teacher-share-service';
 import { removeExtraHours, saveExtraHours } from '@/server/services/extra-hours-service';
+import { cancelLateness, saveLateness } from '@/server/services/lateness-service';
 
 const refresh = () => { revalidatePath('/professores', 'layout'); revalidatePath('/grade'); revalidatePath('/calendario'); };
 
@@ -88,4 +89,11 @@ export async function uncoverLeaveClassesAction(substituteId: string, leaveId: s
     refresh(); revalidatePath('/relatorios');
     return r;
   });
+}
+
+export async function saveLatenessAction(teacherId: string, values: { date: string; minutes: number; notes: string | null }) {
+  return runAction(async () => { const r = await saveLateness(await getPrincipal(), teacherId, values, await requestMeta()); refresh(); return r; });
+}
+export async function cancelLatenessAction(id: string) {
+  return runAction(async () => { const r = await cancelLateness(await getPrincipal(), id, await requestMeta()); refresh(); return r; });
 }

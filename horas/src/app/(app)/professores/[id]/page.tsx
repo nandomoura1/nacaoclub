@@ -23,7 +23,8 @@ import { listGrade } from '@/server/services/schedule-service';
 import { teacherShareData } from '@/server/services/teacher-share-service';
 import { ShareGrade } from './ShareClient';
 import { listExtraHours } from '@/server/services/extra-hours-service';
-import { AulasTab, AusenciasTab, ExtraHoursCard } from './FichaClient';
+import { AulasTab, AusenciasTab, ExtraHoursCard, LatenessCard } from './FichaClient';
+import { listLateness } from '@/server/services/lateness-service';
 import { HoursStatement } from '@/components/hours/HoursStatement';
 import { InternBadge } from '@/components/staff-docs/InternCounter';
 import { teacherDocs } from '@/server/services/staff-doc-service';
@@ -144,14 +145,16 @@ async function AulasSection({ principal, teacherId, teacherName, date, today }: 
 }
 
 async function AusenciasSection({ principal, teacherId, today }: { principal: P; teacherId: string; today: string }) {
-  const [leaves, me, others] = await Promise.all([
+  const [leaves, me, others, lateness] = await Promise.all([
     listLeaves(principal, teacherId),
     prisma.teacherModality.findMany({ where: { teacherId }, select: { modalityId: true } }),
     prisma.teacher.findMany({ where: { active: true, team: 'PROFESSOR', id: { not: teacherId } }, orderBy: { name: 'asc' }, select: { id: true, name: true, modalities: { select: { modalityId: true } } } }),
+    listLateness(principal, teacherId),
   ]);
   const mine = new Set(me.map((m) => m.modalityId));
   const suggested = others.filter((t) => t.modalities.some((m) => mine.has(m.modalityId)));
   return (
+    <div className="space-y-4">
     <AusenciasTab
       teacherId={teacherId}
       leaves={leaves}
@@ -162,6 +165,8 @@ async function AusenciasSection({ principal, teacherId, today }: { principal: P;
         others: others.filter((t) => !suggested.includes(t)).map((t) => ({ id: t.id, name: t.name })),
       }}
     />
+    <LatenessCard teacherId={teacherId} items={lateness} canManage={can(principal, 'leave.manage')} today={today} />
+    </div>
   );
 }
 
