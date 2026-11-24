@@ -19,7 +19,6 @@ type Tab = 'textos' | 'pauta' | 'analise';
 type Res<T> = { ok: true; data: T; message?: string } | { ok: false; error: string };
 const TABS: { id: Tab; label: string; icon: typeof PenLine; hint: string }[] = [
   { id: 'textos', label: 'Legendas e roteiros', icon: PenLine, hint: 'Post, carrossel, reels, stories, WhatsApp ou e-mail a partir de uma campanha ou tema.' },
-  { id: 'pauta', label: 'Pauta da semana', icon: CalendarDays, hint: 'Ideias de posts a partir dos eventos, campanhas e temas do período (70% comunidade, 20% autoridade, 10% oferta).' },
   { id: 'analise', label: 'Leitura da Performance', icon: BarChart3, hint: 'O que funcionou, o que preocupa e o que fazer — a partir dos números do painel.' },
 ];
 const KIND: Record<Tab, StudioItem['kind']> = { textos: 'COPY', pauta: 'PAUTA', analise: 'ANALISE' };

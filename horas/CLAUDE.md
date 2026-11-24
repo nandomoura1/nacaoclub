@@ -181,6 +181,19 @@ datas e avisos, feriados (tarefas opcional), sem cancelados; editável; copiar, 
 **Campanha de evento** (ligada a um evento, mesmo nome de um evento, ou tipo Evento) **não ocupa o período de divulgação**:
 o evento aparece só no dia dele (sem evento cadastrado: a campanha aparece só no último dia, sem arrastar — `eventCampaignDay`).
 
+**Cronograma do mês** (Marketing → Planejar → Cronograma do mês, `/marketing/cronograma?mes=AAAA-MM`; decisão 24/11 — substitui a aba
+"Pauta da semana" da IA, que agora redireciona): **um plano por mês** (`mkt_content_plans`: objetivos, responsável padrão = dono da área
+Planejamento — Maju) + **posts planejados** (`mkt_content_posts`: dia, **canal** Instagram/TikTok/YouTube/WhatsApp/E-mail/Site/TV Nação,
+assunto em caixa alta, formato Reels/Carrossel/Estático/Só stories/Vídeo/Texto, título, roteiro/slides, CTA, stories, "a confirmar", ligação
+opcional a campanha, evento e tarefa). Lê do sistema eventos, campanhas, datas/avisos e **feriados** do mês. **Sugerir com IA** (`mkt.ai`)
+preenche só os **dias livres** (`generateCronograma`, usa objetivos + Memória da Nação; sábado = só stories; não inventa horário/preço — vai em
+"a confirmar"). **Colar do Docs** lê o formato da equipe ("01/12, TERÇA" / ASSUNTO / "Formato | “Título”" / CTA: / Stories: / "[…]" = a confirmar;
+`parsePlanText`, liga ao evento/campanha pelo nome inteiro, título repetido no dia não duplica) e **Copiar no formato do Docs** gera o mesmo
+texto (`planText`). Por post: **Mandar para o Kanban** (área Conteúdo, responsável do mês ou outro, prazo **2 dias antes** da publicação, roteiro
+na descrição, tag `cronograma`) ou fica **só orientação**. **Aprovar mês** = `mkt.approve` (trava a edição); **Reabrir** com motivo; aprovado,
+cada post recebe **Publicado / Não publicado + views**. No Calendário, camada **Postagens (cronograma)** no filtro Tipo (não aparece sem o filtro).
+`domain/marketing/cronograma.ts`, `mkt-cronograma-service.ts`.
+
 **Kanban de Marketing**: estilo Trello (navegação lateral, colunas com rolagem própria,
 "Adicionar um cartão"), imagens no cartão (PNG/JPG/WEBP/GIF ≤ 10 MB, sem SVG; a primeira é a capa),
 link direto `?tarefa=<id>` e envio pelo WhatsApp (link exige login).

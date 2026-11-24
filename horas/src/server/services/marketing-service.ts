@@ -317,17 +317,20 @@ export async function calendarEntries(principal: Principal | null, from: string,
   assertCan(principal, 'mkt.view');
   const F = dt(from)!; const T = dt(to)!;
   const range = { startDate: { lte: T }, OR: [{ endDate: { gte: F } }, { endDate: null, startDate: { gte: F } }] };
-  const [camps, events, tasks, items, holidays] = await Promise.all([
+  const [camps, events, tasks, items, holidays, posts] = await Promise.all([
     prisma.mktCampaign.findMany({ where: range }),
     prisma.mktEvent.findMany({ where: range }),
     prisma.mktTask.findMany({ where: { dueDate: { gte: F, lte: T } }, include: { area: true, campaign: { select: { name: true } } } }),
     prisma.mktCalendarItem.findMany({ where: range }),
     prisma.holiday.findMany({ where: { date: { gte: F, lte: T } } }),
+    // Camada "Postagens" (Cronograma do mês): só aparece com o filtro Tipo = Postagens.
+    prisma.mktContentPost.findMany({ where: { date: { gte: F, lte: T } }, select: { id: true, date: true, topic: true, title: true, format: true, status: true, campaignId: true } }),
   ]);
   const types = Object.fromEntries(CAMPAIGN_TYPES.map((t) => [t.id, t.label]));
   // Nomes de todos os eventos (não só do período): a campanha some mesmo se o evento cai em outro mês.
   const eventNames = new Set((await prisma.mktEvent.findMany({ select: { name: true } })).map((e) => eventNameKey(e.name)));
   return [
+    ...posts.map((p): CalEntry => ({ kind: 'post', id: p.id, title: p.format === 'STORIES' ? (p.topic === 'STORIES' ? 'Só stories' : `${p.topic} · stories`) : `${p.topic} · ${p.title}`, start: iso(p.date)!, end: iso(p.date)!, tag: p.topic, href: `/marketing/cronograma?mes=${iso(p.date)!.slice(0, 7)}`, pinned: true, status: p.status, campaignId: p.campaignId })),
     ...holidays.map((h): CalEntry => ({ kind: 'feriado', id: h.id, title: h.name, start: iso(h.date)!, end: iso(h.date)!, tag: 'Feriado' })),
     ...events.map((e): CalEntry => ({ kind: 'evento', id: e.id, title: e.name, start: iso(e.startDate)!, end: iso(e.endDate) ?? iso(e.startDate)!, tag: 'Evento', href: '/marketing/eventos', ownerId: e.ownerId, modalityId: e.modalityId, status: e.status })),
     ...camps.flatMap((c): CalEntry[] => {

@@ -25,7 +25,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<SP>
     : [mondayOf(`${anchor.slice(0, 7)}-01`), addDays(mondayOf(monthEnd(anchor.slice(0, 7))), 6)];
   const [all, options] = await Promise.all([calendarEntries(principal, from, to), mktOptions()]);
   const entries = all.filter((e) =>
-    (!sp.tipo || e.kind === sp.tipo || e.kind === 'feriado')
+    (e.kind !== 'post' || sp.tipo === 'post')
+    && (!sp.tipo || e.kind === sp.tipo || e.kind === 'feriado')
     && (!sp.area || e.kind !== 'tarefa' || e.areaKey === sp.area)
     && (!sp.responsavel || e.ownerId === sp.responsavel || e.kind === 'feriado')
     && (!sp.modalidade || e.modalityId === sp.modalidade || e.kind === 'feriado' || e.kind === 'tarefa')

@@ -5,7 +5,7 @@ import { addDays, weekdayOf } from '@/domain/dates';
  * itens avulsos e feriados (não há tabela única). Grades de mês/semana. Puro.
  */
 
-export type CalKind = 'campanha' | 'evento' | 'tarefa' | 'item' | 'feriado';
+export type CalKind = 'campanha' | 'evento' | 'tarefa' | 'item' | 'feriado' | 'post';
 export interface CalEntry {
   kind: CalKind;
   id: string;

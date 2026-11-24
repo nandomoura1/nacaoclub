@@ -9,6 +9,7 @@ import { RECO_PROMPT_VERSION, RECO_SYSTEM, RecoSchema } from './prompts/recommen
 import { SCHEDULE_PROMPT_VERSION, SCHEDULE_SYSTEM, ScheduleSchema } from './prompts/schedule';
 import { MEMORY_PROMPT_VERSION, MEMORY_SYSTEM, MemorySchema } from './prompts/memory';
 import { ANALISE_PROMPT_VERSION, ANALISE_SYSTEM, AnaliseSchema, COPY_PROMPT_VERSION, COPY_SYSTEM, CopySchema, PAUTA_PROMPT_VERSION, PAUTA_SYSTEM, PautaSchema } from './prompts/studio';
+import { CRONOGRAMA_PROMPT_VERSION, CRONOGRAMA_SYSTEM, CronogramaSchema } from './prompts/cronograma';
 import type Anthropic from '@anthropic-ai/sdk';
 import type { ScheduleItem } from '@/domain/marketing/schedule-import';
 
@@ -164,4 +165,31 @@ export async function analyzePerformance(facts: unknown): Promise<{ out: Analise
   }
   const out = await askModel(AnaliseSchema, ANALISE_SYSTEM, `Painel de Performance:\n${JSON.stringify(facts, null, 1)}`, 6000);
   return { out, version: ANALISE_PROMPT_VERSION, model: MKT_MODEL };
+}
+
+// ── Cronograma do mês ─────────────────────────────────────
+
+export type CronogramaOut = z.infer<typeof CronogramaSchema>;
+export interface CronogramaContext {
+  mes: string; objetivos: string | null; diasLivres: string[];
+  eventos: { nome: string; data: string; fim: string | null }[];
+  campanhas: { nome: string; tipo: string; inicio: string; fim: string | null; oferta: string | null }[];
+  datas: { titulo: string; tipo: string; data: string; fim: string | null }[];
+  jaPlanejados: { data: string; assunto: string; formato: string; titulo: string }[];
+}
+
+export async function generateCronograma(ctx: CronogramaContext, memory: MemoryContext | null): Promise<{ out: CronogramaOut; version: string; model: string }> {
+  if (isFake()) {
+    const ev = new Map(ctx.eventos.map((e) => [e.data, e.nome]));
+    const posts: CronogramaOut['posts'] = ctx.diasLivres.map((d) => {
+      const sat = new Date(`${d}T12:00:00Z`).getUTCDay() === 6;
+      const e = ev.get(d);
+      if (e) return { data: d, canal: 'INSTAGRAM', assunto: 'EVENTO', formato: 'REELS', titulo: e, roteiro: `Cobertura do ${e}: chegada, aquecimento, torcida.`, cta: 'Marca quem foi contigo.', stories: 'Cobertura ao vivo.', confirmar: null, campanha: null, evento: e };
+      if (sat) return { data: d, canal: 'INSTAGRAM', assunto: 'STORIES', formato: 'STORIES', titulo: 'Só stories', roteiro: 'Sem post no feed.', cta: null, stories: null, confirmar: null, campanha: null, evento: null };
+      return { data: d, canal: 'INSTAGRAM', assunto: 'COMUNIDADE', formato: 'REELS', titulo: 'Bastidores da Nação', roteiro: 'Aluno na câmera conta por que treina aqui.', cta: 'Comenta o seu horário.', stories: null, confirmar: null, campanha: null, evento: null };
+    });
+    return { out: { posts, observacao: 'Exemplo local (AI_FAKE).' }, version: CRONOGRAMA_PROMPT_VERSION, model: 'exemplo local' };
+  }
+  const out = await askModel(CronogramaSchema, CRONOGRAMA_SYSTEM, `Monte o cronograma dos dias livres.\n${JSON.stringify({ ...ctx, memoriaDaNacao: memory?.memoria ?? 'nenhuma', historicoMesmoPeriodoAnoAnterior: memory?.historico ?? [] }, null, 1)}`, 16000);
+  return { out, version: CRONOGRAMA_PROMPT_VERSION, model: MKT_MODEL };
 }

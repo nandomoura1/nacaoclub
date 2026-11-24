@@ -28,6 +28,7 @@ const KINDS = [
   { id: 'tarefa', label: 'Tarefas', cls: 'bg-white text-tinta ring-1 ring-borda' },
   { id: 'item', label: 'Datas e avisos', cls: 'bg-ciano/20 text-navy' },
   { id: 'feriado', label: 'Feriados', cls: 'bg-atencao/15 text-atencao' },
+  { id: 'post', label: 'Postagens (cronograma)', cls: 'bg-ciano/10 text-navy-700 ring-1 ring-ciano/40' },
 ] as const;
 const kindCls = (k: CalEntry['kind']) => KINDS.find((x) => x.id === k)!.cls;
 const MONTHS = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];

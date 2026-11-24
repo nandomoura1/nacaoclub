@@ -3386,3 +3386,62 @@ model AwardClosure {
 
   @@map("award_closures")
 }
+
+/// Cronograma do mês (Marketing → Cronograma do mês): objetivos + posts planejados, aprovado no sistema (decisão 24/11).
+model MktContentPlan {
+  id         String    @id @default(uuid()) @db.Uuid
+  /// "AAAA-MM"
+  month      String    @unique
+  objectives String?
+  /// RASCUNHO | APROVADO (aprovado trava a edição; reabrir pede motivo)
+  status     String    @default("RASCUNHO")
+  /// Responsável padrão das tarefas de produção (padrão: dono da área Planejamento).
+  ownerId    String?   @map("owner_id") @db.Uuid
+  approvedBy String?   @map("approved_by") @db.Uuid
+  approvedAt DateTime? @map("approved_at")
+  createdBy  String?   @map("created_by") @db.Uuid
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  posts MktContentPost[]
+
+  @@map("mkt_content_plans")
+}
+
+/// Post planejado: dia, canal, assunto, formato, roteiro/slides, CTA, stories e o que falta confirmar.
+model MktContentPost {
+  id         String   @id @default(uuid()) @db.Uuid
+  planId     String   @map("plan_id") @db.Uuid
+  date       DateTime @db.Date
+  /// INSTAGRAM, TIKTOK, YOUTUBE, WHATSAPP, EMAIL, SITE, TV_NACAO (domain/marketing/cronograma.ts)
+  channel    String   @default("INSTAGRAM")
+  /// Assunto livre em caixa alta ("PLANO DUO", "TÊNIS"…)
+  topic      String
+  /// REELS, CARROSSEL, ESTATICO, STORIES, VIDEO, TEXTO, OUTRO
+  format     String
+  title      String
+  /// Roteiro / slides / texto
+  body       String?
+  cta        String?
+  stories    String?
+  /// O que falta confirmar ("horário do Murph"…)
+  pending    String?
+  campaignId String?  @map("campaign_id") @db.Uuid
+  eventId    String?  @map("event_id") @db.Uuid
+  taskId     String?  @map("task_id") @db.Uuid
+  /// PLANEJADO | PUBLICADO | NAO_PUBLICADO
+  status     String   @default("PLANEJADO")
+  views      Int?
+  /// MANUAL | IA | DOCS
+  origin     String   @default("MANUAL")
+  position   Int      @default(0)
+  createdBy  String?  @map("created_by") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  plan MktContentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([planId, date])
+  @@index([date])
+  @@map("mkt_content_posts")
+}
