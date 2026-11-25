@@ -28,6 +28,7 @@ export const SIGNER_ROLES = [
   { id: 'EMPREGADO', label: 'Empregado(a)' },
   { id: 'ESTAGIARIO', label: 'Estagiário(a)' },
   { id: 'INSTITUICAO_ENSINO', label: 'Instituição de ensino' },
+  { id: 'SUPERVISOR', label: 'Supervisor(a)' },
   { id: 'TESTEMUNHA', label: 'Testemunha' },
 ] as const;
 export const roleLabel = (id: string) => SIGNER_ROLES.find((r) => r.id === id)?.label ?? id;

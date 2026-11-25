@@ -126,7 +126,7 @@ As partes declaram que leram e concordam com este acordo e o assinam eletronicam
     name: 'Termo de compromisso de estágio',
     category: 'COLABORADOR',
     description: `Estágio (Lei nº 11.788/2008), com a instituição de ensino como parte. ${REVISAR}`,
-    signerRoles: ['CONTRATANTE', 'ESTAGIARIO', 'INSTITUICAO_ENSINO'],
+    signerRoles: ['CONTRATANTE', 'ESTAGIARIO', 'INSTITUICAO_ENSINO', 'SUPERVISOR'],
     fields: [
       { key: 'estagiario_nome', label: 'Nome do(a) estagiário(a)', type: 'texto', required: true },
       { key: 'estagiario_cpf', label: 'CPF do(a) estagiário(a)', type: 'cpf_cnpj', required: true },

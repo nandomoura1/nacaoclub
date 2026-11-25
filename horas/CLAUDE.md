@@ -223,6 +223,8 @@ links param, restaurável); aguardando assinatura precisa ser cancelado antes. S
 **Modelos**: dados da contratante sempre por variável (`{{empresa_razao_social}}`, `{{empresa_cnpj}}`, `{{empresa_endereco}}`,
 `{{empresa_nome}}`) — o editor avisa e troca nome/CNPJ escritos à mão; `{{ }}` só aceita chave de campo (não valor).
 Texto aceita `| tabela |` e `---` (tela e PDF).
+**Papéis de quem assina** (`SIGNER_ROLES`): Contratante, Contratado(a), Cedente, Cessionário(a), Empregador, Empregado(a), Estagiário(a),
+Instituição de ensino, **Supervisor(a)** (decisão 25/11, entra no modelo-base de estágio) e Testemunha.
 
 **Cobrança e CRM — Tecnofit** (menu Cobrança e CRM; `crm.view`/`work`/`view_all`/`view_personal`/`dashboard`/`admin`;
 papéis **CRM / Cobrança** e **Líder de CRM**). API externa da Tecnofit **só leitura** (`src/server/tecnofit/client.ts`;
